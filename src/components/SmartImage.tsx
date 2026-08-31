@@ -5,7 +5,7 @@ export default function SmartImage({
   alt,
   className,
   loading = 'lazy',
-  fallbackSrc = '/ezial-fallback.webp',
+  fallbackSrc = `${import.meta.env.BASE_URL}ezial-fallback.webp`,
 }: {
   src: string;
   alt: string;
