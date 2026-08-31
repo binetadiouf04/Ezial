@@ -81,6 +81,10 @@ interface ProState extends AuthState {
   // Seller shop editing
   sellerShop: Shop | null;
   updateSellerShop: (edit: ShopEdit) => void;
+  updateSellerPin: (newPin: string) => boolean;
+  // Seller login — checks identifier + PIN against shop data, including any
+  // PIN the seller has since set from their settings (see updateSellerPin).
+  verifySellerLogin: (identifier: string, pin: string) => { shop: { sellerId: string; name: string } } | { error: string };
   // Seller transactions
   sellerTransactions: typeof initialTransactions;
   // Driver state
@@ -118,7 +122,6 @@ interface ProState extends AuthState {
   deactivateProduct: (productId: string, input: ModerationInput) => void;
   reactivateProduct: (productId: string, input?: ModerationInput) => void;
   // Admin actions — shops
-  suspendShop: (shopId: string, input: ModerationInput) => void;
   deactivateShop: (shopId: string, input: ModerationInput) => void;
   flagShop: (shopId: string, input: ModerationInput) => void;
   reactivateShop: (shopId: string, input?: ModerationInput) => void;
@@ -171,6 +174,10 @@ export function ProProvider({ children }: { children: ReactNode }) {
   const [orderUpdates, setOrderUpdates] = useState<Record<string, string>>({});
   const [sellerProducts, setSellerProducts] = useState<SellerProduct[]>(initialProducts);
   const [sellerShop, setSellerShop] = useState<Shop | null>(null);
+  // sellerId -> PIN the seller has set from their settings, overriding the
+  // mock default in data.ts. Session-only, matching the rest of this prototype's
+  // mock state; a real backend would store this per-shop instead.
+  const [sellerPinOverrides, setSellerPinOverrides] = useState<Record<string, string>>({});
   const [sellerTransactions] = useState(initialTransactions);
   const [driverAvailable, setDriverAvailable] = useState(true);
 
@@ -295,6 +302,25 @@ export function ProProvider({ children }: { children: ReactNode }) {
     setSellerShop((prev) => prev ? { ...prev, name: edit.name, description: edit.description, contact: edit.contact, pickupAddress: edit.pickupAddress, banner: edit.banner, logo: edit.logo, pickupEnabled: edit.pickupEnabled, deliveryEnabled: edit.deliveryEnabled } : prev);
   }, []);
 
+  // Exactly 4 digits required. The PIN is never read back from state by any
+  // UI — this is a write-only update, matching "never shown in clear once saved".
+  const updateSellerPin = useCallback((newPin: string): boolean => {
+    if (!/^\d{4}$/.test(newPin)) return false;
+    setSellerShop((prev) => prev ? { ...prev, pin: newPin } : prev);
+    if (identifier) setSellerPinOverrides((prev) => ({ ...prev, [identifier]: newPin }));
+    return true;
+  }, [identifier]);
+
+  const verifySellerLogin = useCallback((rawIdentifier: string, pin: string): { shop: { sellerId: string; name: string } } | { error: string } => {
+    const id = rawIdentifier.trim().toUpperCase();
+    const shop = initialShops.find((s) => s.sellerId === id);
+    if (!shop) return { error: 'Identifiant introuvable.' };
+    const effectivePin = sellerPinOverrides[shop.sellerId] ?? shop.pin;
+    if (!effectivePin) return { error: "Aucun PIN n'est configuré pour cette boutique. Contactez EZIAL." };
+    if (effectivePin !== pin.trim()) return { error: 'Identifiant ou PIN incorrect.' };
+    return { shop: { sellerId: shop.sellerId, name: shop.name } };
+  }, [sellerPinOverrides]);
+
   // === Driver actions ===
 
   const collectParcel = useCallback((missionId: string, shopId: string) => {
@@ -401,11 +427,6 @@ export function ProProvider({ children }: { children: ReactNode }) {
   }, [logModeration]);
 
   // --- Shops ---
-
-  const suspendShop = useCallback((shopId: string, input: ModerationInput) => {
-    setAllShops((prev) => prev.map((s) => (s.id === shopId ? { ...s, status: 'suspended' as ShopStatus } : s)));
-    logModeration('shop', shopId, 'suspended', input);
-  }, [logModeration]);
 
   const deactivateShop = useCallback((shopId: string, input: ModerationInput) => {
     setAllShops((prev) => prev.map((s) => (s.id === shopId ? { ...s, status: 'inactive' as ShopStatus } : s)));
@@ -583,6 +604,8 @@ export function ProProvider({ children }: { children: ReactNode }) {
     deleteSellerProduct,
     sellerShop,
     updateSellerShop,
+    updateSellerPin,
+    verifySellerLogin,
     sellerTransactions,
     driverAvailable,
     setDriverAvailable,
@@ -615,7 +638,6 @@ export function ProProvider({ children }: { children: ReactNode }) {
     flagProduct,
     deactivateProduct,
     reactivateProduct,
-    suspendShop,
     deactivateShop,
     flagShop,
     reactivateShop,

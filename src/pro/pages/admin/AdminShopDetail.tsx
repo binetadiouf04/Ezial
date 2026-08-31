@@ -9,14 +9,14 @@ import SmartImage from '@/components/SmartImage';
 import type { ModerationInput } from '../../ProContext';
 
 type Tab = 'info' | 'products' | 'orders' | 'finances' | 'history';
-type ModalKind = 'flag' | 'suspend' | 'deactivate' | null;
+type ModalKind = 'flag' | 'deactivate' | null;
 
 const shopStatusLabels: Record<string, string> = {
   active: 'Active', pending: 'En attente', flagged: 'Signalée', suspended: 'Suspendue', inactive: 'Désactivée',
 };
 
 export default function AdminShopDetail({ shopId }: { shopId: string }) {
-  const { allShops, allProducts, allOrders, allTransactions, navigate, suspendShop, deactivateShop, flagShop, reactivateShop, updateShopInfo, getModerationHistory } = usePro();
+  const { allShops, allProducts, allOrders, allTransactions, navigate, deactivateShop, flagShop, reactivateShop, updateShopInfo, getModerationHistory } = usePro();
   const [tab, setTab] = useState<Tab>('info');
   const [modal, setModal] = useState<ModalKind>(null);
   const [editing, setEditing] = useState(false);
@@ -64,13 +64,11 @@ export default function AdminShopDetail({ shopId }: { shopId: string }) {
 
   const modalConfig: Record<Exclude<ModalKind, null>, { title: string; notice: string; confirmLabel: string }> = {
     flag: { title: 'Signaler la boutique', confirmLabel: 'Signaler', notice: 'La boutique reste visible mais est marquée signalée côté Admin et vendeur.' },
-    suspend: { title: 'Suspendre la boutique', confirmLabel: 'Suspendre', notice: 'La boutique et ses produits ne seront plus visibles sur la marketplace, temporairement.' },
     deactivate: { title: 'Désactiver la boutique', confirmLabel: 'Désactiver', notice: 'La boutique sera désactivée. Ses commandes passées restent conservées et accessibles.' },
   };
 
   const handleConfirmModal = (input: ModerationInput) => {
     if (modal === 'flag') flagShop(shop.id, input);
-    if (modal === 'suspend') suspendShop(shop.id, input);
     if (modal === 'deactivate') deactivateShop(shop.id, input);
     setModal(null);
   };
@@ -265,9 +263,6 @@ export default function AdminShopDetail({ shopId }: { shopId: string }) {
             <button onClick={() => setModal('flag')} className="flex-1 flex items-center justify-center gap-1.5 rounded-lg border border-orange-200 bg-orange-50 px-4 py-2.5 text-sm font-medium text-orange-600 hover:bg-orange-100 transition-colors">
               <Flag size={15} /> Signaler
             </button>
-            <button onClick={() => setModal('suspend')} className="flex-1 flex items-center justify-center gap-1.5 rounded-lg border border-red-200 bg-red-50 px-4 py-2.5 text-sm font-medium text-red-600 hover:bg-red-100 transition-colors">
-              <Ban size={15} /> Suspendre
-            </button>
             <button onClick={() => setModal('deactivate')} className="flex-1 flex items-center justify-center gap-1.5 rounded-lg border border-red-200 bg-red-50 px-4 py-2.5 text-sm font-medium text-red-600 hover:bg-red-100 transition-colors">
               <Ban size={15} /> Désactiver
             </button>
@@ -275,8 +270,8 @@ export default function AdminShopDetail({ shopId }: { shopId: string }) {
         )}
         {shop.status === 'flagged' && (
           <div className="flex flex-col sm:flex-row gap-2">
-            <button onClick={() => setModal('suspend')} className="flex-1 flex items-center justify-center gap-1.5 rounded-lg border border-red-200 bg-red-50 px-4 py-2.5 text-sm font-medium text-red-600 hover:bg-red-100 transition-colors">
-              <Ban size={15} /> Suspendre
+            <button onClick={() => setModal('deactivate')} className="flex-1 flex items-center justify-center gap-1.5 rounded-lg border border-red-200 bg-red-50 px-4 py-2.5 text-sm font-medium text-red-600 hover:bg-red-100 transition-colors">
+              <Ban size={15} /> Désactiver
             </button>
             <button onClick={() => reactivateShop(shop.id)} className="flex-1 btn-primary flex items-center justify-center gap-1.5">
               <RotateCcw size={15} /> Réactiver

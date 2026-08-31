@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { usePro } from '../../ProContext';
 import VendorNoticeBanner from '../../components/VendorNoticeBanner';
-import { Check } from 'lucide-react';
+import { Check, KeyRound } from 'lucide-react';
 import SmartImage from '@/components/SmartImage';
 
 const shopStatusLabels: Record<string, string> = {
@@ -9,7 +9,7 @@ const shopStatusLabels: Record<string, string> = {
 };
 
 export default function SellerShop() {
-  const { sellerShop, updateSellerShop, identifier, getLatestModeration } = usePro();
+  const { sellerShop, updateSellerShop, updateSellerPin, identifier, getLatestModeration } = usePro();
   const latestModeration = sellerShop ? getLatestModeration('shop', sellerShop.id) : null;
   const [form, setForm] = useState({
     name: sellerShop?.name ?? '',
@@ -24,10 +24,38 @@ export default function SellerShop() {
   });
   const [saved, setSaved] = useState(false);
 
+  // PIN change — fields are never pre-filled with the current PIN, and are
+  // cleared right after a successful save, so it's never shown in clear.
+  const [newPin, setNewPin] = useState('');
+  const [confirmPin, setConfirmPin] = useState('');
+  const [pinError, setPinError] = useState('');
+  const [pinSaved, setPinSaved] = useState(false);
+
   const handleSave = () => {
     updateSellerShop(form);
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
+  };
+
+  const handleSavePin = () => {
+    setPinError('');
+    if (!/^\d{4}$/.test(newPin)) {
+      setPinError('Le PIN doit contenir exactement 4 chiffres.');
+      return;
+    }
+    if (newPin !== confirmPin) {
+      setPinError('Les deux PIN ne correspondent pas.');
+      return;
+    }
+    const ok = updateSellerPin(newPin);
+    if (!ok) {
+      setPinError('Le PIN doit contenir exactement 4 chiffres.');
+      return;
+    }
+    setNewPin('');
+    setConfirmPin('');
+    setPinSaved(true);
+    setTimeout(() => setPinSaved(false), 2000);
   };
 
   return (
@@ -46,6 +74,45 @@ export default function SellerShop() {
           <p className="mt-1 font-mono text-sm font-semibold text-ink">{identifier}</p>
         </div>
         <span className="text-xs text-ink/35">Non modifiable</span>
+      </div>
+
+      {/* PIN — security */}
+      <div className="card p-5 space-y-4">
+        <div>
+          <h2 className="text-sm font-semibold text-ink flex items-center gap-1.5"><KeyRound size={15} className="text-ink/40" /> Code PIN</h2>
+          <p className="mt-1 text-xs text-ink/45">Utilisé avec votre identifiant pour vous connecter. Il n'est jamais affiché une fois enregistré.</p>
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="block text-xs font-medium text-ink/60 mb-1.5">Nouveau PIN</label>
+            <input
+              type="password"
+              inputMode="numeric"
+              className="input-field font-mono tracking-[0.5em]"
+              placeholder="••••"
+              maxLength={4}
+              value={newPin}
+              onChange={(e) => { setNewPin(e.target.value.replace(/\D/g, '').slice(0, 4)); setPinError(''); }}
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-ink/60 mb-1.5">Confirmer le PIN</label>
+            <input
+              type="password"
+              inputMode="numeric"
+              className="input-field font-mono tracking-[0.5em]"
+              placeholder="••••"
+              maxLength={4}
+              value={confirmPin}
+              onChange={(e) => { setConfirmPin(e.target.value.replace(/\D/g, '').slice(0, 4)); setPinError(''); }}
+            />
+          </div>
+        </div>
+        {pinError && <p className="text-xs text-burgundy">{pinError}</p>}
+        <div className="flex items-center gap-3">
+          <button onClick={handleSavePin} className="btn-outline">Enregistrer le PIN</button>
+          {pinSaved && <span className="flex items-center gap-1 text-sm text-green-600"><Check size={14} /> PIN mis à jour</span>}
+        </div>
       </div>
 
       {/* Shop info form */}

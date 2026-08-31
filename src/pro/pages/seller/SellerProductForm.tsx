@@ -416,23 +416,51 @@ export default function SellerProductForm({ productId }: { productId?: string })
         <h2 className="text-sm font-semibold text-ink">Catégorie</h2>
         <div>
           <label className="block text-xs font-medium text-ink/60 mb-1.5">Choisir une catégorie</label>
-          <select
-            className="input-field"
-            value={categoryId}
-            onChange={(e) => handleCategoryChange(e.target.value)}
-          >
-            <option value="">— Sélectionner —</option>
-            {categories.map((c) => <option key={c.id} value={c.id}>{c.label}</option>)}
-          </select>
+          <div className="flex flex-wrap gap-2">
+            {categories.map((c) => {
+              const isSelected = categoryId === c.id;
+              return (
+                <button
+                  key={c.id}
+                  type="button"
+                  onClick={() => handleCategoryChange(c.id)}
+                  className={`rounded-lg px-3.5 py-2 text-sm font-medium transition-all ${
+                    isSelected
+                      ? 'bg-burgundy text-white border border-burgundy'
+                      : 'bg-white border border-line text-ink/70 hover:border-ink/25 hover:text-ink'
+                  }`}
+                >
+                  {c.label}
+                  {isSelected && <Check size={13} className="inline ml-1.5 -mt-0.5" />}
+                </button>
+              );
+            })}
+          </div>
           {errors.category && <p className="mt-1 text-xs text-burgundy">{errors.category}</p>}
         </div>
         {selectedCategory && selectedCategory.subcategories.length > 0 && (
           <div>
             <label className="block text-xs font-medium text-ink/60 mb-1.5">Sous-catégorie</label>
-            <select className="input-field" value={subId} onChange={(e) => handleSubCategoryChange(e.target.value)}>
-              <option value="">— Sélectionner —</option>
-              {selectedCategory.subcategories.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
-            </select>
+            <div className="flex flex-wrap gap-2">
+              {selectedCategory.subcategories.map((s) => {
+                const isSelected = subId === s.id;
+                return (
+                  <button
+                    key={s.id}
+                    type="button"
+                    onClick={() => handleSubCategoryChange(s.id)}
+                    className={`rounded-lg px-3.5 py-2 text-sm font-medium transition-all ${
+                      isSelected
+                        ? 'bg-burgundy text-white border border-burgundy'
+                        : 'bg-white border border-line text-ink/70 hover:border-ink/25 hover:text-ink'
+                    }`}
+                  >
+                    {s.label}
+                    {isSelected && <Check size={13} className="inline ml-1.5 -mt-0.5" />}
+                  </button>
+                );
+              })}
+            </div>
           </div>
         )}
       </div>
@@ -568,7 +596,7 @@ export default function SellerProductForm({ productId }: { productId?: string })
       {combinations.length > 0 && (
         <div className="card p-5 space-y-4">
           <div className="flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-ink">Stock</h2>
+            <h2 className="text-sm font-semibold text-ink">En stock</h2>
             <span className="text-xs text-ink/50">Total : <span className="font-semibold text-ink">{totalStock}</span></span>
           </div>
 

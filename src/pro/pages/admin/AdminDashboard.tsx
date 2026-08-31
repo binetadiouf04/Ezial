@@ -1,29 +1,28 @@
 import { usePro } from '../../ProContext';
 import { formatFCFA, formatDate } from '../../data';
 import { StatusChip } from '../../components/StatusChip';
-import { ShoppingBag, Clock, Package, Truck, AlertTriangle, ChevronRight, ArrowRight } from 'lucide-react';
+import { ShoppingBag, Clock, Truck, AlertTriangle, ChevronRight, ArrowRight } from 'lucide-react';
 
 export default function AdminDashboard() {
-  const { allOrders, allProducts, missions, navigate, resolvedIncidents, cancelledOrders } = usePro();
+  const { allOrders, missions, navigate, resolvedIncidents, cancelledOrders } = usePro();
 
   const today = new Date().toDateString();
   const ordersToday = allOrders.filter((o) => new Date(o.date).toDateString() === today).length;
   const ordersInProgress = allOrders.filter((o) => ['confirmed', 'preparing', 'ready', 'out_for_delivery'].includes(o.status) && !cancelledOrders.includes(o.id)).length;
-  const productsToValidate = allProducts.filter((p) => p.status === 'pending').length;
   const deliveriesInProgress = missions.filter((m) => m.driverId && m.step !== 'delivered').length;
   const openIncidents = missions.filter((m) => m.incident && !resolvedIncidents.includes(m.id)).length;
+  const totalOrders = allOrders.length;
 
   const cards = [
     { label: 'Commandes aujourd\'hui', value: ordersToday, icon: ShoppingBag, color: 'text-blue-600 bg-blue-50' },
     { label: 'Commandes en cours', value: ordersInProgress, icon: Clock, color: 'text-amber-600 bg-amber-50' },
-    { label: 'Produits à valider', value: productsToValidate, icon: Package, color: 'text-burgundy bg-burgundy/10' },
     { label: 'Livraisons en cours', value: deliveriesInProgress, icon: Truck, color: 'text-violet-600 bg-violet-50' },
     { label: 'Incidents ouverts', value: openIncidents, icon: AlertTriangle, color: 'text-orange-600 bg-orange-50' },
+    { label: 'Total commandes', value: totalOrders, icon: ShoppingBag, color: 'text-ink bg-ink/5' },
   ];
 
   // À traiter
   const todoItems: { label: string; href: string; priority: 'high' | 'medium' | 'low' }[] = [];
-  if (productsToValidate > 0) todoItems.push({ label: `${productsToValidate} produits attendent une validation`, href: '/admin/produits', priority: 'high' });
   if (openIncidents > 0) todoItems.push({ label: `${openIncidents} ${openIncidents > 1 ? 'livraisons ont' : 'livraison a'} un incident`, href: '/admin/livraisons', priority: 'high' });
   const blockedOrders = allOrders.filter((o) => o.status === 'return_requested' && !cancelledOrders.includes(o.id)).length;
   if (blockedOrders > 0) todoItems.push({ label: `${blockedOrders} ${blockedOrders > 1 ? 'retours à examiner' : 'retour à examiner'}`, href: '/admin/commandes', priority: 'medium' });

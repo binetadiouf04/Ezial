@@ -128,6 +128,8 @@ export interface Shop {
   plan: ShopPlan;
   status: ShopStatus;
   sellerId: string;
+  /** 4-digit PIN chosen by the seller, used with `sellerId` to log in. Unset until the seller picks one (e.g. a pending shop not yet activated). Never rendered in clear once set. */
+  pin?: string;
   productCount: number;
   orderCount: number;
   followers: number;
@@ -274,7 +276,7 @@ export const shops: Shop[] = [
     description: 'Mode féminine contemporaine & essentiels africains.', categoryFocus: 'Vêtements',
     contact: '+221 77 123 45 67', pickupAddress: '15 rue Exemple, Plateau, Dakar',
     pickupEnabled: true, pickupDelay: '24h', deliveryEnabled: true, plan: 'founder', status: 'active',
-    sellerId: 'MAISONFATOU4827', productCount: 22, orderCount: 148, followers: 12480, rating: 4.8, reviewCount: 312,
+    sellerId: 'MAISONFATOU4827', pin: '1234', productCount: 22, orderCount: 148, followers: 12480, rating: 4.8, reviewCount: 312,
     joinDate: '2026-01-15', weeklyGross: 200000, yearlyNet: 2450000,
   },
   {
@@ -282,7 +284,7 @@ export const shops: Shop[] = [
     description: 'Skincare, maquillage & parfums pour peaux métissées et noires.', categoryFocus: 'Beauté',
     contact: '+221 77 234 56 78', pickupAddress: '42 Rue KA, Mermoz, Dakar',
     pickupEnabled: false, pickupDelay: '24h', deliveryEnabled: true, plan: 'founder', status: 'active',
-    sellerId: 'DAKARBEAUTY3816', productCount: 18, orderCount: 207, followers: 8900, rating: 4.9, reviewCount: 428,
+    sellerId: 'DAKARBEAUTY3816', pin: '2345', productCount: 18, orderCount: 207, followers: 8900, rating: 4.9, reviewCount: 428,
     joinDate: '2026-01-20', weeklyGross: 175000, yearlyNet: 1980000,
   },
   {
@@ -290,7 +292,7 @@ export const shops: Shop[] = [
     description: 'Maroquinerie structurée & sacs d\'atelier. Cuir véritable.', categoryFocus: 'Sacs & Maroquinerie',
     contact: '+221 77 345 67 89', pickupAddress: '8 Rue NG, Almadies, Dakar',
     pickupEnabled: true, pickupDelay: '4h', deliveryEnabled: true, plan: 'standard', status: 'active',
-    sellerId: 'ATELIERNAYA5723', productCount: 14, orderCount: 89, followers: 5630, rating: 4.7, reviewCount: 156,
+    sellerId: 'ATELIERNAYA5723', pin: '3456', productCount: 14, orderCount: 89, followers: 5630, rating: 4.7, reviewCount: 156,
     joinDate: '2026-02-10', weeklyGross: 120000, yearlyNet: 1320000,
   },
   {
@@ -298,7 +300,7 @@ export const shops: Shop[] = [
     description: 'Parfums, brumes & encens. Senteurs qui voyagent.', categoryFocus: 'Parfums & Senteurs',
     contact: '+221 77 456 78 90', pickupAddress: '25 Rue LM, Plateau, Dakar',
     pickupEnabled: false, pickupDelay: '24h', deliveryEnabled: true, plan: 'standard', status: 'active',
-    sellerId: 'MAISONSENTEUR1947', productCount: 12, orderCount: 64, followers: 4210, rating: 4.8, reviewCount: 198,
+    sellerId: 'MAISONSENTEUR1947', pin: '4567', productCount: 12, orderCount: 64, followers: 4210, rating: 4.8, reviewCount: 198,
     joinDate: '2026-03-01', weeklyGross: 85000, yearlyNet: 920000,
   },
   {
@@ -306,7 +308,7 @@ export const shops: Shop[] = [
     description: 'Perruques premium, mèches & Blend Hair. Qualité salon.', categoryFocus: 'Cheveux',
     contact: '+221 77 567 89 01', pickupAddress: '10 Rue HI, Yoff, Dakar',
     pickupEnabled: true, pickupDelay: '24h', deliveryEnabled: true, plan: 'founder', status: 'active',
-    sellerId: 'HAIRSTUDIO2641', productCount: 16, orderCount: 112, followers: 9870, rating: 4.6, reviewCount: 267,
+    sellerId: 'HAIRSTUDIO2641', pin: '5678', productCount: 16, orderCount: 112, followers: 9870, rating: 4.6, reviewCount: 267,
     joinDate: '2026-01-28', weeklyGross: 160000, yearlyNet: 1750000,
   },
   {

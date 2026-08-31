@@ -6,9 +6,11 @@ interface LoginFormProps {
   role: Role;
   onBack: () => void;
   onLogin: (identifier: string, name: string) => void;
+  /** Seller-only: validates identifier + PIN against shop data (including any PIN the seller has since changed). */
+  verifySeller?: (identifier: string, pin: string) => { shop: { sellerId: string; name: string } } | { error: string };
 }
 
-const roleConfig: Record<Role, { title: string; subtitle: string; placeholder: string; hint: string; demoId: string; demoName: string }> = {
+const roleConfig: Record<Role, { title: string; subtitle: string; placeholder: string; hint: string; demoId: string; demoName: string; demoPin?: string }> = {
   admin: {
     title: 'Administration',
     subtitle: "Accès réservé à l'équipe EZIAL.",
@@ -19,11 +21,12 @@ const roleConfig: Record<Role, { title: string; subtitle: string; placeholder: s
   },
   seller: {
     title: 'Espace Vendeur',
-    subtitle: 'Connectez-vous avec votre identifiant unique.',
+    subtitle: 'Connectez-vous avec votre identifiant et votre code PIN.',
     placeholder: 'MAISONFATOU4827',
-    hint: 'Votre identifiant a été fourni par EZIAL lors de la création de votre boutique.',
+    hint: 'Identifiant fourni par EZIAL à la création de votre boutique, et PIN à 4 chiffres choisi dans vos paramètres.',
     demoId: 'MAISONFATOU4827',
     demoName: 'Maison Fatou',
+    demoPin: '1234',
   },
   driver: {
     title: 'Espace Livreur',
@@ -35,10 +38,11 @@ const roleConfig: Record<Role, { title: string; subtitle: string; placeholder: s
   },
 };
 
-export default function LoginForm({ role, onBack, onLogin }: LoginFormProps) {
+export default function LoginForm({ role, onBack, onLogin, verifySeller }: LoginFormProps) {
   const cfg = roleConfig[role];
   const [email, setEmail] = useState('');
   const [identifier, setIdentifier] = useState('');
+  const [pin, setPin] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
 
@@ -50,6 +54,21 @@ export default function LoginForm({ role, onBack, onLogin }: LoginFormProps) {
         return;
       }
       onLogin(email.trim(), cfg.demoName);
+    } else if (role === 'seller') {
+      if (!identifier.trim() || !pin.trim()) {
+        setError('Veuillez saisir votre identifiant et votre PIN.');
+        return;
+      }
+      if (!/^\d{4}$/.test(pin.trim())) {
+        setError('Le PIN doit contenir exactement 4 chiffres.');
+        return;
+      }
+      const result = verifySeller?.(identifier, pin);
+      if (!result || 'error' in result) {
+        setError(result?.error ?? 'Connexion impossible.');
+        return;
+      }
+      onLogin(result.shop.sellerId, result.shop.name);
     } else {
       if (!identifier.trim()) {
         setError('Veuillez saisir votre identifiant.');
@@ -65,6 +84,7 @@ export default function LoginForm({ role, onBack, onLogin }: LoginFormProps) {
       setPassword('ezial2026');
     } else {
       setIdentifier(cfg.demoId);
+      if (role === 'seller') setPin(cfg.demoPin ?? '');
     }
     setError('');
   };
@@ -107,20 +127,39 @@ export default function LoginForm({ role, onBack, onLogin }: LoginFormProps) {
               </div>
             </>
           ) : (
-            <div>
-              <label className="block text-xs font-medium text-ink/60 mb-1.5">Identifiant unique</label>
-              <div className="relative">
-                <KeyRound size={16} className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-ink/35" />
-                <input
-                  type="text"
-                  value={identifier}
-                  onChange={(e) => { setIdentifier(e.target.value); setError(''); }}
-                  className="input-field pl-11 font-mono uppercase tracking-wider"
-                  placeholder={cfg.placeholder}
-                  autoCapitalize="characters"
-                />
+            <div className="space-y-4">
+              <div>
+                <label className="block text-xs font-medium text-ink/60 mb-1.5">Identifiant unique</label>
+                <div className="relative">
+                  <KeyRound size={16} className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-ink/35" />
+                  <input
+                    type="text"
+                    value={identifier}
+                    onChange={(e) => { setIdentifier(e.target.value); setError(''); }}
+                    className="input-field pl-11 font-mono uppercase tracking-wider"
+                    placeholder={cfg.placeholder}
+                    autoCapitalize="characters"
+                  />
+                </div>
               </div>
-              <p className="mt-2 text-xs text-ink/45">{cfg.hint}</p>
+              {role === 'seller' && (
+                <div>
+                  <label className="block text-xs font-medium text-ink/60 mb-1.5">Code PIN (4 chiffres)</label>
+                  <div className="relative">
+                    <Lock size={16} className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-ink/35" />
+                    <input
+                      type="password"
+                      inputMode="numeric"
+                      value={pin}
+                      onChange={(e) => { setPin(e.target.value.replace(/\D/g, '').slice(0, 4)); setError(''); }}
+                      className="input-field pl-11 font-mono tracking-[0.5em]"
+                      placeholder="••••"
+                      maxLength={4}
+                    />
+                  </div>
+                </div>
+              )}
+              <p className="text-xs text-ink/45">{cfg.hint}</p>
             </div>
           )}
 

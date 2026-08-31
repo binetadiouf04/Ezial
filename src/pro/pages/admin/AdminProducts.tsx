@@ -5,26 +5,27 @@ import { StatusChip } from '../../components/StatusChip';
 import { Search, ChevronRight } from 'lucide-react';
 import SmartImage from '@/components/SmartImage';
 
-type Tab = 'pending' | 'published' | 'flagged' | 'refused' | 'inactive';
+type Tab = 'active' | 'flagged' | 'inactive';
+
+// A product that is still pending validation or was refused isn't visible on
+// the marketplace — it's grouped under "Actifs" for now since Admin no
+// longer surfaces a separate validation queue, without losing the product.
+const isActiveTab = (status: string) => status === 'published' || status === 'out_of_stock' || status === 'pending' || status === 'changes_requested';
 
 export default function AdminProducts() {
   const { allProducts, allShops, navigate } = usePro();
-  const [tab, setTab] = useState<Tab>('pending');
+  const [tab, setTab] = useState<Tab>('active');
   const [search, setSearch] = useState('');
 
   const tabs: { id: Tab; label: string; count: number }[] = [
-    { id: 'pending', label: 'À valider', count: allProducts.filter((p) => p.status === 'pending').length },
-    { id: 'published', label: 'Actifs', count: allProducts.filter((p) => p.status === 'published').length },
+    { id: 'active', label: 'Actifs', count: allProducts.filter((p) => isActiveTab(p.status)).length },
     { id: 'flagged', label: 'Signalés', count: allProducts.filter((p) => p.status === 'flagged').length },
-    { id: 'refused', label: 'Refusés', count: allProducts.filter((p) => p.status === 'changes_requested').length },
     { id: 'inactive', label: 'Désactivés', count: allProducts.filter((p) => p.status === 'inactive').length },
   ];
 
   const filtered = allProducts.filter((p) => {
-    if (tab === 'pending') return p.status === 'pending';
-    if (tab === 'published') return p.status === 'published' || p.status === 'out_of_stock';
+    if (tab === 'active') return isActiveTab(p.status);
     if (tab === 'flagged') return p.status === 'flagged';
-    if (tab === 'refused') return p.status === 'changes_requested';
     if (tab === 'inactive') return p.status === 'inactive';
     return true;
   }).filter((p) => {

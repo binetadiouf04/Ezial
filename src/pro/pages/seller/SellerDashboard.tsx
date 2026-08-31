@@ -55,7 +55,7 @@ export default function SellerDashboard() {
         <SummaryCard label="Nouvelles commandes" value={newOrders} icon={<ShoppingBag size={16} />} onClick={() => navigate('/seller/commandes')} />
         <SummaryCard label="En préparation" value={preparing} icon={<Clock size={16} />} onClick={() => navigate('/seller/commandes')} />
         <SummaryCard label="Prêtes" value={ready} icon={<Package size={16} />} onClick={() => navigate('/seller/commandes')} />
-        <SummaryCard label="Produits actifs" value={`${activeProducts}/25`} icon={<Package size={16} />} onClick={() => navigate('/seller/produits')} />
+        <SummaryCard label="Produits actifs" value={`${activeProducts} / 25`} icon={<Package size={16} />} onClick={() => navigate('/seller/produits')} />
       </div>
 
       <SummaryCard label="Solde disponible" value={formatFCFA(availableBalance)} icon={<Wallet size={16} />} accent onClick={() => navigate('/seller/finances')} />
