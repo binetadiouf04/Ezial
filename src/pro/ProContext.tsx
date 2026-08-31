@@ -1,7 +1,8 @@
-import { createContext, useContext, useState, useCallback, useEffect, type ReactNode } from 'react';
+import { createContext, useContext, useState, useCallback, useEffect, useMemo, type ReactNode } from 'react';
 import type { Role, DeliveryStep } from './data';
 import { missions as initialMissions, type Mission, type Product, type Shop, type Driver, type DriverTransaction, type Order, type Transaction } from './data';
 import { shops as initialShops, products as initialProducts, transactions as initialTransactions, driverTransactions as initialDriverTransactions, orders as initialOrders, drivers as initialDrivers, formatFCFA } from './data';
+import { assignShopPrefixes, nextReferenceForShop } from '@/utils/reference';
 
 type Route = string;
 
@@ -74,7 +75,7 @@ interface ProState extends AuthState {
   productStatusUpdates: Record<string, 'published' | 'changes_requested' | 'inactive'>;
   // Seller product management
   sellerProducts: SellerProduct[];
-  addSellerProduct: (product: SellerProduct) => void;
+  addSellerProduct: (product: Omit<SellerProduct, 'reference'>) => void;
   updateSellerProduct: (id: string, product: SellerProduct) => void;
   deleteSellerProduct: (id: string) => void;
   // Seller shop editing
@@ -156,6 +157,12 @@ export function ProProvider({ children }: { children: ReactNode }) {
   // Admin state
   const [allShops, setAllShops] = useState<Shop[]>(initialShops);
   const [allDrivers, setAllDrivers] = useState<Driver[]>(initialDrivers);
+
+  // Stable EZ-XXX-#### prefix per shop, used to generate product references.
+  const shopPrefixes = useMemo(
+    () => assignShopPrefixes(allShops.map((s) => ({ id: s.id, name: s.name }))),
+    [allShops],
+  );
   const [productRefusals, setProductRefusals] = useState<Record<string, ProductRefusal>>({});
   const [cancelledOrders, setCancelledOrders] = useState<string[]>([]);
   const [refundedOrders, setRefundedOrders] = useState<string[]>([]);
@@ -246,12 +253,17 @@ export function ProProvider({ children }: { children: ReactNode }) {
     setProductStatusUpdates((prev) => ({ ...prev, [productId]: status }));
   }, []);
 
-  const addSellerProduct = useCallback((product: SellerProduct) => {
-    setSellerProducts((prev) => [product, ...prev]);
-  }, []);
+  const addSellerProduct = useCallback((product: Omit<SellerProduct, 'reference'>) => {
+    setSellerProducts((prev) => {
+      const reference = nextReferenceForShop(shopPrefixes, prev, product.shopId);
+      return [{ ...product, reference }, ...prev];
+    });
+  }, [shopPrefixes]);
 
+  // The reference is assigned once at creation and can never be changed by
+  // the seller — always keep the original, regardless of what is passed in.
   const updateSellerProduct = useCallback((id: string, updated: SellerProduct) => {
-    setSellerProducts((prev) => prev.map((p) => (p.id === id ? updated : p)));
+    setSellerProducts((prev) => prev.map((p) => (p.id === id ? { ...updated, reference: p.reference } : p)));
   }, []);
 
   const deleteSellerProduct = useCallback((id: string) => {

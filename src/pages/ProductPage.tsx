@@ -61,6 +61,7 @@ export default function ProductPage({ productId }: { productId: string }) {
           <div>
             {shop && <button onClick={() => navigate(`/boutique/${shop.id}`)} className="text-xs font-medium uppercase tracking-wider text-burgundy hover:underline">{shop.name}</button>}
             <h1 className="mt-1.5 font-display text-2xl font-semibold leading-tight text-ink sm:text-3xl">{product.name}</h1>
+            <p className="mt-1 text-xs font-mono text-ink/40">Réf. {product.reference}</p>
             {product.rating && product.reviewCount && <div className="mt-2.5"><Rating rating={product.rating} count={product.reviewCount} size="md" /></div>}
           </div>
           <PriceDisplay price={dynamicPrice.price} oldPrice={dynamicPrice.oldPrice ?? product.oldPrice} size="lg" />

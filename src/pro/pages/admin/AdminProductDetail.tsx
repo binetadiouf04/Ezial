@@ -70,6 +70,7 @@ export default function AdminProductDetail({ productId }: { productId: string })
           <div className="min-w-0">
             <h1 className="font-display text-lg font-semibold text-ink">{product.name}</h1>
             <p className="text-xs text-ink/45 mt-1">{shop?.name ?? product.shopId} · {product.category}</p>
+            <p className="mt-1 text-xs font-mono font-medium text-ink/50">Réf. {product.reference}</p>
           </div>
           <StatusChip status={product.status} size="md" />
         </div>

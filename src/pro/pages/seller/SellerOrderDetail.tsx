@@ -83,6 +83,7 @@ export default function SellerOrderDetail({ orderId }: { orderId: string }) {
                 {p && <SmartImage src={p.image} alt="" className="h-16 w-14 rounded-lg object-cover flex-shrink-0" />}
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium text-ink">{item.productName}</p>
+                  {p && <p className="text-xs text-ink/40 mt-0.5 font-mono">Réf. {p.reference}</p>}
                   {Object.entries(item.variants).length > 0 && (
                     <p className="text-xs text-ink/50 mt-0.5">{Object.entries(item.variants).map(([k, v]) => `${k} : ${v}`).join(' · ')}</p>
                   )}

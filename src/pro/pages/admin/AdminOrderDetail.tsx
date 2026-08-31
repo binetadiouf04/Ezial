@@ -5,7 +5,7 @@ import { StatusChip } from '../../components/StatusChip';
 import { ArrowLeft, Store, MapPin, CreditCard, CheckCircle2, Circle, AlertTriangle, X } from 'lucide-react';
 
 export default function AdminOrderDetail({ orderId }: { orderId: string }) {
-  const { allOrders, navigate, missions, getSubOrderStatus, cancelOrder, refundOrder, cancelledOrders, refundedOrders } = usePro();
+  const { allOrders, allProducts, navigate, missions, getSubOrderStatus, cancelOrder, refundOrder, cancelledOrders, refundedOrders } = usePro();
   const [showCancel, setShowCancel] = useState(false);
   const [showRefund, setShowRefund] = useState(false);
 
@@ -104,18 +104,22 @@ export default function AdminOrderDetail({ orderId }: { orderId: string }) {
         <h2 className="text-sm font-semibold text-ink mb-3">Produits</h2>
         <div className="space-y-3">
           {order.subOrders.flatMap((sub) =>
-            sub.items.map((item, i) => (
-              <div key={`${sub.shopId}-${i}`} className="flex items-center gap-3">
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-ink">{item.productName}</p>
-                  <p className="text-xs text-ink/45 flex items-center gap-1"><Store size={11} /> {sub.shopName}</p>
-                  {Object.keys(item.variants).length > 0 && (
-                    <p className="text-xs text-ink/35 mt-0.5">{Object.entries(item.variants).map(([k, v]) => `${k}: ${v}`).join(' · ')}</p>
-                  )}
+            sub.items.map((item, i) => {
+              const product = allProducts.find((p) => p.id === item.productId);
+              return (
+                <div key={`${sub.shopId}-${i}`} className="flex items-center gap-3">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-ink">{item.productName}</p>
+                    {product && <p className="text-xs text-ink/40 font-mono">Réf. {product.reference}</p>}
+                    <p className="text-xs text-ink/45 flex items-center gap-1"><Store size={11} /> {sub.shopName}</p>
+                    {Object.keys(item.variants).length > 0 && (
+                      <p className="text-xs text-ink/35 mt-0.5">{Object.entries(item.variants).map(([k, v]) => `${k}: ${v}`).join(' · ')}</p>
+                    )}
+                  </div>
+                  <span className="text-sm text-ink/60 flex-shrink-0">x{item.quantity}</span>
                 </div>
-                <span className="text-sm text-ink/60 flex-shrink-0">x{item.quantity}</span>
-              </div>
-            )),
+              );
+            }),
           )}
         </div>
       </div>

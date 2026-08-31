@@ -61,7 +61,7 @@ export default function AdminProducts() {
                 <SmartImage src={product.image} alt="" className="h-14 w-14 rounded-lg object-cover flex-shrink-0" />
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium text-ink truncate">{product.name}</p>
-                  <p className="text-xs text-ink/45 mt-0.5">{shop?.name ?? product.shopId} · {product.category}</p>
+                  <p className="text-xs text-ink/45 mt-0.5">{shop?.name ?? product.shopId} · {product.category} · Réf. {product.reference}</p>
                   <div className="flex items-center gap-2 mt-1.5">
                     <span className="text-sm font-semibold text-ink">{formatFCFA(product.price)}</span>
                     {product.submittedDate && <span className="text-xs text-ink/35">· {formatDate(product.submittedDate)}</span>}

@@ -72,7 +72,7 @@ export default function SellerProducts() {
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium text-ink leading-snug line-clamp-1">{product.name}</p>
-                <p className="text-xs text-ink/40 mt-0.5">{product.category}</p>
+                <p className="text-xs text-ink/40 mt-0.5">{product.category} · Réf. {product.reference}</p>
                 <div className="mt-1 flex items-center gap-2">
                   <StatusChip status={product.status} />
                   {stockLabel(product.stock)}

@@ -206,7 +206,7 @@ export default function SellerProductForm({ productId }: { productId?: string })
       description: description.trim(),
     };
     if (existing) {
-      updateSellerProduct(existing.id, { ...product, images });
+      updateSellerProduct(existing.id, { ...product, images, reference: existing.reference });
     } else {
       addSellerProduct({ ...product, images });
     }
@@ -402,7 +402,10 @@ export default function SellerProductForm({ productId }: { productId?: string })
         <ArrowLeft size={16} /> Produits
       </button>
 
-      <h1 className="font-display text-2xl font-semibold text-ink">{existing ? 'Modifier le produit' : 'Ajouter un produit'}</h1>
+      <div className="flex items-center gap-3 flex-wrap">
+        <h1 className="font-display text-2xl font-semibold text-ink">{existing ? 'Modifier le produit' : 'Ajouter un produit'}</h1>
+        {existing && <span className="rounded-full bg-cream px-2.5 py-1 text-xs font-mono font-medium text-ink/60">Réf. {existing.reference}</span>}
+      </div>
 
       {/* 1. Catégorie */}
       <div className="card p-5 space-y-4">
