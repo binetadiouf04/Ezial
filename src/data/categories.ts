@@ -59,3 +59,19 @@ export const categoryTiles: { id: CategoryId; label: string; image: string }[] =
   { id: 'bijoux', label: 'Bijoux', image: 'https://images.pexels.com/photos/8165653/pexels-photo-8165653.jpeg?auto=compress&cs=tinysrgb&h=650&w=940' },
   { id: 'lingerie', label: 'Pyjamas & Lingerie', image: 'https://images.pexels.com/photos/6311392/pexels-photo-6311392.jpeg?auto=compress&cs=tinysrgb&h=650&w=940' },
 ];
+
+export interface HomeCircleTile { id: string; label: string; image: string; route: string; highlight?: boolean; }
+
+// Curated shortcut circles shown on the homepage — a mix of Promos + a few
+// popular subcategories (not the full category list). Images are reused
+// from the same flagship products they represent, for visual consistency.
+export const homeCircleTiles: HomeCircleTile[] = [
+  { id: 'promos', label: 'Promos', image: 'https://images.pexels.com/photos/8165653/pexels-photo-8165653.jpeg?auto=compress&cs=tinysrgb&h=400&w=400', route: '/promos', highlight: true },
+  { id: 'mode-femme', label: 'Mode Femme', image: 'https://images.pexels.com/photos/19816456/pexels-photo-19816456.jpeg?auto=compress&cs=tinysrgb&h=400&w=400', route: '/categorie/vetements/femme' },
+  { id: 'chaussures', label: 'Chaussures', image: 'https://images.pexels.com/photos/29393718/pexels-photo-29393718.jpeg?auto=compress&cs=tinysrgb&h=400&w=400', route: '/categorie/chaussures/femme' },
+  { id: 'sacs-a-main', label: 'Sacs à main', image: 'https://images.pexels.com/photos/7953286/pexels-photo-7953286.jpeg?auto=compress&cs=tinysrgb&h=400&w=400', route: '/categorie/sacs/sacs-a-main' },
+  { id: 'maquillage', label: 'Maquillage', image: 'https://images.pexels.com/photos/10338698/pexels-photo-10338698.jpeg?auto=compress&cs=tinysrgb&h=400&w=400', route: '/categorie/beaute/maquillage' },
+  { id: 'perruques', label: 'Perruques', image: 'https://images.pexels.com/photos/6923241/pexels-photo-6923241.jpeg?auto=compress&cs=tinysrgb&h=400&w=400', route: '/categorie/cheveux/perruques' },
+  { id: 'parfums-femme', label: 'Parfums Femme', image: 'https://images.pexels.com/photos/7364096/pexels-photo-7364096.jpeg?auto=compress&cs=tinysrgb&h=400&w=400', route: '/categorie/parfums/parfums-femme' },
+  { id: 'colliers', label: 'Colliers', image: 'https://images.pexels.com/photos/13219289/pexels-photo-13219289.jpeg?auto=compress&cs=tinysrgb&h=400&w=400', route: '/categorie/bijoux/colliers' },
+];

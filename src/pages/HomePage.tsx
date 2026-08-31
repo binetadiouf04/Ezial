@@ -1,11 +1,60 @@
 import { useApp } from '@/store/AppContext';
 import { products } from '@/data/products';
 import { shops } from '@/data/shops';
-import { categoryTiles } from '@/data/categories';
+import { homeCircleTiles } from '@/data/categories';
 import ProductGrid from '@/components/ProductGrid';
 import ShopCard from '@/components/ShopCard';
-import { ChevronRight } from 'lucide-react';
+import HeroCarousel, { type HeroSlide } from '@/components/HeroCarousel';
 import SmartImage from '@/components/SmartImage';
+import { ChevronRight } from 'lucide-react';
+
+const heroSlides: HeroSlide[] = [
+  {
+    id: 'mode-femme',
+    image: 'https://images.pexels.com/photos/38277759/pexels-photo-38277759.jpeg?auto=compress&cs=tinysrgb&h=900&w=1600',
+    imagePosition: 'object-top',
+    eyebrow: 'Mode Femme',
+    title: 'Élégance sénégalaise',
+    ctaLabel: 'Découvrir',
+    ctaRoute: '/categorie/vetements/femme',
+  },
+  {
+    id: 'beaute',
+    image: 'https://images.pexels.com/photos/12352170/pexels-photo-12352170.jpeg?auto=compress&cs=tinysrgb&h=900&w=1600',
+    imagePosition: 'object-center',
+    eyebrow: 'Beauté',
+    title: 'Rituels skincare',
+    ctaLabel: 'Explorer',
+    ctaRoute: '/categorie/beaute/skincare',
+  },
+  {
+    id: 'cheveux',
+    image: 'https://images.pexels.com/photos/15868319/pexels-photo-15868319.jpeg?auto=compress&cs=tinysrgb&h=900&w=1600',
+    imagePosition: 'object-top',
+    eyebrow: 'Cheveux',
+    title: 'Perruques premium',
+    ctaLabel: 'Voir la collection',
+    ctaRoute: '/categorie/cheveux/perruques',
+  },
+  {
+    id: 'bijoux-parfums',
+    image: 'https://images.pexels.com/photos/30746012/pexels-photo-30746012.jpeg?auto=compress&cs=tinysrgb&h=900&w=1600',
+    imagePosition: 'object-center',
+    eyebrow: 'Bijoux & Parfums',
+    title: 'Éclat & senteurs',
+    ctaLabel: 'Découvrir',
+    ctaRoute: '/categorie/bijoux',
+  },
+  {
+    id: 'mode-homme',
+    image: 'https://images.pexels.com/photos/34695268/pexels-photo-34695268.jpeg?auto=compress&cs=tinysrgb&h=900&w=1600',
+    imagePosition: 'object-top',
+    eyebrow: 'Mode Homme',
+    title: 'Style affirmé',
+    ctaLabel: 'Découvrir',
+    ctaRoute: '/categorie/vetements/homme',
+  },
+];
 
 export default function HomePage() {
   const { navigate } = useApp();
@@ -16,30 +65,15 @@ export default function HomePage() {
 
   return (
     <div className="space-y-16 lg:space-y-24">
-      <section className="relative overflow-hidden rounded-2xl bg-cream">
-        <div className="grid lg:grid-cols-2">
-          <div className="flex flex-col justify-center px-6 py-12 sm:px-10 lg:px-16 lg:py-24 order-2 lg:order-1">
-            <p className="eyebrow mb-4">Nouvelle sélection</p>
-            <h1 className="font-display text-4xl font-semibold leading-[1.05] text-ink sm:text-5xl lg:text-6xl">Les essentiels<br />du moment</h1>
-            <p className="mt-5 max-w-md text-sm text-ink/60 sm:text-base">Mode, beauté, cheveux & parfums sélectionnés à Dakar. Une marketplace premium, livrée chez vous.</p>
-            <div className="mt-8 flex flex-wrap gap-3">
-              <button onClick={() => navigate('/categorie/vetements')} className="btn-primary">Découvrir <ChevronRight size={16} /></button>
-              <button onClick={() => navigate('/categorie/beaute')} className="btn-outline">Beauté</button>
-            </div>
-          </div>
-          <div className="relative aspect-[4/5] lg:aspect-auto order-1 lg:order-2">
-            <SmartImage src="https://images.pexels.com/photos/19816456/pexels-photo-19816456.jpeg?auto=compress&cs=tinysrgb&h=1200&w=900" alt="Sélection EZIAL" className="h-full w-full object-cover" />
-          </div>
-        </div>
-      </section>
+      <HeroCarousel slides={heroSlides} />
 
       <section>
-        <div className="mb-6 flex items-end justify-between"><h2 className="section-title">Catégories</h2></div>
-        <div className="grid grid-cols-3 gap-3 sm:gap-4 md:grid-cols-4 lg:grid-cols-7">
-          {categoryTiles.map((cat) => (
-            <button key={cat.id} onClick={() => navigate(`/categorie/${cat.id}`)} className="group flex flex-col items-center gap-2.5">
-              <div className="relative aspect-square w-full overflow-hidden rounded-full bg-cream"><SmartImage src={cat.image} alt={cat.label} className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-110" /><div className="absolute inset-0 bg-ink/0 transition-colors group-hover:bg-ink/10" /></div>
-              <span className="text-xs font-medium text-ink/80 group-hover:text-burgundy transition-colors sm:text-sm">{cat.label}</span>
+        <div className="mb-5 flex items-end justify-between"><h2 className="section-title">À découvrir</h2></div>
+        <div className="flex gap-5 overflow-x-auto no-scrollbar pb-1 sm:gap-6 lg:gap-8">
+          {homeCircleTiles.map((tile) => (
+            <button key={tile.id} onClick={() => navigate(tile.route)} className="group flex w-[76px] flex-shrink-0 flex-col items-center gap-2 sm:w-[92px] lg:w-[104px]">
+              <div className="relative aspect-square w-full overflow-hidden rounded-full bg-cream"><SmartImage src={tile.image} alt={tile.label} className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-110" /><div className="absolute inset-0 bg-ink/0 transition-colors group-hover:bg-ink/10" /></div>
+              <span className={`text-center text-[11px] font-medium leading-tight transition-colors sm:text-xs ${tile.highlight ? 'text-burgundy font-semibold' : 'text-ink/80 group-hover:text-burgundy'}`}>{tile.label}</span>
             </button>
           ))}
         </div>

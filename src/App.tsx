@@ -20,6 +20,7 @@ import OrderDetailPage from '@/pages/OrderDetailPage';
 import ProEntryPage from '@/pro/pages/ProEntryPage';
 import Footer from '@/components/Footer';
 import InfoPage from '@/pages/InfoPage';
+import PromoPage from '@/pages/PromoPage';
 
 function RouteView() {
   const { route } = useApp();
@@ -38,6 +39,9 @@ function RouteView() {
     const subId = parts[3];
     if (categoryId) return <CategoryPage categoryId={categoryId} subId={subId} />;
   }
+
+  // Promos: /promos
+  if (clean === '/promos') return <PromoPage />;
 
   // Search: /recherche?q=...
   if (clean.startsWith('/recherche')) {
