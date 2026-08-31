@@ -4,7 +4,6 @@ import Header from '@/components/Header';
 import MobileBottomNav from '@/components/MobileBottomNav';
 import MobileCategoryDrawer from '@/components/MobileCategoryDrawer';
 import CartDrawer from '@/components/CartDrawer';
-import CategorySidebar from '@/components/CategorySidebar';
 import HomePage from '@/pages/HomePage';
 import CategoryPage from '@/pages/CategoryPage';
 import SearchPage from '@/pages/SearchPage';
@@ -124,12 +123,9 @@ function Layout() {
       <CartDrawer />
 
       {isHome ? (
-        <div className="container-page flex gap-8 py-6">
-          <CategorySidebar />
-          <div className="min-w-0 flex-1">
-            <RouteView />
-          </div>
-        </div>
+        <main className="container-page flex-1 py-6">
+          <RouteView />
+        </main>
       ) : fullWidth ? (
         <main>
           <RouteView />

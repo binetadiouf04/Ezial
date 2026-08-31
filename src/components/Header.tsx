@@ -7,7 +7,7 @@ import { categories, categoryMap } from '@/data/categories';
 import SmartImage from './SmartImage';
 
 export default function Header() {
-  const { navigate, cartCount, setCategoryDrawerOpen, route } = useApp();
+  const { navigate, cartCount, setCategoryDrawerOpen } = useApp();
   const [query, setQuery] = useState('');
   const [focused, setFocused] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -23,8 +23,6 @@ export default function Header() {
     e.preventDefault();
     if (query.trim()) { navigate(`/recherche?q=${encodeURIComponent(query.trim())}`); setFocused(false); inputRef.current?.blur(); }
   };
-
-  const onHome = route === '/' || route === '';
 
   return (
     <header className="sticky top-0 z-40 border-b border-line bg-white/95 backdrop-blur-md">
@@ -74,15 +72,13 @@ export default function Header() {
           </div>
         </div>
       </div>
-      {!onHome && (
-        <div className="hidden lg:block border-t border-line bg-white">
-          <div className="container-pro">
-            <nav className="flex items-center gap-6 h-11 overflow-x-auto no-scrollbar">
-              {categories.map((c) => <button key={c.id} onClick={() => navigate(`/categorie/${c.id}`)} className="whitespace-nowrap text-sm font-medium text-ink/70 hover:text-burgundy transition-colors">{c.label}</button>)}
-            </nav>
-          </div>
+      <div className="hidden lg:block border-t border-line bg-white">
+        <div className="container-pro">
+          <nav className="flex items-center gap-6 h-11 overflow-x-auto no-scrollbar">
+            {categories.map((c) => <button key={c.id} onClick={() => navigate(`/categorie/${c.id}`)} className="whitespace-nowrap text-sm font-medium text-ink/70 hover:text-burgundy transition-colors">{c.label}</button>)}
+          </nav>
         </div>
-      )}
+      </div>
     </header>
   );
 }
