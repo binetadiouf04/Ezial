@@ -1,0 +1,115 @@
+@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    scroll-behavior: smooth;
+  }
+  body {
+    @apply bg-white text-ink font-sans antialiased;
+    line-height: 1.5;
+  }
+  h1, h2, h3, h4 {
+    line-height: 1.2;
+  }
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    @apply bg-line rounded-full;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-champagne;
+  }
+}
+
+@layer components {
+  .container-pro {
+    @apply mx-auto w-full max-w-[1200px] px-4 sm:px-6 lg:px-8;
+  }
+  .container-page {
+    @apply mx-auto w-full max-w-[1440px] px-4 sm:px-6 lg:px-10;
+  }
+  .btn-primary {
+    @apply inline-flex items-center justify-center gap-2 rounded-full bg-burgundy px-6 py-3 text-sm font-medium text-white transition-all hover:bg-burgundy-deep active:scale-[0.98] disabled:opacity-40 disabled:active:scale-100;
+  }
+  .btn-outline {
+    @apply inline-flex items-center justify-center gap-2 rounded-full border border-line bg-white px-6 py-3 text-sm font-medium text-ink transition-all hover:border-ink/30 active:scale-[0.98];
+  }
+  .btn-ghost {
+    @apply inline-flex items-center justify-center gap-2 rounded-full px-4 py-2 text-sm font-medium text-ink transition-colors hover:bg-cream;
+  }
+  .btn-danger {
+    @apply inline-flex items-center justify-center gap-2 rounded-full border border-red-200 bg-red-50 px-6 py-3 text-sm font-medium text-red-700 transition-all hover:bg-red-100 active:scale-[0.98];
+  }
+  .chip {
+    @apply inline-flex items-center gap-1.5 rounded-full border border-line bg-white px-3 py-1.5 text-xs font-medium text-ink/70 transition-colors;
+  }
+  .chip-active {
+    @apply border-burgundy bg-burgundy/5 text-burgundy;
+  }
+  .input-field {
+    @apply w-full rounded-xl border border-line bg-white px-4 py-3 text-sm text-ink placeholder:text-ink/35 transition-colors focus:border-burgundy focus:outline-none focus:ring-1 focus:ring-burgundy/20;
+  }
+  .section-title {
+    @apply font-display text-2xl font-semibold tracking-tightish text-ink sm:text-3xl;
+  }
+  .eyebrow {
+    @apply text-[11px] font-semibold uppercase tracking-[0.18em] text-burgundy;
+  }
+  .card {
+    @apply rounded-xl border border-line bg-white;
+  }
+  .card-shadow {
+    box-shadow: 0 1px 2px rgba(23,23,23,0.04), 0 8px 24px -12px rgba(23,23,23,0.08);
+  }
+  .nav-link {
+    @apply flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors;
+  }
+  .nav-link-active {
+    @apply bg-burgundy text-white;
+  }
+  .nav-link-inactive {
+    @apply text-ink/60 hover:bg-cream hover:text-ink;
+  }
+}
+
+@layer utilities {
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .fade-in {
+    animation: fadeIn 0.4s ease both;
+  }
+  .slide-up {
+    animation: slideUp 0.35s cubic-bezier(0.16,1,0.3,1) both;
+  }
+  .slide-in-right {
+    animation: slideInRight 0.3s cubic-bezier(0.16,1,0.3,1) both;
+  }
+  @keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+  @keyframes slideUp {
+    from { opacity: 0; transform: translateY(12px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes slideInRight {
+    from { opacity: 0; transform: translateX(20px); }
+    to { opacity: 1; transform: translateX(0); }
+  }
+}
