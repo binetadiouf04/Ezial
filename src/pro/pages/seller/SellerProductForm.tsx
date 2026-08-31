@@ -2,16 +2,87 @@ import { useState, useMemo } from 'react';
 import { usePro } from '../../ProContext';
 import { categories, categoryMap, type CategoryId } from '@/data/categories';
 import { getFilters, type FilterGroup } from '@/data/filters';
-import { colorPalette, getColor } from '@/data/colors';
+import { getColor } from '@/data/colors';
 import VendorNoticeBanner from '../../components/VendorNoticeBanner';
 import { ArrowLeft, X, Package, ChevronDown, Check, Camera, Star } from 'lucide-react';
 
-// Which filter groups are single-choice vs multiple-choice
+// Which filter groups are single-choice (radio-like) vs descriptive multi-choice
+// (checkbox-like, but never split stock) vs true variant dimensions (checkbox-like
+// AND generate one stock/price line per selected value).
 const SINGLE_CHOICE_IDS = new Set(['type', 'style', 'texture', 'matiere', 'peau', 'typeproduit']);
+// Only these represent a genuinely different version of the product being sold —
+// the ones allowed to generate stock/price combinations. Descriptive multi-choice
+// attributes like "besoin" or "famille" (notes olfactives) are intentionally left
+// out: several can apply at once, but they only describe the product and must
+// never split it into separate stock lines.
+const VARIANT_DIMENSION_IDS = new Set(['taille', 'couleur', 'longueur', 'densite', 'volume', 'poids']);
 const COLOR_GROUP_IDS = new Set(['couleur']);
 
 // Number of colors to show before "Voir plus"
 const COLOR_PREVIEW_COUNT = 8;
+
+const VOLUME_BASE_OPTIONS = ['30 ml', '50 ml', '100 ml', 'Autre'];
+const WEIGHT_BASE_OPTIONS = ['150 g', '300 g', 'Autre'];
+
+// Maquillage: the color/teinte palette depends on the type of product chosen —
+// a foundation needs skin tones, a lipstick needs lip shades, etc.
+const skinToneShades = ['Très clair', 'Clair', 'Medium', 'Caramel', 'Doré', 'Brun', 'Brun foncé', 'Deep'];
+const lipShades = ['Nude', 'Rose nude', 'Mauve', 'Bordeaux', 'Rouge', 'Brun', 'Chocolat', 'Prune', 'Corail'];
+const eyeShades = ['Noir', 'Brun', 'Bleu', 'Vert', 'Bordeaux', 'Blanc'];
+const eyeshadowShades = ['Or', 'Cuivré', 'Bronze', 'Marron', 'Chocolat', 'Taupe', 'Rose', 'Prune', 'Violet', 'Noir', 'Blanc', 'Nude', 'Doré', 'Argenté', 'Vert', 'Bleu', 'Turquoise'];
+const blushShades = ['Rose', 'Pêche', 'Terracotta', 'Prune', 'Brun rosé'];
+const highlighterShades = ['Doré', 'Or rose', 'Argenté', 'Beige'];
+
+const makeupColorsByType: Record<string, string[]> = {
+  'Fond de teint': skinToneShades,
+  'Anticernes': skinToneShades,
+  'Poudre': skinToneShades,
+  'Bronzer': skinToneShades,
+  'Highlighter': highlighterShades,
+  'Rouge à lèvres': lipShades,
+  'Gloss': lipShades,
+  'Crayon à lèvres': lipShades,
+  'Mascara': eyeShades,
+  'Eyeliner': eyeShades,
+  'Crayon à sourcils': eyeShades,
+  'Fard à paupières': eyeshadowShades,
+  'Palette': eyeshadowShades,
+  'Blush': blushShades,
+};
+
+// Short placeholder examples for "Nom du produit" / "Description", to help the
+// seller without pre-filling the fields. Keyed by category/subcategory, with a
+// category-level and a generic fallback.
+const examplesBySubcategory: Record<string, { name: string; description: string }> = {
+  'vetements/femme': { name: 'Ex. Robe longue satinée', description: 'Ex. Robe fluide, coupe élégante, idéale pour les sorties et événements.' },
+  'vetements/homme': { name: 'Ex. Chemise slim en lin', description: 'Ex. Chemise légère, coupe ajustée, idéale pour les journées chaudes.' },
+  'chaussures/femme': { name: 'Ex. Escarpins talon 8 cm', description: 'Ex. Escarpins élégants et confortables, pour le bureau ou la soirée.' },
+  'chaussures/homme': { name: 'Ex. Mocassins en cuir', description: 'Ex. Mocassins souples en cuir véritable, semelle confortable.' },
+  'sacs/sacs-a-main': { name: 'Ex. Sac à main structuré', description: 'Ex. Sac en cuir, format moyen, compartiment intérieur zippé.' },
+  'beaute/maquillage': { name: 'Ex. Rouge à lèvres mat', description: 'Ex. Rouge à lèvres longue tenue, fini mat, confortable à porter.' },
+  'beaute/skincare': { name: 'Ex. Sérum hydratant visage', description: 'Ex. Sérum léger pour peau sèche à mixte, hydratation quotidienne.' },
+  'beaute/soins-capillaires': { name: 'Ex. Shampoing hydratant', description: 'Ex. Shampoing doux, nettoie en douceur et hydrate les cheveux secs.' },
+  'beaute/hygiene': { name: 'Ex. Gel douche karité', description: 'Ex. Gel douche hydratant au beurre de karité, parfum doux.' },
+  'cheveux/perruques': { name: 'Ex. Perruque Body Wave 22 pouces', description: 'Ex. Perruque naturelle, densité 180 %, couleur noir naturel.' },
+  'cheveux/meches': { name: 'Ex. Mèches lisses 20 pouces', description: 'Ex. Mèches 100% naturelles, pose facile, tenue longue durée.' },
+  'parfums/parfums-femme': { name: 'Ex. Eau de parfum vanille ambrée', description: 'Ex. Parfum femme aux notes vanillées, ambrées et florales.' },
+  'parfums/parfums-homme': { name: 'Ex. Eau de parfum boisée épicée', description: 'Ex. Parfum homme aux notes boisées, épicées et ambrées.' },
+  'parfums/huiles-brumes': { name: 'Ex. Brume parfumée fleur de tiaré', description: 'Ex. Brume légère et fraîche, à vaporiser sur la peau ou les cheveux.' },
+  'parfums/encens-parfums-maison': { name: 'Ex. Encens oud premium', description: 'Ex. Encens naturel au oud, parfum boisé et enveloppant.' },
+  'bijoux/colliers': { name: 'Ex. Collier fin plaqué or', description: 'Ex. Collier fin et délicat, plaqué or, pour un port quotidien.' },
+  'lingerie/sous-vetements': { name: 'Ex. Culotte coton sans couture', description: 'Ex. Culotte confortable en coton doux, coupe invisible sous les vêtements.' },
+};
+
+const examplesByCategory: Record<string, { name: string; description: string }> = {
+  vetements: { name: 'Ex. Robe longue satinée', description: 'Ex. Robe fluide, coupe élégante, idéale pour les sorties et événements.' },
+  chaussures: { name: 'Ex. Escarpins talon 8 cm', description: 'Ex. Escarpins élégants et confortables.' },
+  sacs: { name: 'Ex. Sac à main structuré', description: 'Ex. Sac en cuir véritable, format moyen.' },
+  beaute: { name: 'Ex. Sérum hydratant visage', description: 'Ex. Sérum léger pour peau sèche à mixte, hydratation quotidienne.' },
+  cheveux: { name: 'Ex. Perruque Body Wave 22 pouces', description: 'Ex. Perruque naturelle, densité 180 %, couleur noir naturel.' },
+  parfums: { name: 'Ex. Eau de parfum vanille ambrée', description: 'Ex. Parfum femme aux notes vanillées, ambrées et florales.' },
+  bijoux: { name: 'Ex. Collier fin plaqué or', description: 'Ex. Collier délicat pour un port quotidien.' },
+  lingerie: { name: 'Ex. Pyjama deux pièces en coton', description: 'Ex. Pyjama doux et confortable, idéal pour les soirées fraîches.' },
+};
 
 interface OptionSelection {
   // groupId -> selected values (string[] for multiple, string[0] for single)
@@ -44,29 +115,70 @@ export default function SellerProductForm({ productId }: { productId?: string })
   const [selections, setSelections] = useState<OptionSelection>({});
   const [showAllColors, setShowAllColors] = useState<Record<string, boolean>>({});
 
+  // Manual value when "Autre" is picked for Volume / Poids
+  const [customVolumeMl, setCustomVolumeMl] = useState('');
+  const [customWeightG, setCustomWeightG] = useState('');
+
   // Price by option toggle
   const [priceByOption, setPriceByOption] = useState(false);
 
-  // Stock + price per combination
+  // Stock + price per combination (used when the product has real variants)
   const [comboData, setComboData] = useState<Record<string, { stock: number; price: number }>>({});
+  // Plain stock (used when the product has no variant dimension at all)
+  const [simpleStock, setSimpleStock] = useState(existing?.stock.toString() ?? '');
 
   const selectedCategory = categoryId ? categoryMap[categoryId as CategoryId] : null;
+  const selectedTypeProduit = selections.typeproduit?.[0];
+
+  const showsVolume =
+    (categoryId === 'beaute' && (subId === 'skincare' || subId === 'hygiene')) ||
+    (categoryId === 'parfums' && (subId === 'parfums-femme' || subId === 'parfums-homme' || subId === 'huiles-brumes'));
+
+  const showsWeight =
+    categoryId === 'parfums' && subId === 'encens-parfums-maison' &&
+    (selectedTypeProduit === 'Encens' || selectedTypeProduit === 'Cire parfumée');
+
+  const isMakeup = categoryId === 'beaute' && subId === 'maquillage';
+
   const optionGroups: FilterGroup[] = useMemo(() => {
     if (!categoryId) return [];
-    return getFilters(categoryId, subId || undefined).filter((g) => g.id !== 'prix');
-  }, [categoryId, subId]);
+    let groups = getFilters(categoryId, subId || undefined).filter((g) => g.id !== 'prix');
 
-  // Determine which groups are "selectable" (generate stock combinations)
-  // vs "descriptive" (single-choice attributes like type, style, matière)
-  // Multiple-choice groups generate combinations. Single-choice groups are descriptive.
-  // Exception: if there's only one multiple-choice group, it generates a simple stock list.
-  const multiChoiceGroups = optionGroups.filter((g) => !SINGLE_CHOICE_IDS.has(g.id));
-  const singleChoiceGroups = optionGroups.filter((g) => SINGLE_CHOICE_IDS.has(g.id));
+    if (isMakeup) {
+      groups = groups.filter((g) => g.id !== 'couleur');
+      const shades = selectedTypeProduit ? makeupColorsByType[selectedTypeProduit] : undefined;
+      if (shades && shades.length > 0) {
+        groups = [...groups, { id: 'couleur', label: 'Couleur / Teinte', options: shades, collapsible: true }];
+      }
+    }
+    if (showsVolume) groups = [...groups, { id: 'volume', label: 'Volume', options: VOLUME_BASE_OPTIONS }];
+    if (showsWeight) groups = [...groups, { id: 'poids', label: 'Poids', options: WEIGHT_BASE_OPTIONS }];
 
-  // Generate combinations from selected multiple-choice options
+    return groups;
+  }, [categoryId, subId, isMakeup, selectedTypeProduit, showsVolume, showsWeight]);
+
+  // Only "true" variant dimensions (taille, couleur, volume, poids, longueur,
+  // densité) generate stock/price combinations — everything else (style, type,
+  // besoin, notes olfactives...) is purely descriptive.
+  const multiChoiceGroups = optionGroups.filter((g) => VARIANT_DIMENSION_IDS.has(g.id));
+
+  // "Autre" in Volume/Poids is replaced by the seller's manual value before it
+  // ever reaches the combination logic or the saved product.
+  const effectiveValues = (groupId: string): string[] => {
+    const raw = selections[groupId] ?? [];
+    if (groupId === 'volume') {
+      return raw.map((v) => (v === 'Autre' ? (customVolumeMl.trim() ? `${customVolumeMl.trim()} ml` : '') : v)).filter(Boolean);
+    }
+    if (groupId === 'poids') {
+      return raw.map((v) => (v === 'Autre' ? (customWeightG.trim() ? `${customWeightG.trim()} g` : '') : v)).filter(Boolean);
+    }
+    return raw;
+  };
+
+  // Generate combinations from selected variant-dimension options
   const combinations: Combo[] = useMemo(() => {
     const selectedMulti = multiChoiceGroups
-      .map((g) => ({ group: g, values: selections[g.id] ?? [] }))
+      .map((g) => ({ group: g, values: effectiveValues(g.id) }))
       .filter((s) => s.values.length > 0);
 
     if (selectedMulti.length === 0) return [];
@@ -90,14 +202,15 @@ export default function SellerProductForm({ productId }: { productId?: string })
       stock: comboData[parts.join('|')]?.stock ?? 0,
       price: comboData[parts.join('|')]?.price ?? (parseInt(price) || 0),
     }));
-  }, [selections, multiChoiceGroups, comboData, price]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selections, multiChoiceGroups, comboData, price, customVolumeMl, customWeightG]);
 
   const totalStock = useMemo(() => {
     if (combinations.length > 0) {
       return combinations.reduce((sum, c) => sum + (comboData[c.key]?.stock ?? 0), 0);
     }
-    return 0;
-  }, [combinations, comboData]);
+    return Math.max(0, parseInt(simpleStock) || 0);
+  }, [combinations, comboData, simpleStock]);
 
   // === Handlers ===
 
@@ -125,8 +238,16 @@ export default function SellerProductForm({ productId }: { productId?: string })
   const toggleSingleChoice = (groupId: string, value: string) => {
     setSelections((prev) => {
       const current = prev[groupId] ?? [];
-      return { ...prev, [groupId]: current[0] === value ? [] : [value] };
+      const next: OptionSelection = { ...prev, [groupId]: current[0] === value ? [] : [value] };
+      // Changing "Type de produit" invalidates color/weight choices made for the
+      // previous type (maquillage shades depend on it; encens' weight variant too).
+      if (groupId === 'typeproduit') {
+        next.couleur = [];
+        next.poids = [];
+      }
+      return next;
     });
+    if (groupId === 'typeproduit') setComboData({});
   };
 
   const toggleMultiChoice = (groupId: string, value: string) => {
@@ -160,12 +281,16 @@ export default function SellerProductForm({ productId }: { productId?: string })
     setSelections({});
     setComboData({});
     setShowAllColors({});
+    setCustomVolumeMl('');
+    setCustomWeightG('');
   };
 
   const handleSubCategoryChange = (newSubId: string) => {
     setSubId(newSubId);
     setSelections({});
     setComboData({});
+    setCustomVolumeMl('');
+    setCustomWeightG('');
   };
 
   const validate = (): boolean => {
@@ -179,20 +304,14 @@ export default function SellerProductForm({ productId }: { productId?: string })
     return Object.keys(e).length === 0;
   };
 
-  const handleSubmit = (status: 'draft' | 'pending') => {
+  const handleSubmit = (status: 'draft' | 'published') => {
     if (!validate()) return;
 
-    // Build variant definitions for storage
+    // Build variant definitions for storage — descriptive attributes (besoin,
+    // famille, style...) are saved too, just never split into stock lines.
     const variantDefs = optionGroups.map((g) => ({
       name: g.label,
-      values: selections[g.id] ?? [],
-    }));
-
-    // Build combination-level data
-    const comboEntries = combinations.map((c) => ({
-      label: c.label,
-      stock: comboData[c.key]?.stock ?? 0,
-      price: priceByOption ? (comboData[c.key]?.price ?? (parseInt(price) || 0)) : (parseInt(price) || 0),
+      values: effectiveValues(g.id),
     }));
 
     const product = {
@@ -202,7 +321,7 @@ export default function SellerProductForm({ productId }: { productId?: string })
       category: selectedCategory?.label ?? categoryId,
       price: parseInt(price),
       image: images[0],
-      stock: totalStock || parseInt('0'),
+      stock: totalStock,
       status,
       variants: variantDefs.filter((v) => v.values.length > 0),
       description: description.trim(),
@@ -291,14 +410,16 @@ export default function SellerProductForm({ productId }: { productId?: string })
   };
 
   // === Stock matrix rendering ===
+  // Supports any number of active variant dimensions: 1 dimension renders a
+  // flat list, 2+ dimensions group by one outer dimension (color first, if
+  // present) and list the remaining dimensions' combination on each row.
 
   const renderStockMatrix = () => {
     if (combinations.length === 0) return null;
 
-    // Group combinations by first attribute for the 2D display
-    // If only one dimension, it's a flat list
-    if (multiChoiceGroups.filter((g) => (selections[g.id] ?? []).length > 0).length === 1) {
-      // Simple flat list
+    const activeGroups = multiChoiceGroups.filter((g) => effectiveValues(g.id).length > 0);
+
+    if (activeGroups.length === 1) {
       return (
         <div className="space-y-2.5">
           {combinations.map((combo) => (
@@ -332,71 +453,64 @@ export default function SellerProductForm({ productId }: { productId?: string })
       );
     }
 
-    // Two-dimensional: group by first attribute
-    const firstGroup = multiChoiceGroups.find((g) => (selections[g.id] ?? []).length > 0);
-    const secondGroup = multiChoiceGroups.filter((g) => g !== firstGroup).find((g) => (selections[g.id] ?? []).length > 0);
-
-    if (!firstGroup || !secondGroup) return null;
-
-    const firstValues = selections[firstGroup.id] ?? [];
-    const secondValues = selections[secondGroup.id] ?? [];
-
-    // Determine which is the "row header" (grouped) — prefer color as the outer grouping
-    const colorGroup = multiChoiceGroups.find((g) => COLOR_GROUP_IDS.has(g.id) && (selections[g.id] ?? []).length > 0);
-    const outerGroup = colorGroup ?? firstGroup;
-    const innerGroup = outerGroup === firstGroup ? secondGroup : firstGroup;
-    const outerValues = selections[outerGroup.id] ?? [];
-    const innerValues = selections[innerGroup.id] ?? [];
+    // 2+ dimensions: group rows by one outer dimension (prefer color).
+    const colorGroup = activeGroups.find((g) => COLOR_GROUP_IDS.has(g.id));
+    const outerGroup = colorGroup ?? activeGroups[0];
+    const outerValues = effectiveValues(outerGroup.id);
 
     return (
       <div className="space-y-4">
-        {outerValues.map((outerVal) => (
-          <div key={outerVal}>
-            <p className="text-xs font-semibold text-ink mb-2 flex items-center gap-2">
-              {COLOR_GROUP_IDS.has(outerGroup.id) && (() => {
-                const c = getColor(outerVal);
-                return c ? <span className="h-3.5 w-3.5 rounded-full border border-line" style={c.multi ? { background: 'conic-gradient(from 0deg, #e0507a, #f4d03f, #2b6cb0, #1c8a5b, #e0507a)' } : { backgroundColor: c.hex }} /> : null;
-              })()}
-              {outerVal}
-            </p>
-            <div className="space-y-2 ml-5">
-              {innerValues.map((innerVal) => {
-                // Find the combo that matches these parts
-                const combo = combinations.find((c) => c.parts.includes(outerVal) && c.parts.includes(innerVal));
-                if (!combo) return null;
-                return (
-                  <div key={combo.key} className="flex items-center gap-3">
-                    <span className="w-12 text-sm text-ink/70 flex-shrink-0">{innerVal}</span>
-                    {priceByOption && (
+        {outerValues.map((outerVal) => {
+          const rowsForOuter = combinations.filter((c) => c.parts.includes(outerVal));
+          return (
+            <div key={outerVal}>
+              <p className="text-xs font-semibold text-ink mb-2 flex items-center gap-2">
+                {COLOR_GROUP_IDS.has(outerGroup.id) && (() => {
+                  const c = getColor(outerVal);
+                  return c ? <span className="h-3.5 w-3.5 rounded-full border border-line" style={c.multi ? { background: 'conic-gradient(from 0deg, #e0507a, #f4d03f, #2b6cb0, #1c8a5b, #e0507a)' } : { backgroundColor: c.hex }} /> : null;
+                })()}
+                {outerVal}
+              </p>
+              <div className="space-y-2 ml-5">
+                {rowsForOuter.map((combo) => {
+                  const innerLabel = combo.parts.filter((p) => p !== outerVal).join(' / ');
+                  return (
+                    <div key={combo.key} className="flex items-center gap-3">
+                      <span className="flex-1 text-sm text-ink/70 min-w-0">{innerLabel}</span>
+                      {priceByOption && (
+                        <div className="flex items-center gap-1.5 flex-shrink-0">
+                          <input
+                            type="number"
+                            className="input-field w-24 text-xs py-1.5"
+                            placeholder="Prix"
+                            value={comboData[combo.key]?.price ?? ''}
+                            onChange={(e) => updateComboPrice(combo.key, parseInt(e.target.value) || 0)}
+                          />
+                          <span className="text-[11px] text-ink/40">FCFA</span>
+                        </div>
+                      )}
                       <div className="flex items-center gap-1.5 flex-shrink-0">
                         <input
                           type="number"
-                          className="input-field w-24 text-xs py-1.5"
-                          placeholder="Prix"
-                          value={comboData[combo.key]?.price ?? ''}
-                          onChange={(e) => updateComboPrice(combo.key, parseInt(e.target.value) || 0)}
+                          className="input-field w-16 text-center text-sm py-1.5"
+                          placeholder="0"
+                          value={comboData[combo.key]?.stock ?? ''}
+                          onChange={(e) => updateComboStock(combo.key, parseInt(e.target.value) || 0)}
                         />
-                        <span className="text-[11px] text-ink/40">FCFA</span>
                       </div>
-                    )}
-                    <div className="flex items-center gap-1.5 flex-shrink-0">
-                      <input
-                        type="number"
-                        className="input-field w-16 text-center text-sm py-1.5"
-                        placeholder="0"
-                        value={comboData[combo.key]?.stock ?? ''}
-                        onChange={(e) => updateComboStock(combo.key, parseInt(e.target.value) || 0)}
-                      />
                     </div>
-                  </div>
-                );
-              })}
+                  );
+                })}
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
     );
   };
+
+  const nameExample = (subId && examplesBySubcategory[`${categoryId}/${subId}`]?.name) || (categoryId && examplesByCategory[categoryId]?.name) || 'Ex. Nom du produit';
+  const descriptionExample = (subId && examplesBySubcategory[`${categoryId}/${subId}`]?.description) || (categoryId && examplesByCategory[categoryId]?.description) || 'Ex. Décrivez le produit : matière, usage, points forts…';
 
   return (
     <div className="space-y-5">
@@ -470,12 +584,12 @@ export default function SellerProductForm({ productId }: { productId?: string })
         <h2 className="text-sm font-semibold text-ink">Informations du produit</h2>
         <div>
           <label className="block text-xs font-medium text-ink/60 mb-1.5">Nom du produit</label>
-          <input className="input-field" value={name} onChange={(e) => setName(e.target.value)} />
+          <input className="input-field" placeholder={nameExample} value={name} onChange={(e) => setName(e.target.value)} />
           {errors.name && <p className="mt-1 text-xs text-burgundy">{errors.name}</p>}
         </div>
         <div>
           <label className="block text-xs font-medium text-ink/60 mb-1.5">Description</label>
-          <textarea className="input-field" rows={3} value={description} onChange={(e) => setDescription(e.target.value)} />
+          <textarea className="input-field" rows={3} placeholder={descriptionExample} value={description} onChange={(e) => setDescription(e.target.value)} />
           {errors.description && <p className="mt-1 text-xs text-burgundy">{errors.description}</p>}
         </div>
       </div>
@@ -484,7 +598,7 @@ export default function SellerProductForm({ productId }: { productId?: string })
       <div className="card p-5 space-y-4">
         <div>
           <h2 className="text-sm font-semibold text-ink">Photos du produit</h2>
-          <p className="mt-1 text-xs text-ink/45">Ajoutez des photos claires de votre produit. Vous pouvez sélectionner plusieurs photos.</p>
+          <p className="mt-1 text-xs text-ink/45">Ajoutez des photos claires de votre produit. Vous pouvez sélectionner plusieurs photos — la première devient la photo principale, les autres forment la galerie. Ezial les adapte automatiquement à l'affichage, aucun format précis n'est requis.</p>
         </div>
 
         {images.length > 0 && (
@@ -567,13 +681,15 @@ export default function SellerProductForm({ productId }: { productId?: string })
         <div className="card p-5 space-y-5">
           <div>
             <h2 className="text-sm font-semibold text-ink">Options du produit</h2>
-            <p className="mt-1 text-xs text-ink/45">Sélectionnez les options disponibles pour ce produit. Ezial génère automatiquement les combinaisons de stock.</p>
+            <p className="mt-1 text-xs text-ink/45">Sélectionnez les options disponibles pour ce produit. Ezial génère automatiquement les combinaisons de stock pour les options qui créent une vraie variante (taille, couleur, volume, poids...).</p>
           </div>
 
           {optionGroups.map((group) => {
             const isColor = COLOR_GROUP_IDS.has(group.id);
             const isSingle = SINGLE_CHOICE_IDS.has(group.id);
             const choiceLabel = isSingle ? 'Choix unique' : 'Choix multiple';
+            const showsCustomVolume = group.id === 'volume' && (selections.volume ?? []).includes('Autre');
+            const showsCustomWeight = group.id === 'poids' && (selections.poids ?? []).includes('Autre');
 
             return (
               <div key={group.id} className="space-y-2.5">
@@ -586,6 +702,32 @@ export default function SellerProductForm({ productId }: { productId?: string })
                 {isColor
                   ? renderColorSwatches(group)
                   : renderChips(group, isSingle)}
+                {showsCustomVolume && (
+                  <div className="flex items-center gap-2 pt-1">
+                    <input
+                      type="number"
+                      min="1"
+                      className="input-field w-28"
+                      placeholder="Volume"
+                      value={customVolumeMl}
+                      onChange={(e) => setCustomVolumeMl(e.target.value)}
+                    />
+                    <span className="text-xs text-ink/50">ml</span>
+                  </div>
+                )}
+                {showsCustomWeight && (
+                  <div className="flex items-center gap-2 pt-1">
+                    <input
+                      type="number"
+                      min="1"
+                      className="input-field w-28"
+                      placeholder="Poids"
+                      value={customWeightG}
+                      onChange={(e) => setCustomWeightG(e.target.value)}
+                    />
+                    <span className="text-xs text-ink/50">g</span>
+                  </div>
+                )}
               </div>
             );
           })}
@@ -593,29 +735,41 @@ export default function SellerProductForm({ productId }: { productId?: string })
       )}
 
       {/* 8. Stock */}
-      {combinations.length > 0 && (
-        <div className="card p-5 space-y-4">
-          <div className="flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-ink">En stock</h2>
-            <span className="text-xs text-ink/50">Total : <span className="font-semibold text-ink">{totalStock}</span></span>
-          </div>
-
-          {/* Legend if price by option is on */}
-          {priceByOption && (
-            <div className="flex items-center gap-4 text-[11px] text-ink/40 border-b border-line pb-2">
-              <span className="w-24">Prix (FCFA)</span>
-              <span>Stock</span>
-            </div>
-          )}
-
-          {renderStockMatrix()}
+      <div className="card p-5 space-y-4">
+        <div className="flex items-center justify-between">
+          <h2 className="text-sm font-semibold text-ink">En stock</h2>
+          {combinations.length > 0 && <span className="text-xs text-ink/50">Total : <span className="font-semibold text-ink">{totalStock}</span></span>}
         </div>
-      )}
+
+        {combinations.length > 0 ? (
+          <>
+            {priceByOption && (
+              <div className="flex items-center gap-4 text-[11px] text-ink/40 border-b border-line pb-2">
+                <span className="w-24">Prix (FCFA)</span>
+                <span>Stock</span>
+              </div>
+            )}
+            {renderStockMatrix()}
+          </>
+        ) : (
+          <div className="flex items-center gap-3">
+            <label className="text-sm text-ink/60 flex-1">Quantité disponible</label>
+            <input
+              type="number"
+              min="0"
+              className="input-field w-24 text-center"
+              placeholder="0"
+              value={simpleStock}
+              onChange={(e) => setSimpleStock(e.target.value)}
+            />
+          </div>
+        )}
+      </div>
 
       {/* Actions */}
       <div className="flex gap-3">
         <button onClick={() => handleSubmit('draft')} className="btn-outline flex-1">Enregistrer en brouillon</button>
-        <button onClick={() => handleSubmit('pending')} className="btn-primary flex-1">Soumettre pour validation</button>
+        <button onClick={() => handleSubmit('published')} className="btn-primary flex-1">Publier</button>
       </div>
     </div>
   );

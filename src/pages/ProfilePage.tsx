@@ -3,6 +3,7 @@ import { useApp, type DeliveryStepStatus, type PickupStepStatus, type Order, typ
 import { getProduct, formatFCFA } from '@/data/products';
 import ProductGrid from '@/components/ProductGrid';
 import { products } from '@/data/products';
+import SmartImage from '@/components/SmartImage';
 import { User, Heart, ShoppingBag, LogOut, ChevronRight, Briefcase, Truck, Store, Check, AlertCircle } from 'lucide-react';
 
 const deliveryStatusLabels: Record<DeliveryStepStatus, string> = {
@@ -137,7 +138,7 @@ export default function ProfilePage() {
                     {order.items.slice(0, 4).map((item, i) => {
                       const p = getProduct(item.productId);
                       if (!p) return null;
-                      return <img key={i} src={p.images[0]} alt="" className="h-12 w-10 rounded object-cover" />;
+                      return <SmartImage key={i} src={p.images[0]} alt="" className="h-12 w-10 rounded object-cover flex-shrink-0" />;
                     })}
                     {order.items.length > 4 && <div className="flex h-12 w-10 items-center justify-center rounded bg-cream text-xs text-ink/40">+{order.items.length - 4}</div>}
                   </div>

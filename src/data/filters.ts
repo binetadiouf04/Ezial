@@ -19,7 +19,7 @@ const hairTextures = ['Straight', 'Body Wave', 'Deep Wave', 'Loose Wave', 'Water
 const hairLengths = ['10"', '12"', '14"', '16"', '18"', '20"', '22"', '24"', '26"', '28"', '30"', '32"', '32"+'];
 const hairDensities = ['150%', '180%', '200%'];
 const hairColors = ['Noir naturel', 'Noir', 'Brun foncé', 'Brun', 'Châtain', 'Chocolat', 'Caramel', 'Miel', 'Auburn', 'Bordeaux', 'Blond', 'Blond miel', 'Blond platine', 'Gris', 'Rouge', 'Cuivré'];
-const hairMaterials = ['Synthetic Hair', 'Blend Hair', 'Cheveux naturels', 'Raw Hair', 'Romance', 'Cheveux vietnamiens', 'Cheveux indiens'];
+const hairMaterials = ['Synthetic Hair', 'Blend Hair', 'Human Hair', 'Raw Hair', 'Romance', 'Vietnamese Hair', 'Indian Hair'];
 
 const parfumsFemmeNotes = ['Floral', 'Fruité', 'Vanillé', 'Gourmand', 'Musqué', 'Ambré', 'Poudré', 'Frais', 'Agrumes', 'Oriental'];
 const parfumsHommeNotes = ['Boisé', 'Aromatique', 'Épicé', 'Ambré', 'Musqué', 'Cuir', 'Frais', 'Agrumes', 'Aquatique', 'Fougère', 'Oriental'];
@@ -29,6 +29,11 @@ const encensMaisonTypes = ['Encens', 'Diffuseur', 'Bougie', 'Cire parfumée', 'P
 
 const jewelryTypes = ['Collier', 'Bracelet', 'Bague', 'Boucles d\'oreilles', 'Montre', 'Lunettes', 'Bijou de taille'];
 const jewelryMaterials = ['Or', 'Argent', 'Plaqué or', 'Acier inoxydable', 'Perles'];
+const jewelryColors = [
+  'Doré', 'Argenté', 'Or rose', 'Noir', 'Blanc', 'Ivoire', 'Crème', 'Beige', 'Marron',
+  'Rouge', 'Bordeaux', 'Rose', 'Mauve', 'Violet', 'Bleu', 'Bleu marine', 'Vert', 'Turquoise',
+  'Jaune', 'Orange', 'Multicolore',
+];
 
 const bagTypes = ['Sac à main', 'Sac bandoulière', 'Pochette', 'Portefeuille', 'Sac à dos'];
 
@@ -171,7 +176,7 @@ export const filterConfig: Record<CategoryId, FilterGroup[]> = {
   bijoux: [
     { id: 'type', label: 'Type', options: jewelryTypes },
     { id: 'matiere', label: 'Matière', options: jewelryMaterials },
-    { id: 'couleur', label: 'Couleur', options: ['Doré', 'Argenté', 'Or rose', 'Noir'], collapsible: true },
+    { id: 'couleur', label: 'Couleur', options: jewelryColors, collapsible: true },
     globalPriceFilter,
   ],
   lingerie: [

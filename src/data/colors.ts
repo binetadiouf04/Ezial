@@ -33,6 +33,12 @@ export const colorPalette: ColorDef[] = [
   { name: 'Gris', hex: '#808080' },
   { name: 'Anthracite', hex: '#383838' },
 
+  // Skin tones (foundation / concealer / powder / bronzer)
+  { name: 'Très clair', hex: '#f2d5b8', light: true },
+  { name: 'Clair', hex: '#e8c19c', light: true },
+  { name: 'Medium', hex: '#c9915f' },
+  { name: 'Deep', hex: '#4a2f1a' },
+
   // Reds
   { name: 'Rouge', hex: '#c8102e' },
   { name: 'Rouge vif', hex: '#e60026' },
@@ -48,6 +54,7 @@ export const colorPalette: ColorDef[] = [
   { name: 'Rose poudré', hex: '#e8b4b8', light: true },
   { name: 'Vieux rose', hex: '#c08081' },
   { name: 'Rose', hex: '#e0507a' },
+  { name: 'Brun rosé', hex: '#a86f66' },
   { name: 'Rose nude', hex: '#d49a8e', light: true },
   { name: 'Fuchsia', hex: '#d6368e' },
   { name: 'Framboise', hex: '#b02050' },
@@ -66,6 +73,7 @@ export const colorPalette: ColorDef[] = [
   { name: 'Or', hex: '#d4af37' },
 
   // Greens
+  { name: 'Vert', hex: '#3a7d44' },
   { name: 'Vert pastel', hex: '#aee6c4', light: true },
   { name: 'Vert menthe', hex: '#9ee6c4' },
   { name: 'Vert sauge', hex: '#8ba888' },
