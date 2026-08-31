@@ -1,10 +1,16 @@
 import { useState } from 'react';
 import { usePro } from '../../ProContext';
+import VendorNoticeBanner from '../../components/VendorNoticeBanner';
 import { Check } from 'lucide-react';
 import SmartImage from '@/components/SmartImage';
 
+const shopStatusLabels: Record<string, string> = {
+  active: 'Active', pending: 'En attente', flagged: 'Signalée', suspended: 'Suspendue', inactive: 'Désactivée',
+};
+
 export default function SellerShop() {
-  const { sellerShop, updateSellerShop, identifier } = usePro();
+  const { sellerShop, updateSellerShop, identifier, getLatestModeration } = usePro();
+  const latestModeration = sellerShop ? getLatestModeration('shop', sellerShop.id) : null;
   const [form, setForm] = useState({
     name: sellerShop?.name ?? '',
     description: sellerShop?.description ?? '',
@@ -30,6 +36,8 @@ export default function SellerShop() {
         <h1 className="font-display text-2xl font-semibold text-ink">Ma boutique</h1>
         <p className="mt-1 text-sm text-ink/55">Gérez les informations de votre boutique</p>
       </div>
+
+      {latestModeration && <VendorNoticeBanner entry={latestModeration} />}
 
       {/* Seller identifier — read-only */}
       <div className="card p-4 flex items-center justify-between">
@@ -109,7 +117,7 @@ export default function SellerShop() {
       <div className="card p-4 space-y-2">
         <p className="text-xs font-medium text-ink/50">Informations non modifiables</p>
         <div className="flex justify-between text-sm"><span className="text-ink/45">Commission Ezial</span><span className="font-medium text-ink">8%</span></div>
-        <div className="flex justify-between text-sm"><span className="text-ink/45">Statut du compte</span><span className="font-medium text-ink">{sellerShop?.status === 'active' ? 'Actif' : sellerShop?.status}</span></div>
+        <div className="flex justify-between text-sm"><span className="text-ink/45">Statut du compte</span><span className="font-medium text-ink">{shopStatusLabels[sellerShop?.status ?? ''] ?? sellerShop?.status}</span></div>
         <div className="flex justify-between text-sm"><span className="text-ink/45">Plan</span><span className="font-medium text-ink">{sellerShop?.plan === 'founder' ? 'Founder' : 'Standard'}</span></div>
       </div>
     </div>

@@ -3,6 +3,7 @@ import { usePro } from '../../ProContext';
 import { categories, categoryMap, type CategoryId } from '@/data/categories';
 import { getFilters, type FilterGroup } from '@/data/filters';
 import { colorPalette, getColor } from '@/data/colors';
+import VendorNoticeBanner from '../../components/VendorNoticeBanner';
 import { ArrowLeft, X, Package, ChevronDown, Check, Camera, Star } from 'lucide-react';
 
 // Which filter groups are single-choice vs multiple-choice
@@ -27,8 +28,9 @@ interface Combo {
 }
 
 export default function SellerProductForm({ productId }: { productId?: string }) {
-  const { navigate, sellerProducts, addSellerProduct, updateSellerProduct } = usePro();
+  const { navigate, sellerProducts, addSellerProduct, updateSellerProduct, getLatestModeration } = usePro();
   const existing = productId ? sellerProducts.find((p) => p.id === productId) : undefined;
+  const latestModeration = existing ? getLatestModeration('product', existing.id) : null;
 
   const [categoryId, setCategoryId] = useState<string>(existing?.category ?? '');
   const [subId, setSubId] = useState<string>('');
@@ -406,6 +408,8 @@ export default function SellerProductForm({ productId }: { productId?: string })
         <h1 className="font-display text-2xl font-semibold text-ink">{existing ? 'Modifier le produit' : 'Ajouter un produit'}</h1>
         {existing && <span className="rounded-full bg-cream px-2.5 py-1 text-xs font-mono font-medium text-ink/60">Réf. {existing.reference}</span>}
       </div>
+
+      {latestModeration && <VendorNoticeBanner entry={latestModeration} />}
 
       {/* 1. Catégorie */}
       <div className="card p-5 space-y-4">

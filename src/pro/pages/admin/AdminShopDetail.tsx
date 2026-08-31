@@ -1,16 +1,26 @@
 import { useState } from 'react';
 import { usePro } from '../../ProContext';
-import { formatFCFA, commissionAmount } from '../../data';
+import { formatFCFA, commissionAmount, shopModerationReasons } from '../../data';
 import { StatusChip } from '../../components/StatusChip';
-import { ArrowLeft, Store, ShoppingBag, Wallet, X, AlertTriangle } from 'lucide-react';
+import ModerationModal from '../../components/ModerationModal';
+import ModerationHistoryList from '../../components/ModerationHistoryList';
+import { ArrowLeft, Store, ShoppingBag, Wallet, Pencil, Flag, Ban, RotateCcw, History, Check } from 'lucide-react';
 import SmartImage from '@/components/SmartImage';
+import type { ModerationInput } from '../../ProContext';
 
-type Tab = 'info' | 'products' | 'orders' | 'finances';
+type Tab = 'info' | 'products' | 'orders' | 'finances' | 'history';
+type ModalKind = 'flag' | 'suspend' | 'deactivate' | null;
+
+const shopStatusLabels: Record<string, string> = {
+  active: 'Active', pending: 'En attente', flagged: 'Signalée', suspended: 'Suspendue', inactive: 'Désactivée',
+};
 
 export default function AdminShopDetail({ shopId }: { shopId: string }) {
-  const { allShops, allProducts, allOrders, allTransactions, navigate, toggleShopStatus } = usePro();
+  const { allShops, allProducts, allOrders, allTransactions, navigate, suspendShop, deactivateShop, flagShop, reactivateShop, updateShopInfo, getModerationHistory } = usePro();
   const [tab, setTab] = useState<Tab>('info');
-  const [showSuspend, setShowSuspend] = useState(false);
+  const [modal, setModal] = useState<ModalKind>(null);
+  const [editing, setEditing] = useState(false);
+  const [editForm, setEditForm] = useState<{ name: string; description: string; contact: string; pickupAddress: string; categoryFocus: string } | null>(null);
 
   const shop = allShops.find((s) => s.id === shopId);
   if (!shop) {
@@ -26,17 +36,44 @@ export default function AdminShopDetail({ shopId }: { shopId: string }) {
   const activeProductCount = shopProducts.filter((p) => p.status === 'published').length;
   const shopOrders = allOrders.filter((o) => o.subOrders.some((s) => s.shopId === shop.id));
   const shopTransactions = allTransactions.filter((t) => t.shopName === shop.name);
+  const history = getModerationHistory('shop', shop.id);
 
   const tabs: { id: Tab; label: string; icon: typeof Store }[] = [
     { id: 'info', label: 'Informations', icon: Store },
     { id: 'products', label: 'Produits', icon: ShoppingBag },
     { id: 'orders', label: 'Commandes', icon: ShoppingBag },
     { id: 'finances', label: 'Finances', icon: Wallet },
+    { id: 'history', label: 'Historique', icon: History },
   ];
 
   const grossSales = shop.weeklyGross;
   const commission = commissionAmount(grossSales);
   const netBalance = grossSales - commission;
+
+  const startEdit = () => {
+    setEditForm({ name: shop.name, description: shop.description, contact: shop.contact, pickupAddress: shop.pickupAddress, categoryFocus: shop.categoryFocus });
+    setEditing(true);
+  };
+
+  const saveEdit = () => {
+    if (!editForm) return;
+    updateShopInfo(shop.id, editForm);
+    setEditing(false);
+    setEditForm(null);
+  };
+
+  const modalConfig: Record<Exclude<ModalKind, null>, { title: string; notice: string; confirmLabel: string }> = {
+    flag: { title: 'Signaler la boutique', confirmLabel: 'Signaler', notice: 'La boutique reste visible mais est marquée signalée côté Admin et vendeur.' },
+    suspend: { title: 'Suspendre la boutique', confirmLabel: 'Suspendre', notice: 'La boutique et ses produits ne seront plus visibles sur la marketplace, temporairement.' },
+    deactivate: { title: 'Désactiver la boutique', confirmLabel: 'Désactiver', notice: 'La boutique sera désactivée. Ses commandes passées restent conservées et accessibles.' },
+  };
+
+  const handleConfirmModal = (input: ModerationInput) => {
+    if (modal === 'flag') flagShop(shop.id, input);
+    if (modal === 'suspend') suspendShop(shop.id, input);
+    if (modal === 'deactivate') deactivateShop(shop.id, input);
+    setModal(null);
+  };
 
   return (
     <div className="space-y-5">
@@ -52,7 +89,7 @@ export default function AdminShopDetail({ shopId }: { shopId: string }) {
           <p className="text-xs text-ink/45 font-mono mt-0.5">{shop.sellerId}</p>
           <p className="text-xs text-ink/45 mt-0.5">{shop.categoryFocus}</p>
         </div>
-        <StatusChip status={shop.status} size="md" />
+        <StatusChip status={shop.status} size="md" label={shopStatusLabels[shop.status]} />
       </div>
 
       {/* Tabs */}
@@ -61,7 +98,7 @@ export default function AdminShopDetail({ shopId }: { shopId: string }) {
           const Icon = t.icon;
           return (
             <button key={t.id} onClick={() => setTab(t.id)} className={`flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors flex-shrink-0 ${tab === t.id ? 'bg-burgundy text-white' : 'bg-white border border-line text-ink/60'}`}>
-              <Icon size={15} /> {t.label}
+              <Icon size={15} /> {t.label}{t.id === 'history' && history.length > 0 && ` (${history.length})`}
             </button>
           );
         })}
@@ -69,28 +106,68 @@ export default function AdminShopDetail({ shopId }: { shopId: string }) {
 
       {/* Info tab */}
       {tab === 'info' && (
-        <div className="card divide-y divide-line">
-          <div className="flex items-center justify-between p-4">
-            <span className="text-sm text-ink/55">Description</span>
-            <span className="text-sm text-ink text-right max-w-[60%]">{shop.description}</span>
-          </div>
-          <div className="flex items-center justify-between p-4">
-            <span className="text-sm text-ink/55">Téléphone</span>
-            <span className="text-sm font-medium text-ink">{shop.contact}</span>
-          </div>
-          <div className="flex items-center justify-between p-4">
-            <span className="text-sm text-ink/55">Adresse</span>
-            <span className="text-sm font-medium text-ink">{shop.pickupAddress}</span>
-          </div>
-          <div className="flex items-center justify-between p-4">
-            <span className="text-sm text-ink/55">Plan</span>
-            <span className="text-sm font-medium text-ink capitalize">{shop.plan === 'founder' ? 'Founder' : 'Standard'}</span>
-          </div>
-          <div className="flex items-center justify-between p-4">
-            <span className="text-sm text-ink/55">Membre depuis</span>
-            <span className="text-sm font-medium text-ink">{new Date(shop.joinDate).toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' })}</span>
-          </div>
-        </div>
+        <>
+          {!editing ? (
+            <div className="card divide-y divide-line">
+              <div className="flex items-center justify-between p-4">
+                <span className="text-sm text-ink/55">Description</span>
+                <span className="text-sm text-ink text-right max-w-[60%]">{shop.description}</span>
+              </div>
+              <div className="flex items-center justify-between p-4">
+                <span className="text-sm text-ink/55">Téléphone</span>
+                <span className="text-sm font-medium text-ink">{shop.contact}</span>
+              </div>
+              <div className="flex items-center justify-between p-4">
+                <span className="text-sm text-ink/55">Adresse</span>
+                <span className="text-sm font-medium text-ink">{shop.pickupAddress}</span>
+              </div>
+              <div className="flex items-center justify-between p-4">
+                <span className="text-sm text-ink/55">Catégorie</span>
+                <span className="text-sm font-medium text-ink">{shop.categoryFocus}</span>
+              </div>
+              <div className="flex items-center justify-between p-4">
+                <span className="text-sm text-ink/55">Plan</span>
+                <span className="text-sm font-medium text-ink capitalize">{shop.plan === 'founder' ? 'Founder' : 'Standard'}</span>
+              </div>
+              <div className="flex items-center justify-between p-4">
+                <span className="text-sm text-ink/55">Membre depuis</span>
+                <span className="text-sm font-medium text-ink">{new Date(shop.joinDate).toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' })}</span>
+              </div>
+              <div className="p-4">
+                <button onClick={startEdit} className="flex items-center gap-1.5 text-sm font-medium text-burgundy hover:underline">
+                  <Pencil size={14} /> Modifier les informations
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="card p-5 space-y-4">
+              <div>
+                <label className="block text-xs font-medium text-ink/60 mb-1.5">Nom de la boutique</label>
+                <input className="input-field" value={editForm?.name ?? ''} onChange={(e) => setEditForm((f) => f && { ...f, name: e.target.value })} />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-ink/60 mb-1.5">Description</label>
+                <textarea className="input-field" rows={3} value={editForm?.description ?? ''} onChange={(e) => setEditForm((f) => f && { ...f, description: e.target.value })} />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-ink/60 mb-1.5">Téléphone</label>
+                <input className="input-field" value={editForm?.contact ?? ''} onChange={(e) => setEditForm((f) => f && { ...f, contact: e.target.value })} />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-ink/60 mb-1.5">Adresse</label>
+                <input className="input-field" value={editForm?.pickupAddress ?? ''} onChange={(e) => setEditForm((f) => f && { ...f, pickupAddress: e.target.value })} />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-ink/60 mb-1.5">Catégorie</label>
+                <input className="input-field" value={editForm?.categoryFocus ?? ''} onChange={(e) => setEditForm((f) => f && { ...f, categoryFocus: e.target.value })} />
+              </div>
+              <div className="flex gap-3">
+                <button onClick={() => { setEditing(false); setEditForm(null); }} className="btn-outline flex-1">Annuler</button>
+                <button onClick={saveEdit} className="btn-primary flex-1">Enregistrer</button>
+              </div>
+            </div>
+          )}
+        </>
       )}
 
       {/* Products tab */}
@@ -173,33 +250,55 @@ export default function AdminShopDetail({ shopId }: { shopId: string }) {
         </div>
       )}
 
+      {/* History tab */}
+      {tab === 'history' && <ModerationHistoryList entries={history} />}
+
       {/* Status actions */}
-      <div className="pt-2">
-        {shop.status === 'active' ? (
-          <button onClick={() => setShowSuspend(true)} className="w-full rounded-lg border border-red-200 bg-red-50 px-4 py-2.5 text-sm font-medium text-red-600 hover:bg-red-100 transition-colors">Suspendre la boutique</button>
-        ) : (
-          <button onClick={() => toggleShopStatus(shop.id, 'active')} className="btn-primary w-full">Activer la boutique</button>
+      <div className="pt-2 space-y-2">
+        {shop.status === 'pending' && (
+          <button onClick={() => reactivateShop(shop.id)} className="btn-primary w-full flex items-center justify-center gap-1.5">
+            <Check size={15} /> Valider la boutique
+          </button>
+        )}
+        {shop.status === 'active' && (
+          <div className="flex flex-col sm:flex-row gap-2">
+            <button onClick={() => setModal('flag')} className="flex-1 flex items-center justify-center gap-1.5 rounded-lg border border-orange-200 bg-orange-50 px-4 py-2.5 text-sm font-medium text-orange-600 hover:bg-orange-100 transition-colors">
+              <Flag size={15} /> Signaler
+            </button>
+            <button onClick={() => setModal('suspend')} className="flex-1 flex items-center justify-center gap-1.5 rounded-lg border border-red-200 bg-red-50 px-4 py-2.5 text-sm font-medium text-red-600 hover:bg-red-100 transition-colors">
+              <Ban size={15} /> Suspendre
+            </button>
+            <button onClick={() => setModal('deactivate')} className="flex-1 flex items-center justify-center gap-1.5 rounded-lg border border-red-200 bg-red-50 px-4 py-2.5 text-sm font-medium text-red-600 hover:bg-red-100 transition-colors">
+              <Ban size={15} /> Désactiver
+            </button>
+          </div>
+        )}
+        {shop.status === 'flagged' && (
+          <div className="flex flex-col sm:flex-row gap-2">
+            <button onClick={() => setModal('suspend')} className="flex-1 flex items-center justify-center gap-1.5 rounded-lg border border-red-200 bg-red-50 px-4 py-2.5 text-sm font-medium text-red-600 hover:bg-red-100 transition-colors">
+              <Ban size={15} /> Suspendre
+            </button>
+            <button onClick={() => reactivateShop(shop.id)} className="flex-1 btn-primary flex items-center justify-center gap-1.5">
+              <RotateCcw size={15} /> Réactiver
+            </button>
+          </div>
+        )}
+        {(shop.status === 'suspended' || shop.status === 'inactive') && (
+          <button onClick={() => reactivateShop(shop.id)} className="btn-primary w-full flex items-center justify-center gap-1.5">
+            <RotateCcw size={15} /> Réactiver la boutique
+          </button>
         )}
       </div>
 
-      {/* Suspend confirmation */}
-      {showSuspend && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/40 p-4" onClick={() => setShowSuspend(false)}>
-          <div className="card max-w-sm w-full p-6" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="font-display text-lg font-semibold text-ink">Suspendre la boutique</h3>
-              <button onClick={() => setShowSuspend(false)}><X size={18} className="text-ink/40" /></button>
-            </div>
-            <div className="flex items-start gap-2 mb-5">
-              <AlertTriangle size={18} className="text-orange-500 flex-shrink-0 mt-0.5" />
-              <p className="text-sm text-ink/55">La boutique sera désactivée. Ses produits ne seront plus visibles sur la marketplace.</p>
-            </div>
-            <div className="flex gap-3">
-              <button onClick={() => setShowSuspend(false)} className="btn-outline flex-1">Retour</button>
-              <button onClick={() => { toggleShopStatus(shop.id, 'suspended'); setShowSuspend(false); }} className="flex-1 rounded-lg bg-red-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-red-700 transition-colors">Confirmer</button>
-            </div>
-          </div>
-        </div>
+      {modal && (
+        <ModerationModal
+          title={modalConfig[modal].title}
+          notice={modalConfig[modal].notice}
+          confirmLabel={modalConfig[modal].confirmLabel}
+          reasons={shopModerationReasons}
+          onCancel={() => setModal(null)}
+          onConfirm={handleConfirmModal}
+        />
       )}
     </div>
   );

@@ -1,8 +1,12 @@
 export type Role = 'admin' | 'seller' | 'driver';
 
 export type ShopPlan = 'founder' | 'standard';
-export type ShopStatus = 'active' | 'pending' | 'inactive' | 'suspended';
-export type ProductStatus = 'draft' | 'pending' | 'published' | 'changes_requested' | 'out_of_stock' | 'inactive';
+// active=ACTIVE, pending=nouvelle boutique en attente d'approbation,
+// flagged=SIGNALÉE, suspended=SUSPENDUE, inactive=DÉSACTIVÉE
+export type ShopStatus = 'active' | 'pending' | 'flagged' | 'suspended' | 'inactive';
+// pending=EN ATTENTE, published=ACTIF, flagged=SIGNALÉ,
+// changes_requested=REFUSÉ, inactive=DÉSACTIVÉ (draft/out_of_stock are seller-side states)
+export type ProductStatus = 'draft' | 'pending' | 'published' | 'flagged' | 'changes_requested' | 'out_of_stock' | 'inactive';
 export type OrderStatus =
   | 'confirmed'
   | 'preparing'
@@ -24,6 +28,90 @@ export type DeliveryStep =
   | 'to_customer'
   | 'arrived'
   | 'delivered';
+
+// ---- Moderation (shops & products) ----
+// A ModerationEntry is an immutable log line: it is only ever appended,
+// never edited or removed, so the trail is preserved even after a target
+// is reactivated. `vendorMessage` is shown to the seller; `internalNote`
+// is admin-only and must never reach seller-facing screens.
+export type ModerationTargetType = 'shop' | 'product';
+export type ModerationAction =
+  | 'created'
+  | 'validated'
+  | 'flagged'
+  | 'refused'
+  | 'suspended'
+  | 'reactivated'
+  | 'deactivated';
+
+export const moderationActionLabels: Record<ModerationAction, string> = {
+  created: 'Créé',
+  validated: 'Validé',
+  flagged: 'Signalé',
+  refused: 'Refusé',
+  suspended: 'Suspendu',
+  reactivated: 'Réactivé',
+  deactivated: 'Désactivé',
+};
+
+export const shopModerationReasons = [
+  'Informations incorrectes',
+  'Produits non conformes',
+  'Contrefaçon suspectée',
+  'Problème avec des commandes',
+  'Plaintes clients',
+  'Non-respect des règles Ezial',
+  'Activité suspecte',
+  'Autre',
+];
+
+export const productModerationReasons = [
+  'Mauvaise catégorie',
+  'Description incorrecte',
+  'Photos non conformes',
+  'Prix incohérent',
+  'Produit interdit/non autorisé',
+  'Contrefaçon suspectée',
+  'Informations trompeuses',
+  'Rupture/problème de disponibilité',
+  'Autre',
+];
+
+export interface ModerationEntry {
+  id: string;
+  targetType: ModerationTargetType;
+  targetId: string;
+  action: ModerationAction;
+  reason?: string;
+  /** Visible to the seller on the shop/product. */
+  vendorMessage?: string;
+  /** Admin-only — never shown to the seller. */
+  internalNote?: string;
+  adminName: string;
+  date: string; // ISO datetime
+}
+
+// ---- Blog ----
+export type BlogStatus = 'draft' | 'scheduled' | 'published' | 'unpublished';
+
+export const blogCategories = ['Mode', 'Beauté', 'Cheveux', 'Actualités Ezial', 'Conseils'];
+
+export interface BlogPost {
+  id: string;
+  title: string;
+  slug: string;
+  coverImage: string;
+  category: string;
+  excerpt: string;
+  content: string;
+  sources?: string;
+  author: string;
+  publishDate: string; // ISO date, may be in the future when scheduled
+  updatedDate?: string; // ISO date
+  seoTitle?: string;
+  metaDescription?: string;
+  status: BlogStatus;
+}
 
 export interface Shop {
   id: string;
@@ -450,6 +538,112 @@ export const shopCampaigns: Campaign[] = [
   { id: 'sc2', shopName: 'Dakar Beauty', type: 'Boost boutique', platform: 'TikTok', budget: 35000, status: 'active', startDate: '2026-08-22', endDate: '2026-09-22' },
   { id: 'sc3', shopName: 'Hair Studio Dakar', type: 'Boost produits', platform: 'Google', budget: 25000, status: 'paused', startDate: '2026-08-15', endDate: '2026-08-30' },
 ];
+
+// ---- Mock moderation history ----
+export const moderationHistory: ModerationEntry[] = [
+  {
+    id: 'mh1', targetType: 'product', targetId: 'p8', action: 'deactivated',
+    reason: 'Photos non conformes',
+    vendorMessage: 'Merci de remplacer les deux premières photos par des photos montrant clairement le produit.',
+    internalNote: 'Photos trop sombres, difficile de juger la qualité réelle du produit.',
+    adminName: 'Admin EZIAL', date: '2026-08-30T11:20:00',
+  },
+  {
+    id: 'mh2', targetType: 'product', targetId: 'p8', action: 'reactivated',
+    adminName: 'Admin EZIAL', date: '2026-08-31T09:05:00',
+  },
+  {
+    id: 'mh3', targetType: 'product', targetId: 'p13', action: 'refused',
+    reason: 'Description incorrecte',
+    vendorMessage: 'La description ne précise pas le grammage exact du plaqué or. Merci de préciser avant nouvelle soumission.',
+    adminName: 'Admin EZIAL', date: '2026-08-23T14:40:00',
+  },
+  {
+    id: 'mh4', targetType: 'shop', targetId: 'atelier-naya', action: 'flagged',
+    reason: 'Plaintes clients',
+    internalNote: '2 clientes signalent un délai de préparation anormalement long cette semaine.',
+    adminName: 'Admin EZIAL', date: '2026-08-28T16:10:00',
+  },
+  {
+    id: 'mh5', targetType: 'shop', targetId: 'atelier-naya', action: 'reactivated',
+    vendorMessage: 'Merci pour votre réactivité, situation résolue.',
+    adminName: 'Admin EZIAL', date: '2026-08-29T10:00:00',
+  },
+];
+
+// ---- Mock blog posts ----
+export const blogPosts: BlogPost[] = [
+  {
+    id: 'b1',
+    title: 'Comment bien choisir sa perruque lace',
+    slug: 'comment-bien-choisir-sa-perruque-lace',
+    coverImage: 'https://images.pexels.com/photos/6923241/pexels-photo-6923241.jpeg?auto=compress&cs=tinysrgb&h=700&w=1200',
+    category: 'Cheveux',
+    excerpt: 'Texture, densité, matière : les critères essentiels pour un rendu naturel et durable.',
+    content: 'Choisir une perruque lace ne se résume pas à la couleur. La texture doit correspondre à vos cheveux naturels si vous voulez un effet indétectable, la densité change complètement le volume perçu, et la matière (cheveux naturels, Raw Hair, Romance...) détermine la durée de vie et l\'entretien. Dans cet article, on décortique chaque critère pour vous aider à choisir sereinement sur Ezial.',
+    sources: 'Entretiens avec les vendeuses Hair Studio Dakar, guide interne Ezial.',
+    author: 'Équipe Ezial',
+    publishDate: '2026-08-18',
+    updatedDate: '2026-08-20',
+    seoTitle: 'Comment choisir sa perruque lace | Guide Ezial',
+    metaDescription: 'Le guide complet pour choisir la perruque lace idéale : texture, densité, matière et entretien.',
+    status: 'published',
+  },
+  {
+    id: 'b2',
+    title: '5 essentiels beauté pour la saison sèche',
+    slug: '5-essentiels-beaute-saison-seche',
+    coverImage: 'https://images.pexels.com/photos/8101511/pexels-photo-8101511.jpeg?auto=compress&cs=tinysrgb&h=700&w=1200',
+    category: 'Beauté',
+    excerpt: 'Sérum, crème riche, brume hydratante : la routine qui sauve votre peau pendant l\'harmattan.',
+    content: 'La saison sèche met la peau à rude épreuve. Voici 5 produits disponibles sur Ezial pour garder une peau souple et éclatante : un sérum à l\'acide hyaluronique, une crème riche en fin de routine, une brume hydratante à réappliquer dans la journée, un baume à lèvres nourrissant et une huile corporelle pour sceller l\'hydratation.',
+    author: 'Équipe Ezial',
+    publishDate: '2026-08-10',
+    status: 'published',
+  },
+  {
+    id: 'b3',
+    title: 'Tendances mode Korité 2026',
+    slug: 'tendances-mode-korite-2026',
+    coverImage: 'https://images.pexels.com/photos/38277759/pexels-photo-38277759.jpeg?auto=compress&cs=tinysrgb&h=700&w=1200',
+    category: 'Mode',
+    excerpt: 'Wax revisité, coupes corporate et ensembles modestes : ce qui se portera pour la Korité.',
+    content: 'Cette année, nos boutiques partenaires misent sur un wax revisité aux coupes modernes, des ensembles corporate pour les femmes actives et des tenues modestes travaillées dans des matières nobles. Tour d\'horizon des pièces à shopper avant la fête.',
+    author: 'Équipe Ezial',
+    publishDate: '2026-09-05',
+    seoTitle: 'Tendances mode Korité 2026 | Ezial',
+    metaDescription: 'Les tendances mode à shopper pour la Korité 2026 sur Ezial : wax, corporate et modeste.',
+    status: 'scheduled',
+  },
+  {
+    id: 'b4',
+    title: 'Portrait : Maison Fatou, l\'atelier qui monte',
+    slug: 'portrait-maison-fatou',
+    coverImage: 'https://images.pexels.com/photos/19816456/pexels-photo-19816456.jpeg?auto=compress&cs=tinysrgb&h=700&w=1200',
+    category: 'Actualités Ezial',
+    excerpt: 'Rencontre avec la boutique qui a conquis des milliers de clientes sur Ezial.',
+    content: 'Brouillon — interview à finaliser avec la fondatrice de Maison Fatou.',
+    author: 'Équipe Ezial',
+    publishDate: '2026-09-15',
+    status: 'draft',
+  },
+  {
+    id: 'b5',
+    title: 'Offre de lancement Ezial — bilan',
+    slug: 'offre-de-lancement-ezial-bilan',
+    coverImage: 'https://images.pexels.com/photos/7953286/pexels-photo-7953286.jpeg?auto=compress&cs=tinysrgb&h=700&w=1200',
+    category: 'Actualités Ezial',
+    excerpt: 'Retour sur notre première campagne de lancement à Dakar.',
+    content: 'Article retiré car l\'offre promotionnelle qu\'il décrivait n\'est plus disponible.',
+    author: 'Équipe Ezial',
+    publishDate: '2026-07-01',
+    updatedDate: '2026-08-05',
+    status: 'unpublished',
+  },
+];
+
+export const blogPostMap = blogPosts.reduce((acc, b) => ({ ...acc, [b.id]: b }), {} as Record<string, BlogPost>);
+export const getBlogPost = (id: string) => blogPostMap[id];
 
 // ---- Admin summary data ----
 export const adminSummary = {

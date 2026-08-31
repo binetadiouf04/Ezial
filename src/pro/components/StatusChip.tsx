@@ -1,4 +1,4 @@
-export function StatusChip({ status, size = 'sm' }: { status: string; size?: 'sm' | 'md' }) {
+export function StatusChip({ status, size = 'sm', label: labelOverride }: { status: string; size?: 'sm' | 'md'; label?: string }) {
   const styles: Record<string, string> = {
     // Order / sub-order
     confirmed: 'bg-blue-50 text-blue-700 border-blue-100',
@@ -14,7 +14,8 @@ export function StatusChip({ status, size = 'sm' }: { status: string; size?: 'sm
     draft: 'bg-ink/5 text-ink/50 border-line',
     pending: 'bg-amber-50 text-amber-700 border-amber-100',
     published: 'bg-green-50 text-green-700 border-green-100',
-    changes_requested: 'bg-orange-50 text-orange-700 border-orange-100',
+    flagged: 'bg-orange-50 text-orange-700 border-orange-100',
+    changes_requested: 'bg-red-50 text-red-700 border-red-100',
     out_of_stock: 'bg-red-50 text-red-700 border-red-100',
     inactive: 'bg-ink/5 text-ink/50 border-line',
     // Shop
@@ -26,10 +27,11 @@ export function StatusChip({ status, size = 'sm' }: { status: string; size?: 'sm
     offline: 'bg-ink/5 text-ink/50 border-line',
     // Payout
     paid: 'bg-green-50 text-green-700 border-green-100',
-    // Campaign
+    // Campaign / Blog
     scheduled: 'bg-blue-50 text-blue-700 border-blue-100',
     ended: 'bg-ink/5 text-ink/50 border-line',
     paused: 'bg-ink/5 text-ink/50 border-line',
+    unpublished: 'bg-ink/5 text-ink/50 border-line',
   };
 
   const labels: Record<string, string> = {
@@ -44,10 +46,11 @@ export function StatusChip({ status, size = 'sm' }: { status: string; size?: 'sm
     refunded: 'Remboursée',
     draft: 'Brouillon',
     pending: 'En attente',
-    published: 'Publié',
-    changes_requested: 'Modifs demandées',
+    published: 'Actif',
+    flagged: 'Signalé',
+    changes_requested: 'Refusé',
     out_of_stock: 'Rupture de stock',
-    inactive: 'Inactif',
+    inactive: 'Désactivé',
     active: 'Actif',
     suspended: 'Suspendu',
     available: 'Disponible',
@@ -57,10 +60,11 @@ export function StatusChip({ status, size = 'sm' }: { status: string; size?: 'sm
     scheduled: 'Planifiée',
     ended: 'Terminée',
     paused: 'En pause',
+    unpublished: 'Dépublié',
   };
 
   const cls = styles[status] ?? 'bg-ink/5 text-ink/50 border-line';
-  const label = labels[status] ?? status;
+  const label = labelOverride ?? labels[status] ?? status;
   const sz = size === 'md' ? 'px-3 py-1.5 text-xs' : 'px-2.5 py-1 text-[11px]';
 
   return (

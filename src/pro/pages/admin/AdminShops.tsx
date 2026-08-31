@@ -5,6 +5,10 @@ import { StatusChip } from '../../components/StatusChip';
 import { Search, Plus, X, Store, Check } from 'lucide-react';
 import SmartImage from '@/components/SmartImage';
 
+const shopStatusLabels: Record<string, string> = {
+  active: 'Active', pending: 'En attente', flagged: 'Signalée', suspended: 'Suspendue', inactive: 'Désactivée',
+};
+
 export default function AdminShops() {
   const { allShops, navigate, createShop } = usePro();
   const [search, setSearch] = useState('');
@@ -56,7 +60,7 @@ export default function AdminShops() {
                 <span className="text-xs text-ink/45">{shop.orderCount} commandes</span>
               </div>
             </div>
-            <StatusChip status={shop.status} size="md" />
+            <StatusChip status={shop.status} size="md" label={shopStatusLabels[shop.status]} />
           </button>
         ))}
       </div>

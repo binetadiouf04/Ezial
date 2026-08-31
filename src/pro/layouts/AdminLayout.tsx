@@ -1,5 +1,5 @@
 import { usePro } from '../ProContext';
-import { LayoutDashboard, ShoppingBag, Package, Store, Truck, Users, Wallet, LogOut, ArrowLeft } from 'lucide-react';
+import { LayoutDashboard, ShoppingBag, Package, Store, Truck, Users, Wallet, Newspaper, LogOut, ArrowLeft } from 'lucide-react';
 import AdminDashboard from '../pages/admin/AdminDashboard';
 import AdminOrders from '../pages/admin/AdminOrders';
 import AdminOrderDetail from '../pages/admin/AdminOrderDetail';
@@ -12,12 +12,16 @@ import AdminDeliveryDetail from '../pages/admin/AdminDeliveryDetail';
 import AdminDrivers from '../pages/admin/AdminDrivers';
 import AdminDriverDetail from '../pages/admin/AdminDriverDetail';
 import AdminFinances from '../pages/admin/AdminFinances';
+import AdminBlog from '../pages/admin/AdminBlog';
+import AdminBlogForm from '../pages/admin/AdminBlogForm';
+import AdminBlogPreview from '../pages/admin/AdminBlogPreview';
 
 const navItems = [
   { route: '/admin', label: 'Tableau de bord', icon: LayoutDashboard },
   { route: '/admin/commandes', label: 'Commandes', icon: ShoppingBag },
   { route: '/admin/produits', label: 'Produits', icon: Package },
   { route: '/admin/boutiques', label: 'Boutiques', icon: Store },
+  { route: '/admin/blog', label: 'Blog', icon: Newspaper },
   { route: '/admin/livraisons', label: 'Livraisons', icon: Truck },
   { route: '/admin/livreurs', label: 'Livreurs', icon: Users },
   { route: '/admin/finances', label: 'Finances', icon: Wallet },
@@ -32,6 +36,8 @@ export default function AdminLayout() {
   const shopDetailMatch = clean.match(/^\/admin\/boutiques\/(.+)$/);
   const deliveryDetailMatch = clean.match(/^\/admin\/livraisons\/(.+)$/);
   const driverDetailMatch = clean.match(/^\/admin\/livreurs\/(.+)$/);
+  const blogEditMatch = clean.match(/^\/admin\/blog\/modifier\/(.+)$/);
+  const blogPreviewMatch = clean.match(/^\/admin\/blog\/apercu\/(.+)$/);
 
   const renderPage = () => {
     if (clean === '/admin') return <AdminDashboard />;
@@ -41,6 +47,10 @@ export default function AdminLayout() {
     if (productDetailMatch) return <AdminProductDetail productId={productDetailMatch[1]} />;
     if (clean === '/admin/boutiques') return <AdminShops />;
     if (shopDetailMatch) return <AdminShopDetail shopId={shopDetailMatch[1]} />;
+    if (clean === '/admin/blog') return <AdminBlog />;
+    if (clean === '/admin/blog/nouveau') return <AdminBlogForm />;
+    if (blogEditMatch) return <AdminBlogForm postId={blogEditMatch[1]} />;
+    if (blogPreviewMatch) return <AdminBlogPreview postId={blogPreviewMatch[1]} />;
     if (clean === '/admin/livraisons') return <AdminDeliveries />;
     if (deliveryDetailMatch) return <AdminDeliveryDetail missionId={deliveryDetailMatch[1]} />;
     if (clean === '/admin/livreurs') return <AdminDrivers />;

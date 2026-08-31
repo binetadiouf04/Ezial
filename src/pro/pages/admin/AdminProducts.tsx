@@ -5,7 +5,7 @@ import { StatusChip } from '../../components/StatusChip';
 import { Search, ChevronRight } from 'lucide-react';
 import SmartImage from '@/components/SmartImage';
 
-type Tab = 'pending' | 'published' | 'refused';
+type Tab = 'pending' | 'published' | 'flagged' | 'refused' | 'inactive';
 
 export default function AdminProducts() {
   const { allProducts, allShops, navigate } = usePro();
@@ -15,13 +15,17 @@ export default function AdminProducts() {
   const tabs: { id: Tab; label: string; count: number }[] = [
     { id: 'pending', label: 'À valider', count: allProducts.filter((p) => p.status === 'pending').length },
     { id: 'published', label: 'Actifs', count: allProducts.filter((p) => p.status === 'published').length },
+    { id: 'flagged', label: 'Signalés', count: allProducts.filter((p) => p.status === 'flagged').length },
     { id: 'refused', label: 'Refusés', count: allProducts.filter((p) => p.status === 'changes_requested').length },
+    { id: 'inactive', label: 'Désactivés', count: allProducts.filter((p) => p.status === 'inactive').length },
   ];
 
   const filtered = allProducts.filter((p) => {
     if (tab === 'pending') return p.status === 'pending';
     if (tab === 'published') return p.status === 'published' || p.status === 'out_of_stock';
+    if (tab === 'flagged') return p.status === 'flagged';
     if (tab === 'refused') return p.status === 'changes_requested';
+    if (tab === 'inactive') return p.status === 'inactive';
     return true;
   }).filter((p) => {
     if (!search.trim()) return true;
@@ -39,9 +43,9 @@ export default function AdminProducts() {
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-2">
+      <div className="flex gap-2 overflow-x-auto no-scrollbar">
         {tabs.map((t) => (
-          <button key={t.id} onClick={() => setTab(t.id)} className={`flex-1 rounded-lg py-2 text-sm font-medium transition-colors ${tab === t.id ? 'bg-burgundy text-white' : 'bg-white border border-line text-ink/60'}`}>
+          <button key={t.id} onClick={() => setTab(t.id)} className={`flex-shrink-0 whitespace-nowrap rounded-lg px-4 py-2 text-sm font-medium transition-colors ${tab === t.id ? 'bg-burgundy text-white' : 'bg-white border border-line text-ink/60'}`}>
             {t.label} {t.count > 0 && `(${t.count})`}
           </button>
         ))}

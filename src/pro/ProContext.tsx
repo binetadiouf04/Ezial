@@ -1,7 +1,7 @@
 import { createContext, useContext, useState, useCallback, useEffect, useMemo, type ReactNode } from 'react';
-import type { Role, DeliveryStep } from './data';
+import type { Role, DeliveryStep, ShopStatus, ProductStatus, ModerationEntry, ModerationTargetType, ModerationAction, BlogPost, BlogStatus } from './data';
 import { missions as initialMissions, type Mission, type Product, type Shop, type Driver, type DriverTransaction, type Order, type Transaction } from './data';
-import { shops as initialShops, products as initialProducts, transactions as initialTransactions, driverTransactions as initialDriverTransactions, orders as initialOrders, drivers as initialDrivers, formatFCFA } from './data';
+import { shops as initialShops, products as initialProducts, transactions as initialTransactions, driverTransactions as initialDriverTransactions, orders as initialOrders, drivers as initialDrivers, moderationHistory as initialModerationHistory, blogPosts as initialBlogPosts, formatFCFA } from './data';
 import { assignShopPrefixes, nextReferenceForShop } from '@/utils/reference';
 
 type Route = string;
@@ -30,11 +30,11 @@ export interface Incident {
   reportedAt: string;
 }
 
-export interface ProductRefusal {
-  productId: string;
-  reason: string;
-  comment?: string;
-  date: string;
+/** Shared payload for a shop/product moderation action (flag, refuse, deactivate...). */
+export interface ModerationInput {
+  reason?: string;
+  vendorMessage?: string;
+  internalNote?: string;
 }
 
 interface AuthState {
@@ -71,8 +71,8 @@ interface ProState extends AuthState {
   reportProblem: (id: string, reason: string, comment: string) => void;
   advanceSubOrder: (orderId: string, shopId: string, fulfillment: 'delivery' | 'pickup') => void;
   getSubOrderStatus: (orderId: string, shopId: string, original: string) => string;
-  setProductStatus: (productId: string, status: 'published' | 'changes_requested' | 'inactive') => void;
-  productStatusUpdates: Record<string, 'published' | 'changes_requested' | 'inactive'>;
+  setProductStatus: (productId: string, status: ProductStatus) => void;
+  productStatusUpdates: Record<string, ProductStatus>;
   // Seller product management
   sellerProducts: SellerProduct[];
   addSellerProduct: (product: Omit<SellerProduct, 'reference'>) => void;
@@ -102,15 +102,28 @@ interface ProState extends AuthState {
   allProducts: Product[];
   allTransactions: Transaction[];
   allDriverTransactions: DriverTransaction[];
-  productRefusals: Record<string, ProductRefusal>;
   cancelledOrders: string[];
   refundedOrders: string[];
   resolvedIncidents: string[];
   payoutStatuses: Record<string, 'pending' | 'available' | 'paid'>;
   driverPayoutStatuses: Record<string, 'pending' | 'available' | 'paid'>;
-  // Admin actions
+  // Moderation history — append-only log for shops & products
+  moderationHistory: ModerationEntry[];
+  getModerationHistory: (targetType: ModerationTargetType, targetId: string) => ModerationEntry[];
+  getLatestModeration: (targetType: ModerationTargetType, targetId: string) => ModerationEntry | null;
+  // Admin actions — products
   validateProduct: (productId: string) => void;
-  refuseProduct: (productId: string, reason: string, comment?: string) => void;
+  refuseProduct: (productId: string, input: ModerationInput) => void;
+  flagProduct: (productId: string, input: ModerationInput) => void;
+  deactivateProduct: (productId: string, input: ModerationInput) => void;
+  reactivateProduct: (productId: string, input?: ModerationInput) => void;
+  // Admin actions — shops
+  suspendShop: (shopId: string, input: ModerationInput) => void;
+  deactivateShop: (shopId: string, input: ModerationInput) => void;
+  flagShop: (shopId: string, input: ModerationInput) => void;
+  reactivateShop: (shopId: string, input?: ModerationInput) => void;
+  updateShopInfo: (shopId: string, edit: Partial<Pick<Shop, 'name' | 'description' | 'contact' | 'pickupAddress' | 'categoryFocus' | 'logo' | 'banner'>>) => void;
+  // Admin actions — orders & payouts
   cancelOrder: (orderId: string) => void;
   refundOrder: (orderId: string) => void;
   resolveIncident: (missionId: string) => void;
@@ -118,8 +131,15 @@ interface ProState extends AuthState {
   markDriverPaid: (driverId: string) => void;
   createShop: (input: NewShopInput) => Shop;
   createDriver: (input: NewDriverInput) => Driver;
-  toggleShopStatus: (shopId: string, status: 'active' | 'suspended') => void;
   toggleDriverStatus: (driverId: string, status: 'active' | 'suspended') => void;
+  // Blog
+  blogPosts: BlogPost[];
+  createBlogPost: (post: Omit<BlogPost, 'id'>) => BlogPost;
+  updateBlogPost: (id: string, post: Omit<BlogPost, 'id'>) => void;
+  deleteBlogPost: (id: string) => void;
+  publishBlogPost: (id: string) => void;
+  unpublishBlogPost: (id: string) => void;
+  scheduleBlogPost: (id: string, publishDate: string) => void;
 }
 
 const ProContext = createContext<ProState | null>(null);
@@ -147,7 +167,7 @@ export function ProProvider({ children }: { children: ReactNode }) {
   const [name, setName] = useState('');
   const [route, setRoute] = useState('/');
   const [missions, setMissions] = useState<Mission[]>(initialMissions);
-  const [productStatusUpdates, setProductStatusUpdates] = useState<Record<string, 'published' | 'changes_requested' | 'inactive'>>({});
+  const [productStatusUpdates, setProductStatusUpdates] = useState<Record<string, ProductStatus>>({});
   const [orderUpdates, setOrderUpdates] = useState<Record<string, string>>({});
   const [sellerProducts, setSellerProducts] = useState<SellerProduct[]>(initialProducts);
   const [sellerShop, setSellerShop] = useState<Shop | null>(null);
@@ -163,7 +183,8 @@ export function ProProvider({ children }: { children: ReactNode }) {
     () => assignShopPrefixes(allShops.map((s) => ({ id: s.id, name: s.name }))),
     [allShops],
   );
-  const [productRefusals, setProductRefusals] = useState<Record<string, ProductRefusal>>({});
+  const [moderationHistory, setModerationHistory] = useState<ModerationEntry[]>(initialModerationHistory);
+  const [blogPosts, setBlogPosts] = useState<BlogPost[]>(initialBlogPosts);
   const [cancelledOrders, setCancelledOrders] = useState<string[]>([]);
   const [refundedOrders, setRefundedOrders] = useState<string[]>([]);
   const [resolvedIncidents, setResolvedIncidents] = useState<string[]>([]);
@@ -249,7 +270,7 @@ export function ProProvider({ children }: { children: ReactNode }) {
     return orderUpdates[key] ?? original;
   }, []);
 
-  const setProductStatus = useCallback((productId: string, status: 'published' | 'changes_requested' | 'inactive') => {
+  const setProductStatus = useCallback((productId: string, status: ProductStatus) => {
     setProductStatusUpdates((prev) => ({ ...prev, [productId]: status }));
   }, []);
 
@@ -323,17 +344,119 @@ export function ProProvider({ children }: { children: ReactNode }) {
 
   // === Admin actions ===
 
+  // Appends one immutable line to the moderation log. This is the single
+  // place a ModerationEntry is ever created — never mutated afterwards, so
+  // the trail survives status changes in either direction.
+  const logModeration = useCallback((targetType: ModerationTargetType, targetId: string, action: ModerationAction, input?: ModerationInput) => {
+    const entry: ModerationEntry = {
+      id: `mh-${Date.now()}-${Math.round(Math.random() * 1000)}`,
+      targetType,
+      targetId,
+      action,
+      reason: input?.reason,
+      vendorMessage: input?.vendorMessage,
+      internalNote: input?.internalNote,
+      adminName: name || 'Admin EZIAL',
+      date: new Date().toISOString(),
+    };
+    setModerationHistory((prev) => [entry, ...prev]);
+  }, [name]);
+
+  // Always sorted newest first by date — never relies on array/insertion order,
+  // so mock data can be authored chronologically without breaking "latest".
+  const getModerationHistory = useCallback((targetType: ModerationTargetType, targetId: string) =>
+    moderationHistory
+      .filter((e) => e.targetType === targetType && e.targetId === targetId)
+      .sort((a, b) => (a.date < b.date ? 1 : -1)),
+  [moderationHistory]);
+
+  const getLatestModeration = useCallback((targetType: ModerationTargetType, targetId: string) =>
+    getModerationHistory(targetType, targetId)[0] ?? null, [getModerationHistory]);
+
+  // --- Products ---
+
   const validateProduct = useCallback((productId: string) => {
     setProductStatusUpdates((prev) => ({ ...prev, [productId]: 'published' }));
+    logModeration('product', productId, 'validated');
+  }, [logModeration]);
+
+  const refuseProduct = useCallback((productId: string, input: ModerationInput) => {
+    setProductStatusUpdates((prev) => ({ ...prev, [productId]: 'changes_requested' }));
+    logModeration('product', productId, 'refused', input);
+  }, [logModeration]);
+
+  const flagProduct = useCallback((productId: string, input: ModerationInput) => {
+    setProductStatusUpdates((prev) => ({ ...prev, [productId]: 'flagged' }));
+    logModeration('product', productId, 'flagged', input);
+  }, [logModeration]);
+
+  const deactivateProduct = useCallback((productId: string, input: ModerationInput) => {
+    setProductStatusUpdates((prev) => ({ ...prev, [productId]: 'inactive' }));
+    logModeration('product', productId, 'deactivated', input);
+  }, [logModeration]);
+
+  const reactivateProduct = useCallback((productId: string, input?: ModerationInput) => {
+    setProductStatusUpdates((prev) => ({ ...prev, [productId]: 'published' }));
+    logModeration('product', productId, 'reactivated', input);
+  }, [logModeration]);
+
+  // --- Shops ---
+
+  const suspendShop = useCallback((shopId: string, input: ModerationInput) => {
+    setAllShops((prev) => prev.map((s) => (s.id === shopId ? { ...s, status: 'suspended' as ShopStatus } : s)));
+    logModeration('shop', shopId, 'suspended', input);
+  }, [logModeration]);
+
+  const deactivateShop = useCallback((shopId: string, input: ModerationInput) => {
+    setAllShops((prev) => prev.map((s) => (s.id === shopId ? { ...s, status: 'inactive' as ShopStatus } : s)));
+    logModeration('shop', shopId, 'deactivated', input);
+  }, [logModeration]);
+
+  const flagShop = useCallback((shopId: string, input: ModerationInput) => {
+    setAllShops((prev) => prev.map((s) => (s.id === shopId ? { ...s, status: 'flagged' as ShopStatus } : s)));
+    logModeration('shop', shopId, 'flagged', input);
+  }, [logModeration]);
+
+  const reactivateShop = useCallback((shopId: string, input?: ModerationInput) => {
+    setAllShops((prev) => prev.map((s) => (s.id === shopId ? { ...s, status: 'active' as ShopStatus } : s)));
+    logModeration('shop', shopId, 'reactivated', input);
+  }, [logModeration]);
+
+  const updateShopInfo = useCallback((shopId: string, edit: Partial<Pick<Shop, 'name' | 'description' | 'contact' | 'pickupAddress' | 'categoryFocus' | 'logo' | 'banner'>>) => {
+    setAllShops((prev) => prev.map((s) => (s.id === shopId ? { ...s, ...edit } : s)));
   }, []);
 
-  const refuseProduct = useCallback((productId: string, reason: string, comment?: string) => {
-    setProductStatusUpdates((prev) => ({ ...prev, [productId]: 'changes_requested' }));
-    setProductRefusals((prev) => ({
-      ...prev,
-      [productId]: { productId, reason, comment, date: new Date().toISOString() },
-    }));
+  // --- Blog ---
+
+  const createBlogPost = useCallback((post: Omit<BlogPost, 'id'>): BlogPost => {
+    const newPost: BlogPost = { ...post, id: `b-${Date.now()}` };
+    setBlogPosts((prev) => [newPost, ...prev]);
+    return newPost;
   }, []);
+
+  const updateBlogPost = useCallback((id: string, post: Omit<BlogPost, 'id'>) => {
+    setBlogPosts((prev) => prev.map((p) => (p.id === id ? { ...post, id } : p)));
+  }, []);
+
+  const deleteBlogPost = useCallback((id: string) => {
+    setBlogPosts((prev) => prev.filter((p) => p.id !== id));
+  }, []);
+
+  const setBlogStatus = useCallback((id: string, status: BlogStatus, publishDate?: string) => {
+    setBlogPosts((prev) => prev.map((p) => (p.id === id ? { ...p, status, ...(publishDate ? { publishDate } : {}), updatedDate: new Date().toISOString().split('T')[0] } : p)));
+  }, []);
+
+  const publishBlogPost = useCallback((id: string) => {
+    setBlogStatus(id, 'published', new Date().toISOString().split('T')[0]);
+  }, [setBlogStatus]);
+
+  const unpublishBlogPost = useCallback((id: string) => {
+    setBlogStatus(id, 'unpublished');
+  }, [setBlogStatus]);
+
+  const scheduleBlogPost = useCallback((id: string, publishDate: string) => {
+    setBlogStatus(id, 'scheduled', publishDate);
+  }, [setBlogStatus]);
 
   const cancelOrder = useCallback((orderId: string) => {
     setCancelledOrders((prev) => [...prev, orderId]);
@@ -405,10 +528,6 @@ export function ProProvider({ children }: { children: ReactNode }) {
     };
     setAllDrivers((prev) => [...prev, newDriver]);
     return newDriver;
-  }, []);
-
-  const toggleShopStatus = useCallback((shopId: string, status: 'active' | 'suspended') => {
-    setAllShops((prev) => prev.map((s) => (s.id === shopId ? { ...s, status } : s)));
   }, []);
 
   const toggleDriverStatus = useCallback((driverId: string, status: 'active' | 'suspended') => {
@@ -483,14 +602,24 @@ export function ProProvider({ children }: { children: ReactNode }) {
     allProducts,
     allTransactions,
     allDriverTransactions: initialDriverTransactions,
-    productRefusals,
     cancelledOrders,
     refundedOrders,
     resolvedIncidents,
     payoutStatuses,
     driverPayoutStatuses,
+    moderationHistory,
+    getModerationHistory,
+    getLatestModeration,
     validateProduct,
     refuseProduct,
+    flagProduct,
+    deactivateProduct,
+    reactivateProduct,
+    suspendShop,
+    deactivateShop,
+    flagShop,
+    reactivateShop,
+    updateShopInfo,
     cancelOrder,
     refundOrder,
     resolveIncident,
@@ -498,8 +627,14 @@ export function ProProvider({ children }: { children: ReactNode }) {
     markDriverPaid,
     createShop,
     createDriver,
-    toggleShopStatus,
     toggleDriverStatus,
+    blogPosts,
+    createBlogPost,
+    updateBlogPost,
+    deleteBlogPost,
+    publishBlogPost,
+    unpublishBlogPost,
+    scheduleBlogPost,
   };
 
   return <ProContext.Provider value={value}>{children}</ProContext.Provider>;
