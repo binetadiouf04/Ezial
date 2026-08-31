@@ -1,7 +1,7 @@
 import { useApp } from '@/store/AppContext';
 import { getProduct, formatFCFA } from '@/data/products';
 import { getShop } from '@/data/shops';
-import { paymentLabels } from '@/pages/CheckoutPage';
+import { paymentLabels } from '@/data/payments';
 import { CheckCircle2, Truck, Store, MapPin, Smartphone, Clock } from 'lucide-react';
 import SmartImage from '@/components/SmartImage';
 

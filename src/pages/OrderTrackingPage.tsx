@@ -2,7 +2,7 @@ import { useApp, type DeliveryStepStatus, type PickupStepStatus } from '@/store/
 import { getProduct, formatFCFA } from '@/data/products';
 import { getShop } from '@/data/shops';
 import { DeliveryTimeline, PickupTimeline } from '@/components/OrderTimeline';
-import { paymentLabels } from '@/pages/CheckoutPage';
+import { paymentLabels } from '@/data/payments';
 import { Phone, MapPin, Package, Store, Check, Clock, KeySquare, Truck, Smartphone } from 'lucide-react';
 import SmartImage from '@/components/SmartImage';
 

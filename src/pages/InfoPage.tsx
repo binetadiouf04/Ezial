@@ -1,4 +1,5 @@
 import { useApp } from '@/store/AppContext';
+import { paymentMethods } from '@/data/payments';
 import { ArrowLeft } from 'lucide-react';
 
 const infoContent: Record<string, { title: string; body: React.ReactNode }> = {
@@ -18,7 +19,7 @@ const infoContent: Record<string, { title: string; body: React.ReactNode }> = {
         <p>1. Parcourez les boutiques et produits sur Ezial.</p>
         <p>2. Ajoutez vos articles au panier. Vous pouvez commander chez plusieurs boutiques en une seule commande.</p>
         <p>3. Choisissez la livraison Ezial ou le retrait en boutique.</p>
-        <p>4. Payez avec Wave ou Orange Money.</p>
+        <p>4. Payez avec Wave, Orange Money ou PayPal.</p>
         <p>5. Suivez votre commande en temps réel jusqu'à la réception.</p>
       </>
     ),
@@ -27,7 +28,7 @@ const infoContent: Record<string, { title: string; body: React.ReactNode }> = {
     title: 'Livraison & retrait',
     body: (
       <>
-        <p><strong>Livraison Ezial</strong> — Nous livrons à Dakar et ses environs. Les frais dépendent de votre zone. Délai estimé : 24 à 72h selon la zone.</p>
+        <p><strong>Livraison Ezial</strong> — Nous livrons à Dakar et ses environs. Les frais dépendent de votre zone. Délai estimé : 4 à 72h selon la zone.</p>
         <p><strong>Retrait en boutique</strong> — Certaines boutiques proposent le retrait direct. Le délai de préparation est indiqué sur chaque produit.</p>
       </>
     ),
@@ -36,9 +37,8 @@ const infoContent: Record<string, { title: string; body: React.ReactNode }> = {
     title: 'Paiement',
     body: (
       <>
-        <p>Ezial accepte les paiements mobiles suivants :</p>
-        <p>• <strong>Wave</strong></p>
-        <p>• <strong>Orange Money</strong></p>
+        <p>Ezial accepte les moyens de paiement suivants :</p>
+        {paymentMethods.map((p) => <p key={p.id}>• <strong>{p.label}</strong></p>)}
         <p>Le paiement est sécurisé et confirmé instantanément.</p>
       </>
     ),
@@ -48,7 +48,7 @@ const infoContent: Record<string, { title: string; body: React.ReactNode }> = {
     body: (
       <>
         <p>Vous pouvez demander un retour dans les 48h suivant la réception de votre commande si le produit ne correspond pas ou présente un défaut.</p>
-        <p>Le remboursement est traité via votre moyen de paiement initial (Wave ou Orange Money).</p>
+        <p>Le remboursement est traité via votre moyen de paiement initial (Wave, Orange Money ou PayPal).</p>
         <p>Pour toute demande de retour, contactez-nous via le formulaire de contact.</p>
       </>
     ),

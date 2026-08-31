@@ -37,8 +37,8 @@ const shoeTypesHomme = ['Baskets', 'Mocassins', 'Sandales', 'Derbies', 'Chaussur
 const shoeSizes = ['36', '37', '38', '39', '40', '41', '42', '43', '44', '45'];
 
 const clothingStyles = ['Mode africaine', 'Mode moderne', 'Mode modeste'];
-const clothingTypesFemme = ['Robe', 'Ensemble', 'Top', 'Chemise', 'T-shirt', 'Pantalon', 'Jean', 'Jupe', 'Combinaison', 'Veste', 'Blazer'];
-const clothingTypesHomme = ['T-shirt', 'Polo', 'Chemise', 'Pantalon', 'Jean', 'Short', 'Ensemble', 'Sweat / Hoodie', 'Veste', 'Blazer', 'Costume', 'Boubou / Tenue africaine'];
+const clothingTypesFemme = ['Traditionnel', 'Corporate', 'Robes', 'Tenues de plage', 'Tenues de sport', 'Ensembles', 'Jupes', 'Pantalons', 'Modeste'];
+const clothingTypesHomme = ['Traditionnel', 'Corporate', 'Chemises', 'T-shirts & Polos', 'Tenues de sport', 'Ensembles', 'Pantalons', 'Jeans', 'Shorts', 'Modeste'];
 
 const lingerieTypes = ['Pyjama', 'Nuisette', 'Soutien-gorge', 'Culotte', 'Sous-vêtement', 'Caleçon'];
 

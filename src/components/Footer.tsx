@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useApp } from '@/store/AppContext';
+import { paymentMethods } from '@/data/payments';
 import { Instagram, Facebook, Plus, Phone, Mail, MapPin } from 'lucide-react';
 
 function TikTokIcon({ size = 18, className = '' }: { size?: number; className?: string }) {
@@ -10,25 +11,22 @@ function TikTokIcon({ size = 18, className = '' }: { size?: number; className?: 
   );
 }
 
-const serviceLinks = [
+const aideLinks = [
   { label: 'Centre d\'aide', route: '/info/centre-aide' },
   { label: 'Livraison & retrait', route: '/info/livraison' },
-  { label: 'Paiement', route: '/info/paiement' },
   { label: 'Retours & remboursements', route: '/info/retours' },
   { label: 'Nous contacter', route: '/info/contact' },
 ];
 
 const ezialLinks = [
   { label: 'À propos', route: '/info/a-propos' },
-  { label: 'Comment ça marche', route: '/info/comment-ca-marche' },
   { label: 'Devenir vendeur', route: '/pro' },
   { label: 'Ezial Pro', route: '/pro' },
   { label: 'Conditions générales', route: '/info/conditions-generales' },
 ];
 
 const legalLinks = [
-  { label: 'Conditions générales', route: '/info/conditions-generales' },
-  { label: 'Politique de confidentialité', route: '/info/confidentialite' },
+  { label: 'Confidentialité', route: '/info/confidentialite' },
   { label: 'Mentions légales', route: '/info/mentions-legales' },
 ];
 
@@ -46,8 +44,8 @@ function FooterLink({ label, route }: { label: string; route: string }) {
 function FooterColumn({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div>
-      <h3 className="text-xs font-semibold uppercase tracking-wider text-white/60 mb-4">{title}</h3>
-      <ul className="space-y-3">{children}</ul>
+      <h3 className="text-xs font-semibold uppercase tracking-wider text-white/60 mb-3">{title}</h3>
+      <ul className="space-y-2">{children}</ul>
     </div>
   );
 }
@@ -58,7 +56,7 @@ function MobileAccordion({ title, children }: { title: string; children: React.R
     <div className="border-b border-white/15">
       <button
         onClick={() => setOpen(!open)}
-        className="flex w-full items-center justify-between py-4 text-left"
+        className="flex w-full items-center justify-between py-3 text-left"
       >
         <span className="text-sm font-semibold text-white">{title}</span>
         <Plus
@@ -66,12 +64,38 @@ function MobileAccordion({ title, children }: { title: string; children: React.R
           className={`text-white/50 transition-transform duration-300 ${open ? 'rotate-45' : ''}`}
         />
       </button>
-      <div className={`overflow-hidden transition-all duration-300 ${open ? 'max-h-96 pb-4' : 'max-h-0'}`}>
-        <ul className="space-y-3">{children}</ul>
+      <div className={`overflow-hidden transition-all duration-300 ${open ? 'max-h-96 pb-3' : 'max-h-0'}`}>
+        <ul className="space-y-2">{children}</ul>
       </div>
     </div>
   );
 }
+
+const SocialIcons = ({ size = 17, wrapSize = 'h-9 w-9' }: { size?: number; wrapSize?: string }) => (
+  <div className="flex items-center gap-3">
+    <a href="https://instagram.com" target="_blank" rel="noopener noreferrer" className={`flex ${wrapSize} items-center justify-center rounded-full bg-white/10 text-white/70 hover:bg-white/20 hover:text-white transition-colors`} aria-label="Instagram">
+      <Instagram size={size} />
+    </a>
+    <a href="https://tiktok.com" target="_blank" rel="noopener noreferrer" className={`flex ${wrapSize} items-center justify-center rounded-full bg-white/10 text-white/70 hover:bg-white/20 hover:text-white transition-colors`} aria-label="TikTok">
+      <TikTokIcon size={size - 1} />
+    </a>
+    <a href="https://facebook.com" target="_blank" rel="noopener noreferrer" className={`flex ${wrapSize} items-center justify-center rounded-full bg-white/10 text-white/70 hover:bg-white/20 hover:text-white transition-colors`} aria-label="Facebook">
+      <Facebook size={size} />
+    </a>
+  </div>
+);
+
+const ContactRows = () => (
+  <div className="space-y-2.5">
+    <p className="flex items-center gap-2 text-sm text-white/75"><MapPin size={14} className="text-white/50 flex-shrink-0" /> Dakar, Sénégal</p>
+    <a href="tel:+221770000000" className="flex items-center gap-2 text-sm text-white/75 hover:text-white hover:underline transition-colors">
+      <Phone size={14} className="text-white/50 flex-shrink-0" /> +221 77 000 00 00
+    </a>
+    <a href="mailto:contact@ezial.sn" className="flex items-center gap-2 text-sm text-white/75 hover:text-white hover:underline transition-colors">
+      <Mail size={14} className="text-white/50 flex-shrink-0" /> contact@ezial.sn
+    </a>
+  </div>
+);
 
 export default function Footer() {
   const { navigate } = useApp();
@@ -80,11 +104,11 @@ export default function Footer() {
     <footer className="mt-auto" style={{ backgroundColor: '#4A1223' }}>
       {/* Main footer content */}
       <div style={{ backgroundColor: '#651D32' }}>
-        <div className="container-page py-12 lg:py-14">
+        <div className="container-page py-7 lg:py-9">
           {/* Desktop — 4 columns */}
           <div className="hidden lg:grid lg:grid-cols-4 lg:gap-10">
             {/* Column 1 — Brand */}
-            <div className="space-y-4">
+            <div className="space-y-3">
               <button
                 onClick={() => navigate('/')}
                 className="font-display font-bold tracking-[0.25em] text-white text-xl select-none"
@@ -94,40 +118,12 @@ export default function Footer() {
               <p className="text-sm text-white/75 leading-relaxed max-w-xs">
                 Votre marketplace mode, beauté & lifestyle au Sénégal.
               </p>
-              <div className="flex items-center gap-3 pt-2">
-                <a
-                  href="https://instagram.com"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex h-9 w-9 items-center justify-center rounded-full bg-white/10 text-white/70 hover:bg-white/20 hover:text-white transition-colors"
-                  aria-label="Instagram"
-                >
-                  <Instagram size={17} />
-                </a>
-                <a
-                  href="https://tiktok.com"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex h-9 w-9 items-center justify-center rounded-full bg-white/10 text-white/70 hover:bg-white/20 hover:text-white transition-colors"
-                  aria-label="TikTok"
-                >
-                  <TikTokIcon size={16} />
-                </a>
-                <a
-                  href="https://facebook.com"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex h-9 w-9 items-center justify-center rounded-full bg-white/10 text-white/70 hover:bg-white/20 hover:text-white transition-colors"
-                  aria-label="Facebook"
-                >
-                  <Facebook size={17} />
-                </a>
-              </div>
+              <SocialIcons />
             </div>
 
-            {/* Column 2 — Service client */}
-            <FooterColumn title="Service client">
-              {serviceLinks.map((link, i) => (
+            {/* Column 2 — Aide */}
+            <FooterColumn title="Aide">
+              {aideLinks.map((link, i) => (
                 <FooterLink key={i} label={link.label} route={link.route} />
               ))}
             </FooterColumn>
@@ -141,50 +137,15 @@ export default function Footer() {
 
             {/* Column 4 — Contact */}
             <div>
-              <h3 className="text-xs font-semibold uppercase tracking-wider text-white/60 mb-4">Contact</h3>
-              <div className="space-y-3.5">
-                <div className="flex items-start gap-2.5">
-                  <MapPin size={15} className="text-white/50 flex-shrink-0 mt-0.5" />
-                  <div>
-                    <p className="text-xs text-white/50">Adresse commerciale</p>
-                    <p className="text-sm text-white/75">Dakar, Sénégal</p>
-                  </div>
-                </div>
-                <div className="flex items-start gap-2.5">
-                  <Phone size={15} className="text-white/50 flex-shrink-0 mt-0.5" />
-                  <div>
-                    <p className="text-xs text-white/50">Téléphone commercial</p>
-                    <a href="tel:+221770000000" className="text-sm text-white/75 hover:text-white hover:underline transition-colors">
-                      +221 77 000 00 00
-                    </a>
-                  </div>
-                </div>
-                <div className="flex items-start gap-2.5">
-                  <Phone size={15} className="text-white/50 flex-shrink-0 mt-0.5" />
-                  <div>
-                    <p className="text-xs text-white/50">Assistance client</p>
-                    <a href="tel:+221780000000" className="text-sm text-white/75 hover:text-white hover:underline transition-colors">
-                      +221 78 000 00 00
-                    </a>
-                  </div>
-                </div>
-                <div className="flex items-start gap-2.5">
-                  <Mail size={15} className="text-white/50 flex-shrink-0 mt-0.5" />
-                  <div>
-                    <p className="text-xs text-white/50">Email</p>
-                    <a href="mailto:contact@ezial.sn" className="text-sm text-white/75 hover:text-white hover:underline transition-colors">
-                      contact@ezial.sn
-                    </a>
-                  </div>
-                </div>
-              </div>
+              <h3 className="text-xs font-semibold uppercase tracking-wider text-white/60 mb-3">Contact</h3>
+              <ContactRows />
             </div>
           </div>
 
           {/* Mobile — brand + accordions */}
           <div className="lg:hidden">
             {/* Brand */}
-            <div className="space-y-3 mb-5">
+            <div className="space-y-2.5 mb-4">
               <button
                 onClick={() => navigate('/')}
                 className="font-display font-bold tracking-[0.25em] text-white text-xl select-none"
@@ -194,60 +155,17 @@ export default function Footer() {
               <p className="text-sm text-white/75 leading-relaxed">
                 Votre marketplace mode, beauté & lifestyle au Sénégal.
               </p>
-              <div className="flex items-center gap-3 pt-1">
-                <a
-                  href="https://instagram.com"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-white/70 hover:bg-white/20 hover:text-white transition-colors"
-                  aria-label="Instagram"
-                >
-                  <Instagram size={18} />
-                </a>
-                <a
-                  href="https://tiktok.com"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-white/70 hover:bg-white/20 hover:text-white transition-colors"
-                  aria-label="TikTok"
-                >
-                  <TikTokIcon size={17} />
-                </a>
-                <a
-                  href="https://facebook.com"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-white/70 hover:bg-white/20 hover:text-white transition-colors"
-                  aria-label="Facebook"
-                >
-                  <Facebook size={18} />
-                </a>
-              </div>
+              <SocialIcons size={18} wrapSize="h-10 w-10" />
             </div>
 
-            {/* Contact essentials — always visible */}
-            <div className="space-y-3 mb-5 pb-5 border-b border-white/15">
-              <div className="flex items-start gap-2.5">
-                <MapPin size={15} className="text-white/50 flex-shrink-0 mt-0.5" />
-                <div>
-                  <p className="text-xs text-white/50">Adresse commerciale</p>
-                  <p className="text-sm text-white/75">Dakar, Sénégal</p>
-                </div>
-              </div>
-              <div className="flex items-start gap-2.5">
-                <Mail size={15} className="text-white/50 flex-shrink-0 mt-0.5" />
-                <div>
-                  <p className="text-xs text-white/50">Email</p>
-                  <a href="mailto:contact@ezial.sn" className="text-sm text-white/75 hover:text-white hover:underline transition-colors">
-                    contact@ezial.sn
-                  </a>
-                </div>
-              </div>
+            {/* Contact — always visible */}
+            <div className="mb-1 pb-3 border-b border-white/15">
+              <ContactRows />
             </div>
 
             {/* Accordion sections */}
-            <MobileAccordion title="Service client">
-              {serviceLinks.map((link, i) => (
+            <MobileAccordion title="Aide">
+              {aideLinks.map((link, i) => (
                 <FooterLink key={i} label={link.label} route={link.route} />
               ))}
             </MobileAccordion>
@@ -256,32 +174,17 @@ export default function Footer() {
                 <FooterLink key={i} label={link.label} route={link.route} />
               ))}
             </MobileAccordion>
-            <MobileAccordion title="Contact">
-              <li className="space-y-1">
-                <p className="text-xs text-white/50">Téléphone commercial</p>
-                <a href="tel:+221770000000" className="text-sm text-white/75 hover:text-white hover:underline transition-colors">
-                  +221 77 000 00 00
-                </a>
-              </li>
-              <li className="space-y-1">
-                <p className="text-xs text-white/50">Assistance client</p>
-                <a href="tel:+221780000000" className="text-sm text-white/75 hover:text-white hover:underline transition-colors">
-                  +221 78 000 00 00
-                </a>
-              </li>
-            </MobileAccordion>
           </div>
 
           {/* Payment methods */}
-          <div className="mt-8 pt-6 border-t border-white/15">
-            <p className="text-xs font-semibold uppercase tracking-wider text-white/60 mb-3">Paiements acceptés</p>
-            <div className="flex items-center gap-3">
-              <span className="rounded-md bg-white/10 px-4 py-2 text-sm font-medium text-white/85">
-                Wave
-              </span>
-              <span className="rounded-md bg-white/10 px-4 py-2 text-sm font-medium text-white/85">
-                Orange Money
-              </span>
+          <div className="mt-6 pt-5 border-t border-white/15">
+            <p className="text-xs font-semibold uppercase tracking-wider text-white/60 mb-2.5">Paiements acceptés</p>
+            <div className="flex flex-wrap items-center gap-2.5">
+              {paymentMethods.map((p) => (
+                <span key={p.id} className="rounded-md bg-white/10 px-3.5 py-1.5 text-sm font-medium text-white/85">
+                  {p.label}
+                </span>
+              ))}
             </div>
           </div>
         </div>
@@ -289,10 +192,10 @@ export default function Footer() {
 
       {/* Legal bottom bar */}
       <div className="border-t border-white/15">
-        <div className="container-page py-5">
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
-            <p className="text-xs text-white/50">© 2026 Ezial — Tous droits réservés</p>
-            <div className="flex flex-wrap items-center justify-center gap-x-5 gap-y-2">
+        <div className="container-page py-4">
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-2.5">
+            <p className="text-xs text-white/50">© 2026 Ezial</p>
+            <div className="flex flex-wrap items-center justify-center gap-x-5 gap-y-1.5">
               {legalLinks.map((link, i) => (
                 <FooterLink key={i} label={link.label} route={link.route} />
               ))}

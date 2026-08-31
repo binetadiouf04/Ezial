@@ -2,16 +2,13 @@ import { useState } from 'react';
 import { useApp, type Order, type ShopFulfillment, type DeliveryPreference, quartierToZone, deliveryWindows, generateOrderId, generatePickupCode } from '@/store/AppContext';
 import { getProduct, formatFCFA } from '@/data/products';
 import { getShop } from '@/data/shops';
+import { paymentMethods as paymentMethodsData } from '@/data/payments';
 import CheckoutSteps from '@/components/CheckoutSteps';
-import { Check, Truck, Store, Smartphone, Clock, Loader2, AlertCircle } from 'lucide-react';
+import { Check, Truck, Store, Smartphone, Wallet, Clock, Loader2, AlertCircle } from 'lucide-react';
 import SmartImage from '@/components/SmartImage';
 
-const paymentMethods = [
-  { id: 'wave', label: 'Wave', icon: Smartphone, desc: 'Paiement mobile' },
-  { id: 'orange', label: 'Orange Money', icon: Smartphone, desc: 'Paiement mobile' },
-];
-
-const paymentLabels: Record<string, string> = { wave: 'Wave', orange: 'Orange Money' };
+const paymentIcons: Record<string, typeof Smartphone> = { wave: Smartphone, orange: Smartphone, paypal: Wallet };
+const paymentMethods = paymentMethodsData.map((p) => ({ ...p, icon: paymentIcons[p.id] ?? Smartphone }));
 
 function tomorrowISO(): string {
   const d = new Date();
@@ -163,7 +160,7 @@ export default function CheckoutPage() {
                     <div className="space-y-2">
                       <button onClick={() => setShopFulfillments({ ...shopFulfillments, [shop.id]: 'delivery' })} className={`flex w-full items-start gap-3 rounded-xl border p-3.5 text-left transition-colors ${current === 'delivery' ? 'border-burgundy bg-burgundy/5' : 'border-line'}`}>
                         <Truck size={18} className={current === 'delivery' ? 'text-burgundy' : 'text-ink/40'} />
-                        <div><p className="text-sm font-medium text-ink">Livraison</p><p className="text-xs text-ink/50">Dakar sous 24–48 h</p></div>
+                        <div><p className="text-sm font-medium text-ink">Livraison</p><p className="text-xs text-ink/50">Dakar sous 4–48 h</p></div>
                         {current === 'delivery' && <Check size={16} className="ml-auto text-burgundy" />}
                       </button>
                       {shop.pickupEnabled && (
@@ -193,7 +190,7 @@ export default function CheckoutPage() {
                     <Truck size={20} className="text-burgundy" />
                     <div>
                       <p className="text-sm font-semibold text-ink">Livraison Ezial</p>
-                      <p className="text-xs text-ink/55">Dakar sous 24–48 h · {formatFCFA(zone.fee)}</p>
+                      <p className="text-xs text-ink/55">Dakar sous 4–48 h · {formatFCFA(zone.fee)}</p>
                     </div>
                   </div>
                   <p className="mt-2 text-xs text-ink/45 leading-relaxed">Ezial regroupe vos articles des différentes boutiques en une seule livraison vers votre adresse.</p>
@@ -294,7 +291,7 @@ export default function CheckoutPage() {
                   return (
                     <button key={p.id} onClick={() => setPayment(p.id)} className={`flex w-full items-center gap-3 rounded-xl border p-4 text-left transition-colors ${payment === p.id ? 'border-burgundy bg-burgundy/5' : 'border-line'}`}>
                       <Icon size={20} className={payment === p.id ? 'text-burgundy' : 'text-ink/40'} />
-                      <div><p className="text-sm font-medium text-ink">{p.label}</p><p className="text-xs text-ink/45">{p.desc}</p></div>
+                      <div><p className="text-sm font-medium text-ink">{p.label}</p><p className="text-xs text-ink/45">{p.description}</p></div>
                       {payment === p.id && <Check size={17} className="ml-auto text-burgundy" />}
                     </button>
                   );
@@ -353,5 +350,3 @@ export default function CheckoutPage() {
     </div>
   );
 }
-
-export { paymentLabels };

@@ -111,7 +111,7 @@ export default function HomePage() {
 
       <section className="border-t border-line pt-12">
         <div className="grid grid-cols-1 gap-8 sm:grid-cols-3">
-          {[{ title: 'Livraison à Dakar', desc: 'Sous 24–48 h chez vous' }, { title: 'Boutiques sélectionnées', desc: 'Chaque vendeur est validé par EZIAL' }, { title: 'Paiement sécurisé', desc: 'Wave & Orange Money' }].map((f) => (
+          {[{ title: 'Livraison à Dakar', desc: 'Sous 4–48 h chez vous' }, { title: 'Boutiques sélectionnées', desc: 'Chaque vendeur est validé par EZIAL' }, { title: 'Paiement sécurisé', desc: 'Wave, Orange Money & PayPal' }].map((f) => (
             <div key={f.title} className="text-center sm:text-left"><h3 className="font-display text-lg font-semibold text-ink">{f.title}</h3><p className="mt-1 text-sm text-ink/55">{f.desc}</p></div>
           ))}
         </div>

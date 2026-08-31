@@ -14,9 +14,9 @@ livraison consolidée et retrait en boutique.
   plusieurs étapes, suivi de commande en temps réel.
 - **Espace PRO** — trois tableaux de bord séparés pour les vendeurs, les
   administrateurs et les livreurs, accessibles via `/pro`.
-- **Paiement mobile** — Wave & Orange Money (simulation, aucun paiement réel).
+- **Paiement** — Wave, Orange Money & PayPal (simulation, aucun paiement réel).
 - **Livraison Ezial** — une seule livraison regroupée pour les articles de
-  plusieurs boutiques, sous 24–48 h à Dakar. Retrait en boutique également
+  plusieurs boutiques, sous 4–48 h à Dakar. Retrait en boutique également
   disponible.
 
 ## Fonctionnalités
