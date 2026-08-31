@@ -1,9 +1,9 @@
 import { usePro } from '../../ProContext';
 import { formatFCFA } from '../../data';
-import { Truck, MapPin, Store, ChevronRight, Navigation, CheckCircle2, Power } from 'lucide-react';
+import { Truck, MapPin, Store, ChevronRight, Navigation, CheckCircle2, Power, Package } from 'lucide-react';
 
 export default function DriverHome() {
-  const { name, driverAvailable, setDriverAvailable, navigate, activeMission, availableMissions, acceptMission, completedMissions } = usePro();
+  const { name, driverAvailable, setDriverAvailable, navigate, activeMission, availableMissions, acceptMission, completedMissions, collectParcel, startDelivery } = usePro();
 
   const completedToday = completedMissions.filter((m) => {
     if (!m.deliveredAt) return false;
@@ -52,43 +52,68 @@ export default function DriverHome() {
 
       {driverAvailable && (
         <>
-          {/* Active delivery */}
-          {activeMission && (
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-wider text-ink/40 mb-2">Livraison en cours</p>
-              <button
-                onClick={() => navigate(`/driver/livraisons/${activeMission.id}`)}
-                className="card w-full p-4 text-left border-burgundy/30 bg-burgundy/5 transition-all"
-              >
-                <div className="flex items-center justify-between mb-3">
-                  <span className="font-mono text-sm font-semibold text-burgundy">{activeMission.orderId}</span>
-                  <span className="text-xs font-medium text-burgundy flex items-center gap-1">
-                    {activeMission.step === 'to_collection' && <><Truck size={13} /> En collecte</>}
-                    {activeMission.step === 'all_collected' && <><CheckCircle2 size={13} /> Colis récupérés</>}
-                    {activeMission.step === 'to_customer' && <><Navigation size={13} /> En livraison</>}
-                  </span>
-                </div>
-                <div className="space-y-1.5 mb-3">
-                  {activeMission.collections.map((c) => (
-                    <div key={c.shopId} className="flex items-center gap-2 text-sm">
-                      {c.collected ? (
-                        <CheckCircle2 size={16} className="text-green-600 flex-shrink-0" />
-                      ) : (
-                        <div className="h-4 w-4 rounded-full border-2 border-ink/20 flex-shrink-0" />
-                      )}
-                      <span className={c.collected ? 'text-ink/50 line-through' : 'text-ink font-medium'}>{c.shopName}</span>
+          {/* Active delivery — the driver's main screen while a mission is running */}
+          {activeMission && (() => {
+            const nextCollection = activeMission.collections.find((c) => !c.collected);
+            return (
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wider text-ink/40 mb-2">Livraison en cours</p>
+                <div className="card p-4 border-burgundy/30 bg-burgundy/5">
+                  <button
+                    onClick={() => navigate(`/driver/livraisons/${activeMission.id}`)}
+                    className="w-full text-left"
+                  >
+                    <div className="flex items-center justify-between mb-3">
+                      <span className="font-mono text-sm font-semibold text-burgundy">{activeMission.orderId}</span>
+                      <span className="text-xs font-medium text-burgundy flex items-center gap-1">
+                        {activeMission.step === 'to_collection' && <><Truck size={13} /> En collecte</>}
+                        {activeMission.step === 'all_collected' && <><CheckCircle2 size={13} /> Colis récupérés</>}
+                        {activeMission.step === 'to_customer' && <><Navigation size={13} /> En livraison</>}
+                      </span>
                     </div>
-                  ))}
+                    <div className="space-y-1.5 mb-3">
+                      {activeMission.collections.map((c) => (
+                        <div key={c.shopId} className="flex items-center gap-2 text-sm">
+                          {c.collected ? (
+                            <CheckCircle2 size={16} className="text-green-600 flex-shrink-0" />
+                          ) : (
+                            <div className="h-4 w-4 rounded-full border-2 border-ink/20 flex-shrink-0" />
+                          )}
+                          <span className={c.collected ? 'text-ink/50 line-through' : 'text-ink font-medium'}>{c.shopName}</span>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="flex items-center justify-between text-xs text-ink/50 mb-1">
+                      <span className="flex items-center gap-1"><MapPin size={12} /> → {activeMission.destination}</span>
+                      <span className="font-semibold text-burgundy">{formatFCFA(activeMission.earnings)}</span>
+                    </div>
+                  </button>
+
+                  {/* Direct action for the current step — no extra navigation needed */}
+                  <div className="mt-3 pt-3 border-t border-burgundy/10 space-y-2">
+                    {activeMission.step === 'to_collection' && nextCollection && (
+                      <button onClick={() => collectParcel(activeMission.id, nextCollection.shopId)} className="btn-primary w-full flex items-center justify-center gap-2">
+                        <Package size={16} /> Confirmer la récupération
+                      </button>
+                    )}
+                    {activeMission.step === 'all_collected' && (
+                      <button onClick={() => startDelivery(activeMission.id)} className="btn-primary w-full flex items-center justify-center gap-2">
+                        <Navigation size={16} /> Commencer la livraison
+                      </button>
+                    )}
+                    {activeMission.step === 'to_customer' && (
+                      <button onClick={() => navigate(`/driver/livraisons/${activeMission.id}`)} className="btn-primary w-full flex items-center justify-center gap-2">
+                        <CheckCircle2 size={16} /> Confirmer la livraison
+                      </button>
+                    )}
+                    <button onClick={() => navigate(`/driver/livraisons/${activeMission.id}`)} className="w-full text-center text-xs text-ink/45 hover:text-burgundy flex items-center justify-center gap-1 py-1">
+                      Voir le détail <ChevronRight size={12} />
+                    </button>
+                  </div>
                 </div>
-                <div className="flex items-center justify-between border-t border-burgundy/10 pt-3">
-                  <span className="flex items-center gap-1 text-xs text-ink/50">
-                    <MapPin size={12} /> → {activeMission.destination}
-                  </span>
-                  <ChevronRight size={16} className="text-burgundy" />
-                </div>
-              </button>
-            </div>
-          )}
+              </div>
+            );
+          })()}
 
           {/* Available deliveries with ACCEPT button directly on card */}
           {!activeMission && (
@@ -124,7 +149,7 @@ export default function DriverHome() {
                           onClick={() => acceptMission(mission.id)}
                           className="btn-primary"
                         >
-                          Accepter
+                          Accepter la livraison
                         </button>
                       </div>
                     </div>

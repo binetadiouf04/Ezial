@@ -82,8 +82,8 @@ export default function SellerFinances() {
                 </div>
                 <div className="space-y-1 text-sm">
                   <div className="flex justify-between"><span className="text-ink/55">Vente</span><span className="font-medium text-ink">{formatFCFA(t.gross)}</span></div>
-                  <div className="flex justify-between"><span className="text-ink/55">Commission</span><span className="font-medium text-ink/50">-{formatFCFA(t.commission)}</span></div>
-                  <div className="flex justify-between border-t border-line pt-1"><span className="font-medium text-ink">Net</span><span className="font-semibold text-ink">{formatFCFA(t.net)}</span></div>
+                  <div className="flex justify-between"><span className="text-ink/55">Commission Ezial</span><span className="font-medium text-ink/50">-{formatFCFA(t.commission)}</span></div>
+                  <div className="flex justify-between border-t border-line pt-1"><span className="font-medium text-ink">Montant net</span><span className="font-semibold text-ink">{formatFCFA(t.net)}</span></div>
                 </div>
               </div>
             ))

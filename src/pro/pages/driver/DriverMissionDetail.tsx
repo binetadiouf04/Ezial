@@ -228,7 +228,7 @@ export default function DriverMissionDetail({ missionId }: { missionId: string }
             disabled={!!activeMission}
             className="btn-primary w-full disabled:opacity-40 disabled:cursor-not-allowed"
           >
-            {activeMission ? 'Vous avez déjà une livraison en cours' : 'Accepter'}
+            {activeMission ? 'Vous avez déjà une livraison en cours' : 'Accepter la livraison'}
           </button>
         </>
       )}

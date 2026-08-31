@@ -1,12 +1,8 @@
 import { useState } from 'react';
 import { usePro } from '../../ProContext';
 import VendorNoticeBanner from '../../components/VendorNoticeBanner';
-import { Check, KeyRound } from 'lucide-react';
+import { Check, KeyRound, Image as ImageIcon, Camera } from 'lucide-react';
 import SmartImage from '@/components/SmartImage';
-
-const shopStatusLabels: Record<string, string> = {
-  active: 'Active', pending: 'En attente', flagged: 'Signalée', suspended: 'Suspendue', inactive: 'Désactivée',
-};
 
 export default function SellerShop() {
   const { sellerShop, updateSellerShop, updateSellerPin, identifier, getLatestModeration } = usePro();
@@ -35,6 +31,18 @@ export default function SellerShop() {
     updateSellerShop(form);
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
+  };
+
+  const handleLogoFile = (files: FileList | null) => {
+    const file = files?.[0];
+    if (!file || !file.type.startsWith('image/')) return;
+    setForm((f) => ({ ...f, logo: URL.createObjectURL(file) }));
+  };
+
+  const handleBannerFile = (files: FileList | null) => {
+    const file = files?.[0];
+    if (!file || !file.type.startsWith('image/')) return;
+    setForm((f) => ({ ...f, banner: URL.createObjectURL(file) }));
   };
 
   const handleSavePin = () => {
@@ -116,50 +124,75 @@ export default function SellerShop() {
       </div>
 
       {/* Shop info form */}
-      <div className="card p-5 space-y-4">
-        {/* Logo preview */}
-        <div className="flex items-center gap-3">
-          {form.logo && <SmartImage src={form.logo} alt="" className="h-14 w-14 rounded-lg object-cover" />}
-          <div className="flex-1">
-            <label className="block text-xs font-medium text-ink/60 mb-1.5">Logo (URL)</label>
-            <input className="input-field" value={form.logo} onChange={(e) => setForm({ ...form, logo: e.target.value })} />
+      <div className="card p-5 space-y-5">
+        {/* Logo upload */}
+        <div>
+          <label className="block text-xs font-medium text-ink/60 mb-1.5">Logo de la boutique</label>
+          <div className="flex items-center gap-3">
+            <div className="h-16 w-16 flex-shrink-0 overflow-hidden rounded-lg border border-line bg-cream">
+              {form.logo ? (
+                <SmartImage src={form.logo} alt="" className="h-full w-full object-cover" />
+              ) : (
+                <div className="flex h-full w-full items-center justify-center text-ink/25"><ImageIcon size={20} /></div>
+              )}
+            </div>
+            <label className="btn-outline cursor-pointer text-sm">
+              {form.logo ? 'Changer le logo' : 'Ajouter le logo'}
+              <input type="file" accept="image/*" className="hidden" onChange={(e) => handleLogoFile(e.target.files)} />
+            </label>
           </div>
         </div>
 
-        {/* Banner preview */}
-        {form.banner && (
-          <div className="rounded-lg overflow-hidden h-32 bg-cream">
-            <SmartImage src={form.banner} alt="" className="h-full w-full object-cover" />
-          </div>
-        )}
+        {/* Banner upload */}
         <div>
-          <label className="block text-xs font-medium text-ink/60 mb-1.5">Image de couverture (URL)</label>
-          <input className="input-field" value={form.banner} onChange={(e) => setForm({ ...form, banner: e.target.value })} />
+          <label className="block text-xs font-medium text-ink/60 mb-1.5">Image de couverture</label>
+          <div className="h-32 overflow-hidden rounded-lg border border-line bg-cream">
+            {form.banner ? (
+              <SmartImage src={form.banner} alt="" className="h-full w-full object-cover" />
+            ) : (
+              <div className="flex h-full w-full items-center justify-center text-ink/25"><ImageIcon size={24} /></div>
+            )}
+          </div>
+          <label className="btn-outline mt-2 inline-flex cursor-pointer items-center gap-1.5 text-sm">
+            <Camera size={14} /> {form.banner ? "Changer l'image de couverture" : "Ajouter une image de couverture"}
+            <input type="file" accept="image/*" className="hidden" onChange={(e) => handleBannerFile(e.target.files)} />
+          </label>
+          <p className="mt-1.5 text-xs text-ink/40">Vos photos sont automatiquement recadrées à l'affichage, sans déformation.</p>
         </div>
 
         <div>
           <label className="block text-xs font-medium text-ink/60 mb-1.5">Nom de la boutique</label>
           <input className="input-field" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+          <p className="mt-1 text-xs text-ink/40">Utilisez le nom sous lequel vos clients vous connaissent.</p>
         </div>
 
         <div>
           <label className="block text-xs font-medium text-ink/60 mb-1.5">Description</label>
           <textarea className="input-field" rows={3} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
+          <p className="mt-1 text-xs text-ink/40">
+            Présentez ce que vous vendez, votre spécialité et ce qui distingue votre boutique. Cette description est visible publiquement — mentionnez naturellement vos produits, votre style et votre localisation.
+          </p>
+          <p className="mt-1 text-xs text-ink/35 italic">
+            Ex. : « Maison Fatou propose des vêtements féminins modernes et des pièces d'inspiration africaine à Dakar : robes, ensembles et tenues pour toutes les occasions. »
+          </p>
         </div>
 
         <div>
           <label className="block text-xs font-medium text-ink/60 mb-1.5">Téléphone</label>
           <input className="input-field" value={form.contact} onChange={(e) => setForm({ ...form, contact: e.target.value })} />
+          <p className="mt-1 text-xs text-ink/40">Numéro permettant à Ezial de vous contacter.</p>
         </div>
 
         <div>
           <label className="block text-xs font-medium text-ink/60 mb-1.5">Adresse / quartier</label>
           <input className="input-field" value={form.pickupAddress} onChange={(e) => setForm({ ...form, pickupAddress: e.target.value })} />
+          <p className="mt-1 text-xs text-ink/40">Indiquez précisément où se trouve votre boutique ou votre point de retrait.</p>
         </div>
 
         <div>
           <label className="block text-xs font-medium text-ink/60 mb-1.5">Horaires</label>
           <input className="input-field" value={form.hours} onChange={(e) => setForm({ ...form, hours: e.target.value })} />
+          <p className="mt-1 text-xs text-ink/40">Indiquez les horaires auxquels les commandes peuvent être préparées ou retirées.</p>
         </div>
 
         {/* Fulfillment options */}
@@ -178,14 +211,6 @@ export default function SellerShop() {
           <button onClick={handleSave} className="btn-primary">Enregistrer</button>
           {saved && <span className="flex items-center gap-1 text-sm text-green-600"><Check size={14} /> Enregistré</span>}
         </div>
-      </div>
-
-      {/* Non-modifiable info */}
-      <div className="card p-4 space-y-2">
-        <p className="text-xs font-medium text-ink/50">Informations non modifiables</p>
-        <div className="flex justify-between text-sm"><span className="text-ink/45">Commission Ezial</span><span className="font-medium text-ink">8%</span></div>
-        <div className="flex justify-between text-sm"><span className="text-ink/45">Statut du compte</span><span className="font-medium text-ink">{shopStatusLabels[sellerShop?.status ?? ''] ?? sellerShop?.status}</span></div>
-        <div className="flex justify-between text-sm"><span className="text-ink/45">Plan</span><span className="font-medium text-ink">{sellerShop?.plan === 'founder' ? 'Founder' : 'Standard'}</span></div>
       </div>
     </div>
   );

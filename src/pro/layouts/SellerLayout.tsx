@@ -75,7 +75,7 @@ export default function SellerLayout() {
         </nav>
         <div className="p-3 border-t border-line space-y-1">
           <button onClick={() => { window.location.hash = '/'; }} className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-ink/50 hover:bg-cream hover:text-ink transition-colors">
-            <ArrowLeft size={18} /> Marketplace
+            <ArrowLeft size={18} /> Retourner sur Ezial
           </button>
           <button onClick={logout} className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-ink/50 hover:bg-burgundy/5 hover:text-burgundy transition-colors">
             <LogOut size={18} /> Déconnexion
@@ -89,7 +89,14 @@ export default function SellerLayout() {
           {sellerShop && <SmartImage src={sellerShop.logo} alt="" className="h-8 w-8 rounded-lg object-cover" />}
           <span className="text-sm font-semibold text-ink">{sellerShop?.name ?? name}</span>
         </div>
-        <button onClick={logout} className="text-ink/40 hover:text-burgundy"><LogOut size={18} /></button>
+        <div className="flex items-center gap-1">
+          <button onClick={() => { window.location.hash = '/'; }} aria-label="Retourner sur Ezial" title="Retourner sur Ezial" className="rounded-lg p-2 text-ink/40 hover:text-burgundy transition-colors">
+            <ArrowLeft size={18} />
+          </button>
+          <button onClick={logout} aria-label="Déconnexion" title="Déconnexion" className="rounded-lg p-2 text-ink/40 hover:text-burgundy transition-colors">
+            <LogOut size={18} />
+          </button>
+        </div>
       </div>
 
       {/* Main content */}
