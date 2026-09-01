@@ -48,7 +48,7 @@ export function StatusChip({ status, size = 'sm', label: labelOverride }: { stat
     pending: 'En attente',
     published: 'Actif',
     flagged: 'Signalé',
-    changes_requested: 'Refusé',
+    changes_requested: 'Modifications demandées',
     out_of_stock: 'Rupture de stock',
     inactive: 'Désactivé',
     active: 'Actif',

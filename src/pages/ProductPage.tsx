@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import { useApp } from '@/store/AppContext';
-import { getProduct, productsByShop, formatFCFA, discountPercent, getVariantPrice, getProductsFromSameShop, getSimilarProducts } from '@/data/products';
+import { getProduct, getVariantPrice, getProductsFromSameShop, getSimilarProducts } from '@/data/products';
 import { getShop } from '@/data/shops';
 import { categoryMap } from '@/data/categories';
 import ProductGallery from '@/components/ProductGallery';
@@ -56,7 +56,10 @@ export default function ProductPage({ productId }: { productId: string }) {
         <span className="text-ink/70 line-clamp-1">{product.name}</span>
       </nav>
       <div className="grid gap-8 lg:grid-cols-2 lg:gap-14">
-        <div className="lg:sticky lg:top-[90px] lg:self-start"><ProductGallery images={product.images} alt={product.name} /></div>
+        <div className="relative lg:sticky lg:top-[90px] lg:self-start">
+          <ProductGallery images={product.images} alt={product.name} />
+          <div className="absolute right-2.5 top-2.5 z-10"><FavoriteButton productId={product.id} /></div>
+        </div>
         <div className="space-y-6">
           <div>
             {shop && <button onClick={() => navigate(`/boutique/${shop.id}`)} className="text-xs font-medium uppercase tracking-wider text-burgundy hover:underline">{shop.name}</button>}

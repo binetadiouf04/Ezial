@@ -4,7 +4,7 @@ import { StatusChip } from '../../components/StatusChip';
 import { ShoppingBag, Clock, Truck, AlertTriangle, ChevronRight, ArrowRight } from 'lucide-react';
 
 export default function AdminDashboard() {
-  const { allOrders, missions, navigate, resolvedIncidents, cancelledOrders } = usePro();
+  const { allOrders, allShops, missions, navigate, resolvedIncidents, cancelledOrders } = usePro();
 
   const today = new Date().toDateString();
   const ordersToday = allOrders.filter((o) => new Date(o.date).toDateString() === today).length;
@@ -26,7 +26,7 @@ export default function AdminDashboard() {
   if (openIncidents > 0) todoItems.push({ label: `${openIncidents} ${openIncidents > 1 ? 'livraisons ont' : 'livraison a'} un incident`, href: '/admin/livraisons', priority: 'high' });
   const blockedOrders = allOrders.filter((o) => o.status === 'return_requested' && !cancelledOrders.includes(o.id)).length;
   if (blockedOrders > 0) todoItems.push({ label: `${blockedOrders} ${blockedOrders > 1 ? 'retours à examiner' : 'retour à examiner'}`, href: '/admin/commandes', priority: 'medium' });
-  const pendingShops = 0;
+  const pendingShops = allShops.filter((s) => s.status === 'pending').length;
   if (pendingShops > 0) todoItems.push({ label: `${pendingShops} boutiques en attente`, href: '/admin/boutiques', priority: 'medium' });
 
   const recentOrders = allOrders.slice(0, 5);

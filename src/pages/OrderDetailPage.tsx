@@ -57,11 +57,9 @@ export default function OrderDetailPage({ orderId }: { orderId: string }) {
     );
   }
 
-  const hasPickup = order.shopFulfillments.some((f) => f.type === 'pickup');
   const hasDelivery = order.shopFulfillments.some((f) => f.type === 'delivery');
   const pickupFulfillments = order.shopFulfillments.filter((f) => f.type === 'pickup');
   const isDelivered = order.status === 'delivered';
-  const allPickedUp = hasPickup && !hasDelivery && order.shopFulfillments.every((f) => f.pickupStatus === 'picked_up');
 
   return (
     <div className="container-pro py-8 max-w-3xl">

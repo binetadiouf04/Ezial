@@ -1,5 +1,4 @@
 import { useState, useMemo } from 'react';
-import { useApp } from '@/store/AppContext';
 import { getShop } from '@/data/shops';
 import { productsByShop } from '@/data/products';
 import ProductGrid from '@/components/ProductGrid';
@@ -18,7 +17,6 @@ const sortOptions = [
 type SortId = (typeof sortOptions)[number]['id'];
 
 export default function ShopPage({ shopId }: { shopId: string }) {
-  const { navigate } = useApp();
   const shop = getShop(shopId);
   const [tab, setTab] = useState<Tab>('Accueil');
   const [following, setFollowing] = useState(false);
@@ -27,7 +25,7 @@ export default function ShopPage({ shopId }: { shopId: string }) {
   const allProducts = productsByShop(shopId);
 
   const sortedProducts = useMemo(() => {
-    let result = [...allProducts];
+    const result = [...allProducts];
     switch (sort) {
       case 'prix-asc': result.sort((a, b) => a.price - b.price); break;
       case 'prix-desc': result.sort((a, b) => b.price - a.price); break;

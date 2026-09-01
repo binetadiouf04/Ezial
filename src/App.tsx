@@ -1,5 +1,9 @@
+import { useEffect } from 'react';
 import { AppProvider, useApp } from '@/store/AppContext';
 import { ProProvider } from '@/pro/ProContext';
+import { getProduct } from '@/data/products';
+import { getShop } from '@/data/shops';
+import { categoryMap, type CategoryId } from '@/data/categories';
 import Header from '@/components/Header';
 import MobileBottomNav from '@/components/MobileBottomNav';
 import MobileCategoryDrawer from '@/components/MobileCategoryDrawer';
@@ -95,6 +99,46 @@ function RouteView() {
   return <HomePage />;
 }
 
+const SITE_TITLE = 'Ezial';
+const DEFAULT_DESCRIPTION = "Ezial est une marketplace qui réunit des boutiques de mode, beauté, cheveux, bijoux et parfums à Dakar, avec livraison ou retrait en boutique.";
+
+function setMetaDescription(content: string) {
+  let tag = document.querySelector('meta[name="description"]');
+  if (!tag) {
+    tag = document.createElement('meta');
+    tag.setAttribute('name', 'description');
+    document.head.appendChild(tag);
+  }
+  tag.setAttribute('content', content);
+}
+
+function pageMetaFor(route: string): { title: string; description: string } {
+  const clean = route.split('?')[0];
+  if (clean === '/pro') return { title: `Ezial Pro — Espace de gestion`, description: "L'espace privé pour les administrateurs, vendeurs et livreurs de la marketplace Ezial." };
+  if (clean.startsWith('/produit/')) {
+    const p = getProduct(clean.split('/')[2]);
+    if (p) return { title: `${p.name} — ${SITE_TITLE}`, description: p.description.slice(0, 155) };
+  }
+  if (clean.startsWith('/boutique/')) {
+    const s = getShop(clean.split('/')[2]);
+    if (s) return { title: `${s.name} — Boutique ${SITE_TITLE}`, description: s.description.slice(0, 155) };
+  }
+  if (clean.startsWith('/categorie/')) {
+    const cat = categoryMap[clean.split('/')[2] as CategoryId];
+    if (cat) return { title: `${cat.label} — ${SITE_TITLE}`, description: `Découvrez ${cat.label.toLowerCase()} sur Ezial, la marketplace mode et beauté à Dakar.` };
+  }
+  if (clean === '/panier') return { title: `Panier — ${SITE_TITLE}`, description: DEFAULT_DESCRIPTION };
+  if (clean === '/checkout') return { title: `Commande — ${SITE_TITLE}`, description: DEFAULT_DESCRIPTION };
+  if (clean.startsWith('/commande/')) return { title: `Confirmation de commande — ${SITE_TITLE}`, description: DEFAULT_DESCRIPTION };
+  if (clean.startsWith('/suivi/')) return { title: `Suivi de commande — ${SITE_TITLE}`, description: DEFAULT_DESCRIPTION };
+  if (clean.startsWith('/compte/commande/')) return { title: `Détail de commande — ${SITE_TITLE}`, description: DEFAULT_DESCRIPTION };
+  if (clean === '/favoris') return { title: `Favoris — ${SITE_TITLE}`, description: DEFAULT_DESCRIPTION };
+  if (clean === '/profil' || clean === '/commandes') return { title: `Mon compte — ${SITE_TITLE}`, description: DEFAULT_DESCRIPTION };
+  if (clean === '/promos') return { title: `Promotions — ${SITE_TITLE}`, description: 'Toutes les offres et promotions en cours sur Ezial.' };
+  if (clean.startsWith('/recherche')) return { title: `Recherche — ${SITE_TITLE}`, description: DEFAULT_DESCRIPTION };
+  return { title: `${SITE_TITLE} — Mode, beauté & lifestyle à Dakar`, description: DEFAULT_DESCRIPTION };
+}
+
 function Layout() {
   const { route } = useApp();
   const clean = route.split('?')[0];
@@ -102,6 +146,12 @@ function Layout() {
   const isPro = clean === '/pro';
   const isCheckout = clean === '/checkout';
   const isOrderConfirm = clean.startsWith('/commande/');
+
+  useEffect(() => {
+    const { title, description } = pageMetaFor(route);
+    document.title = title;
+    setMetaDescription(description);
+  }, [route]);
 
   // PRO page renders standalone — no marketplace header/nav
   if (isPro) {

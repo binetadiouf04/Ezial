@@ -1,7 +1,8 @@
 import { usePro } from '../../ProContext';
 import { formatDateTime } from '../../data';
 import { StatusChip } from '../../components/StatusChip';
-import { ArrowLeft, Store, MapPin, User, Phone, AlertTriangle, CheckCircle2, Circle, Package } from 'lucide-react';
+import { ArrowLeft, MapPin, User, Phone, AlertTriangle, CheckCircle2, Circle, Package } from 'lucide-react';
+import SmartImage from '@/components/SmartImage';
 
 export default function AdminDeliveryDetail({ missionId }: { missionId: string }) {
   const { missions, navigate, allDrivers, resolvedIncidents, resolveIncident } = usePro();
@@ -19,16 +20,6 @@ export default function AdminDeliveryDetail({ missionId }: { missionId: string }
   const driver = allDrivers.find((d) => d.id === mission.driverId);
   const hasIncident = mission.incident && !resolvedIncidents.includes(mission.id);
   const collectedCount = mission.collections.filter((c) => c.collected).length;
-
-  const stepLabels: Record<string, string> = {
-    accepted: 'Disponible',
-    to_collection: 'En collecte',
-    collected: 'En collecte',
-    all_collected: 'Colis récupérés',
-    to_customer: 'En livraison',
-    arrived: 'Arrivé',
-    delivered: 'Livrée',
-  };
 
   return (
     <div className="space-y-5">
@@ -62,7 +53,7 @@ export default function AdminDeliveryDetail({ missionId }: { missionId: string }
           <span className="text-xs font-medium text-burgundy">{collectedCount} / {mission.collections.length} récupérées</span>
         </div>
         <div className="space-y-4">
-          {mission.collections.map((c, i) => (
+          {mission.collections.map((c) => (
             <div key={c.shopId} className="flex items-start gap-3">
               {c.collected ? (
                 <CheckCircle2 size={20} className="text-green-600 flex-shrink-0 mt-0.5" />
@@ -128,7 +119,7 @@ export default function AdminDeliveryDetail({ missionId }: { missionId: string }
           </div>
           {mission.proofPhoto && (
             <div className="mt-3 rounded-lg overflow-hidden h-32 bg-cream">
-              <img src={mission.proofPhoto.startsWith('data:') ? mission.proofPhoto : 'https://images.pexels.com/photos/19816456/pexels-photo-19816456.jpeg?auto=compress&cs=tinysrgb&h=200'} alt="Preuve" className="h-full w-full object-cover" />
+              <SmartImage src={mission.proofPhoto.startsWith('data:') ? mission.proofPhoto : 'https://images.pexels.com/photos/19816456/pexels-photo-19816456.jpeg?auto=compress&cs=tinysrgb&h=200'} alt="Preuve" className="h-full w-full object-cover" />
             </div>
           )}
         </div>

@@ -1,7 +1,8 @@
 import { usePro } from '../../ProContext';
-import { productsByShop, formatFCFA } from '../../data';
+import { formatFCFA } from '../../data';
+import type { ProductStatus } from '../../data';
 import { StatusChip } from '../../components/StatusChip';
-import { Plus, Package, Pencil, AlertTriangle, ChevronRight } from 'lucide-react';
+import { Plus, Package, Pencil, AlertTriangle, Power } from 'lucide-react';
 import SmartImage from '@/components/SmartImage';
 
 const MAX_ACTIVE = 25;
@@ -31,8 +32,8 @@ export default function SellerProducts() {
     const product = shopProducts.find((p) => p.id === productId);
     if (!product) return;
     const stock = Math.max(0, newStock);
-    const status = stock === 0 ? 'out_of_stock' : product.status === 'out_of_stock' ? 'published' : product.status;
-    updateSellerProduct(productId, { ...product, stock, status: status as any });
+    const status: ProductStatus = stock === 0 ? 'out_of_stock' : product.status === 'out_of_stock' ? 'published' : product.status;
+    updateSellerProduct(productId, { ...product, stock, status });
   };
 
   const stockLabel = (stock: number) => {
@@ -81,6 +82,15 @@ export default function SellerProducts() {
               <div className="text-right flex-shrink-0">
                 <p className="text-sm font-semibold text-ink">{formatFCFA(product.price)}</p>
                 <div className="mt-1 flex items-center gap-1 justify-end">
+                  {(product.status === 'published' || product.status === 'inactive') && (
+                    <button
+                      onClick={() => handleToggleActive(product.id, product.status)}
+                      title={product.status === 'published' ? 'Désactiver' : 'Activer'}
+                      className={`rounded-lg p-1.5 transition-colors ${product.status === 'published' ? 'text-green-600 hover:bg-green-50' : 'text-ink/35 hover:bg-cream hover:text-ink'}`}
+                    >
+                      <Power size={15} />
+                    </button>
+                  )}
                   <button onClick={() => navigate(`/seller/produits/modifier/${product.id}`)} className="rounded-lg p-1.5 text-ink/40 hover:bg-cream hover:text-ink transition-colors">
                     <Pencil size={15} />
                   </button>

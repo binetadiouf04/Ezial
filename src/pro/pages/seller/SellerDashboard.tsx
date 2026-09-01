@@ -1,11 +1,11 @@
 import { usePro } from '../../ProContext';
-import { orders, productsByShop, formatFCFA, formatDateTime, commissionAmount, netAmount } from '../../data';
+import { orders, productsByShop, formatFCFA, formatDateTime, netAmount } from '../../data';
 import SummaryCard from '../../components/SummaryCard';
 import { StatusChip } from '../../components/StatusChip';
 import { ShoppingBag, Package, Wallet, Clock, ChevronRight, Truck, Store } from 'lucide-react';
 
 export default function SellerDashboard() {
-  const { identifier, navigate, getSubOrderStatus } = usePro();
+  const { navigate, getSubOrderStatus } = usePro();
   const shopId = 'maison-fatou';
 
   // Derive seller's order portions from global orders

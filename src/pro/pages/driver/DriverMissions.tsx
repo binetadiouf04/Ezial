@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { usePro } from '../../ProContext';
 import { formatFCFA, formatDate } from '../../data';
-import { Truck, MapPin, Store, ChevronRight, CheckCircle2, Navigation, Clock } from 'lucide-react';
+import { Truck, MapPin, Store, CheckCircle2, Navigation, Clock } from 'lucide-react';
 
 type Tab = 'active' | 'available' | 'completed';
 

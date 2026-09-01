@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import { usePro } from '../../ProContext';
-import { formatFCFA } from '../../data';
 import { StatusChip } from '../../components/StatusChip';
 import { Search, Plus, X, Check, User } from 'lucide-react';
 

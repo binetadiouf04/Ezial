@@ -130,11 +130,6 @@ export default function AdminOrderDetail({ orderId }: { orderId: string }) {
         <div className="space-y-3">
           {order.subOrders.map((sub) => {
             const status = getSubOrderStatus(order.id, sub.shopId, sub.status);
-            const subTotal = sub.items.reduce((sum, item) => {
-              const product = order.subOrders.flatMap((s) => s.items).find((i) => i.productId === item.productId);
-              return sum + (product ? 0 : 0);
-            }, 0);
-            const shop = order.subOrders.find((s) => s.shopId === sub.shopId);
             return (
               <div key={sub.shopId} className="flex items-center justify-between p-3 rounded-lg bg-cream/40">
                 <div className="min-w-0">

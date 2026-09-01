@@ -1,7 +1,7 @@
 import { useApp } from '@/store/AppContext';
 import { getProduct, formatFCFA } from '@/data/products';
 import { getShop } from '@/data/shops';
-import { Plus, Minus, Trash2, ShoppingBag, ChevronRight, Heart, ArrowLeftRight, Bookmark } from 'lucide-react';
+import { Plus, Minus, Trash2, ShoppingBag, ChevronRight, ArrowLeftRight, Bookmark } from 'lucide-react';
 import SmartImage from '@/components/SmartImage';
 
 export default function CartPage() {

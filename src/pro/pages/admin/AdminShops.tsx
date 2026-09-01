@@ -1,8 +1,7 @@
 import { useState } from 'react';
 import { usePro } from '../../ProContext';
-import { formatFCFA } from '../../data';
 import { StatusChip } from '../../components/StatusChip';
-import { Search, Plus, X, Store, Check } from 'lucide-react';
+import { Search, Plus, X, Check } from 'lucide-react';
 import SmartImage from '@/components/SmartImage';
 
 const shopStatusLabels: Record<string, string> = {

@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import { usePro } from '../../ProContext';
-import { StatusChip } from '../../components/StatusChip';
 import { ChevronRight, AlertTriangle } from 'lucide-react';
 
 type Filter = 'available' | 'collecting' | 'delivering' | 'delivered' | 'incident';

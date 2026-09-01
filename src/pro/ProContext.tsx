@@ -1,7 +1,7 @@
 import { createContext, useContext, useState, useCallback, useEffect, useMemo, type ReactNode } from 'react';
 import type { Role, DeliveryStep, ShopStatus, ProductStatus, ModerationEntry, ModerationTargetType, ModerationAction, BlogPost, BlogStatus } from './data';
 import { missions as initialMissions, type Mission, type Product, type Shop, type Driver, type DriverTransaction, type Order, type Transaction } from './data';
-import { shops as initialShops, products as initialProducts, transactions as initialTransactions, driverTransactions as initialDriverTransactions, orders as initialOrders, drivers as initialDrivers, moderationHistory as initialModerationHistory, blogPosts as initialBlogPosts, formatFCFA } from './data';
+import { shops as initialShops, products as initialProducts, transactions as initialTransactions, driverTransactions as initialDriverTransactions, orders as initialOrders, drivers as initialDrivers, moderationHistory as initialModerationHistory, blogPosts as initialBlogPosts } from './data';
 import { assignShopPrefixes, nextReferenceForShop } from '@/utils/reference';
 
 type Route = string;
@@ -68,7 +68,6 @@ interface ProState extends AuthState {
   missions: Mission[];
   acceptMission: (id: string) => void;
   advanceMission: (id: string) => void;
-  reportProblem: (id: string, reason: string, comment: string) => void;
   advanceSubOrder: (orderId: string, shopId: string, fulfillment: 'delivery' | 'pickup') => void;
   getSubOrderStatus: (orderId: string, shopId: string, original: string) => string;
   setProductStatus: (productId: string, status: ProductStatus) => void;
@@ -257,10 +256,6 @@ export function ProProvider({ children }: { children: ReactNode }) {
     );
   }, []);
 
-  const reportProblem = useCallback((_id: string, _reason: string, _comment: string) => {
-    // Legacy: in a real app this would notify admin
-  }, []);
-
   const advanceSubOrder = useCallback((orderId: string, shopId: string, fulfillment: 'delivery' | 'pickup') => {
     setOrderUpdates((prev) => {
       const key = `${orderId}:${shopId}`;
@@ -275,7 +270,7 @@ export function ProProvider({ children }: { children: ReactNode }) {
   const getSubOrderStatus = useCallback((orderId: string, shopId: string, original: string): string => {
     const key = `${orderId}:${shopId}`;
     return orderUpdates[key] ?? original;
-  }, []);
+  }, [orderUpdates]);
 
   const setProductStatus = useCallback((productId: string, status: ProductStatus) => {
     setProductStatusUpdates((prev) => ({ ...prev, [productId]: status }));
@@ -501,11 +496,13 @@ export function ProProvider({ children }: { children: ReactNode }) {
 
   const createShop = useCallback((input: NewShopInput): Shop => {
     const sellerId = generateIdentifier(input.name);
-    const id = input.name.toLowerCase().replace(/[^a-z0-9]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
+    const slug = input.name.toLowerCase().replace(/[^a-z0-9]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
+    const existingIds = new Set(allShops.map((s) => s.id));
+    const id = !slug || existingIds.has(slug) ? `shop-${Date.now()}` : slug;
     const defaultLogo = 'https://images.pexels.com/photos/19816456/pexels-photo-19816456.jpeg?auto=compress&cs=tinysrgb&h=300&w=300&fit=crop';
     const defaultBanner = 'https://images.pexels.com/photos/8743972/pexels-photo-8743972.jpeg?auto=compress&cs=tinysrgb&h=400&w=900';
     const newShop: Shop = {
-      id: `shop-${Date.now()}`,
+      id,
       name: input.name,
       logo: input.logo || defaultLogo,
       banner: input.banner || defaultBanner,
@@ -530,7 +527,7 @@ export function ProProvider({ children }: { children: ReactNode }) {
     };
     setAllShops((prev) => [...prev, newShop]);
     return newShop;
-  }, []);
+  }, [allShops]);
 
   const createDriver = useCallback((input: NewDriverInput): Driver => {
     const driverIdentifier = generateIdentifier(input.firstName);
@@ -593,7 +590,6 @@ export function ProProvider({ children }: { children: ReactNode }) {
     missions,
     acceptMission,
     advanceMission,
-    reportProblem,
     advanceSubOrder,
     getSubOrderStatus,
     setProductStatus,

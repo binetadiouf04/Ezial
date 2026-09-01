@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://binetadiouf04.github.io/Ezial/sitemap.xml

@@ -1,13 +1,11 @@
 import { usePro } from '../../ProContext';
-import { productsByShop, formatFCFA, formatDate, commissionAmount, netAmount } from '../../data';
+import { formatFCFA, formatDate } from '../../data';
 import FinanceSummary from '../../components/FinanceSummary';
 import { StatusChip } from '../../components/StatusChip';
 import { Wallet, TrendingUp, Calendar } from 'lucide-react';
 
 export default function SellerFinances() {
   const { sellerTransactions } = usePro();
-  const shopId = 'maison-fatou';
-  const shopProducts = productsByShop(shopId);
   const shopName = 'Maison Fatou';
 
   // Filter transactions for this shop

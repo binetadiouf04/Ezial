@@ -1,7 +1,7 @@
 import { usePro } from '../../ProContext';
 import { orders, productsByShop, formatFCFA, formatDateTime, commissionAmount, netAmount } from '../../data';
 import { StatusChip } from '../../components/StatusChip';
-import { ArrowLeft, Truck, Store, Phone, Check, Clock, Package } from 'lucide-react';
+import { ArrowLeft, Truck, Store, Phone, Check, Package } from 'lucide-react';
 import SmartImage from '@/components/SmartImage';
 
 export default function SellerOrderDetail({ orderId }: { orderId: string }) {
@@ -24,7 +24,6 @@ export default function SellerOrderDetail({ orderId }: { orderId: string }) {
 
   const status = getSubOrderStatus(order.id, shopId, sub.status);
   const isDelivery = order.fulfillment === 'delivery';
-  const isPickup = order.fulfillment === 'pickup';
 
   const sellerSubtotal = sub.items.reduce((sum, item) => {
     const p = shopProducts.find((pp) => pp.id === item.productId);

@@ -1,4 +1,4 @@
-import { useApp, type DeliveryStepStatus, type PickupStepStatus } from '@/store/AppContext';
+import { useApp, type PickupStepStatus } from '@/store/AppContext';
 import { getProduct, formatFCFA } from '@/data/products';
 import { getShop } from '@/data/shops';
 import { DeliveryTimeline, PickupTimeline } from '@/components/OrderTimeline';
@@ -9,10 +9,6 @@ import SmartImage from '@/components/SmartImage';
 const shopPrepLabels: Record<string, string> = { preparing: 'En préparation', ready: 'Prête', collected: 'Prête' };
 const shopPrepColors: Record<string, string> = { preparing: 'bg-amber-50 text-amber-700', ready: 'bg-green-50 text-green-700', collected: 'bg-green-50 text-green-700' };
 
-const deliveryStatusLabels: Record<DeliveryStepStatus, string> = {
-  confirmed: 'Commande confirmée', preparing: 'En préparation', ready: 'Prête',
-  picked_up: 'En livraison', delivering: 'En livraison', delivered: 'Livrée',
-};
 const pickupStepLabels: Record<PickupStepStatus, string> = {
   preparing: 'En préparation', ready_for_pickup: 'Prête à récupérer', picked_up: 'Récupérée',
 };
@@ -25,7 +21,6 @@ export default function OrderTrackingPage({ orderId }: { orderId: string }) {
     return <div className="container-pro py-20 text-center"><Package size={42} className="mx-auto text-ink/20" /><p className="mt-4 text-sm text-ink/60">Commande introuvable.</p><button onClick={() => navigate('/profil')} className="btn-outline mt-6">Mes commandes</button></div>;
   }
 
-  const hasPickup = order.shopFulfillments.some((f) => f.type === 'pickup');
   const hasDelivery = order.shopFulfillments.some((f) => f.type === 'delivery');
   const pickupFulfillments = order.shopFulfillments.filter((f) => f.type === 'pickup');
 
@@ -49,7 +44,6 @@ export default function OrderTrackingPage({ orderId }: { orderId: string }) {
           {/* Pickup timelines */}
           {pickupFulfillments.map((sf) => {
             const shop = getShop(sf.shopId);
-            const shopItems = order.items.filter((i) => i.shopId === sf.shopId);
             return (
               <div key={sf.shopId} className="card p-6">
                 <h2 className="text-sm font-semibold text-ink mb-2 flex items-center gap-1.5"><Store size={15} className="text-burgundy" /> Retrait — {shop?.name}</h2>
