@@ -1,5 +1,5 @@
 import { supabase } from './supabaseClient';
-import type { Product, VariantOption } from '@/data/products';
+import type { Product, VariantOption, VariantPrice } from '@/data/products';
 import type { Shop } from '@/data/shops';
 import type { CategoryId } from '@/data/categories';
 
@@ -7,92 +7,98 @@ import type { CategoryId } from '@/data/categories';
 // `Shop` shapes the frontend already uses (src/data/products.ts,
 // src/data/shops.ts). This is preparation only: nothing in the app calls
 // this yet, src/data/products.ts is still the live source, and no display
-// code has been touched. It's meant to make the eventual swap a small,
-// mechanical change once this is wired in.
+// code has been touched.
+//
+// Column names below match the verified live schema exactly — no guessed
+// or nonexistent columns (no old_price, no review_count, etc.).
 //
 // Relies entirely on the existing RLS policies to scope `shops` and
-// `products` to active rows — no client-side status/is_active filter is
-// applied here, so it stays correct regardless of the exact column name
-// those policies check.
+// `products` to active rows — no client-side status filter is applied
+// here (the exact "active" value isn't known from the column list alone,
+// and RLS already enforces it correctly).
 //
-// Schema assumptions (adjust the field lookups below if your actual column
-// names differ — this was written without direct access to the live
-// schema):
-//   public.shops:            id, name, banner, logo, followers, description,
-//                             city, rating, review_count, address,
-//                             pickup_enabled, pickup_eta
-//   public.products:         id, reference, name, shop_id, category,
-//                             subcategory, price, old_price, stock,
-//                             description, rating, review_count, delivery,
-//                             pickup, is_new, is_trending, is_promo,
-//                             texture, hair_material, gender, shoe_gender
-//   public.product_images:   id, product_id, url, sort_order, is_primary
-//   public.product_variants: id, product_id, name, value, sort_order
+//   public.shops:            id, owner_id, name, slug, description, phone,
+//                             neighborhood, address_text, logo_url,
+//                             cover_url, status, seller_code, pin_hash,
+//                             active_product_limit, created_at, updated_at
+//   public.products:         id, shop_id, reference, name, description,
+//                             category, subcategory, base_price, status,
+//                             is_promo, promo_price, promo_start, promo_end,
+//                             created_at, updated_at
+//   public.product_images:   id, product_id, storage_path, is_primary,
+//                             sort_order, created_at
+//   public.product_variants: id, product_id, attributes (jsonb), price,
+//                             stock, created_at, updated_at
 //
-// `details` and `reviews` (both part of the frontend Product shape) have no
-// Supabase source yet — only the four tables above were in scope for this
-// step — so they come back empty until a dedicated table exists for them.
+// Frontend fields with no Supabase equivalent at all come back as a neutral
+// default (see the mapping functions below) rather than an invented column.
+
+// product_images.storage_path is a Supabase Storage path, not a URL. The
+// bucket it lives in isn't part of the schema given for this step — this
+// name is an unconfirmed guess and must be checked against the real bucket
+// (Supabase dashboard → Storage) before this is relied on.
+const PRODUCT_IMAGES_BUCKET = 'product-images';
+
+function resolveImageUrl(storagePath: string): string {
+  if (!storagePath) return '';
+  if (/^https?:\/\//.test(storagePath)) return storagePath; // already a full URL
+  return supabase.storage.from(PRODUCT_IMAGES_BUCKET).getPublicUrl(storagePath).data.publicUrl;
+}
 
 interface ShopRow {
   id: string;
+  owner_id?: string | null;
   name: string;
-  banner?: string | null;
-  logo?: string | null;
-  followers?: number | null;
+  slug?: string | null;
   description?: string | null;
-  city?: string | null;
-  rating?: number | null;
-  review_count?: number | null;
-  address?: string | null;
-  pickup_enabled?: boolean | null;
-  pickup_eta?: string | null;
-  [key: string]: unknown;
+  phone?: string | null;
+  neighborhood?: string | null;
+  address_text?: string | null;
+  logo_url?: string | null;
+  cover_url?: string | null;
+  status?: string | null;
+  seller_code?: string | null;
+  pin_hash?: string | null;
+  active_product_limit?: number | null;
+  created_at?: string;
+  updated_at?: string;
 }
 
 interface ProductRow {
   id: string;
+  shop_id: string;
   reference?: string | null;
   name: string;
-  shop_id: string;
+  description?: string | null;
   category?: string | null;
   subcategory?: string | null;
-  price: number;
-  old_price?: number | null;
-  stock?: number | null;
-  description?: string | null;
-  rating?: number | null;
-  review_count?: number | null;
-  delivery?: string | null;
-  pickup?: string | null;
-  is_new?: boolean | null;
-  is_trending?: boolean | null;
+  base_price: number;
+  status?: string | null;
   is_promo?: boolean | null;
-  texture?: string | null;
-  hair_material?: string | null;
-  gender?: string | null;
-  shoe_gender?: string | null;
-  [key: string]: unknown;
+  promo_price?: number | null;
+  promo_start?: string | null;
+  promo_end?: string | null;
+  created_at?: string;
+  updated_at?: string;
 }
 
 interface ProductImageRow {
   id: string;
   product_id: string;
-  url?: string | null;
-  image_url?: string | null;
-  sort_order?: number | null;
+  storage_path?: string | null;
   is_primary?: boolean | null;
-  [key: string]: unknown;
+  sort_order?: number | null;
+  created_at?: string;
 }
 
 interface ProductVariantRow {
   id: string;
   product_id: string;
-  name?: string | null;
-  variant_name?: string | null;
-  value?: string | null;
-  variant_value?: string | null;
-  sort_order?: number | null;
-  [key: string]: unknown;
+  attributes: Record<string, unknown> | null;
+  price?: number | null;
+  stock?: number | null;
+  created_at?: string;
+  updated_at?: string;
 }
 
 export interface SupabaseCatalogResult {
@@ -106,43 +112,69 @@ function mapShop(row: ShopRow): Shop {
   return {
     id: row.id,
     name: row.name,
-    banner: row.banner ?? '',
-    logo: row.logo ?? '',
-    followers: row.followers ?? 0,
+    banner: row.cover_url ?? '',
+    logo: row.logo_url ?? '',
+    // No Supabase equivalent — neutral defaults, not invented columns.
+    followers: 0,
     description: row.description ?? '',
-    city: row.city ?? '',
-    rating: row.rating ?? 0,
-    reviewCount: row.review_count ?? 0,
-    address: row.address ?? '',
-    pickupEnabled: row.pickup_enabled ?? false,
-    pickupEta: row.pickup_eta ?? '',
+    city: '',
+    rating: 0,
+    reviewCount: 0,
+    address: row.address_text ?? '',
+    pickupEnabled: false,
+    pickupEta: '',
   };
 }
 
 function imagesForProduct(productId: string, imageRows: ProductImageRow[]): string[] {
   return imageRows
     .filter((img) => img.product_id === productId)
-    .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0) || (b.is_primary ? 1 : 0) - (a.is_primary ? 1 : 0))
-    .map((img) => img.url ?? img.image_url ?? '')
+    .sort((a, b) => (b.is_primary ? 1 : 0) - (a.is_primary ? 1 : 0) || (a.sort_order ?? 0) - (b.sort_order ?? 0))
+    .map((img) => resolveImageUrl(img.storage_path ?? ''))
     .filter(Boolean);
 }
 
-function variantsForProduct(productId: string, variantRows: ProductVariantRow[]): VariantOption[] {
+function variantRowsForProduct(productId: string, variantRows: ProductVariantRow[]): ProductVariantRow[] {
+  return variantRows.filter((row) => row.product_id === productId && row.attributes);
+}
+
+/** Attribute names + the distinct values seen across all variant rows, for rendering selectable options. */
+function variantOptionsForProduct(productId: string, variantRows: ProductVariantRow[]): VariantOption[] {
   const grouped = new Map<string, string[]>();
-  for (const row of variantRows) {
-    if (row.product_id !== productId) continue;
-    const name = row.name ?? row.variant_name;
-    const value = row.value ?? row.variant_value;
-    if (!name || !value) continue;
-    const values = grouped.get(name) ?? [];
-    if (!values.includes(value)) values.push(value);
-    grouped.set(name, values);
+  for (const row of variantRowsForProduct(productId, variantRows)) {
+    for (const [name, value] of Object.entries(row.attributes ?? {})) {
+      if (typeof value !== 'string') continue;
+      const values = grouped.get(name) ?? [];
+      if (!values.includes(value)) values.push(value);
+      grouped.set(name, values);
+    }
   }
   return [...grouped.entries()].map(([name, values]) => ({ name, values }));
 }
 
+/** Each row is one full attribute combination with its own price/stock — maps 1:1 to VariantPrice. */
+function variantPricesForProduct(productId: string, variantRows: ProductVariantRow[]): VariantPrice[] {
+  return variantRowsForProduct(productId, variantRows).map((row) => ({
+    conditions: row.attributes as Record<string, string>,
+    price: row.price ?? 0,
+    stock: row.stock ?? undefined,
+  }));
+}
+
+function isPromoActive(row: ProductRow): boolean {
+  if (!row.is_promo) return false;
+  const now = Date.now();
+  if (row.promo_start && now < new Date(row.promo_start).getTime()) return false;
+  if (row.promo_end && now > new Date(row.promo_end).getTime()) return false;
+  return true;
+}
+
 function mapProduct(row: ProductRow, imageRows: ProductImageRow[], variantRows: ProductVariantRow[]): Product {
+  const promoActive = isPromoActive(row);
   const images = imagesForProduct(row.id, imageRows);
+  const variants = variantRowsForProduct(row.id, variantRows);
+  const stockFromVariants = variants.reduce((sum, v) => sum + (v.stock ?? 0), 0);
+
   return {
     id: row.id,
     reference: row.reference ?? '',
@@ -150,25 +182,30 @@ function mapProduct(row: ProductRow, imageRows: ProductImageRow[], variantRows: 
     shopId: row.shop_id,
     category: (row.category ?? '') as CategoryId,
     subcategory: row.subcategory ?? '',
-    price: row.price,
-    oldPrice: row.old_price ?? undefined,
+    price: promoActive ? (row.promo_price ?? row.base_price) : row.base_price,
+    oldPrice: promoActive ? row.base_price : undefined,
     images: images.length > 0 ? images : [''],
-    rating: row.rating ?? undefined,
-    reviewCount: row.review_count ?? undefined,
-    stock: row.stock ?? 0,
-    variants: variantsForProduct(row.id, variantRows),
+    // No Supabase equivalent — neutral defaults, not invented columns.
+    rating: undefined,
+    reviewCount: undefined,
+    // products has no stock column in this schema — stock lives on
+    // product_variants. Summed here when the product has variants; a
+    // product with none has no stock source at all, so it defaults to 0.
+    stock: variants.length > 0 ? stockFromVariants : 0,
+    variants: variantOptionsForProduct(row.id, variantRows),
     description: row.description ?? '',
-    details: [], // no Supabase source yet (not part of this step's tables)
-    delivery: row.delivery ?? '',
-    pickup: row.pickup ?? undefined,
-    isNew: row.is_new ?? undefined,
-    isTrending: row.is_trending ?? undefined,
-    isPromo: row.is_promo ?? undefined,
-    reviews: [], // no Supabase source yet (not part of this step's tables)
-    texture: row.texture ?? undefined,
-    hairMaterial: row.hair_material ?? undefined,
-    gender: row.gender === 'femme' || row.gender === 'homme' ? row.gender : undefined,
-    shoeGender: row.shoe_gender === 'femme' || row.shoe_gender === 'homme' ? row.shoe_gender : undefined,
+    details: [], // no Supabase source (not part of this step's tables)
+    delivery: '',
+    pickup: undefined,
+    isNew: undefined,
+    isTrending: undefined,
+    isPromo: promoActive,
+    reviews: [], // no Supabase source (not part of this step's tables)
+    variantPrices: variantPricesForProduct(row.id, variantRows),
+    texture: undefined,
+    hairMaterial: undefined,
+    gender: undefined,
+    shoeGender: undefined,
   };
 }
 
@@ -178,7 +215,7 @@ function mapProduct(row: ProductRow, imageRows: ProductImageRow[], variantRows: 
  *
  * Four separate queries joined client-side by id, rather than one nested
  * PostgREST select — more resilient to unknown/ambiguous foreign key setups
- * on a schema this code hasn't seen directly.
+ * on a schema this code hasn't queried directly before.
  */
 export async function fetchActiveCatalogFromSupabase(): Promise<SupabaseCatalogResult> {
   const errors: string[] = [];
