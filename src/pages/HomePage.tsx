@@ -6,6 +6,7 @@ import ProductGrid from '@/components/ProductGrid';
 import ShopCard from '@/components/ShopCard';
 import HeroCarousel, { type HeroSlide } from '@/components/HeroCarousel';
 import SmartImage from '@/components/SmartImage';
+import SupabaseConnectionTest from '@/components/SupabaseConnectionTest';
 import { ChevronRight } from 'lucide-react';
 
 const heroSlides: HeroSlide[] = [
@@ -66,6 +67,7 @@ export default function HomePage() {
   return (
     <div className="space-y-16 lg:space-y-24">
       <h1 className="sr-only">Ezial — Mode, beauté & lifestyle à Dakar</h1>
+      <SupabaseConnectionTest />
       <HeroCarousel slides={heroSlides} />
 
       <section>
