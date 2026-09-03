@@ -33,10 +33,8 @@ import type { CategoryId } from '@/data/categories';
 // Frontend fields with no Supabase equivalent at all come back as a neutral
 // default (see the mapping functions below) rather than an invented column.
 
-// product_images.storage_path is a Supabase Storage path, not a URL. The
-// bucket it lives in isn't part of the schema given for this step — this
-// name is an unconfirmed guess and must be checked against the real bucket
-// (Supabase dashboard → Storage) before this is relied on.
+// product_images.storage_path is a Supabase Storage path, not a URL.
+// Confirmed bucket name: product-images.
 const PRODUCT_IMAGES_BUCKET = 'product-images';
 
 function resolveImageUrl(storagePath: string): string {
