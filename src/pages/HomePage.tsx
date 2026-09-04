@@ -10,6 +10,18 @@ import SmartImage from '@/components/SmartImage';
 import { fetchActiveCatalogFromSupabase } from '@/lib/supabaseCatalog';
 import { ChevronRight } from 'lucide-react';
 
+// TRANSITIONAL — merges the Supabase catalog into the mock one instead of
+// replacing it outright, so the homepage stays populated while the real
+// catalog is still thin. A Supabase product wins over a mock product that
+// shares its reference; mock products with no matching reference are kept
+// as-is. Remove this merge (and mockProducts) once the Supabase catalog is
+// filled enough to stand on its own — see fetchActiveCatalogFromSupabase().
+function mergeCatalogs(mock: Product[], supabase: Product[]): Product[] {
+  const supabaseRefs = new Set(supabase.map((p) => p.reference).filter(Boolean));
+  const remainingMock = mock.filter((p) => !supabaseRefs.has(p.reference));
+  return [...supabase, ...remainingMock];
+}
+
 const heroSlides: HeroSlide[] = [
   {
     id: 'mode-femme',
@@ -61,8 +73,9 @@ const heroSlides: HeroSlide[] = [
 export default function HomePage() {
   const { navigate } = useApp();
   // The mock catalog renders immediately; if the Supabase catalog fetch
-  // succeeds, its products replace it. On failure (or while still loading),
-  // the mock catalog stays as the fallback source — never left empty.
+  // succeeds, its products are merged in (see mergeCatalogs above). On
+  // failure (or while still loading), the mock catalog stays as-is —
+  // never left empty.
   const [products, setProducts] = useState<Product[]>(mockProducts);
 
   useEffect(() => {
@@ -70,7 +83,7 @@ export default function HomePage() {
     fetchActiveCatalogFromSupabase()
       .then((result) => {
         if (cancelled) return;
-        if (result.errors.length === 0) setProducts(result.products);
+        if (result.errors.length === 0) setProducts(mergeCatalogs(mockProducts, result.products));
       })
       .catch(() => {
         // Fetch itself failed unexpectedly — keep the mock catalog as-is.
