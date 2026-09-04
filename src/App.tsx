@@ -24,6 +24,8 @@ import ProEntryPage from '@/pro/pages/ProEntryPage';
 import Footer from '@/components/Footer';
 import InfoPage from '@/pages/InfoPage';
 import PromoPage from '@/pages/PromoPage';
+import TrendingPage from '@/pages/TrendingPage';
+import ForYouPage from '@/pages/ForYouPage';
 
 function RouteView() {
   const { route } = useApp();
@@ -45,6 +47,12 @@ function RouteView() {
 
   // Promos: /promos
   if (clean === '/promos') return <PromoPage />;
+
+  // Trending: /tendances
+  if (clean === '/tendances') return <TrendingPage />;
+
+  // For you: /pour-vous
+  if (clean === '/pour-vous') return <ForYouPage />;
 
   // Search: /recherche?q=...
   if (clean.startsWith('/recherche')) {
@@ -135,6 +143,8 @@ function pageMetaFor(route: string): { title: string; description: string } {
   if (clean === '/favoris') return { title: `Favoris — ${SITE_TITLE}`, description: DEFAULT_DESCRIPTION };
   if (clean === '/profil' || clean === '/commandes') return { title: `Mon compte — ${SITE_TITLE}`, description: DEFAULT_DESCRIPTION };
   if (clean === '/promos') return { title: `Promotions — ${SITE_TITLE}`, description: 'Toutes les offres et promotions en cours sur Ezial.' };
+  if (clean === '/tendances') return { title: `Tendances — ${SITE_TITLE}`, description: 'Les produits tendances du moment sur Ezial.' };
+  if (clean === '/pour-vous') return { title: `Sélection pour vous — ${SITE_TITLE}`, description: 'Notre sélection de produits personnalisée sur Ezial.' };
   if (clean.startsWith('/recherche')) return { title: `Recherche — ${SITE_TITLE}`, description: DEFAULT_DESCRIPTION };
   return { title: `${SITE_TITLE} — Mode, beauté & lifestyle à Dakar`, description: DEFAULT_DESCRIPTION };
 }

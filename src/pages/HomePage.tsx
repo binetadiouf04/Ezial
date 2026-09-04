@@ -3,7 +3,7 @@ import { useApp } from '@/store/AppContext';
 import { products as mockProducts, type Product } from '@/data/products';
 import { shops } from '@/data/shops';
 import { homeCircleTiles } from '@/data/categories';
-import ProductGrid from '@/components/ProductGrid';
+import ProductCard from '@/components/ProductCard';
 import ShopCard from '@/components/ShopCard';
 import HeroCarousel, { type HeroSlide } from '@/components/HeroCarousel';
 import SmartImage from '@/components/SmartImage';
@@ -20,6 +20,44 @@ function mergeCatalogs(mock: Product[], supabase: Product[]): Product[] {
   const supabaseRefs = new Set(supabase.map((p) => p.reference).filter(Boolean));
   const remainingMock = mock.filter((p) => !supabaseRefs.has(p.reference));
   return [...supabase, ...remainingMock];
+}
+
+// Homepage-only preview row for a product section: a capped selection (~6 on
+// desktop) with a "Voir tout" link to the full list, horizontally swipeable
+// on mobile instead of wrapping into extra rows.
+function HomeProductPreview({
+  eyebrow,
+  title,
+  products,
+  seeAllRoute,
+  onNavigate,
+}: {
+  eyebrow: string;
+  title: string;
+  products: Product[];
+  seeAllRoute: string;
+  onNavigate: (route: string) => void;
+}) {
+  const preview = products.slice(0, 6);
+  return (
+    <>
+      <div className="mb-6 flex items-end justify-between">
+        <div><p className="eyebrow mb-1.5">{eyebrow}</p><h2 className="section-title">{title}</h2></div>
+        <button onClick={() => onNavigate(seeAllRoute)} className="flex items-center gap-1 text-sm font-medium text-burgundy hover:underline">Voir tout <ChevronRight size={15} /></button>
+      </div>
+      {preview.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-20 text-center"><p className="text-sm text-ink/50">Aucun produit trouvé.</p></div>
+      ) : (
+        <div className="flex gap-4 overflow-x-auto no-scrollbar pb-1 sm:grid sm:grid-cols-3 sm:gap-5 sm:overflow-visible sm:pb-0 lg:grid-cols-6">
+          {preview.map((p) => (
+            <div key={p.id} className="w-[44%] flex-shrink-0 sm:w-auto sm:flex-shrink-0">
+              <ProductCard product={p} />
+            </div>
+          ))}
+        </div>
+      )}
+    </>
+  );
 }
 
 const heroSlides: HeroSlide[] = [
@@ -93,7 +131,6 @@ export default function HomePage() {
 
   const trending = products.filter((p) => p.isTrending);
   const promos = products.filter((p) => p.isPromo);
-  const nouveautes = products.filter((p) => p.isNew);
   const pourVous = [...products].sort(() => 0.5 - Math.random()).slice(0, 8);
 
   return (
@@ -113,34 +150,23 @@ export default function HomePage() {
         </div>
       </section>
 
-      <section>
-        <div className="mb-6 flex items-end justify-between">
-          <div><p className="eyebrow mb-1.5">Tendances du moment</p><h2 className="section-title">Le plus aimé maintenant</h2></div>
-          <button onClick={() => navigate('/categorie/vetements')} className="hidden sm:flex items-center gap-1 text-sm font-medium text-burgundy hover:underline">Tout voir <ChevronRight size={15} /></button>
-        </div>
-        <ProductGrid products={trending} columns={4} />
-      </section>
-
       {promos.length > 0 && (
         <section className="rounded-2xl bg-burgundy/5 p-6 sm:p-10">
-          <div className="mb-6 flex items-end justify-between"><div><p className="eyebrow mb-1.5">Promotions</p><h2 className="section-title">Offres à ne pas manquer</h2></div></div>
-          <ProductGrid products={promos} columns={4} />
+          <HomeProductPreview eyebrow="Promotions" title="Offres à ne pas manquer" products={promos} seeAllRoute="/promos" onNavigate={navigate} />
         </section>
       )}
 
       <section>
+        <HomeProductPreview eyebrow="Tendances du moment" title="Le plus aimé maintenant" products={trending} seeAllRoute="/tendances" onNavigate={navigate} />
+      </section>
+
+      <section>
+        <HomeProductPreview eyebrow="Pour vous" title="Sélection personnalisée" products={pourVous} seeAllRoute="/pour-vous" onNavigate={navigate} />
+      </section>
+
+      <section>
         <div className="mb-6 flex items-end justify-between"><div><p className="eyebrow mb-1.5">Boutiques à découvrir</p><h2 className="section-title">Nos vendeurs sélectionnés</h2></div></div>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">{shops.map((shop) => <ShopCard key={shop.id} shop={shop} />)}</div>
-      </section>
-
-      <section>
-        <div className="mb-6 flex items-end justify-between"><div><p className="eyebrow mb-1.5">Nouveautés</p><h2 className="section-title">Vient d'arriver</h2></div></div>
-        <ProductGrid products={nouveautes} columns={4} />
-      </section>
-
-      <section>
-        <div className="mb-6 flex items-end justify-between"><div><p className="eyebrow mb-1.5">Pour vous</p><h2 className="section-title">Sélection personnalisée</h2></div></div>
-        <ProductGrid products={pourVous} columns={4} />
       </section>
 
       <section className="border-t border-line pt-12">
