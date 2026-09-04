@@ -37,6 +37,11 @@ import type { CategoryId } from '@/data/categories';
 // Confirmed bucket name: product-images.
 const PRODUCT_IMAGES_BUCKET = 'product-images';
 
+// Same placeholder image SmartImage already falls back to on load error —
+// used here so a product with no product_images row never gets an empty
+// <img src>, without touching SmartImage/ProductCard.
+const FALLBACK_PRODUCT_IMAGE = `${import.meta.env.BASE_URL}ezial-fallback.webp`;
+
 function resolveImageUrl(storagePath: string): string {
   if (!storagePath) return '';
   if (/^https?:\/\//.test(storagePath)) return storagePath; // already a full URL
@@ -182,7 +187,7 @@ function mapProduct(row: ProductRow, imageRows: ProductImageRow[], variantRows: 
     subcategory: row.subcategory ?? '',
     price: promoActive ? (row.promo_price ?? row.base_price) : row.base_price,
     oldPrice: promoActive ? row.base_price : undefined,
-    images: images.length > 0 ? images : [''],
+    images: images.length > 0 ? images : [FALLBACK_PRODUCT_IMAGE],
     // No Supabase equivalent — neutral defaults, not invented columns.
     rating: undefined,
     reviewCount: undefined,

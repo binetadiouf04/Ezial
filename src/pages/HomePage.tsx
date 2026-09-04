@@ -1,12 +1,13 @@
+import { useEffect, useState } from 'react';
 import { useApp } from '@/store/AppContext';
-import { products } from '@/data/products';
+import { products as mockProducts, type Product } from '@/data/products';
 import { shops } from '@/data/shops';
 import { homeCircleTiles } from '@/data/categories';
 import ProductGrid from '@/components/ProductGrid';
 import ShopCard from '@/components/ShopCard';
 import HeroCarousel, { type HeroSlide } from '@/components/HeroCarousel';
 import SmartImage from '@/components/SmartImage';
-import SupabaseCatalogTest from '@/components/SupabaseCatalogTest';
+import { fetchActiveCatalogFromSupabase } from '@/lib/supabaseCatalog';
 import { ChevronRight } from 'lucide-react';
 
 const heroSlides: HeroSlide[] = [
@@ -59,6 +60,24 @@ const heroSlides: HeroSlide[] = [
 
 export default function HomePage() {
   const { navigate } = useApp();
+  // The mock catalog renders immediately; if the Supabase catalog fetch
+  // succeeds, its products replace it. On failure (or while still loading),
+  // the mock catalog stays as the fallback source — never left empty.
+  const [products, setProducts] = useState<Product[]>(mockProducts);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchActiveCatalogFromSupabase()
+      .then((result) => {
+        if (cancelled) return;
+        if (result.errors.length === 0) setProducts(result.products);
+      })
+      .catch(() => {
+        // Fetch itself failed unexpectedly — keep the mock catalog as-is.
+      });
+    return () => { cancelled = true; };
+  }, []);
+
   const trending = products.filter((p) => p.isTrending);
   const promos = products.filter((p) => p.isPromo);
   const nouveautes = products.filter((p) => p.isNew);
@@ -67,7 +86,6 @@ export default function HomePage() {
   return (
     <div className="space-y-16 lg:space-y-24">
       <h1 className="sr-only">Ezial — Mode, beauté & lifestyle à Dakar</h1>
-      <SupabaseCatalogTest />
       <HeroCarousel slides={heroSlides} />
 
       <section>
