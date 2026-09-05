@@ -4,7 +4,7 @@ import { categories, categoryMap, type CategoryId } from '@/data/categories';
 import { getFilters, type FilterGroup } from '@/data/filters';
 import { getColor } from '@/data/colors';
 import VendorNoticeBanner from '../../components/VendorNoticeBanner';
-import { createProductInSupabase, fetchProductImages, deleteProductImage, addProductImages, type SupabaseProductStatus } from '@/lib/supabaseSellerProducts';
+import { createProductInSupabase, fetchProductImages, deleteProductImage, addProductImages, type SupabaseProductStatus, type CreateProductStep } from '@/lib/supabaseSellerProducts';
 import { ArrowLeft, X, Package, ChevronDown, Check, Camera, Star } from 'lucide-react';
 
 // products.status in Supabase only accepts draft/active/flagged/disabled —
@@ -166,6 +166,18 @@ export default function SellerProductForm({ productId }: { productId?: string })
   const [imageActionError, setImageActionError] = useState('');
   const [submitError, setSubmitError] = useState('');
   const [isSaving, setIsSaving] = useState(false);
+
+  // TEMPORARY DIAGNOSTIC — visible, step-by-step trace of what happens on
+  // "Publier"/"Enregistrer en brouillon". Purely observational: it never
+  // changes what handleSubmit does, only records/shows it. Remove once the
+  // real issue behind a "Publier" click is confirmed.
+  const [diagnosticLog, setDiagnosticLog] = useState<{ step: string; ok: boolean; message: string; time: string }[]>([]);
+  const logDiagnostic = (step: string, ok: boolean, message: string) => {
+    const time = new Date().toLocaleTimeString('fr-FR', { hour12: false });
+    setDiagnosticLog((prev) => [...prev, { step, ok, message, time }]);
+    if (ok) console.log(`[diagnostic Publier] ${step}: OK — ${message}`);
+    else console.error(`[diagnostic Publier] ${step}: ERREUR — ${message}`);
+  };
 
   useEffect(() => {
     if (!existing?.supabaseProductId) return;
@@ -437,8 +449,15 @@ export default function SellerProductForm({ productId }: { productId?: string })
   };
 
   const handleSubmit = async (status: 'draft' | 'published') => {
-    if (!validate()) return;
+    setDiagnosticLog([]);
+    logDiagnostic('1. Début submit', true, `bouton="${status}", categoryId="${categoryId}", subId="${subId}"`);
+
+    if (!validate()) {
+      logDiagnostic('1. Début submit', false, 'Validation du formulaire échouée (champs obligatoires manquants) — aucun appel Supabase effectué.');
+      return;
+    }
     if (!sellerSupabaseShopId) {
+      logDiagnostic('1. Début submit', false, "Aucune boutique Supabase réelle liée au compte (sellerSupabaseShopId est null) — aucun appel Supabase effectué.");
       setSubmitError("Votre compte vendeur n'est relié à aucune boutique Supabase réelle. Contactez EZIAL.");
       return;
     }
@@ -468,30 +487,44 @@ export default function SellerProductForm({ productId }: { productId?: string })
           sortOrderStart === 0,
         );
         if (result.error) {
+          logDiagnostic('4. Upload Storage (édition)', false, result.error);
           setSubmitError(result.error);
           setIsSaving(false);
           return;
         }
+        logDiagnostic('4. Upload Storage (édition)', true, `${newLocalImages.length} nouvelle(s) image(s) envoyée(s)`);
       }
     } else {
-      const supabaseResult = await createProductInSupabase({
-        shopId: sellerSupabaseShopId,
-        shopName: sellerShopName,
-        name: name.trim(),
-        description: description.trim(),
-        category: categoryId,
-        subcategory: subId,
-        basePrice: parseInt(price) || 0,
-        status: SUPABASE_STATUS_FOR_FORM_STATUS[status],
-        descriptiveAttributes: buildDescriptiveAttributes(),
-        variants: buildVariantRows(),
-        images: newLocalImages.map((img) => ({ file: img.file })),
-      });
+      const stepLabels: Record<CreateProductStep, string> = {
+        products: '2. Création products',
+        product_variants: '3. Création product_variants',
+        storage_upload: '4. Upload Storage',
+        product_images: '5. Création product_images',
+      };
+      const supabaseResult = await createProductInSupabase(
+        {
+          shopId: sellerSupabaseShopId,
+          shopName: sellerShopName,
+          name: name.trim(),
+          description: description.trim(),
+          category: categoryId,
+          subcategory: subId,
+          basePrice: parseInt(price) || 0,
+          status: SUPABASE_STATUS_FOR_FORM_STATUS[status],
+          descriptiveAttributes: buildDescriptiveAttributes(),
+          variants: buildVariantRows(),
+          images: newLocalImages.map((img) => ({ file: img.file })),
+        },
+        (step, result) => logDiagnostic(stepLabels[step], result.ok, result.ok ? 'OK' : result.error),
+      );
       if ('error' in supabaseResult) {
+        logDiagnostic('6. Succès final', false, supabaseResult.error);
         setSubmitError(supabaseResult.error);
         setIsSaving(false);
+        // Never redirects when a step failed.
         return;
       }
+      logDiagnostic('6. Succès final', true, `productId="${supabaseResult.productId}", reference="${supabaseResult.reference}"`);
 
       const product = {
         id: existing?.id ?? `p${Date.now()}`,
@@ -517,6 +550,7 @@ export default function SellerProductForm({ productId }: { productId?: string })
     }
 
     setIsSaving(false);
+    logDiagnostic('7. Redirection', true, "navigate('/seller/produits')");
     navigate('/seller/produits');
   };
 
@@ -919,6 +953,20 @@ export default function SellerProductForm({ productId }: { productId?: string })
         </p>
       )}
       {submitError && <p className="rounded-lg bg-burgundy/5 px-4 py-3 text-sm text-burgundy">{submitError}</p>}
+
+      {/* TEMPORARY DIAGNOSTIC — visible step-by-step trace of the last
+          submit attempt. Purely observational; remove once the "Publier"
+          issue is confirmed and fixed. */}
+      {diagnosticLog.length > 0 && (
+        <div className="rounded-lg border border-dashed border-ink/25 bg-cream/60 p-4 text-xs font-mono space-y-1.5">
+          <p className="font-semibold text-ink/70">Diagnostic temporaire — dernière tentative</p>
+          {diagnosticLog.map((entry, i) => (
+            <p key={i} className={entry.ok ? 'text-green-700' : 'text-burgundy'}>
+              [{entry.time}] {entry.step} — {entry.ok ? 'OK' : 'ERREUR'} : {entry.message}
+            </p>
+          ))}
+        </div>
+      )}
 
       {/* Actions */}
       <div className="flex gap-3">
