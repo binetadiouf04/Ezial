@@ -1,12 +1,16 @@
 import { supabase } from './supabaseClient';
 import { PRODUCT_IMAGES_BUCKET, resolveImageUrl } from './supabaseCatalog';
+import { assignShopPrefixes, formatReference } from '@/utils/reference';
 
 // Writes a seller-created product to Supabase: products, then
 // product_variants, then the image uploads + product_images. Each step
 // only runs after the previous one succeeded, and any failure rolls back
 // everything created so far (best-effort — the Supabase JS client has no
 // real cross-table transaction, so this is a manual compensating-delete
-// chain, not a real ROLLBACK).
+// chain, not a real ROLLBACK). The whole sequence also runs inside a
+// try/catch: an unexpected rejection (a dropped connection mid-upload, for
+// instance) still triggers the same best-effort cleanup instead of leaving
+// a products row silently orphaned.
 
 export interface VariantRowInput {
   attributes: Record<string, string>;
@@ -26,7 +30,7 @@ export type SupabaseProductStatus = 'draft' | 'active' | 'flagged' | 'disabled';
 
 export interface CreateProductInput {
   shopId: string;
-  reference: string;
+  shopName: string;
   name: string;
   description: string;
   category: string;
@@ -40,6 +44,7 @@ export interface CreateProductInput {
 
 export interface CreateProductResult {
   productId: string;
+  reference: string;
 }
 
 export interface CreateProductError {
@@ -49,6 +54,40 @@ export interface CreateProductError {
 function sanitizeFileName(name: string): string {
   return name.trim().replace(/[^a-zA-Z0-9._-]/g, '_') || 'photo';
 }
+
+// The shop's 3-letter reference prefix, derived only from its real Supabase
+// name — never from any frontend mock data. A single-shop list never hits
+// assignShopPrefixes' collision-avoidance branch, so this is a pure,
+// deterministic, stable function of the shop's own name (same input, same
+// prefix, every time).
+function shopReferencePrefix(shopId: string, shopName: string): string {
+  const prefixes = assignShopPrefixes([{ id: shopId, name: shopName }]);
+  return prefixes[shopId] ?? 'EZI';
+}
+
+// The next free reference for this shop, computed from the products
+// actually present in Supabase for it — never from local/mock counters.
+async function nextAvailableReference(shopId: string, shopName: string): Promise<string> {
+  const prefix = shopReferencePrefix(shopId, shopName);
+  const { data } = await supabase.from('products').select('reference').eq('shop_id', shopId);
+  const pattern = new RegExp(`^EZ-${prefix}-(\\d+)$`);
+  let maxSeq = 0;
+  for (const row of data ?? []) {
+    const match = (row.reference as string | null)?.match(pattern);
+    if (match) maxSeq = Math.max(maxSeq, parseInt(match[1], 10));
+  }
+  return formatReference(prefix, maxSeq + 1);
+}
+
+// Postgres' unique_violation code — used to tell "someone else just took
+// this exact reference" (retry with a fresh one) apart from any other
+// insert failure (which should not be retried).
+function isReferenceConflict(error: { code?: string; message?: string } | null | undefined): boolean {
+  if (!error) return false;
+  return error.code === '23505' || (error.message ?? '').includes('products_reference_key');
+}
+
+const MAX_REFERENCE_ATTEMPTS = 5;
 
 async function uploadImages(
   uid: string,
@@ -68,13 +107,30 @@ async function uploadImages(
   return { paths: uploadedSoFar };
 }
 
-async function cleanupFailedProduct(productId: string, uploadedPaths: string[]): Promise<void> {
+// Best-effort compensating delete. Each step's own result is checked —
+// unlike a silent fire-and-forget, this never claims a clean rollback when
+// Supabase actually refused one of the deletes (e.g. RLS not permitting a
+// seller to delete a products row directly): the caller is told exactly
+// whether cleanup fully succeeded, so it can report an honest error instead
+// of hiding a leftover row.
+async function cleanupFailedProduct(productId: string, uploadedPaths: string[]): Promise<{ cleanedUp: boolean }> {
+  let cleanedUp = true;
   if (uploadedPaths.length > 0) {
-    await supabase.storage.from(PRODUCT_IMAGES_BUCKET).remove(uploadedPaths);
+    const { error } = await supabase.storage.from(PRODUCT_IMAGES_BUCKET).remove(uploadedPaths);
+    if (error) cleanedUp = false;
   }
-  await supabase.from('product_images').delete().eq('product_id', productId);
-  await supabase.from('product_variants').delete().eq('product_id', productId);
-  await supabase.from('products').delete().eq('id', productId);
+  const { error: imagesError } = await supabase.from('product_images').delete().eq('product_id', productId);
+  if (imagesError) cleanedUp = false;
+  const { error: variantsError } = await supabase.from('product_variants').delete().eq('product_id', productId);
+  if (variantsError) cleanedUp = false;
+  const { error: productError } = await supabase.from('products').delete().eq('id', productId);
+  if (productError) cleanedUp = false;
+  return { cleanedUp };
+}
+
+function failureMessage(reason: string, productId: string, cleanedUp: boolean): string {
+  if (cleanedUp) return `${reason} Le produit n'a pas été enregistré.`;
+  return `${reason} Le nettoyage automatique a échoué : un produit partiel (id ${productId}) peut être resté en base. Contactez EZIAL avec cet identifiant.`;
 }
 
 export async function createProductInSupabase(
@@ -86,60 +142,98 @@ export async function createProductInSupabase(
     return { error: 'Session vendeur expirée. Reconnectez-vous et réessayez.' };
   }
 
-  const { data: productRow, error: productError } = await supabase
-    .from('products')
-    .insert({
-      shop_id: input.shopId,
-      reference: input.reference,
-      name: input.name,
-      description: input.description,
-      category: input.category,
-      subcategory: input.subcategory,
-      base_price: input.basePrice,
-      status: input.status,
-      descriptive_attributes: input.descriptiveAttributes,
-    })
-    .select('id')
-    .single();
+  // Tracked across the whole try block so the catch handler can still
+  // attempt cleanup if anything unexpected throws partway through (a
+  // dropped connection, for instance) instead of leaving a row orphaned
+  // with no cleanup attempted at all.
+  let productId: string | undefined;
+  let uploadedPaths: string[] = [];
 
-  if (productError || !productRow) {
-    return { error: `Impossible de créer le produit : ${productError?.message ?? 'erreur inconnue'}.` };
-  }
-  const productId = productRow.id as string;
+  try {
+    let productRow: { id: string } | null = null;
+    let reference = '';
+    let lastError: { code?: string; message?: string } | null = null;
 
-  const variantRows = input.variants.map((v) => ({
-    product_id: productId,
-    attributes: v.attributes,
-    price: v.price,
-    stock: v.stock,
-  }));
-  const { error: variantsError } = await supabase.from('product_variants').insert(variantRows);
-  if (variantsError) {
-    await cleanupFailedProduct(productId, []);
-    return { error: `Impossible d'enregistrer les variantes : ${variantsError.message}. Le produit n'a pas été créé.` };
-  }
+    for (let attempt = 0; attempt < MAX_REFERENCE_ATTEMPTS; attempt++) {
+      reference = await nextAvailableReference(input.shopId, input.shopName);
+      const { data, error } = await supabase
+        .from('products')
+        .insert({
+          shop_id: input.shopId,
+          reference,
+          name: input.name,
+          description: input.description,
+          category: input.category,
+          subcategory: input.subcategory,
+          base_price: input.basePrice,
+          status: input.status,
+          descriptive_attributes: input.descriptiveAttributes,
+        })
+        .select('id')
+        .single();
 
-  if (input.images.length > 0) {
-    const uploadResult = await uploadImages(uid, productId, input.images);
-    if ('error' in uploadResult) {
-      await cleanupFailedProduct(productId, uploadResult.uploadedSoFar);
-      return { error: `${uploadResult.error} Le produit n'a pas été enregistré.` };
+      if (!error && data) {
+        productRow = data as { id: string };
+        break;
+      }
+      lastError = error;
+      // A reference collision (another concurrent request just took the
+      // same next number) is retried with a freshly-queried reference —
+      // anything else is a real failure, not retried.
+      if (!isReferenceConflict(error)) break;
     }
 
-    const imageRows = uploadResult.paths.map((storagePath, i) => ({
+    if (!productRow) {
+      if (isReferenceConflict(lastError)) {
+        return { error: "Impossible de générer une référence produit disponible après plusieurs tentatives (conflit concurrent). Réessayez." };
+      }
+      return { error: `Impossible de créer le produit : ${lastError?.message ?? 'erreur inconnue'}.` };
+    }
+    productId = productRow.id;
+
+    const variantRows = input.variants.map((v) => ({
       product_id: productId,
-      storage_path: storagePath,
-      is_primary: i === 0,
-      sort_order: i,
+      attributes: v.attributes,
+      price: v.price,
+      stock: v.stock,
     }));
-    const { error: imagesError } = await supabase.from('product_images').insert(imageRows);
-    if (imagesError) {
-      await cleanupFailedProduct(productId, uploadResult.paths);
-      return { error: `Impossible d'enregistrer les images : ${imagesError.message}. Le produit n'a pas été enregistré.` };
+    const { error: variantsError } = await supabase.from('product_variants').insert(variantRows);
+    if (variantsError) {
+      const { cleanedUp } = await cleanupFailedProduct(productId, uploadedPaths);
+      return { error: failureMessage(`Impossible d'enregistrer les variantes : ${variantsError.message}.`, productId, cleanedUp) };
     }
-  }
 
-  return { productId };
+    if (input.images.length > 0) {
+      const uploadResult = await uploadImages(uid, productId, input.images);
+      if ('error' in uploadResult) {
+        uploadedPaths = uploadResult.uploadedSoFar;
+        const { cleanedUp } = await cleanupFailedProduct(productId, uploadedPaths);
+        return { error: failureMessage(uploadResult.error, productId, cleanedUp) };
+      }
+      uploadedPaths = uploadResult.paths;
+
+      const imageRows = uploadedPaths.map((storagePath, i) => ({
+        product_id: productId,
+        storage_path: storagePath,
+        is_primary: i === 0,
+        sort_order: i,
+      }));
+      const { error: imagesError } = await supabase.from('product_images').insert(imageRows);
+      if (imagesError) {
+        const { cleanedUp } = await cleanupFailedProduct(productId, uploadedPaths);
+        return { error: failureMessage(`Impossible d'enregistrer les images : ${imagesError.message}.`, productId, cleanedUp) };
+      }
+    }
+
+    return { productId, reference };
+  } catch (err) {
+    const reason = `Erreur inattendue : ${err instanceof Error ? err.message : String(err)}.`;
+    if (!productId) {
+      return { error: `${reason} Le produit n'a pas été créé.` };
+    }
+    const { cleanedUp } = await cleanupFailedProduct(productId, uploadedPaths);
+    return { error: failureMessage(reason, productId, cleanedUp) };
+  }
 }
 
 // === Edit-mode image sync (existing Supabase-synced product only) ===

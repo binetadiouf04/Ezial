@@ -148,7 +148,7 @@ interface ImageItem {
 }
 
 export default function SellerProductForm({ productId }: { productId?: string }) {
-  const { navigate, sellerProducts, addSellerProduct, peekNextProductReference, updateSellerProduct, getLatestModeration, sellerSupabaseShopId } = usePro();
+  const { navigate, name: sellerShopName, sellerProducts, addSellerProduct, updateSellerProduct, getLatestModeration, sellerSupabaseShopId } = usePro();
   const existing = productId ? sellerProducts.find((p) => p.id === productId) : undefined;
   const latestModeration = existing ? getLatestModeration('product', existing.id) : null;
 
@@ -474,10 +474,9 @@ export default function SellerProductForm({ productId }: { productId?: string })
         }
       }
     } else {
-      const reference = existing?.reference ?? peekNextProductReference(sellerSupabaseShopId);
       const supabaseResult = await createProductInSupabase({
         shopId: sellerSupabaseShopId,
-        reference,
+        shopName: sellerShopName,
         name: name.trim(),
         description: description.trim(),
         category: categoryId,
@@ -509,9 +508,11 @@ export default function SellerProductForm({ productId }: { productId?: string })
       };
       const localImages = images.map((img) => img.previewUrl);
       if (existing) {
-        updateSellerProduct(existing.id, { ...product, images: localImages, reference: existing.reference });
+        // Always the reference Supabase just confirmed — never the stale
+        // locally-generated one, even when re-syncing a legacy product.
+        updateSellerProduct(existing.id, { ...product, images: localImages, reference: supabaseResult.reference });
       } else {
-        addSellerProduct({ ...product, images: localImages });
+        addSellerProduct({ ...product, images: localImages }, supabaseResult.reference);
       }
     }
 

@@ -78,14 +78,12 @@ interface ProState extends AuthState {
   productStatusUpdates: Record<string, ProductStatus>;
   // Seller product management
   sellerProducts: SellerProduct[];
-  // Returns the generated reference synchronously, so a caller that needs to
-  // write the same reference elsewhere (e.g. to Supabase) doesn't have to
-  // duplicate the generation logic.
-  addSellerProduct: (product: Omit<SellerProduct, 'reference'>) => string;
-  // Read-only preview of the reference addSellerProduct would generate for
-  // shopId right now — lets a caller (e.g. the Supabase write) use the exact
-  // same value before the local mock record is actually created.
-  peekNextProductReference: (shopId: string) => string;
+  // Returns the reference the product was saved with, synchronously. Pass
+  // forcedReference to use an already-known value (e.g. one just confirmed
+  // by a real Supabase insert) instead of generating one from local mock
+  // state — local generation must never be the source of truth once a
+  // product is actually backed by Supabase.
+  addSellerProduct: (product: Omit<SellerProduct, 'reference'>, forcedReference?: string) => string;
   updateSellerProduct: (id: string, product: SellerProduct) => void;
   deleteSellerProduct: (id: string) => void;
   // Seller shop editing
@@ -316,14 +314,10 @@ export function ProProvider({ children }: { children: ReactNode }) {
     setProductStatusUpdates((prev) => ({ ...prev, [productId]: status }));
   }, []);
 
-  const addSellerProduct = useCallback((product: Omit<SellerProduct, 'reference'>): string => {
-    const reference = nextReferenceForShop(shopPrefixes, sellerProducts, product.shopId);
+  const addSellerProduct = useCallback((product: Omit<SellerProduct, 'reference'>, forcedReference?: string): string => {
+    const reference = forcedReference ?? nextReferenceForShop(shopPrefixes, sellerProducts, product.shopId);
     setSellerProducts((prev) => [{ ...product, reference }, ...prev]);
     return reference;
-  }, [shopPrefixes, sellerProducts]);
-
-  const peekNextProductReference = useCallback((shopId: string): string => {
-    return nextReferenceForShop(shopPrefixes, sellerProducts, shopId);
   }, [shopPrefixes, sellerProducts]);
 
   // The reference is assigned once at creation and can never be changed by
@@ -638,7 +632,6 @@ export function ProProvider({ children }: { children: ReactNode }) {
     productStatusUpdates,
     sellerProducts,
     addSellerProduct,
-    peekNextProductReference,
     updateSellerProduct,
     deleteSellerProduct,
     sellerShop,
