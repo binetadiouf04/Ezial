@@ -138,16 +138,8 @@ function failureMessage(reason: string, productId: string, cleanedUp: boolean): 
   return `${reason} Le nettoyage automatique a échoué : un produit partiel (id ${productId}) peut être resté en base. Contactez EZIAL avec cet identifiant.`;
 }
 
-// TEMPORARY DIAGNOSTIC — purely observational, never changes control flow:
-// an optional per-step reporter so a caller (SellerProductForm's on-screen
-// diagnostic log) can show OK/exact-error for each of the four Supabase
-// steps this function performs, without altering what it actually does.
-export type CreateProductStep = 'products' | 'product_variants' | 'storage_upload' | 'product_images';
-export type CreateProductStepReporter = (step: CreateProductStep, result: { ok: true } | { ok: false; error: string }) => void;
-
 export async function createProductInSupabase(
   input: CreateProductInput,
-  onStep?: CreateProductStepReporter,
 ): Promise<CreateProductResult | CreateProductError> {
   const { data: userData, error: userError } = await supabase.auth.getUser();
   const uid = userData?.user?.id;
@@ -197,13 +189,11 @@ export async function createProductInSupabase(
     }
 
     if (!productRow) {
-      const reason = isReferenceConflict(lastError)
-        ? "Impossible de générer une référence produit disponible après plusieurs tentatives (conflit concurrent). Réessayez."
-        : `Impossible de créer le produit : ${lastError?.message ?? 'erreur inconnue'}.`;
-      onStep?.('products', { ok: false, error: reason });
-      return { error: reason };
+      if (isReferenceConflict(lastError)) {
+        return { error: "Impossible de générer une référence produit disponible après plusieurs tentatives (conflit concurrent). Réessayez." };
+      }
+      return { error: `Impossible de créer le produit : ${lastError?.message ?? 'erreur inconnue'}.` };
     }
-    onStep?.('products', { ok: true });
     productId = productRow.id;
 
     const variantRows = input.variants.map((v) => ({
@@ -214,22 +204,18 @@ export async function createProductInSupabase(
     }));
     const { error: variantsError } = await supabase.from('product_variants').insert(variantRows);
     if (variantsError) {
-      onStep?.('product_variants', { ok: false, error: variantsError.message });
       const { cleanedUp } = await cleanupFailedProduct(productId, uploadedPaths);
       return { error: failureMessage(`Impossible d'enregistrer les variantes : ${variantsError.message}.`, productId, cleanedUp) };
     }
-    onStep?.('product_variants', { ok: true });
 
     if (input.images.length > 0) {
       const uploadResult = await uploadImages(uid, productId, input.images);
       if ('error' in uploadResult) {
         uploadedPaths = uploadResult.uploadedSoFar;
-        onStep?.('storage_upload', { ok: false, error: uploadResult.error });
         const { cleanedUp } = await cleanupFailedProduct(productId, uploadedPaths);
         return { error: failureMessage(uploadResult.error, productId, cleanedUp) };
       }
       uploadedPaths = uploadResult.paths;
-      onStep?.('storage_upload', { ok: true });
 
       const imageRows = uploadedPaths.map((storagePath, i) => ({
         product_id: productId,
@@ -239,14 +225,9 @@ export async function createProductInSupabase(
       }));
       const { error: imagesError } = await supabase.from('product_images').insert(imageRows);
       if (imagesError) {
-        onStep?.('product_images', { ok: false, error: imagesError.message });
         const { cleanedUp } = await cleanupFailedProduct(productId, uploadedPaths);
         return { error: failureMessage(`Impossible d'enregistrer les images : ${imagesError.message}.`, productId, cleanedUp) };
       }
-      onStep?.('product_images', { ok: true });
-    } else {
-      onStep?.('storage_upload', { ok: true });
-      onStep?.('product_images', { ok: true });
     }
 
     return { productId, reference };
