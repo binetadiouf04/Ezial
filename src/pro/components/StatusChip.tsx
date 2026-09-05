@@ -18,6 +18,7 @@ export function StatusChip({ status, size = 'sm', label: labelOverride }: { stat
     changes_requested: 'bg-red-50 text-red-700 border-red-100',
     out_of_stock: 'bg-red-50 text-red-700 border-red-100',
     inactive: 'bg-ink/5 text-ink/50 border-line',
+    disabled: 'bg-ink/5 text-ink/50 border-line',
     // Shop
     active: 'bg-green-50 text-green-700 border-green-100',
     suspended: 'bg-red-50 text-red-700 border-red-100',
@@ -51,6 +52,7 @@ export function StatusChip({ status, size = 'sm', label: labelOverride }: { stat
     changes_requested: 'Modifications demandées',
     out_of_stock: 'Rupture de stock',
     inactive: 'Désactivé',
+    disabled: 'Désactivé',
     active: 'Actif',
     suspended: 'Suspendu',
     available: 'Disponible',

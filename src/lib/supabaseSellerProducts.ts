@@ -241,6 +241,91 @@ export async function createProductInSupabase(
   }
 }
 
+// === Seller product list (SellerProducts.tsx) ===
+
+export interface SellerProductVariantSummary {
+  id: string;
+  stock: number;
+}
+
+export interface SellerProductSummary {
+  id: string;
+  reference: string;
+  name: string;
+  category: string;
+  price: number;
+  stock: number;
+  status: SupabaseProductStatus;
+  imageUrl: string;
+  // Exactly one row (no real size/color dimensions, or a single selected
+  // combination) is what the stock +/- control can safely adjust — 2+ rows
+  // mean stock is only ever shown as a read-only aggregate here.
+  variants: SellerProductVariantSummary[];
+}
+
+// Every real product for this shop, with stock, primary image and variants
+// resolved from Supabase — never from local/mock state.
+export async function fetchSellerProducts(shopId: string): Promise<SellerProductSummary[]> {
+  const { data: productRows, error: productsError } = await supabase
+    .from('products')
+    .select('id, reference, name, category, base_price, status, created_at')
+    .eq('shop_id', shopId)
+    .order('created_at', { ascending: false });
+  if (productsError || !productRows || productRows.length === 0) return [];
+
+  const productIds = productRows.map((row) => row.id as string);
+
+  const [{ data: variantRows }, { data: imageRows }] = await Promise.all([
+    supabase.from('product_variants').select('id, product_id, stock').in('product_id', productIds),
+    supabase.from('product_images').select('product_id, storage_path, is_primary, sort_order').in('product_id', productIds),
+  ]);
+
+  const variantsByProduct = new Map<string, SellerProductVariantSummary[]>();
+  for (const row of variantRows ?? []) {
+    const pid = row.product_id as string;
+    const list = variantsByProduct.get(pid) ?? [];
+    list.push({ id: row.id as string, stock: (row.stock as number) ?? 0 });
+    variantsByProduct.set(pid, list);
+  }
+
+  const imagesByProduct = new Map<string, { storagePath: string; isPrimary: boolean; sortOrder: number }[]>();
+  for (const row of imageRows ?? []) {
+    const pid = row.product_id as string;
+    const list = imagesByProduct.get(pid) ?? [];
+    list.push({ storagePath: (row.storage_path as string) ?? '', isPrimary: Boolean(row.is_primary), sortOrder: (row.sort_order as number) ?? 0 });
+    imagesByProduct.set(pid, list);
+  }
+
+  return productRows.map((row) => {
+    const pid = row.id as string;
+    const variants = variantsByProduct.get(pid) ?? [];
+    const images = (imagesByProduct.get(pid) ?? []).sort(
+      (a, b) => (b.isPrimary ? 1 : 0) - (a.isPrimary ? 1 : 0) || a.sortOrder - b.sortOrder,
+    );
+    return {
+      id: pid,
+      reference: (row.reference as string) ?? '',
+      name: (row.name as string) ?? '',
+      category: (row.category as string) ?? '',
+      price: (row.base_price as number) ?? 0,
+      stock: variants.reduce((sum, v) => sum + v.stock, 0),
+      status: (row.status as SupabaseProductStatus) ?? 'draft',
+      imageUrl: images[0] ? resolveImageUrl(images[0].storagePath) : '',
+      variants,
+    };
+  });
+}
+
+export async function setSellerProductStatus(productId: string, status: SupabaseProductStatus): Promise<{ error?: string }> {
+  const { error } = await supabase.from('products').update({ status }).eq('id', productId);
+  return error ? { error: error.message } : {};
+}
+
+export async function setSellerProductVariantStock(variantId: string, stock: number): Promise<{ error?: string }> {
+  const { error } = await supabase.from('product_variants').update({ stock: Math.max(0, stock) }).eq('id', variantId);
+  return error ? { error: error.message } : {};
+}
+
 // === Edit-mode image sync (existing Supabase-synced product only) ===
 
 export interface ExistingProductImage {
