@@ -3,11 +3,15 @@ import type { Role, DeliveryStep, ShopStatus, ProductStatus, ModerationEntry, Mo
 import { missions as initialMissions, type Mission, type Product, type Shop, type Driver, type DriverTransaction, type Order, type Transaction } from './data';
 import { shops as initialShops, products as initialProducts, transactions as initialTransactions, driverTransactions as initialDriverTransactions, orders as initialOrders, drivers as initialDrivers, moderationHistory as initialModerationHistory, blogPosts as initialBlogPosts } from './data';
 import { assignShopPrefixes, nextReferenceForShop } from '@/utils/reference';
+import { signInSeller, restoreSellerSession, signOutSeller } from '@/lib/supabaseSellerAuth';
 
 type Route = string;
 
 interface SellerProduct extends Product {
   images?: string[];
+  // Set once a product has been created in the real Supabase backend —
+  // absent for products that only exist in this session's local mock state.
+  supabaseProductId?: string;
 }
 
 interface ShopEdit {
@@ -63,7 +67,7 @@ interface NewDriverInput {
 interface ProState extends AuthState {
   route: Route;
   navigate: (r: Route) => void;
-  login: (role: Role, identifier: string, name: string) => void;
+  login: (role: Role, identifier: string, name: string, supabaseShopId?: string) => void;
   logout: () => void;
   missions: Mission[];
   acceptMission: (id: string) => void;
@@ -74,16 +78,29 @@ interface ProState extends AuthState {
   productStatusUpdates: Record<string, ProductStatus>;
   // Seller product management
   sellerProducts: SellerProduct[];
-  addSellerProduct: (product: Omit<SellerProduct, 'reference'>) => void;
+  // Returns the generated reference synchronously, so a caller that needs to
+  // write the same reference elsewhere (e.g. to Supabase) doesn't have to
+  // duplicate the generation logic.
+  addSellerProduct: (product: Omit<SellerProduct, 'reference'>) => string;
+  // Read-only preview of the reference addSellerProduct would generate for
+  // shopId right now — lets a caller (e.g. the Supabase write) use the exact
+  // same value before the local mock record is actually created.
+  peekNextProductReference: (shopId: string) => string;
   updateSellerProduct: (id: string, product: SellerProduct) => void;
   deleteSellerProduct: (id: string) => void;
   // Seller shop editing
   sellerShop: Shop | null;
   updateSellerShop: (edit: ShopEdit) => void;
   updateSellerPin: (newPin: string) => boolean;
-  // Seller login — checks identifier + PIN against shop data, including any
-  // PIN the seller has since set from their settings (see updateSellerPin).
-  verifySellerLogin: (identifier: string, pin: string) => { shop: { sellerId: string; name: string } } | { error: string };
+  // The seller's real Supabase shop id (shops.id, matched via
+  // shops.owner_id = auth.uid()) — null until a real Supabase Auth session
+  // has been verified to own a real shop. This is the id product-creation
+  // code must use; never a hardcoded/mock shop id.
+  sellerSupabaseShopId: string | null;
+  // Seller login — authenticates seller_code + password against Supabase
+  // Auth, then verifies the account owns a real shop (shops.owner_id =
+  // auth.uid()) before granting access.
+  verifySellerLogin: (identifier: string, password: string) => Promise<{ shop: { sellerId: string; name: string; supabaseShopId: string } } | { error: string }>;
   // Seller transactions
   sellerTransactions: typeof initialTransactions;
   // Driver state
@@ -173,10 +190,7 @@ export function ProProvider({ children }: { children: ReactNode }) {
   const [orderUpdates, setOrderUpdates] = useState<Record<string, string>>({});
   const [sellerProducts, setSellerProducts] = useState<SellerProduct[]>(initialProducts);
   const [sellerShop, setSellerShop] = useState<Shop | null>(null);
-  // sellerId -> PIN the seller has set from their settings, overriding the
-  // mock default in data.ts. Session-only, matching the rest of this prototype's
-  // mock state; a real backend would store this per-shop instead.
-  const [sellerPinOverrides, setSellerPinOverrides] = useState<Record<string, string>>({});
+  const [sellerSupabaseShopId, setSellerSupabaseShopId] = useState<string | null>(null);
   const [sellerTransactions] = useState(initialTransactions);
   const [driverAvailable, setDriverAvailable] = useState(true);
 
@@ -199,19 +213,40 @@ export function ProProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const saved = sessionStorage.getItem('ezial-pro-auth');
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        setRole(parsed.role);
-        setIdentifier(parsed.identifier);
-        setName(parsed.name);
-        setRoute(parsed.role === 'admin' ? '/admin' : parsed.role === 'seller' ? '/seller' : '/driver');
-        if (parsed.role === 'seller') {
-          const shop = initialShops.find((s) => s.sellerId === parsed.identifier);
-          setSellerShop(shop ?? null);
-        }
-      } catch { /* ignore */ }
+    if (!saved) return;
+    let parsed: { role: Role; identifier: string; name: string };
+    try {
+      parsed = JSON.parse(saved);
+    } catch {
+      return;
     }
+
+    if (parsed.role !== 'seller') {
+      // Admin/driver sessions are unchanged mock state — no Supabase involved.
+      setRole(parsed.role);
+      setIdentifier(parsed.identifier);
+      setName(parsed.name);
+      setRoute(parsed.role === 'admin' ? '/admin' : '/driver');
+      return;
+    }
+
+    // Seller sessions are never trusted from sessionStorage alone — the
+    // real Supabase session must still exist AND still own a real shop
+    // (shops.owner_id = auth.uid()) before the seller area opens.
+    (async () => {
+      const shop = await restoreSellerSession();
+      if (!shop) {
+        sessionStorage.removeItem('ezial-pro-auth');
+        return;
+      }
+      setRole('seller');
+      setIdentifier(parsed.identifier);
+      setName(shop.shopName);
+      setSellerSupabaseShopId(shop.shopId);
+      setRoute('/seller');
+      const mockShop = initialShops.find((s) => s.sellerId === parsed.identifier);
+      setSellerShop(mockShop ?? null);
+    })();
   }, []);
 
   const navigate = useCallback((r: Route) => {
@@ -219,7 +254,7 @@ export function ProProvider({ children }: { children: ReactNode }) {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }, []);
 
-  const login = useCallback((r: Role, id: string, n: string) => {
+  const login = useCallback((r: Role, id: string, n: string, supabaseShopId?: string) => {
     setRole(r);
     setIdentifier(id);
     setName(n);
@@ -228,6 +263,7 @@ export function ProProvider({ children }: { children: ReactNode }) {
     if (r === 'seller') {
       const shop = initialShops.find((s) => s.sellerId === id);
       setSellerShop(shop ?? null);
+      setSellerSupabaseShopId(supabaseShopId ?? null);
     }
     sessionStorage.setItem('ezial-pro-auth', JSON.stringify({ role: r, identifier: id, name: n }));
   }, []);
@@ -238,7 +274,11 @@ export function ProProvider({ children }: { children: ReactNode }) {
     setName('');
     setRoute('/');
     setSellerShop(null);
+    setSellerSupabaseShopId(null);
     sessionStorage.removeItem('ezial-pro-auth');
+    // Fire-and-forget: the local session is already cleared above regardless
+    // of whether the Supabase sign-out call itself succeeds.
+    void signOutSeller();
   }, []);
 
   const acceptMission = useCallback((id: string) => {
@@ -276,12 +316,15 @@ export function ProProvider({ children }: { children: ReactNode }) {
     setProductStatusUpdates((prev) => ({ ...prev, [productId]: status }));
   }, []);
 
-  const addSellerProduct = useCallback((product: Omit<SellerProduct, 'reference'>) => {
-    setSellerProducts((prev) => {
-      const reference = nextReferenceForShop(shopPrefixes, prev, product.shopId);
-      return [{ ...product, reference }, ...prev];
-    });
-  }, [shopPrefixes]);
+  const addSellerProduct = useCallback((product: Omit<SellerProduct, 'reference'>): string => {
+    const reference = nextReferenceForShop(shopPrefixes, sellerProducts, product.shopId);
+    setSellerProducts((prev) => [{ ...product, reference }, ...prev]);
+    return reference;
+  }, [shopPrefixes, sellerProducts]);
+
+  const peekNextProductReference = useCallback((shopId: string): string => {
+    return nextReferenceForShop(shopPrefixes, sellerProducts, shopId);
+  }, [shopPrefixes, sellerProducts]);
 
   // The reference is assigned once at creation and can never be changed by
   // the seller — always keep the original, regardless of what is passed in.
@@ -297,24 +340,23 @@ export function ProProvider({ children }: { children: ReactNode }) {
     setSellerShop((prev) => prev ? { ...prev, name: edit.name, description: edit.description, contact: edit.contact, pickupAddress: edit.pickupAddress, banner: edit.banner, logo: edit.logo, pickupEnabled: edit.pickupEnabled, deliveryEnabled: edit.deliveryEnabled } : prev);
   }, []);
 
-  // Exactly 4 digits required. The PIN is never read back from state by any
-  // UI — this is a write-only update, matching "never shown in clear once saved".
+  // Cosmetic only: this PIN has no bearing on real authentication anymore —
+  // seller login goes through Supabase Auth (seller_code + real password).
+  // Kept so the seller settings page keeps working unchanged; a real
+  // password-change/reset flow (by the seller or an admin) is a separate,
+  // not-yet-built feature.
   const updateSellerPin = useCallback((newPin: string): boolean => {
     if (!/^\d{4}$/.test(newPin)) return false;
     setSellerShop((prev) => prev ? { ...prev, pin: newPin } : prev);
-    if (identifier) setSellerPinOverrides((prev) => ({ ...prev, [identifier]: newPin }));
     return true;
-  }, [identifier]);
+  }, []);
 
-  const verifySellerLogin = useCallback((rawIdentifier: string, pin: string): { shop: { sellerId: string; name: string } } | { error: string } => {
-    const id = rawIdentifier.trim().toUpperCase();
-    const shop = initialShops.find((s) => s.sellerId === id);
-    if (!shop) return { error: 'Identifiant introuvable.' };
-    const effectivePin = sellerPinOverrides[shop.sellerId] ?? shop.pin;
-    if (!effectivePin) return { error: "Aucun PIN n'est configuré pour cette boutique. Contactez EZIAL." };
-    if (effectivePin !== pin.trim()) return { error: 'Identifiant ou PIN incorrect.' };
-    return { shop: { sellerId: shop.sellerId, name: shop.name } };
-  }, [sellerPinOverrides]);
+  const verifySellerLogin = useCallback(async (rawIdentifier: string, password: string): Promise<{ shop: { sellerId: string; name: string; supabaseShopId: string } } | { error: string }> => {
+    const id = rawIdentifier.trim();
+    const result = await signInSeller(id, password);
+    if ('error' in result) return { error: result.error };
+    return { shop: { sellerId: id.toUpperCase(), name: result.shopName, supabaseShopId: result.shopId } };
+  }, []);
 
   // === Driver actions ===
 
@@ -596,11 +638,13 @@ export function ProProvider({ children }: { children: ReactNode }) {
     productStatusUpdates,
     sellerProducts,
     addSellerProduct,
+    peekNextProductReference,
     updateSellerProduct,
     deleteSellerProduct,
     sellerShop,
     updateSellerShop,
     updateSellerPin,
+    sellerSupabaseShopId,
     verifySellerLogin,
     sellerTransactions,
     driverAvailable,

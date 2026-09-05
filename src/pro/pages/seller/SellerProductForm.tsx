@@ -1,9 +1,10 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { usePro } from '../../ProContext';
 import { categories, categoryMap, type CategoryId } from '@/data/categories';
 import { getFilters, type FilterGroup } from '@/data/filters';
 import { getColor } from '@/data/colors';
 import VendorNoticeBanner from '../../components/VendorNoticeBanner';
+import { createProductInSupabase, fetchProductImages, deleteProductImage, addProductImages } from '@/lib/supabaseSellerProducts';
 import { ArrowLeft, X, Package, ChevronDown, Check, Camera, Star } from 'lucide-react';
 
 // Which filter groups are single-choice (radio-like) vs descriptive multi-choice
@@ -98,8 +99,19 @@ interface Combo {
   price: number; // only used when priceByOption is ON
 }
 
+// One photo in the form's gallery. `existing` is present only for a photo
+// already persisted as a Supabase product_images row (needed to delete the
+// right Storage object + row if removed); `file` is present only for a
+// newly-selected, not-yet-uploaded photo.
+interface ImageItem {
+  key: string;
+  previewUrl: string;
+  file?: File;
+  existing?: { id: string; storagePath: string };
+}
+
 export default function SellerProductForm({ productId }: { productId?: string }) {
-  const { navigate, sellerProducts, addSellerProduct, updateSellerProduct, getLatestModeration } = usePro();
+  const { navigate, sellerProducts, addSellerProduct, peekNextProductReference, updateSellerProduct, getLatestModeration, sellerSupabaseShopId } = usePro();
   const existing = productId ? sellerProducts.find((p) => p.id === productId) : undefined;
   const latestModeration = existing ? getLatestModeration('product', existing.id) : null;
 
@@ -108,8 +120,25 @@ export default function SellerProductForm({ productId }: { productId?: string })
   const [name, setName] = useState(existing?.name ?? '');
   const [description, setDescription] = useState(existing?.description ?? '');
   const [price, setPrice] = useState(existing?.price.toString() ?? '');
-  const [images, setImages] = useState<string[]>(existing ? [existing.image] : []);
+  // Photos already synced to Supabase are reloaded in full via the effect
+  // below; a legacy (mock-only) product falls back to its single `image`.
+  const [images, setImages] = useState<ImageItem[]>(
+    existing && !existing.supabaseProductId ? [{ key: 'legacy-0', previewUrl: existing.image }] : [],
+  );
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [imageActionError, setImageActionError] = useState('');
+  const [submitError, setSubmitError] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
+
+  useEffect(() => {
+    if (!existing?.supabaseProductId) return;
+    let cancelled = false;
+    fetchProductImages(existing.supabaseProductId).then((rows) => {
+      if (cancelled) return;
+      setImages(rows.map((row) => ({ key: row.id, previewUrl: row.url, existing: { id: row.id, storagePath: row.storagePath } })));
+    });
+    return () => { cancelled = true; };
+  }, [existing?.supabaseProductId]);
 
   // Options state: which values are selected per option group
   const [selections, setSelections] = useState<OptionSelection>({});
@@ -216,22 +245,35 @@ export default function SellerProductForm({ productId }: { productId?: string })
 
   const handleAddFiles = (files: FileList | null) => {
     if (!files) return;
-    const newImages: string[] = [];
+    const newImages: ImageItem[] = [];
     Array.from(files).forEach((file) => {
       if (!file.type.startsWith('image/')) return;
-      newImages.push(URL.createObjectURL(file));
+      newImages.push({ key: `local-${Date.now()}-${Math.random().toString(36).slice(2)}`, previewUrl: URL.createObjectURL(file), file });
     });
     if (newImages.length > 0) setImages((prev) => [...prev, ...newImages]);
   };
 
-  const removeImage = (index: number) => {
-    setImages((prev) => prev.filter((_, i) => i !== index));
+  // Removing a photo that's already a real Supabase product_images row
+  // deletes the Storage file + the row immediately — never left dangling.
+  const removeImage = async (key: string) => {
+    const target = images.find((img) => img.key === key);
+    if (!target) return;
+    setImageActionError('');
+    if (target.existing) {
+      const result = await deleteProductImage(target.existing.id, target.existing.storagePath);
+      if (result.error) {
+        setImageActionError(result.error);
+        return;
+      }
+    }
+    setImages((prev) => prev.filter((img) => img.key !== key));
   };
 
-  const setPrimaryImage = (index: number) => {
+  const setPrimaryImage = (key: string) => {
     setImages((prev) => {
-      const img = prev[index];
-      return [img, ...prev.filter((_, i) => i !== index)];
+      const img = prev.find((i) => i.key === key);
+      if (!img) return prev;
+      return [img, ...prev.filter((i) => i.key !== key)];
     });
   };
 
@@ -304,33 +346,139 @@ export default function SellerProductForm({ productId }: { productId?: string })
     return Object.keys(e).length === 0;
   };
 
-  const handleSubmit = (status: 'draft' | 'published') => {
-    if (!validate()) return;
+  // Only the true variant dimensions (multiChoiceGroups) become
+  // product_variants rows; everything else is descriptive-only. Recomputed
+  // here (rather than reused from the `combinations` memo) so each combo's
+  // parts can be paired back up with the group that produced them — needed
+  // to build `attributes` keyed by the group's visible label, e.g.
+  // {"Taille":"M","Couleur":"Noir"}.
+  const buildVariantRows = (): { attributes: Record<string, string>; price: number; stock: number }[] => {
+    const basePrice = parseInt(price) || 0;
+    const selectedMulti = multiChoiceGroups
+      .map((g) => ({ group: g, values: effectiveValues(g.id) }))
+      .filter((s) => s.values.length > 0);
 
-    // Build variant definitions for storage — descriptive attributes (besoin,
-    // famille, style...) are saved too, just never split into stock lines.
+    // No variant dimension selected: still one product_variants row, with
+    // empty attributes and the base price/stock — never left without a row.
+    if (selectedMulti.length === 0) {
+      return [{ attributes: {}, price: basePrice, stock: Math.max(0, parseInt(simpleStock) || 0) }];
+    }
+
+    let combos: string[][] = selectedMulti[0].values.map((v) => [v]);
+    for (let i = 1; i < selectedMulti.length; i++) {
+      const next: string[][] = [];
+      for (const c of combos) {
+        for (const val of selectedMulti[i].values) next.push([...c, val]);
+      }
+      combos = next;
+    }
+
+    return combos.map((parts) => {
+      const key = parts.join('|');
+      const attributes: Record<string, string> = {};
+      selectedMulti.forEach((s, i) => { attributes[s.group.label] = parts[i]; });
+      return {
+        attributes,
+        // "Le prix change selon les options" OFF → every row gets base_price,
+        // regardless of any stale per-combo price left from when it was ON.
+        price: priceByOption ? (comboData[key]?.price ?? basePrice) : basePrice,
+        stock: comboData[key]?.stock ?? 0,
+      };
+    });
+  };
+
+  // Descriptive-only groups (style, type, matière, texture...) — saved for
+  // display, but never split into stock lines.
+  const buildDescriptiveAttributes = (): Record<string, string[]> => {
+    const result: Record<string, string[]> = {};
+    for (const g of optionGroups) {
+      if (VARIANT_DIMENSION_IDS.has(g.id)) continue;
+      const values = effectiveValues(g.id);
+      if (values.length > 0) result[g.label] = values;
+    }
+    return result;
+  };
+
+  const handleSubmit = async (status: 'draft' | 'published') => {
+    if (!validate()) return;
+    if (!sellerSupabaseShopId) {
+      setSubmitError("Votre compte vendeur n'est relié à aucune boutique Supabase réelle. Contactez EZIAL.");
+      return;
+    }
+    setSubmitError('');
+    setIsSaving(true);
+
+    // Build variant definitions for the local mock record too — descriptive
+    // attributes (besoin, famille, style...) are saved there as well, just
+    // never split into stock lines.
     const variantDefs = optionGroups.map((g) => ({
       name: g.label,
       values: effectiveValues(g.id),
     }));
 
-    const product = {
-      id: existing?.id ?? `p${Date.now()}`,
-      name: name.trim(),
-      shopId: 'maison-fatou',
-      category: selectedCategory?.label ?? categoryId,
-      price: parseInt(price),
-      image: images[0],
-      stock: totalStock,
-      status,
-      variants: variantDefs.filter((v) => v.values.length > 0),
-      description: description.trim(),
-    };
-    if (existing) {
-      updateSellerProduct(existing.id, { ...product, images, reference: existing.reference });
+    const newLocalImages = images.filter((img): img is ImageItem & { file: File } => Boolean(img.file));
+
+    if (existing?.supabaseProductId) {
+      // Editing an already-Supabase-synced product: only new photos are
+      // pushed to Supabase in this task's scope — product/variant fields
+      // stay on the local mock record, exactly as before.
+      if (newLocalImages.length > 0) {
+        const sortOrderStart = images.length - newLocalImages.length;
+        const result = await addProductImages(
+          existing.supabaseProductId,
+          newLocalImages.map((img) => ({ file: img.file })),
+          sortOrderStart,
+          sortOrderStart === 0,
+        );
+        if (result.error) {
+          setSubmitError(result.error);
+          setIsSaving(false);
+          return;
+        }
+      }
     } else {
-      addSellerProduct({ ...product, images });
+      const reference = existing?.reference ?? peekNextProductReference(sellerSupabaseShopId);
+      const supabaseResult = await createProductInSupabase({
+        shopId: sellerSupabaseShopId,
+        reference,
+        name: name.trim(),
+        description: description.trim(),
+        category: categoryId,
+        subcategory: subId,
+        basePrice: parseInt(price) || 0,
+        status,
+        descriptiveAttributes: buildDescriptiveAttributes(),
+        variants: buildVariantRows(),
+        images: newLocalImages.map((img) => ({ file: img.file })),
+      });
+      if ('error' in supabaseResult) {
+        setSubmitError(supabaseResult.error);
+        setIsSaving(false);
+        return;
+      }
+
+      const product = {
+        id: existing?.id ?? `p${Date.now()}`,
+        name: name.trim(),
+        shopId: sellerSupabaseShopId,
+        category: selectedCategory?.label ?? categoryId,
+        price: parseInt(price),
+        image: images[0]?.previewUrl ?? '',
+        stock: totalStock,
+        status,
+        variants: variantDefs.filter((v) => v.values.length > 0),
+        description: description.trim(),
+        supabaseProductId: supabaseResult.productId,
+      };
+      const localImages = images.map((img) => img.previewUrl);
+      if (existing) {
+        updateSellerProduct(existing.id, { ...product, images: localImages, reference: existing.reference });
+      } else {
+        addSellerProduct({ ...product, images: localImages });
+      }
     }
+
+    setIsSaving(false);
     navigate('/seller/produits');
   };
 
@@ -604,8 +752,8 @@ export default function SellerProductForm({ productId }: { productId?: string })
         {images.length > 0 && (
           <div className="grid grid-cols-3 gap-2.5">
             {images.map((img, i) => (
-              <div key={i} className="relative group rounded-lg overflow-hidden bg-cream aspect-square">
-                <img src={img} alt={`Photo ${i + 1}`} className="h-full w-full object-cover" />
+              <div key={img.key} className="relative group rounded-lg overflow-hidden bg-cream aspect-square">
+                <img src={img.previewUrl} alt={`Photo ${i + 1}`} className="h-full w-full object-cover" />
                 {i === 0 && (
                   <span className="absolute bottom-1 left-1 rounded bg-burgundy px-1.5 py-0.5 text-[9px] font-medium text-white flex items-center gap-0.5">
                     <Star size={8} fill="white" /> Principale
@@ -615,7 +763,7 @@ export default function SellerProductForm({ productId }: { productId?: string })
                   {i !== 0 && (
                     <button
                       type="button"
-                      onClick={() => setPrimaryImage(i)}
+                      onClick={() => setPrimaryImage(img.key)}
                       className="rounded-full bg-white/90 p-1 text-ink/50 hover:text-burgundy transition-colors"
                       title="Définir comme photo principale"
                     >
@@ -624,7 +772,7 @@ export default function SellerProductForm({ productId }: { productId?: string })
                   )}
                   <button
                     type="button"
-                    onClick={() => removeImage(i)}
+                    onClick={() => removeImage(img.key)}
                     className="rounded-full bg-white/90 p-1 text-ink/50 hover:text-burgundy transition-colors"
                   >
                     <X size={12} />
@@ -634,6 +782,7 @@ export default function SellerProductForm({ productId }: { productId?: string })
             ))}
           </div>
         )}
+        {imageActionError && <p className="text-xs text-burgundy">{imageActionError}</p>}
 
         <label className="flex flex-col items-center justify-center rounded-lg border-2 border-dashed border-line cursor-pointer hover:border-burgundy/30 transition-colors py-6">
           <Camera size={24} className="text-ink/30" />
@@ -766,10 +915,17 @@ export default function SellerProductForm({ productId }: { productId?: string })
         )}
       </div>
 
+      {!sellerSupabaseShopId && (
+        <p className="rounded-lg bg-burgundy/5 px-4 py-3 text-sm text-burgundy">
+          Votre compte vendeur n'est relié à aucune boutique Supabase réelle. Contactez EZIAL avant de publier un produit.
+        </p>
+      )}
+      {submitError && <p className="rounded-lg bg-burgundy/5 px-4 py-3 text-sm text-burgundy">{submitError}</p>}
+
       {/* Actions */}
       <div className="flex gap-3">
-        <button onClick={() => handleSubmit('draft')} className="btn-outline flex-1">Enregistrer en brouillon</button>
-        <button onClick={() => handleSubmit('published')} className="btn-primary flex-1">Publier</button>
+        <button onClick={() => handleSubmit('draft')} disabled={isSaving} className="btn-outline flex-1">{isSaving ? 'Enregistrement…' : 'Enregistrer en brouillon'}</button>
+        <button onClick={() => handleSubmit('published')} disabled={isSaving} className="btn-primary flex-1">{isSaving ? 'Enregistrement…' : 'Publier'}</button>
       </div>
     </div>
   );

@@ -35,14 +35,14 @@ import type { CategoryId } from '@/data/categories';
 
 // product_images.storage_path is a Supabase Storage path, not a URL.
 // Confirmed bucket name: product-images.
-const PRODUCT_IMAGES_BUCKET = 'product-images';
+export const PRODUCT_IMAGES_BUCKET = 'product-images';
 
 // Same placeholder image SmartImage already falls back to on load error —
 // used here so a product with no product_images row never gets an empty
 // <img src>, without touching SmartImage/ProductCard.
 const FALLBACK_PRODUCT_IMAGE = `${import.meta.env.BASE_URL}ezial-fallback.webp`;
 
-function resolveImageUrl(storagePath: string): string {
+export function resolveImageUrl(storagePath: string): string {
   if (!storagePath) return '';
   if (/^https?:\/\//.test(storagePath)) return storagePath; // already a full URL
   return supabase.storage.from(PRODUCT_IMAGES_BUCKET).getPublicUrl(storagePath).data.publicUrl;

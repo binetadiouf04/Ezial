@@ -31,7 +31,7 @@ export default function ProEntryPage() {
   if (selectedRole) {
     return (
       <div className="min-h-screen bg-cream flex items-center justify-center p-4">
-        <LoginForm role={selectedRole} onBack={() => setSelectedRole(null)} onLogin={(id, name) => login(selectedRole, id, name)} verifySeller={verifySellerLogin} />
+        <LoginForm role={selectedRole} onBack={() => setSelectedRole(null)} onLogin={(id, name, supabaseShopId) => login(selectedRole, id, name, supabaseShopId)} verifySeller={verifySellerLogin} />
       </div>
     );
   }

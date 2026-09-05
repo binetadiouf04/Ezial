@@ -5,12 +5,12 @@ import { ArrowLeft, Lock, KeyRound } from 'lucide-react';
 interface LoginFormProps {
   role: Role;
   onBack: () => void;
-  onLogin: (identifier: string, name: string) => void;
-  /** Seller-only: validates identifier + PIN against shop data (including any PIN the seller has since changed). */
-  verifySeller?: (identifier: string, pin: string) => { shop: { sellerId: string; name: string } } | { error: string };
+  onLogin: (identifier: string, name: string, supabaseShopId?: string) => void;
+  /** Seller-only: authenticates seller_code + password against Supabase Auth, then checks shop ownership. */
+  verifySeller?: (identifier: string, password: string) => Promise<{ shop: { sellerId: string; name: string; supabaseShopId: string } } | { error: string }>;
 }
 
-const roleConfig: Record<Role, { title: string; subtitle: string; placeholder: string; hint: string; demoId: string; demoName: string; demoPin?: string }> = {
+const roleConfig: Record<Role, { title: string; subtitle: string; placeholder: string; hint: string; demoId: string; demoName: string }> = {
   admin: {
     title: 'Administration',
     subtitle: "Accès réservé à l'équipe EZIAL.",
@@ -21,12 +21,11 @@ const roleConfig: Record<Role, { title: string; subtitle: string; placeholder: s
   },
   seller: {
     title: 'Espace Vendeur',
-    subtitle: 'Connectez-vous avec votre identifiant et votre code PIN.',
+    subtitle: 'Connectez-vous avec votre identifiant vendeur et votre mot de passe.',
     placeholder: 'MAISONFATOU4827',
-    hint: 'Identifiant fourni par EZIAL à la création de votre boutique, et PIN à 4 chiffres choisi dans vos paramètres.',
+    hint: 'Identifiant fourni par EZIAL à la création de votre boutique, et mot de passe choisi avec EZIAL.',
     demoId: 'MAISONFATOU4827',
     demoName: 'Maison Fatou',
-    demoPin: '1234',
   },
   driver: {
     title: 'Espace Livreur',
@@ -42,11 +41,11 @@ export default function LoginForm({ role, onBack, onLogin, verifySeller }: Login
   const cfg = roleConfig[role];
   const [email, setEmail] = useState('');
   const [identifier, setIdentifier] = useState('');
-  const [pin, setPin] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [isVerifying, setIsVerifying] = useState(false);
 
-  const submit = (e: React.FormEvent) => {
+  const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (role === 'admin') {
       if (!email.trim() || !password.trim()) {
@@ -55,20 +54,18 @@ export default function LoginForm({ role, onBack, onLogin, verifySeller }: Login
       }
       onLogin(email.trim(), cfg.demoName);
     } else if (role === 'seller') {
-      if (!identifier.trim() || !pin.trim()) {
-        setError('Veuillez saisir votre identifiant et votre PIN.');
+      if (!identifier.trim() || !password.trim()) {
+        setError('Veuillez saisir votre identifiant et votre mot de passe.');
         return;
       }
-      if (!/^\d{4}$/.test(pin.trim())) {
-        setError('Le PIN doit contenir exactement 4 chiffres.');
-        return;
-      }
-      const result = verifySeller?.(identifier, pin);
+      setIsVerifying(true);
+      const result = await verifySeller?.(identifier, password);
+      setIsVerifying(false);
       if (!result || 'error' in result) {
         setError(result?.error ?? 'Connexion impossible.');
         return;
       }
-      onLogin(result.shop.sellerId, result.shop.name);
+      onLogin(result.shop.sellerId, result.shop.name, result.shop.supabaseShopId);
     } else {
       if (!identifier.trim()) {
         setError('Veuillez saisir votre identifiant.');
@@ -84,7 +81,6 @@ export default function LoginForm({ role, onBack, onLogin, verifySeller }: Login
       setPassword('ezial2026');
     } else {
       setIdentifier(cfg.demoId);
-      if (role === 'seller') setPin(cfg.demoPin ?? '');
     }
     setError('');
   };
@@ -144,17 +140,15 @@ export default function LoginForm({ role, onBack, onLogin, verifySeller }: Login
               </div>
               {role === 'seller' && (
                 <div>
-                  <label className="block text-xs font-medium text-ink/60 mb-1.5">Code PIN (4 chiffres)</label>
+                  <label className="block text-xs font-medium text-ink/60 mb-1.5">Mot de passe</label>
                   <div className="relative">
                     <Lock size={16} className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-ink/35" />
                     <input
                       type="password"
-                      inputMode="numeric"
-                      value={pin}
-                      onChange={(e) => { setPin(e.target.value.replace(/\D/g, '').slice(0, 4)); setError(''); }}
-                      className="input-field pl-11 font-mono tracking-[0.5em]"
-                      placeholder="••••"
-                      maxLength={4}
+                      value={password}
+                      onChange={(e) => { setPassword(e.target.value); setError(''); }}
+                      className="input-field pl-11"
+                      placeholder="••••••••"
                     />
                   </div>
                 </div>
@@ -165,8 +159,8 @@ export default function LoginForm({ role, onBack, onLogin, verifySeller }: Login
 
           {error && <p className="text-sm text-burgundy">{error}</p>}
 
-          <button type="submit" className="btn-primary w-full">
-            Se connecter
+          <button type="submit" className="btn-primary w-full" disabled={isVerifying}>
+            {isVerifying ? 'Connexion…' : 'Se connecter'}
           </button>
         </form>
 
