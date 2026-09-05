@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useApp } from '@/store/AppContext';
 import { products as mockProducts, type Product } from '@/data/products';
-import { shops, registerSupabaseShops } from '@/data/shops';
+import { shops as mockShops, registerSupabaseShops, type Shop } from '@/data/shops';
 import { homeCircleTiles } from '@/data/categories';
 import ProductCard from '@/components/ProductCard';
 import ShopCard from '@/components/ShopCard';
@@ -19,6 +19,16 @@ import { ChevronRight } from 'lucide-react';
 function mergeCatalogs(mock: Product[], supabase: Product[]): Product[] {
   const supabaseRefs = new Set(supabase.map((p) => p.reference).filter(Boolean));
   const remainingMock = mock.filter((p) => !supabaseRefs.has(p.reference));
+  return [...supabase, ...remainingMock];
+}
+
+// Same transitional merge as mergeCatalogs, but for the "Boutiques à
+// découvrir" shop grid — deduped by id (shops have no shared "reference"
+// field to match mock vs. Supabase rows on, but a real Supabase shop's id
+// is a UUID that will never collide with a mock shop's slug-style id).
+function mergeShops(mock: Shop[], supabase: Shop[]): Shop[] {
+  const supabaseIds = new Set(supabase.map((s) => s.id));
+  const remainingMock = mock.filter((s) => !supabaseIds.has(s.id));
   return [...supabase, ...remainingMock];
 }
 
@@ -111,10 +121,11 @@ const heroSlides: HeroSlide[] = [
 export default function HomePage() {
   const { navigate } = useApp();
   // The mock catalog renders immediately; if the Supabase catalog fetch
-  // succeeds, its products are merged in (see mergeCatalogs above). On
-  // failure (or while still loading), the mock catalog stays as-is —
-  // never left empty.
+  // succeeds, its products/shops are merged in (see mergeCatalogs/mergeShops
+  // above). On failure (or while still loading), the mock catalog stays
+  // as-is — never left empty.
   const [products, setProducts] = useState<Product[]>(mockProducts);
+  const [displayShops, setDisplayShops] = useState<Shop[]>(mockShops);
 
   useEffect(() => {
     let cancelled = false;
@@ -128,6 +139,7 @@ export default function HomePage() {
           // anything in the static mock shop list.
           registerSupabaseShops(result.shops);
           setProducts(mergeCatalogs(mockProducts, result.products));
+          setDisplayShops(mergeShops(mockShops, result.shops));
         }
       })
       .catch(() => {
@@ -173,7 +185,7 @@ export default function HomePage() {
 
       <section>
         <div className="mb-6 flex items-end justify-between"><div><p className="eyebrow mb-1.5">Boutiques à découvrir</p><h2 className="section-title">Nos vendeurs sélectionnés</h2></div></div>
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">{shops.map((shop) => <ShopCard key={shop.id} shop={shop} />)}</div>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">{displayShops.map((shop) => <ShopCard key={shop.id} shop={shop} />)}</div>
       </section>
 
       <section className="border-t border-line pt-12">
