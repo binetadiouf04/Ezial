@@ -18,6 +18,12 @@ export interface NewProductImage {
   file: File;
 }
 
+// The real products_status_check constraint only allows these four values —
+// 'published' does not exist in the Supabase schema. Typing this here (not
+// as the form's own 'draft' | 'published') makes it a compile error for any
+// caller to pass an incompatible status again.
+export type SupabaseProductStatus = 'draft' | 'active' | 'flagged' | 'disabled';
+
 export interface CreateProductInput {
   shopId: string;
   reference: string;
@@ -26,7 +32,7 @@ export interface CreateProductInput {
   category: string;
   subcategory: string;
   basePrice: number;
-  status: 'draft' | 'published';
+  status: SupabaseProductStatus;
   descriptiveAttributes: Record<string, string[]>;
   variants: VariantRowInput[];
   images: NewProductImage[];

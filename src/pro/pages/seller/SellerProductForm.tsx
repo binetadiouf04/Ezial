@@ -4,7 +4,16 @@ import { categories, categoryMap, type CategoryId } from '@/data/categories';
 import { getFilters, type FilterGroup } from '@/data/filters';
 import { getColor } from '@/data/colors';
 import VendorNoticeBanner from '../../components/VendorNoticeBanner';
-import { createProductInSupabase, fetchProductImages, deleteProductImage, addProductImages } from '@/lib/supabaseSellerProducts';
+import { createProductInSupabase, fetchProductImages, deleteProductImage, addProductImages, type SupabaseProductStatus } from '@/lib/supabaseSellerProducts';
+
+// products.status in Supabase only accepts draft/active/flagged/disabled —
+// there is no 'published' value there. The form's own draft/published
+// choice (used everywhere else in the local mock product model) is mapped
+// to the Supabase-accepted value only at the point of writing to Supabase.
+const SUPABASE_STATUS_FOR_FORM_STATUS: Record<'draft' | 'published', SupabaseProductStatus> = {
+  draft: 'draft',
+  published: 'active',
+};
 import { ArrowLeft, X, Package, ChevronDown, Check, Camera, Star } from 'lucide-react';
 
 // Which filter groups are single-choice (radio-like) vs descriptive multi-choice
@@ -468,7 +477,7 @@ export default function SellerProductForm({ productId }: { productId?: string })
         category: categoryId,
         subcategory: subId,
         basePrice: parseInt(price) || 0,
-        status,
+        status: SUPABASE_STATUS_FOR_FORM_STATUS[status],
         descriptiveAttributes: buildDescriptiveAttributes(),
         variants: buildVariantRows(),
         images: newLocalImages.map((img) => ({ file: img.file })),
