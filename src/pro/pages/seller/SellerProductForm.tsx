@@ -99,6 +99,28 @@ interface Combo {
   price: number; // only used when priceByOption is ON
 }
 
+// Shared visual for every selectable chip in this form (category,
+// subcategory, and every option group except color swatches, which keep
+// their own presentation). The check icon's slot is always reserved and
+// only toggles opacity, so a chip's width/height never change when it
+// becomes selected — no wrapped-under-text checkmark, no layout shift.
+function SelectableChip({ label, selected, onClick }: { label: string; selected: boolean; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-lg px-3.5 py-2 text-sm font-medium leading-none transition-colors ${
+        selected
+          ? 'bg-burgundy text-white border border-burgundy'
+          : 'bg-white border border-line text-ink/70 hover:border-ink/25 hover:text-ink'
+      }`}
+    >
+      <span>{label}</span>
+      <Check size={13} className={`shrink-0 transition-opacity ${selected ? 'opacity-100' : 'opacity-0'}`} aria-hidden={!selected} />
+    </button>
+  );
+}
+
 // One photo in the form's gallery. `existing` is present only for a photo
 // already persisted as a Supabase product_images row (needed to delete the
 // right Storage object + row if removed); `file` is present only for a
@@ -535,24 +557,14 @@ export default function SellerProductForm({ productId }: { productId?: string })
 
     return (
       <div className="flex flex-wrap gap-2">
-        {group.options.map((opt) => {
-          const isSelected = selected.includes(opt);
-          return (
-            <button
-              key={opt}
-              type="button"
-              onClick={() => isSingle ? toggleSingleChoice(group.id, opt) : toggleMultiChoice(group.id, opt)}
-              className={`rounded-lg px-3.5 py-2 text-sm font-medium transition-all ${
-                isSelected
-                  ? 'bg-burgundy text-white border border-burgundy'
-                  : 'bg-white border border-line text-ink/70 hover:border-ink/25 hover:text-ink'
-              }`}
-            >
-              {opt}
-              {isSelected && isSingle && <Check size={13} className="inline ml-1.5 -mt-0.5" />}
-            </button>
-          );
-        })}
+        {group.options.map((opt) => (
+          <SelectableChip
+            key={opt}
+            label={opt}
+            selected={selected.includes(opt)}
+            onClick={() => (isSingle ? toggleSingleChoice(group.id, opt) : toggleMultiChoice(group.id, opt))}
+          />
+        ))}
       </div>
     );
   };
@@ -679,24 +691,9 @@ export default function SellerProductForm({ productId }: { productId?: string })
         <div>
           <label className="block text-xs font-medium text-ink/60 mb-1.5">Choisir une catégorie</label>
           <div className="flex flex-wrap gap-2">
-            {categories.map((c) => {
-              const isSelected = categoryId === c.id;
-              return (
-                <button
-                  key={c.id}
-                  type="button"
-                  onClick={() => handleCategoryChange(c.id)}
-                  className={`rounded-lg px-3.5 py-2 text-sm font-medium transition-all ${
-                    isSelected
-                      ? 'bg-burgundy text-white border border-burgundy'
-                      : 'bg-white border border-line text-ink/70 hover:border-ink/25 hover:text-ink'
-                  }`}
-                >
-                  {c.label}
-                  {isSelected && <Check size={13} className="inline ml-1.5 -mt-0.5" />}
-                </button>
-              );
-            })}
+            {categories.map((c) => (
+              <SelectableChip key={c.id} label={c.label} selected={categoryId === c.id} onClick={() => handleCategoryChange(c.id)} />
+            ))}
           </div>
           {errors.category && <p className="mt-1 text-xs text-burgundy">{errors.category}</p>}
         </div>
@@ -704,24 +701,9 @@ export default function SellerProductForm({ productId }: { productId?: string })
           <div>
             <label className="block text-xs font-medium text-ink/60 mb-1.5">Sous-catégorie</label>
             <div className="flex flex-wrap gap-2">
-              {selectedCategory.subcategories.map((s) => {
-                const isSelected = subId === s.id;
-                return (
-                  <button
-                    key={s.id}
-                    type="button"
-                    onClick={() => handleSubCategoryChange(s.id)}
-                    className={`rounded-lg px-3.5 py-2 text-sm font-medium transition-all ${
-                      isSelected
-                        ? 'bg-burgundy text-white border border-burgundy'
-                        : 'bg-white border border-line text-ink/70 hover:border-ink/25 hover:text-ink'
-                    }`}
-                  >
-                    {s.label}
-                    {isSelected && <Check size={13} className="inline ml-1.5 -mt-0.5" />}
-                  </button>
-                );
-              })}
+              {selectedCategory.subcategories.map((s) => (
+                <SelectableChip key={s.id} label={s.label} selected={subId === s.id} onClick={() => handleSubCategoryChange(s.id)} />
+              ))}
             </div>
           </div>
         )}
