@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useApp } from '@/store/AppContext';
 import { products as mockProducts, type Product } from '@/data/products';
-import { shops } from '@/data/shops';
+import { shops, registerSupabaseShops } from '@/data/shops';
 import { homeCircleTiles } from '@/data/categories';
 import ProductCard from '@/components/ProductCard';
 import ShopCard from '@/components/ShopCard';
@@ -121,7 +121,14 @@ export default function HomePage() {
     fetchActiveCatalogFromSupabase()
       .then((result) => {
         if (cancelled) return;
-        if (result.errors.length === 0) setProducts(mergeCatalogs(mockProducts, result.products));
+        if (result.errors.length === 0) {
+          // Registered before the merge so ProductCard's getShop() can
+          // resolve a real Supabase product's shop (name, logo, link) —
+          // without this, a Supabase product's shopId never matches
+          // anything in the static mock shop list.
+          registerSupabaseShops(result.shops);
+          setProducts(mergeCatalogs(mockProducts, result.products));
+        }
       })
       .catch(() => {
         // Fetch itself failed unexpectedly — keep the mock catalog as-is.

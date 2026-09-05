@@ -13,4 +13,15 @@ export const shops: Shop[] = [
 ];
 
 export const shopMap: Record<string, Shop> = shops.reduce((acc, s) => ({ ...acc, [s.id]: s }), {} as Record<string, Shop>);
-export const getShop = (id: string): Shop | undefined => shopMap[id];
+
+// Shops resolved from Supabase at runtime (e.g. a real seller's shop),
+// registered once a Supabase catalog fetch succeeds (see HomePage.tsx /
+// supabaseCatalog.ts) — kept separate from the static mock `shops` array
+// above so getShop() can resolve either without merging the two lists.
+const supabaseShopMap: Record<string, Shop> = {};
+
+export function registerSupabaseShops(fetchedShops: Shop[]): void {
+  for (const shop of fetchedShops) supabaseShopMap[shop.id] = shop;
+}
+
+export const getShop = (id: string): Shop | undefined => shopMap[id] ?? supabaseShopMap[id];

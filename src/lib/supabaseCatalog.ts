@@ -24,7 +24,8 @@ import type { CategoryId } from '@/data/categories';
 //   public.products:         id, shop_id, reference, name, description,
 //                             category, subcategory, base_price, status,
 //                             is_promo, promo_price, promo_start, promo_end,
-//                             created_at, updated_at
+//                             descriptive_attributes (jsonb), created_at,
+//                             updated_at
 //   public.product_images:   id, product_id, storage_path, is_primary,
 //                             sort_order, created_at
 //   public.product_variants: id, product_id, attributes (jsonb), price,
@@ -81,6 +82,7 @@ interface ProductRow {
   promo_price?: number | null;
   promo_start?: string | null;
   promo_end?: string | null;
+  descriptive_attributes?: Record<string, string[]> | null;
   created_at?: string;
   updated_at?: string;
 }
@@ -172,6 +174,17 @@ function isPromoActive(row: ProductRow): boolean {
   return true;
 }
 
+// products.descriptive_attributes (style, type de vêtement, matière...) has
+// no dedicated Product field — it maps onto the existing details list
+// (already rendered as the "Détails" tab on ProductPage), one row per
+// attribute group.
+function detailsFromDescriptiveAttributes(attrs: Record<string, string[]> | null | undefined): { label: string; value: string }[] {
+  if (!attrs) return [];
+  return Object.entries(attrs)
+    .filter(([, values]) => Array.isArray(values) && values.length > 0)
+    .map(([label, values]) => ({ label, value: values.join(', ') }));
+}
+
 function mapProduct(row: ProductRow, imageRows: ProductImageRow[], variantRows: ProductVariantRow[]): Product {
   const promoActive = isPromoActive(row);
   const images = imagesForProduct(row.id, imageRows);
@@ -197,7 +210,7 @@ function mapProduct(row: ProductRow, imageRows: ProductImageRow[], variantRows: 
     stock: variants.length > 0 ? stockFromVariants : 0,
     variants: variantOptionsForProduct(row.id, variantRows),
     description: row.description ?? '',
-    details: [], // no Supabase source (not part of this step's tables)
+    details: detailsFromDescriptiveAttributes(row.descriptive_attributes),
     delivery: '',
     pickup: undefined,
     isNew: undefined,
