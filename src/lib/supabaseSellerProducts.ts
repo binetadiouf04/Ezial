@@ -65,11 +65,16 @@ function shopReferencePrefix(shopId: string, shopName: string): string {
   return prefixes[shopId] ?? 'EZI';
 }
 
-// The next free reference for this shop, computed from the products
-// actually present in Supabase for it — never from local/mock counters.
+// The next free reference for this shop's prefix, computed from the
+// products actually present in Supabase — never from local/mock counters.
+// products.reference is unique across the whole table (not per shop), so
+// this looks at every product sharing the prefix, across every shop, not
+// just this shop's own products: if two shops happen to compute the same
+// 3-letter code, their references still never collide, since both draw
+// their next number from the same shared count.
 async function nextAvailableReference(shopId: string, shopName: string): Promise<string> {
   const prefix = shopReferencePrefix(shopId, shopName);
-  const { data } = await supabase.from('products').select('reference').eq('shop_id', shopId);
+  const { data } = await supabase.from('products').select('reference').like('reference', `EZ-${prefix}-%`);
   const pattern = new RegExp(`^EZ-${prefix}-(\\d+)$`);
   let maxSeq = 0;
   for (const row of data ?? []) {
