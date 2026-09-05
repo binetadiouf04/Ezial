@@ -5,6 +5,7 @@ import { getFilters, type FilterGroup } from '@/data/filters';
 import { getColor } from '@/data/colors';
 import VendorNoticeBanner from '../../components/VendorNoticeBanner';
 import { createProductInSupabase, fetchProductImages, deleteProductImage, addProductImages, type SupabaseProductStatus } from '@/lib/supabaseSellerProducts';
+import { ArrowLeft, X, Package, ChevronDown, Check, Camera, Star } from 'lucide-react';
 
 // products.status in Supabase only accepts draft/active/flagged/disabled —
 // there is no 'published' value there. The form's own draft/published
@@ -14,12 +15,17 @@ const SUPABASE_STATUS_FOR_FORM_STATUS: Record<'draft' | 'published', SupabasePro
   draft: 'draft',
   published: 'active',
 };
-import { ArrowLeft, X, Package, ChevronDown, Check, Camera, Star } from 'lucide-react';
 
 // Which filter groups are single-choice (radio-like) vs descriptive multi-choice
 // (checkbox-like, but never split stock) vs true variant dimensions (checkbox-like
 // AND generate one stock/price line per selected value).
 const SINGLE_CHOICE_IDS = new Set(['type', 'style', 'texture', 'matiere', 'peau', 'typeproduit']);
+// The one exception to 'type' being single-choice: for Vêtements > Femme,
+// several clothing types can describe the same product (e.g. "Robes" and
+// "Tenues de plage"). Still purely descriptive — 'type' was never a variant
+// dimension, so this never generates stock/price combinations.
+const isVetementsFemmeTypeGroup = (categoryId: string, subId: string, groupId: string): boolean =>
+  categoryId === 'vetements' && subId === 'femme' && groupId === 'type';
 // Only these represent a genuinely different version of the product being sold —
 // the ones allowed to generate stock/price combinations. Descriptive multi-choice
 // attributes like "besoin" or "famille" (notes olfactives) are intentionally left
@@ -826,7 +832,7 @@ export default function SellerProductForm({ productId }: { productId?: string })
 
           {optionGroups.map((group) => {
             const isColor = COLOR_GROUP_IDS.has(group.id);
-            const isSingle = SINGLE_CHOICE_IDS.has(group.id);
+            const isSingle = SINGLE_CHOICE_IDS.has(group.id) && !isVetementsFemmeTypeGroup(categoryId, subId, group.id);
             const choiceLabel = isSingle ? 'Choix unique' : 'Choix multiple';
             const showsCustomVolume = group.id === 'volume' && (selections.volume ?? []).includes('Autre');
             const showsCustomWeight = group.id === 'poids' && (selections.poids ?? []).includes('Autre');
