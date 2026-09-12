@@ -1,14 +1,21 @@
 import { useEffect, useState } from 'react';
 import { useApp } from '@/store/AppContext';
 import { products as mockProducts, type Product } from '@/data/products';
-import { shops as mockShops, registerSupabaseShops, type Shop } from '@/data/shops';
+import { shops as mockShops, registerSupabaseShops, getShop, type Shop } from '@/data/shops';
 import { homeCircleTiles } from '@/data/categories';
 import ProductCard from '@/components/ProductCard';
 import ShopCard from '@/components/ShopCard';
 import HeroCarousel, { type HeroSlide } from '@/components/HeroCarousel';
 import SmartImage from '@/components/SmartImage';
 import { fetchActiveCatalogFromSupabase } from '@/lib/supabaseCatalog';
+import { rankProducts } from '@/lib/productRanking';
 import { ChevronRight } from 'lucide-react';
+
+// Phase 1: resolves "official shop" purely from Supabase shops.is_official
+// (via getShop's registry) — never a hardcoded id/slug/name. Phase 2 will
+// extend RankingContext with buyer-behavior signals; this function itself
+// won't need to change.
+const isOfficialShop = (shopId: string): boolean => getShop(shopId)?.isOfficial === true;
 
 // TRANSITIONAL — merges the Supabase catalog into the mock one instead of
 // replacing it outright, so the homepage stays populated while the real
@@ -148,9 +155,15 @@ export default function HomePage() {
     return () => { cancelled = true; };
   }, []);
 
-  const trending = products.filter((p) => p.isTrending);
-  const promos = products.filter((p) => p.isPromo);
-  const pourVous = [...products].sort(() => 0.5 - Math.random()).slice(0, 8);
+  // Phase 1: official-Ezial-shop products are boosted to the front of each
+  // section (rankProducts), never hidden — everything else just follows in
+  // its existing order. "Pour vous" is shuffled first so its randomness is
+  // preserved within each tier, then ranked so official products still
+  // surface even when they wouldn't have landed in a random slice.
+  const rankingContext = { isOfficialShop };
+  const trending = rankProducts(products.filter((p) => p.isTrending), rankingContext);
+  const promos = rankProducts(products.filter((p) => p.isPromo), rankingContext);
+  const pourVous = rankProducts([...products].sort(() => 0.5 - Math.random()), rankingContext).slice(0, 8);
 
   return (
     <div className="space-y-16 lg:space-y-24">

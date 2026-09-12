@@ -2,6 +2,10 @@ export interface Shop {
   id: string; name: string; banner: string; logo: string;
   followers: number; description: string; city: string; rating: number; reviewCount: number;
   address: string; pickupEnabled: boolean; pickupEta: string;
+  // From Supabase shops.is_official — never set on the static mock shops
+  // below (always falsy there). Drives which shop's products are
+  // prioritized on the Home (see src/lib/productRanking.ts).
+  isOfficial?: boolean;
 }
 
 export const shops: Shop[] = [

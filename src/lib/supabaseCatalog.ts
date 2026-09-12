@@ -20,7 +20,8 @@ import type { CategoryId } from '@/data/categories';
 //   public.shops:            id, owner_id, name, slug, description, phone,
 //                             neighborhood, address_text, logo_url,
 //                             cover_url, status, seller_code, pin_hash,
-//                             active_product_limit, created_at, updated_at
+//                             active_product_limit, is_official, created_at,
+//                             updated_at
 //   public.products:         id, shop_id, reference, name, description,
 //                             category, subcategory, base_price, status,
 //                             is_promo, promo_price, promo_start, promo_end,
@@ -64,6 +65,7 @@ interface ShopRow {
   seller_code?: string | null;
   pin_hash?: string | null;
   active_product_limit?: number | null;
+  is_official?: boolean | null;
   created_at?: string;
   updated_at?: string;
 }
@@ -128,6 +130,7 @@ function mapShop(row: ShopRow): Shop {
     address: row.address_text ?? '',
     pickupEnabled: false,
     pickupEta: '',
+    isOfficial: Boolean(row.is_official),
   };
 }
 
