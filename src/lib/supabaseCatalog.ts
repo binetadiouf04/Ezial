@@ -232,13 +232,22 @@ function mapProduct(row: ProductRow, imageRows: ProductImageRow[], variantRows: 
  * Four separate queries joined client-side by id, rather than one nested
  * PostgREST select — more resilient to unknown/ambiguous foreign key setups
  * on a schema this code hasn't queried directly before.
+ *
+ * products.status is filtered to 'active' explicitly here, on top of RLS —
+ * the exact accepted values (draft/active/flagged/disabled) are now known
+ * (see SupabaseProductStatus in supabaseSellerProducts.ts), so a draft,
+ * flagged or disabled product is never shown publicly even if a given RLS
+ * policy turns out to be broader than intended. shops.status is not
+ * filtered client-side here — its accepted values haven't been confirmed,
+ * and filtering on a wrong guess would hide every shop instead of just the
+ * inactive ones; it still relies on RLS alone, as before.
  */
 export async function fetchActiveCatalogFromSupabase(): Promise<SupabaseCatalogResult> {
   const errors: string[] = [];
 
   const [shopsRes, productsRes] = await Promise.all([
     supabase.from('shops').select('*'),
-    supabase.from('products').select('*'),
+    supabase.from('products').select('*').eq('status', 'active'),
   ]);
 
   if (shopsRes.error) errors.push(`shops: ${shopsRes.error.message}`);
