@@ -178,14 +178,10 @@ export default function HomePage() {
 
         <section>
           <div className="mb-5 flex items-end justify-between"><h2 className="section-title">À découvrir</h2></div>
-          <div className="flex overflow-x-auto no-scrollbar pb-1">
+          <div className="grid grid-cols-4 gap-x-2 gap-y-6 sm:grid-cols-5 sm:gap-x-4 md:grid-cols-6 lg:grid-cols-8 lg:gap-x-6">
             {homeCircleTiles.map((tile) => (
-              <button
-                key={tile.id}
-                onClick={() => navigate(tile.route)}
-                className="group flex w-[76px] flex-shrink-0 flex-col items-center gap-2 -ml-3 first:ml-0 sm:w-[92px] sm:-ml-4 lg:w-[104px] lg:-ml-5"
-              >
-                <div className="relative aspect-square w-full overflow-hidden rounded-full bg-cream ring-2 ring-white"><SmartImage src={tile.image} alt={tile.label} className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-110" /><div className="absolute inset-0 bg-ink/0 transition-colors group-hover:bg-ink/10" /></div>
+              <button key={tile.id} onClick={() => navigate(tile.route)} className="group flex flex-col items-center gap-2">
+                <div className="relative aspect-square w-full overflow-hidden rounded-full bg-cream"><SmartImage src={tile.image} alt={tile.label} className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-110" /><div className="absolute inset-0 bg-ink/0 transition-colors group-hover:bg-ink/10" /></div>
                 <span className={`text-center text-[11px] font-medium leading-tight transition-colors sm:text-xs ${tile.highlight ? 'text-burgundy font-semibold' : 'text-ink/80 group-hover:text-burgundy'}`}>{tile.label}</span>
               </button>
             ))}
