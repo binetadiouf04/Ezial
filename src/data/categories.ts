@@ -25,6 +25,7 @@ export const categories: Category[] = [
   { id: 'beaute', label: 'Beauté', subcategories: [
     { id: 'maquillage', label: 'Maquillage' }, { id: 'skincare', label: 'Skincare' },
     { id: 'soins-capillaires', label: 'Soins capillaires' }, { id: 'hygiene', label: 'Hygiène & soins corporels' },
+    { id: 'mains-et-pieds', label: 'Mains et pieds' },
   ]},
   { id: 'cheveux', label: 'Cheveux', subcategories: [
     { id: 'perruques', label: 'Perruques' }, { id: 'meches', label: 'Mèches' },
@@ -62,28 +63,45 @@ export const categoryTiles: { id: CategoryId; label: string; image: string }[] =
 
 export interface HomeCircleTile { id: string; label: string; image: string; route: string; highlight?: boolean; }
 
-// Curated shortcut circles shown on the homepage — a mix of Promos + a few
-// popular subcategories (not the full category list). Images are reused
-// from the same flagship products they represent, for visual consistency.
+// Curated shortcut circles shown on the homepage — a mix of Promos + the
+// most relevant subcategories (not the full category list, and no exact
+// semantic duplicates: a specific item is only kept alongside its general
+// category when it adds a genuinely distinct shortcut, e.g. Bijoux +
+// Colliers). Images are reused from the same flagship products they
+// represent, for visual consistency. Items with no dedicated subcategory
+// route through a search query on their own label instead of a fabricated
+// category id.
 export const homeCircleTiles: HomeCircleTile[] = [
   { id: 'promos', label: 'Promos', image: 'https://images.pexels.com/photos/8165653/pexels-photo-8165653.jpeg?auto=compress&cs=tinysrgb&h=400&w=400', route: '/promos', highlight: true },
   { id: 'mode-femme', label: 'Femme', image: 'https://images.pexels.com/photos/19816456/pexels-photo-19816456.jpeg?auto=compress&cs=tinysrgb&h=400&w=400', route: '/categorie/vetements/femme' },
   { id: 'mode-homme', label: 'Homme', image: 'https://images.pexels.com/photos/34695268/pexels-photo-34695268.jpeg?auto=compress&cs=tinysrgb&h=400&w=400', route: '/categorie/vetements/homme' },
+  { id: 'robes', label: 'Robes', image: 'https://images.pexels.com/photos/1755428/pexels-photo-1755428.jpeg?auto=compress&cs=tinysrgb&h=400&w=400', route: '/recherche?q=robes' },
+  { id: 'chemises', label: 'Chemises', image: 'https://images.pexels.com/photos/1183266/pexels-photo-1183266.jpeg?auto=compress&cs=tinysrgb&h=400&w=400', route: '/recherche?q=chemises' },
+  { id: 'kimono', label: 'Kimono', image: 'https://images.pexels.com/photos/8214396/pexels-photo-8214396.jpeg?auto=compress&cs=tinysrgb&h=400&w=400', route: '/recherche?q=kimono' },
+  { id: 'voiles', label: 'Voiles', image: 'https://images.pexels.com/photos/36636771/pexels-photo-36636771.jpeg?auto=compress&cs=tinysrgb&h=400&w=400', route: '/recherche?q=voiles' },
+  { id: 'traditionnel-femme', label: 'Traditionnel Femme', image: 'https://images.pexels.com/photos/38277759/pexels-photo-38277759.jpeg?auto=compress&cs=tinysrgb&h=400&w=400', route: '/recherche?q=traditionnel femme' },
+  { id: 'traditionnel-homme', label: 'Traditionnel Homme', image: 'https://images.pexels.com/photos/19320006/pexels-photo-19320006.jpeg?auto=compress&cs=tinysrgb&h=400&w=400', route: '/recherche?q=traditionnel homme' },
+  { id: 'made-in-senegal', label: 'Made in Senegal', image: 'https://images.pexels.com/photos/34991789/pexels-photo-34991789.jpeg?auto=compress&cs=tinysrgb&h=400&w=400', route: '/recherche?q=made in senegal' },
   { id: 'chaussures', label: 'Chaussures', image: 'https://images.pexels.com/photos/29393718/pexels-photo-29393718.jpeg?auto=compress&cs=tinysrgb&h=400&w=400', route: '/categorie/chaussures/femme' },
+  { id: 'sandales', label: 'Sandales', image: 'https://images.pexels.com/photos/27023941/pexels-photo-27023941.jpeg?auto=compress&cs=tinysrgb&h=400&w=400', route: '/recherche?q=sandales' },
+  { id: 'baskets', label: 'Baskets', image: 'https://images.pexels.com/photos/261301/pexels-photo-261301.jpeg?auto=compress&cs=tinysrgb&h=400&w=400', route: '/recherche?q=baskets' },
   { id: 'sacs-a-main', label: 'Sacs', image: 'https://images.pexels.com/photos/7953286/pexels-photo-7953286.jpeg?auto=compress&cs=tinysrgb&h=400&w=400', route: '/categorie/sacs/sacs-a-main' },
   { id: 'maquillage', label: 'Maquillage', image: 'https://images.pexels.com/photos/10338698/pexels-photo-10338698.jpeg?auto=compress&cs=tinysrgb&h=400&w=400', route: '/categorie/beaute/maquillage' },
+  { id: 'faux-cils', label: 'Faux cils', image: 'https://images.pexels.com/photos/3373736/pexels-photo-3373736.jpeg?auto=compress&cs=tinysrgb&h=400&w=400', route: '/recherche?q=faux cils' },
   { id: 'skincare', label: 'Skincare', image: 'https://images.pexels.com/photos/12352170/pexels-photo-12352170.jpeg?auto=compress&cs=tinysrgb&h=400&w=400', route: '/categorie/beaute/skincare' },
-  { id: 'raw-hair', label: 'Raw Hair', image: 'https://images.pexels.com/photos/15868319/pexels-photo-15868319.jpeg?auto=compress&cs=tinysrgb&h=400&w=400', route: '/categorie/cheveux/cheveux-naturels' },
+  { id: 'gommage', label: 'Gommage', image: 'https://images.pexels.com/photos/3755659/pexels-photo-3755659.jpeg?auto=compress&cs=tinysrgb&h=400&w=400', route: '/recherche?q=gommage' },
+  { id: 'press-on-nails', label: 'Press-on nails', image: 'https://images.pexels.com/photos/4938515/pexels-photo-4938515.jpeg?auto=compress&cs=tinysrgb&h=400&w=400', route: '/categorie/beaute/mains-et-pieds' },
   { id: 'perruques', label: 'Perruques', image: 'https://images.pexels.com/photos/6923241/pexels-photo-6923241.jpeg?auto=compress&cs=tinysrgb&h=400&w=400', route: '/categorie/cheveux/perruques' },
+  { id: 'raw-hair', label: 'Raw Hair', image: 'https://images.pexels.com/photos/15868319/pexels-photo-15868319.jpeg?auto=compress&cs=tinysrgb&h=400&w=400', route: '/categorie/cheveux/cheveux-naturels' },
+  { id: 'blend-hair', label: 'Blend Hair', image: 'https://images.pexels.com/photos/3993462/pexels-photo-3993462.jpeg?auto=compress&cs=tinysrgb&h=400&w=400', route: '/categorie/cheveux/blend-hair' },
   { id: 'soins-capillaires', label: 'Soins capillaires', image: 'https://images.pexels.com/photos/13734819/pexels-photo-13734819.jpeg?auto=compress&cs=tinysrgb&h=400&w=400', route: '/categorie/beaute/soins-capillaires' },
   { id: 'parfums-femme', label: 'Parfums Femme', image: 'https://images.pexels.com/photos/7364096/pexels-photo-7364096.jpeg?auto=compress&cs=tinysrgb&h=400&w=400', route: '/categorie/parfums/parfums-femme' },
-  { id: 'parfums', label: 'Parfums', image: 'https://images.pexels.com/photos/30405427/pexels-photo-30405427.jpeg?auto=compress&cs=tinysrgb&h=400&w=400', route: '/categorie/parfums' },
+  { id: 'parfums-homme', label: 'Parfums Homme', image: 'https://images.pexels.com/photos/965880/pexels-photo-965880.jpeg?auto=compress&cs=tinysrgb&h=400&w=400', route: '/categorie/parfums/parfums-homme' },
   { id: 'encens', label: 'Encens', image: 'https://images.pexels.com/photos/30746012/pexels-photo-30746012.jpeg?auto=compress&cs=tinysrgb&h=400&w=400', route: '/categorie/parfums/encens-parfums-maison' },
   { id: 'bijoux', label: 'Bijoux', image: 'https://images.pexels.com/photos/8165653/pexels-photo-8165653.jpeg?auto=compress&cs=tinysrgb&h=400&w=400', route: '/categorie/bijoux' },
   { id: 'colliers', label: 'Colliers', image: 'https://images.pexels.com/photos/13219289/pexels-photo-13219289.jpeg?auto=compress&cs=tinysrgb&h=400&w=400', route: '/categorie/bijoux/colliers' },
-  { id: 'montres', label: 'Montre', image: 'https://images.pexels.com/photos/13219289/pexels-photo-13219289.jpeg?auto=compress&cs=tinysrgb&h=400&w=400', route: '/categorie/bijoux/montres' },
   { id: 'or', label: 'Or', image: 'https://images.pexels.com/photos/8165653/pexels-photo-8165653.jpeg?auto=compress&cs=tinysrgb&h=400&w=400', route: '/recherche?q=or' },
-  { id: 'nuisette', label: 'Nuisette', image: 'https://images.pexels.com/photos/6311392/pexels-photo-6311392.jpeg?auto=compress&cs=tinysrgb&h=400&w=400', route: '/categorie/lingerie/lingerie' },
   { id: 'pyjamas', label: 'Pyjamas', image: 'https://images.pexels.com/photos/6311392/pexels-photo-6311392.jpeg?auto=compress&cs=tinysrgb&h=400&w=400', route: '/categorie/lingerie/pyjamas' },
-  { id: 'pyjamas-lingerie', label: 'Pyjamas & Lingerie', image: 'https://images.pexels.com/photos/6311392/pexels-photo-6311392.jpeg?auto=compress&cs=tinysrgb&h=400&w=400', route: '/categorie/lingerie' },
+  { id: 'nuisette', label: 'Nuisettes', image: 'https://images.pexels.com/photos/20337341/pexels-photo-20337341.jpeg?auto=compress&cs=tinysrgb&h=400&w=400', route: '/categorie/lingerie/vetements-de-nuit' },
+  { id: 'sous-vetements', label: 'Sous-vêtements', image: 'https://images.pexels.com/photos/6568208/pexels-photo-6568208.jpeg?auto=compress&cs=tinysrgb&h=400&w=400', route: '/categorie/lingerie/sous-vetements' },
 ];
