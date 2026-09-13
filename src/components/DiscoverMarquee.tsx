@@ -47,28 +47,28 @@ function MarqueeRow({ tiles, direction, onNavigate }: { tiles: HomeCircleTile[];
 }
 
 // Tablet/desktop: one dense, static grid — no animation, no duplication.
-// A fixed 8-column track (independent of viewport width) means the row
-// count is purely a function of the curated tile count, so the 32 curated
-// tiles always land in exactly 4 rows (8 × 4), never more and never fewer,
-// on every tablet/desktop width — while the grid itself still stretches to
-// fill the full available width. Tile size is capped in px (not a
-// responsive/full-width circle) and sized so 8 of them always fit within
-// the narrowest supported tablet width without wrapping or scrolling.
+// A fixed 6-column track (same at every tablet/desktop breakpoint) means
+// the row count is purely a function of the curated tile count: the 24
+// curated tiles always land in exactly 4 rows (6 × 4), never more and
+// never fewer. Column count never grows with viewport width — instead the
+// circles themselves grow (md → lg → xl), which is what "adapts to the
+// available width" here while keeping the row/column structure fixed and
+// the circles big and legible at every size.
 function GridTile({ tile, onNavigate }: { tile: HomeCircleTile; onNavigate: (route: string) => void }) {
   return (
-    <button onClick={() => onNavigate(tile.route)} className="group flex flex-col items-center gap-1.5">
-      <div className="relative aspect-square w-[76px] overflow-hidden rounded-full bg-cream">
+    <button onClick={() => onNavigate(tile.route)} className="group flex flex-col items-center gap-2">
+      <div className="relative aspect-square w-24 lg:w-28 xl:w-32 overflow-hidden rounded-full bg-cream">
         <SmartImage src={tile.image} alt={tile.label} className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-110" />
         <div className="absolute inset-0 bg-ink/0 transition-colors group-hover:bg-ink/10" />
       </div>
-      <span className={`text-center text-[10px] font-medium leading-tight transition-colors ${tile.highlight ? 'text-burgundy font-semibold' : 'text-ink/80 group-hover:text-burgundy'}`}>{tile.label}</span>
+      <span className={`text-center text-xs font-medium leading-tight transition-colors ${tile.highlight ? 'text-burgundy font-semibold' : 'text-ink/80 group-hover:text-burgundy'}`}>{tile.label}</span>
     </button>
   );
 }
 
 function DiscoverGrid({ tiles, onNavigate }: { tiles: HomeCircleTile[]; onNavigate: (route: string) => void }) {
   return (
-    <div className="grid grid-cols-8 justify-items-center gap-x-2 gap-y-4">
+    <div className="grid grid-cols-6 justify-items-center gap-x-3 gap-y-6">
       {tiles.map((tile) => (
         <GridTile key={tile.id} tile={tile} onNavigate={onNavigate} />
       ))}
