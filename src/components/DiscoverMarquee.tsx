@@ -46,6 +46,20 @@ function MarqueeRow({ tiles, direction, onNavigate }: { tiles: HomeCircleTile[];
   );
 }
 
+// Tablet/desktop row: the same circles + labels, laid out once with no
+// animation and no duplication — wraps within its own row if a viewport is
+// ever too narrow to fit it, but never scrolls (no overflow-x, no
+// scrollbar), and never moves on its own.
+function StaticRow({ tiles, onNavigate }: { tiles: HomeCircleTile[]; onNavigate: (route: string) => void }) {
+  return (
+    <div className="flex flex-wrap justify-center gap-x-5 gap-y-4">
+      {tiles.map((tile) => (
+        <DiscoverTile key={tile.id} tile={tile} onNavigate={onNavigate} />
+      ))}
+    </div>
+  );
+}
+
 export default function DiscoverMarquee({ tiles, onNavigate }: { tiles: HomeCircleTile[]; onNavigate: (route: string) => void }) {
   const mobileRows = distributeIntoRows(tiles, 2);
   const desktopRows = distributeIntoRows(tiles, 4);
@@ -59,10 +73,10 @@ export default function DiscoverMarquee({ tiles, onNavigate }: { tiles: HomeCirc
         ))}
       </div>
 
-      {/* Tablet/desktop: 4 looping rows */}
+      {/* Tablet/desktop: 4 static rows, no animation, no scroll */}
       <div className="hidden space-y-5 md:block">
         {desktopRows.map((rowTiles, i) => (
-          <MarqueeRow key={i} tiles={rowTiles} direction={i % 2 === 0 ? 'right' : 'left'} onNavigate={onNavigate} />
+          <StaticRow key={i} tiles={rowTiles} onNavigate={onNavigate} />
         ))}
       </div>
     </>
