@@ -1,5 +1,6 @@
+import { useState } from 'react';
 import { usePro } from '../ProContext';
-import { Home, ShoppingBag, Package, Wallet, Store, LogOut, ArrowLeft } from 'lucide-react';
+import { Home, ShoppingBag, Package, Wallet, Store, LogOut, ArrowLeft, Menu, X } from 'lucide-react';
 import SellerDashboard from '../pages/seller/SellerDashboard';
 import SellerOrders from '../pages/seller/SellerOrders';
 import SellerOrderDetail from '../pages/seller/SellerOrderDetail';
@@ -19,8 +20,10 @@ const navItems = [
 
 export default function SellerLayout() {
   const { route, navigate, logout, name, identifier, sellerShop } = usePro();
+  const [menuOpen, setMenuOpen] = useState(false);
 
   const clean = route.split('?')[0];
+  const goTo = (r: string) => { setMenuOpen(false); navigate(r); };
 
   // Order detail: /seller/commandes/:id
   const orderDetailMatch = clean.match(/^\/seller\/commandes\/(.+)$/);
@@ -85,7 +88,10 @@ export default function SellerLayout() {
 
       {/* Mobile top bar */}
       <div className="lg:hidden sticky top-0 z-20 border-b border-line bg-white px-4 py-3 flex items-center justify-between">
-        <div className="flex items-center gap-2.5">
+        <div className="flex items-center gap-2">
+          <button onClick={() => setMenuOpen(true)} aria-label="Ouvrir le menu" className="-ml-1.5 flex h-9 w-9 items-center justify-center rounded-full text-ink hover:bg-cream">
+            <Menu size={22} />
+          </button>
           {sellerShop && <SmartImage src={sellerShop.logo} alt="" className="h-8 w-8 rounded-lg object-cover" />}
           <span className="text-sm font-semibold text-ink">{sellerShop?.name ?? name}</span>
         </div>
@@ -99,29 +105,51 @@ export default function SellerLayout() {
         </div>
       </div>
 
+      {/* Mobile menu drawer — replaces the old fixed bottom nav; carries the
+          same 5 destinations (Accueil, Commandes, Produits, Finances, Ma
+          boutique), opened on demand instead of pinned on screen so it can
+          never cover page content or interfere with scrolling. */}
+      {menuOpen && (
+        <div className="fixed inset-0 z-50 lg:hidden">
+          <div className="absolute inset-0 bg-ink/30 fade-in" onClick={() => setMenuOpen(false)} />
+          <div className="absolute left-0 top-0 h-full w-[82%] max-w-xs bg-white slide-up flex flex-col">
+            <div className="flex items-center justify-between border-b border-line px-4 py-4">
+              <div className="flex min-w-0 items-center gap-3">
+                {sellerShop && <SmartImage src={sellerShop.logo} alt="" className="h-9 w-9 rounded-lg object-cover" />}
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-semibold text-ink">{sellerShop?.name ?? name}</p>
+                  <p className="truncate text-xs text-ink/40 font-mono">{identifier}</p>
+                </div>
+              </div>
+              <button onClick={() => setMenuOpen(false)} className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full hover:bg-cream" aria-label="Fermer le menu">
+                <X size={20} />
+              </button>
+            </div>
+            <nav className="flex-1 space-y-1 overflow-y-auto p-3">
+              {navItems.map((item) => {
+                const Icon = item.icon;
+                const active = isActive(item.route);
+                return (
+                  <button
+                    key={item.route}
+                    onClick={() => goTo(item.route)}
+                    className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${active ? 'bg-burgundy/10 text-burgundy' : 'text-ink/60 hover:bg-cream hover:text-ink'}`}
+                  >
+                    <Icon size={18} /> {item.label}
+                  </button>
+                );
+              })}
+            </nav>
+          </div>
+        </div>
+      )}
+
       {/* Main content */}
       <div className="flex-1 min-w-0">
-        <main className="p-4 sm:p-6 lg:p-8 max-w-5xl mx-auto pb-24 lg:pb-8">
+        <main className="p-4 sm:p-6 lg:p-8 max-w-5xl mx-auto pb-8">
           {renderPage()}
         </main>
       </div>
-
-      {/* Mobile bottom nav */}
-      <nav className="lg:hidden fixed bottom-0 left-0 right-0 z-20 border-t border-line bg-white/95 backdrop-blur-md">
-        <div className="flex items-stretch justify-around">
-          {navItems.map((item) => {
-            const Icon = item.icon;
-            const active = isActive(item.route);
-            return (
-              <button key={item.route} onClick={() => navigate(item.route)} className="flex flex-1 flex-col items-center gap-1 py-2.5">
-                <Icon size={20} className={active ? 'text-burgundy' : 'text-ink/45'} strokeWidth={active ? 2 : 1.7} />
-                <span className={`text-[10px] font-medium ${active ? 'text-burgundy' : 'text-ink/45'}`}>{item.label}</span>
-              </button>
-            );
-          })}
-        </div>
-        <div className="h-[env(safe-area-inset-bottom)]" />
-      </nav>
     </div>
   );
 }
