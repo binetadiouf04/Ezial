@@ -25,7 +25,7 @@ const parfumsFemmeNotes = ['Floral', 'Fruité', 'Vanillé', 'Gourmand', 'Musqué
 const parfumsHommeNotes = ['Boisé', 'Aromatique', 'Épicé', 'Ambré', 'Musqué', 'Cuir', 'Frais', 'Agrumes', 'Aquatique', 'Fougère', 'Oriental'];
 const allFragranceNotes = [...new Set([...parfumsFemmeNotes, ...parfumsHommeNotes])];
 
-const encensMaisonTypes = ['Encens', 'Diffuseur', 'Bougie', 'Cire parfumée', 'Parfum d\'ambiance'];
+const encensMaisonTypes = ['Encens', 'Diffuseur', 'Bougie', 'Huile à brûler', 'Parfum d\'ambiance'];
 
 const jewelryTypes = ['Collier', 'Bracelet', 'Bague', 'Boucles d\'oreilles', 'Montre', 'Lunettes', 'Bijou de taille'];
 const jewelryMaterials = ['Or', 'Argent', 'Plaqué or', 'Acier inoxydable', 'Perles'];

@@ -31,17 +31,20 @@ const isVetementsFemmeTypeGroup = (categoryId: string, subId: string, groupId: s
 // attributes like "besoin" or "famille" (notes olfactives) are intentionally left
 // out: several can apply at once, but they only describe the product and must
 // never split it into separate stock lines.
-const VARIANT_DIMENSION_IDS = new Set(['taille', 'couleur', 'longueur', 'densite', 'volume', 'poids']);
+const VARIANT_DIMENSION_IDS = new Set(['taille', 'couleur', 'longueur', 'densite', 'volume']);
 const COLOR_GROUP_IDS = new Set(['couleur']);
 
 // Number of colors to show before "Voir plus"
 const COLOR_PREVIEW_COUNT = 8;
 
 const VOLUME_BASE_OPTIONS = ['30 ml', '50 ml', '100 ml', 'Autre'];
-const WEIGHT_BASE_OPTIONS = ['150 g', '300 g', 'Autre'];
 // Encens "Type" — descriptive only (choix multiple, jamais une variante de
 // stock — the group id is new and isn't in VARIANT_DIMENSION_IDS).
 const ENCENS_TYPE_OPTIONS = ['Gowé', 'Sarkhtan', 'Nakk', 'Bant'];
+// Encens & Parfums de maison "Notes" (Diffuseur, Bougie, Huile à brûler,
+// Parfum d'ambiance — never Encens) — also descriptive/multi-choice only,
+// same reasoning as ENCENS_TYPE_OPTIONS above.
+const ENCENS_MAISON_NOTES_OPTIONS = ['Orientale', 'Fruitée', 'Florale', 'Boisée'];
 
 // Human labels for validate()'s error keys, used to build a clear summary
 // of exactly which field is blocking "Publier"/"Enregistrer en brouillon".
@@ -194,9 +197,8 @@ export default function SellerProductForm({ productId }: { productId?: string })
   const [selections, setSelections] = useState<OptionSelection>({});
   const [showAllColors, setShowAllColors] = useState<Record<string, boolean>>({});
 
-  // Manual value when "Autre" is picked for Volume / Poids
+  // Manual value when "Autre" is picked for Volume
   const [customVolumeMl, setCustomVolumeMl] = useState('');
-  const [customWeightG, setCustomWeightG] = useState('');
   // Brumes: free-text scent notes, comma-separated (ex. "caramel, vanille
   // fouettée, cassonade") — descriptive only, saved under its own
   // descriptive_attributes key, never a variant dimension.
@@ -213,23 +215,26 @@ export default function SellerProductForm({ productId }: { productId?: string })
   const selectedCategory = categoryId ? categoryMap[categoryId as CategoryId] : null;
   const selectedTypeProduit = selections.typeproduit?.[0];
 
+  // Encens & Parfums de maison: which extra fields show depends entirely on
+  // the selected "Type de produit" — Type (Gowé...) only for Encens; Volume
+  // + Notes for Huile à brûler / Parfum d'ambiance; Notes only for
+  // Diffuseur / Bougie; nothing extra until a type is picked.
+  const isEncensMaison = categoryId === 'parfums' && subId === 'encens-parfums-maison';
+  const showsEncensType = isEncensMaison && selectedTypeProduit === 'Encens';
+  const showsEncensVolume = isEncensMaison && (selectedTypeProduit === 'Huile à brûler' || selectedTypeProduit === 'Parfum d\'ambiance');
+  // Every Encens & Parfums de maison type except Encens itself shows the
+  // descriptive Notes chips (Orientale/Fruitée/Florale/Boisée).
+  const showsEncensNotesChips = isEncensMaison && Boolean(selectedTypeProduit) && selectedTypeProduit !== 'Encens';
+
   const showsVolume =
     (categoryId === 'beaute' && (subId === 'skincare' || subId === 'hygiene')) ||
-    (categoryId === 'parfums' && (subId === 'parfums-femme' || subId === 'parfums-homme' || subId === 'huiles-brumes'));
-
-  const showsWeight =
-    categoryId === 'parfums' && subId === 'encens-parfums-maison' &&
-    (selectedTypeProduit === 'Encens' || selectedTypeProduit === 'Cire parfumée');
+    (categoryId === 'parfums' && (subId === 'parfums-femme' || subId === 'parfums-homme' || subId === 'huiles-brumes')) ||
+    showsEncensVolume;
 
   // Brumes: a simple free-text "Notes" field (caramel, vanille fouettée...)
   // — descriptive only, not a chip list, since scent notes aren't a fixed
   // enum. Handled as its own input further below, not via optionGroups.
   const showsNotes = categoryId === 'parfums' && subId === 'huiles-brumes';
-
-  // Encens: "Type" (Gowé, Sarkhtan, Nakk, Bant) — a genuinely new group id,
-  // so it's descriptive/multi-choice automatically (not in
-  // SINGLE_CHOICE_IDS or VARIANT_DIMENSION_IDS) with no special-casing.
-  const showsEncensType = categoryId === 'parfums' && subId === 'encens-parfums-maison';
 
   const isMakeup = categoryId === 'beaute' && subId === 'maquillage';
 
@@ -245,26 +250,23 @@ export default function SellerProductForm({ productId }: { productId?: string })
       }
     }
     if (showsVolume) groups = [...groups, { id: 'volume', label: 'Volume', options: VOLUME_BASE_OPTIONS }];
-    if (showsWeight) groups = [...groups, { id: 'poids', label: 'Poids', options: WEIGHT_BASE_OPTIONS }];
     if (showsEncensType) groups = [...groups, { id: 'typeencens', label: 'Type', options: ENCENS_TYPE_OPTIONS }];
+    if (showsEncensNotesChips) groups = [...groups, { id: 'notesambiance', label: 'Notes', options: ENCENS_MAISON_NOTES_OPTIONS }];
 
     return groups;
-  }, [categoryId, subId, isMakeup, selectedTypeProduit, showsVolume, showsWeight, showsEncensType]);
+  }, [categoryId, subId, isMakeup, selectedTypeProduit, showsVolume, showsEncensType, showsEncensNotesChips]);
 
-  // Only "true" variant dimensions (taille, couleur, volume, poids, longueur,
+  // Only "true" variant dimensions (taille, couleur, volume, longueur,
   // densité) generate stock/price combinations — everything else (style, type,
   // besoin, notes olfactives...) is purely descriptive.
   const multiChoiceGroups = optionGroups.filter((g) => VARIANT_DIMENSION_IDS.has(g.id));
 
-  // "Autre" in Volume/Poids is replaced by the seller's manual value before it
+  // "Autre" in Volume is replaced by the seller's manual value before it
   // ever reaches the combination logic or the saved product.
   const effectiveValues = (groupId: string): string[] => {
     const raw = selections[groupId] ?? [];
     if (groupId === 'volume') {
       return raw.map((v) => (v === 'Autre' ? (customVolumeMl.trim() ? `${customVolumeMl.trim()} ml` : '') : v)).filter(Boolean);
-    }
-    if (groupId === 'poids') {
-      return raw.map((v) => (v === 'Autre' ? (customWeightG.trim() ? `${customWeightG.trim()} g` : '') : v)).filter(Boolean);
     }
     return raw;
   };
@@ -297,7 +299,7 @@ export default function SellerProductForm({ productId }: { productId?: string })
       price: comboData[parts.join('|')]?.price ?? (parseInt(price) || 0),
     }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selections, multiChoiceGroups, comboData, price, customVolumeMl, customWeightG]);
+  }, [selections, multiChoiceGroups, comboData, price, customVolumeMl]);
 
   const totalStock = useMemo(() => {
     if (combinations.length > 0) {
@@ -346,15 +348,24 @@ export default function SellerProductForm({ productId }: { productId?: string })
     setSelections((prev) => {
       const current = prev[groupId] ?? [];
       const next: OptionSelection = { ...prev, [groupId]: current[0] === value ? [] : [value] };
-      // Changing "Type de produit" invalidates color/weight choices made for the
-      // previous type (maquillage shades depend on it; encens' weight variant too).
+      // Changing "Type de produit" invalidates choices tied to the previous
+      // type: maquillage shades depend on it, and so does everything shown
+      // for Encens & Parfums de maison (Type/Volume/Notes vary per type —
+      // e.g. never leave "Gowé" saved after switching to Parfum d'ambiance).
       if (groupId === 'typeproduit') {
         next.couleur = [];
-        next.poids = [];
+        if (isEncensMaison) {
+          next.typeencens = [];
+          next.volume = [];
+          next.notesambiance = [];
+        }
       }
       return next;
     });
-    if (groupId === 'typeproduit') setComboData({});
+    if (groupId === 'typeproduit') {
+      setComboData({});
+      if (isEncensMaison) setCustomVolumeMl('');
+    }
   };
 
   const toggleMultiChoice = (groupId: string, value: string) => {
@@ -389,7 +400,6 @@ export default function SellerProductForm({ productId }: { productId?: string })
     setComboData({});
     setShowAllColors({});
     setCustomVolumeMl('');
-    setCustomWeightG('');
   };
 
   const handleSubCategoryChange = (newSubId: string) => {
@@ -397,7 +407,6 @@ export default function SellerProductForm({ productId }: { productId?: string })
     setSelections({});
     setComboData({});
     setCustomVolumeMl('');
-    setCustomWeightG('');
   };
 
   // Returns the error map directly (not just a boolean) so the caller can
@@ -877,7 +886,7 @@ export default function SellerProductForm({ productId }: { productId?: string })
         <div className="card p-5 space-y-5">
           <div>
             <h2 className="text-sm font-semibold text-ink">Options du produit</h2>
-            <p className="mt-1 text-xs text-ink/45">Sélectionnez les options disponibles pour ce produit. Ezial génère automatiquement les combinaisons de stock pour les options qui créent une vraie variante (taille, couleur, volume, poids...).</p>
+            <p className="mt-1 text-xs text-ink/45">Sélectionnez les options disponibles pour ce produit. Ezial génère automatiquement les combinaisons de stock pour les options qui créent une vraie variante (taille, couleur, volume...).</p>
           </div>
 
           {optionGroups.map((group) => {
@@ -885,7 +894,6 @@ export default function SellerProductForm({ productId }: { productId?: string })
             const isSingle = SINGLE_CHOICE_IDS.has(group.id) && !isVetementsFemmeTypeGroup(categoryId, subId, group.id);
             const choiceLabel = isSingle ? 'Choix unique' : 'Choix multiple';
             const showsCustomVolume = group.id === 'volume' && (selections.volume ?? []).includes('Autre');
-            const showsCustomWeight = group.id === 'poids' && (selections.poids ?? []).includes('Autre');
 
             return (
               <div key={group.id} className="space-y-2.5">
@@ -909,19 +917,6 @@ export default function SellerProductForm({ productId }: { productId?: string })
                       onChange={(e) => setCustomVolumeMl(e.target.value)}
                     />
                     <span className="text-xs text-ink/50">ml</span>
-                  </div>
-                )}
-                {showsCustomWeight && (
-                  <div className="flex items-center gap-2 pt-1">
-                    <input
-                      type="number"
-                      min="1"
-                      className="input-field w-28"
-                      placeholder="Poids"
-                      value={customWeightG}
-                      onChange={(e) => setCustomWeightG(e.target.value)}
-                    />
-                    <span className="text-xs text-ink/50">g</span>
                   </div>
                 )}
               </div>
