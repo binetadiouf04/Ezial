@@ -64,10 +64,15 @@ interface NewDriverInput {
   phone: string;
 }
 
+export interface SellerShopInfo {
+  supabaseShopId: string;
+  isOfficial: boolean;
+}
+
 interface ProState extends AuthState {
   route: Route;
   navigate: (r: Route) => void;
-  login: (role: Role, identifier: string, name: string, supabaseShopId?: string) => void;
+  login: (role: Role, identifier: string, name: string, shopInfo?: SellerShopInfo) => void;
   logout: () => void;
   missions: Mission[];
   acceptMission: (id: string) => void;
@@ -95,10 +100,14 @@ interface ProState extends AuthState {
   // has been verified to own a real shop. This is the id product-creation
   // code must use; never a hardcoded/mock shop id.
   sellerSupabaseShopId: string | null;
+  // From shops.is_official for the signed-in seller's real shop — never a
+  // hardcoded id/slug/name. Drives removing the active-product limit for
+  // the official Ezial shop (SellerProducts, SellerDashboard).
+  sellerShopIsOfficial: boolean;
   // Seller login — authenticates seller_code + password against Supabase
   // Auth, then verifies the account owns a real shop (shops.owner_id =
   // auth.uid()) before granting access.
-  verifySellerLogin: (identifier: string, password: string) => Promise<{ shop: { sellerId: string; name: string; supabaseShopId: string } } | { error: string }>;
+  verifySellerLogin: (identifier: string, password: string) => Promise<{ shop: { sellerId: string; name: string; supabaseShopId: string; isOfficial: boolean } } | { error: string }>;
   // Seller transactions
   sellerTransactions: typeof initialTransactions;
   // Driver state
@@ -189,6 +198,7 @@ export function ProProvider({ children }: { children: ReactNode }) {
   const [sellerProducts, setSellerProducts] = useState<SellerProduct[]>(initialProducts);
   const [sellerShop, setSellerShop] = useState<Shop | null>(null);
   const [sellerSupabaseShopId, setSellerSupabaseShopId] = useState<string | null>(null);
+  const [sellerShopIsOfficial, setSellerShopIsOfficial] = useState(false);
   const [sellerTransactions] = useState(initialTransactions);
   const [driverAvailable, setDriverAvailable] = useState(true);
 
@@ -241,6 +251,7 @@ export function ProProvider({ children }: { children: ReactNode }) {
       setIdentifier(parsed.identifier);
       setName(shop.shopName);
       setSellerSupabaseShopId(shop.shopId);
+      setSellerShopIsOfficial(shop.isOfficial);
       setRoute('/seller');
       const mockShop = initialShops.find((s) => s.sellerId === parsed.identifier);
       setSellerShop(mockShop ?? null);
@@ -252,7 +263,7 @@ export function ProProvider({ children }: { children: ReactNode }) {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }, []);
 
-  const login = useCallback((r: Role, id: string, n: string, supabaseShopId?: string) => {
+  const login = useCallback((r: Role, id: string, n: string, shopInfo?: SellerShopInfo) => {
     setRole(r);
     setIdentifier(id);
     setName(n);
@@ -261,7 +272,8 @@ export function ProProvider({ children }: { children: ReactNode }) {
     if (r === 'seller') {
       const shop = initialShops.find((s) => s.sellerId === id);
       setSellerShop(shop ?? null);
-      setSellerSupabaseShopId(supabaseShopId ?? null);
+      setSellerSupabaseShopId(shopInfo?.supabaseShopId ?? null);
+      setSellerShopIsOfficial(shopInfo?.isOfficial ?? false);
     }
     sessionStorage.setItem('ezial-pro-auth', JSON.stringify({ role: r, identifier: id, name: n }));
   }, []);
@@ -273,6 +285,7 @@ export function ProProvider({ children }: { children: ReactNode }) {
     setRoute('/');
     setSellerShop(null);
     setSellerSupabaseShopId(null);
+    setSellerShopIsOfficial(false);
     sessionStorage.removeItem('ezial-pro-auth');
     // Fire-and-forget: the local session is already cleared above regardless
     // of whether the Supabase sign-out call itself succeeds.
@@ -345,11 +358,11 @@ export function ProProvider({ children }: { children: ReactNode }) {
     return true;
   }, []);
 
-  const verifySellerLogin = useCallback(async (rawIdentifier: string, password: string): Promise<{ shop: { sellerId: string; name: string; supabaseShopId: string } } | { error: string }> => {
+  const verifySellerLogin = useCallback(async (rawIdentifier: string, password: string): Promise<{ shop: { sellerId: string; name: string; supabaseShopId: string; isOfficial: boolean } } | { error: string }> => {
     const id = rawIdentifier.trim();
     const result = await signInSeller(id, password);
     if ('error' in result) return { error: result.error };
-    return { shop: { sellerId: id.toUpperCase(), name: result.shopName, supabaseShopId: result.shopId } };
+    return { shop: { sellerId: id.toUpperCase(), name: result.shopName, supabaseShopId: result.shopId, isOfficial: result.isOfficial } };
   }, []);
 
   // === Driver actions ===
@@ -638,6 +651,7 @@ export function ProProvider({ children }: { children: ReactNode }) {
     updateSellerShop,
     updateSellerPin,
     sellerSupabaseShopId,
+    sellerShopIsOfficial,
     verifySellerLogin,
     sellerTransactions,
     driverAvailable,

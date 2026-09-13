@@ -26,6 +26,9 @@ const NO_SHOP_ERROR = "Aucune boutique n'est associée à ce compte. Contactez E
 export interface SellerAuthShop {
   shopId: string;
   shopName: string;
+  // From shops.is_official — the only signal used anywhere to recognize
+  // the official Ezial shop (no hardcoded id/slug/name).
+  isOfficial: boolean;
 }
 
 // The one real authorization check for the seller area: the signed-in
@@ -38,12 +41,12 @@ async function shopForCurrentUser(): Promise<SellerAuthShop | null> {
 
   const { data: shop, error: shopError } = await supabase
     .from('shops')
-    .select('id, name, owner_id')
+    .select('id, name, owner_id, is_official')
     .eq('owner_id', userData.user.id)
     .maybeSingle();
   if (shopError || !shop) return null;
 
-  return { shopId: shop.id as string, shopName: shop.name as string };
+  return { shopId: shop.id as string, shopName: shop.name as string, isOfficial: Boolean(shop.is_official) };
 }
 
 export async function signInSeller(sellerCode: string, password: string): Promise<SellerAuthShop | { error: string }> {

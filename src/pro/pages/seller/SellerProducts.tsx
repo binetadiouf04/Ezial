@@ -15,7 +15,7 @@ import {
 const MAX_ACTIVE = 25;
 
 export default function SellerProducts() {
-  const { navigate, sellerSupabaseShopId } = usePro();
+  const { navigate, sellerSupabaseShopId, sellerShopIsOfficial } = usePro();
   const [products, setProducts] = useState<SellerProductSummary[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [actionError, setActionError] = useState('');
@@ -43,7 +43,7 @@ export default function SellerProducts() {
   const handleToggleActive = async (product: SellerProductSummary) => {
     setActionError('');
     const nextStatus = product.status === 'active' ? 'disabled' : 'active';
-    if (nextStatus === 'active' && activeCount >= MAX_ACTIVE) {
+    if (!sellerShopIsOfficial && nextStatus === 'active' && activeCount >= MAX_ACTIVE) {
       alert(`Vous avez atteint la limite de ${MAX_ACTIVE} produits actifs. Désactivez un produit pour en activer un nouveau.`);
       return;
     }
@@ -93,7 +93,7 @@ export default function SellerProducts() {
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div>
           <h1 className="font-display text-2xl font-semibold text-ink">Produits</h1>
-          <p className="mt-1 text-sm text-ink/55">Produits actifs : <span className="font-medium text-ink">{activeCount} / {MAX_ACTIVE}</span></p>
+          <p className="mt-1 text-sm text-ink/55">Produits actifs : <span className="font-medium text-ink">{sellerShopIsOfficial ? activeCount : `${activeCount} / ${MAX_ACTIVE}`}</span></p>
         </div>
         <button onClick={() => navigate('/seller/produits/ajouter')} className="btn-primary flex items-center gap-2">
           <Plus size={16} /> Ajouter un produit

@@ -183,7 +183,7 @@ function Layout() {
       <CartDrawer />
 
       {isHome ? (
-        <main className="container-page flex-1 py-6">
+        <main className="container-page flex-1 pt-2 pb-6">
           <RouteView />
         </main>
       ) : fullWidth ? (

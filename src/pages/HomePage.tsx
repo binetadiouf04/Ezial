@@ -166,48 +166,61 @@ export default function HomePage() {
   const pourVous = rankProducts([...products].sort(() => 0.5 - Math.random()), rankingContext).slice(0, 8);
 
   return (
-    <div className="space-y-16 lg:space-y-24">
+    <div>
       <h1 className="sr-only">Ezial — Mode, beauté & lifestyle à Dakar</h1>
-      <HeroCarousel slides={heroSlides} />
 
-      <section>
-        <div className="mb-5 flex items-end justify-between"><h2 className="section-title">À découvrir</h2></div>
-        <div className="flex gap-5 overflow-x-auto no-scrollbar pb-1 sm:gap-6 lg:gap-8">
-          {homeCircleTiles.map((tile) => (
-            <button key={tile.id} onClick={() => navigate(tile.route)} className="group flex w-[76px] flex-shrink-0 flex-col items-center gap-2 sm:w-[92px] lg:w-[104px]">
-              <div className="relative aspect-square w-full overflow-hidden rounded-full bg-cream"><SmartImage src={tile.image} alt={tile.label} className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-110" /><div className="absolute inset-0 bg-ink/0 transition-colors group-hover:bg-ink/10" /></div>
-              <span className={`text-center text-[11px] font-medium leading-tight transition-colors sm:text-xs ${tile.highlight ? 'text-burgundy font-semibold' : 'text-ink/80 group-hover:text-burgundy'}`}>{tile.label}</span>
-            </button>
-          ))}
-        </div>
-      </section>
+      {/* Hero + À découvrir intentionally share a tighter rhythm than the
+          rest of the page — the goal was to close the gap right under the
+          header and right under this circle row specifically, not the
+          spacing between the sections further down. */}
+      <div className="space-y-4 lg:space-y-6">
+        <HeroCarousel slides={heroSlides} />
 
-      {promos.length > 0 && (
-        <section className="rounded-2xl bg-burgundy/5 p-6 sm:p-10">
-          <HomeProductPreview eyebrow="Promotions" title="Offres à ne pas manquer" products={promos} seeAllRoute="/promos" onNavigate={navigate} />
+        <section>
+          <div className="mb-5 flex items-end justify-between"><h2 className="section-title">À découvrir</h2></div>
+          <div className="flex overflow-x-auto no-scrollbar pb-1">
+            {homeCircleTiles.map((tile) => (
+              <button
+                key={tile.id}
+                onClick={() => navigate(tile.route)}
+                className="group flex w-[76px] flex-shrink-0 flex-col items-center gap-2 -ml-3 first:ml-0 sm:w-[92px] sm:-ml-4 lg:w-[104px] lg:-ml-5"
+              >
+                <div className="relative aspect-square w-full overflow-hidden rounded-full bg-cream ring-2 ring-white"><SmartImage src={tile.image} alt={tile.label} className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-110" /><div className="absolute inset-0 bg-ink/0 transition-colors group-hover:bg-ink/10" /></div>
+                <span className={`text-center text-[11px] font-medium leading-tight transition-colors sm:text-xs ${tile.highlight ? 'text-burgundy font-semibold' : 'text-ink/80 group-hover:text-burgundy'}`}>{tile.label}</span>
+              </button>
+            ))}
+          </div>
         </section>
-      )}
+      </div>
 
-      <section>
-        <HomeProductPreview eyebrow="Tendances du moment" title="Le plus aimé maintenant" products={trending} seeAllRoute="/tendances" onNavigate={navigate} />
-      </section>
+      <div className="mt-10 space-y-16 lg:mt-14 lg:space-y-24">
+        {promos.length > 0 && (
+          <section className="rounded-2xl bg-burgundy/5 p-6 sm:p-10">
+            <HomeProductPreview eyebrow="Promotions" title="Offres à ne pas manquer" products={promos} seeAllRoute="/promos" onNavigate={navigate} />
+          </section>
+        )}
 
-      <section>
-        <HomeProductPreview eyebrow="Pour vous" title="Sélection personnalisée" products={pourVous} seeAllRoute="/pour-vous" onNavigate={navigate} />
-      </section>
+        <section>
+          <HomeProductPreview eyebrow="Tendances du moment" title="Le plus aimé maintenant" products={trending} seeAllRoute="/tendances" onNavigate={navigate} />
+        </section>
 
-      <section>
-        <div className="mb-6 flex items-end justify-between"><div><p className="eyebrow mb-1.5">Boutiques à découvrir</p><h2 className="section-title">Nos vendeurs sélectionnés</h2></div></div>
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">{displayShops.map((shop) => <ShopCard key={shop.id} shop={shop} />)}</div>
-      </section>
+        <section>
+          <HomeProductPreview eyebrow="Pour vous" title="Sélection personnalisée" products={pourVous} seeAllRoute="/pour-vous" onNavigate={navigate} />
+        </section>
 
-      <section className="border-t border-line pt-12">
-        <div className="grid grid-cols-1 gap-8 sm:grid-cols-3">
-          {[{ title: 'Livraison à Dakar', desc: 'Sous 4–48 h chez vous' }, { title: 'Boutiques sélectionnées', desc: 'Chaque vendeur est validé par EZIAL' }, { title: 'Paiement sécurisé', desc: 'Wave, Orange Money & PayPal' }].map((f) => (
-            <div key={f.title} className="text-center sm:text-left"><h3 className="font-display text-lg font-semibold text-ink">{f.title}</h3><p className="mt-1 text-sm text-ink/55">{f.desc}</p></div>
-          ))}
-        </div>
-      </section>
+        <section>
+          <div className="mb-6 flex items-end justify-between"><div><p className="eyebrow mb-1.5">Boutiques à découvrir</p><h2 className="section-title">Nos vendeurs sélectionnés</h2></div></div>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">{displayShops.map((shop) => <ShopCard key={shop.id} shop={shop} />)}</div>
+        </section>
+
+        <section className="border-t border-line pt-12">
+          <div className="grid grid-cols-1 gap-8 sm:grid-cols-3">
+            {[{ title: 'Livraison à Dakar', desc: 'Sous 4–48 h chez vous' }, { title: 'Boutiques sélectionnées', desc: 'Chaque vendeur est validé par EZIAL' }, { title: 'Paiement sécurisé', desc: 'Wave, Orange Money & PayPal' }].map((f) => (
+              <div key={f.title} className="text-center sm:text-left"><h3 className="font-display text-lg font-semibold text-ink">{f.title}</h3><p className="mt-1 text-sm text-ink/55">{f.desc}</p></div>
+            ))}
+          </div>
+        </section>
+      </div>
     </div>
   );
 }

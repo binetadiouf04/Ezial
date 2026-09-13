@@ -39,6 +39,19 @@ const COLOR_PREVIEW_COUNT = 8;
 
 const VOLUME_BASE_OPTIONS = ['30 ml', '50 ml', '100 ml', 'Autre'];
 const WEIGHT_BASE_OPTIONS = ['150 g', '300 g', 'Autre'];
+// Encens "Type" — descriptive only (choix multiple, jamais une variante de
+// stock — the group id is new and isn't in VARIANT_DIMENSION_IDS).
+const ENCENS_TYPE_OPTIONS = ['Gowé', 'Sarkhtan', 'Nakk', 'Bant'];
+
+// Human labels for validate()'s error keys, used to build a clear summary
+// of exactly which field is blocking "Publier"/"Enregistrer en brouillon".
+const VALIDATION_FIELD_LABELS: Record<string, string> = {
+  category: 'Catégorie',
+  name: 'Nom du produit',
+  description: 'Description',
+  price: 'Prix',
+  images: 'Photos',
+};
 
 // Maquillage: the color/teinte palette depends on the type of product chosen —
 // a foundation needs skin tones, a lipstick needs lip shades, etc.
@@ -184,6 +197,10 @@ export default function SellerProductForm({ productId }: { productId?: string })
   // Manual value when "Autre" is picked for Volume / Poids
   const [customVolumeMl, setCustomVolumeMl] = useState('');
   const [customWeightG, setCustomWeightG] = useState('');
+  // Brumes: free-text scent notes, comma-separated (ex. "caramel, vanille
+  // fouettée, cassonade") — descriptive only, saved under its own
+  // descriptive_attributes key, never a variant dimension.
+  const [notesInput, setNotesInput] = useState('');
 
   // Price by option toggle
   const [priceByOption, setPriceByOption] = useState(false);
@@ -204,6 +221,16 @@ export default function SellerProductForm({ productId }: { productId?: string })
     categoryId === 'parfums' && subId === 'encens-parfums-maison' &&
     (selectedTypeProduit === 'Encens' || selectedTypeProduit === 'Cire parfumée');
 
+  // Brumes: a simple free-text "Notes" field (caramel, vanille fouettée...)
+  // — descriptive only, not a chip list, since scent notes aren't a fixed
+  // enum. Handled as its own input further below, not via optionGroups.
+  const showsNotes = categoryId === 'parfums' && subId === 'huiles-brumes';
+
+  // Encens: "Type" (Gowé, Sarkhtan, Nakk, Bant) — a genuinely new group id,
+  // so it's descriptive/multi-choice automatically (not in
+  // SINGLE_CHOICE_IDS or VARIANT_DIMENSION_IDS) with no special-casing.
+  const showsEncensType = categoryId === 'parfums' && subId === 'encens-parfums-maison';
+
   const isMakeup = categoryId === 'beaute' && subId === 'maquillage';
 
   const optionGroups: FilterGroup[] = useMemo(() => {
@@ -219,9 +246,10 @@ export default function SellerProductForm({ productId }: { productId?: string })
     }
     if (showsVolume) groups = [...groups, { id: 'volume', label: 'Volume', options: VOLUME_BASE_OPTIONS }];
     if (showsWeight) groups = [...groups, { id: 'poids', label: 'Poids', options: WEIGHT_BASE_OPTIONS }];
+    if (showsEncensType) groups = [...groups, { id: 'typeencens', label: 'Type', options: ENCENS_TYPE_OPTIONS }];
 
     return groups;
-  }, [categoryId, subId, isMakeup, selectedTypeProduit, showsVolume, showsWeight]);
+  }, [categoryId, subId, isMakeup, selectedTypeProduit, showsVolume, showsWeight, showsEncensType]);
 
   // Only "true" variant dimensions (taille, couleur, volume, poids, longueur,
   // densité) generate stock/price combinations — everything else (style, type,
@@ -372,7 +400,12 @@ export default function SellerProductForm({ productId }: { productId?: string })
     setCustomWeightG('');
   };
 
-  const validate = (): boolean => {
+  // Returns the error map directly (not just a boolean) so the caller can
+  // build a clear, visible summary of exactly which field is blocking
+  // submission — the previous inline-only errors were easy to miss on a
+  // long, scrollable form, making a correctly-working "Publier" button
+  // look broken when a required field above the fold was simply empty.
+  const validate = (): Record<string, string> => {
     const e: Record<string, string> = {};
     if (!categoryId) e.category = 'Veuillez choisir une catégorie';
     if (!name.trim()) e.name = 'Le nom du produit est obligatoire';
@@ -380,7 +413,7 @@ export default function SellerProductForm({ productId }: { productId?: string })
     if (!price || parseInt(price) <= 0) e.price = 'Le prix est obligatoire';
     if (images.length === 0) e.images = 'Ajoutez au moins une photo.';
     setErrors(e);
-    return Object.keys(e).length === 0;
+    return e;
   };
 
   // Only the true variant dimensions (multiChoiceGroups) become
@@ -433,91 +466,107 @@ export default function SellerProductForm({ productId }: { productId?: string })
       const values = effectiveValues(g.id);
       if (values.length > 0) result[g.label] = values;
     }
+    if (showsNotes && notesInput.trim()) {
+      const notes = notesInput.split(',').map((n) => n.trim()).filter(Boolean);
+      if (notes.length > 0) result['Notes'] = notes;
+    }
     return result;
   };
 
   const handleSubmit = async (status: 'draft' | 'published') => {
-    if (!validate()) return;
+    const validationErrors = validate();
+    if (Object.keys(validationErrors).length > 0) {
+      // Shown right above the action buttons (via submitError) instead of
+      // only inline next to each field — the field itself may be scrolled
+      // out of view, which previously made a correctly-blocked submit look
+      // like the button was simply unresponsive.
+      const missing = Object.keys(validationErrors).map((key) => VALIDATION_FIELD_LABELS[key] ?? key);
+      setSubmitError(`Impossible d'enregistrer : vérifiez ${missing.join(', ')}.`);
+      return;
+    }
     if (!sellerSupabaseShopId) {
       setSubmitError("Votre compte vendeur n'est relié à aucune boutique Supabase réelle. Contactez EZIAL.");
       return;
     }
     setSubmitError('');
     setIsSaving(true);
+    // finally guarantees isSaving is always cleared — including on an
+    // unexpected exception — so the button can never stay stuck on
+    // "Enregistrement…" forever after a transient failure.
+    try {
+      // Build variant definitions for the local mock record too —
+      // descriptive attributes (besoin, famille, style...) are saved there
+      // as well, just never split into stock lines.
+      const variantDefs = optionGroups.map((g) => ({
+        name: g.label,
+        values: effectiveValues(g.id),
+      }));
 
-    // Build variant definitions for the local mock record too — descriptive
-    // attributes (besoin, famille, style...) are saved there as well, just
-    // never split into stock lines.
-    const variantDefs = optionGroups.map((g) => ({
-      name: g.label,
-      values: effectiveValues(g.id),
-    }));
+      const newLocalImages = images.filter((img): img is ImageItem & { file: File } => Boolean(img.file));
 
-    const newLocalImages = images.filter((img): img is ImageItem & { file: File } => Boolean(img.file));
-
-    if (existing?.supabaseProductId) {
-      // Editing an already-Supabase-synced product: only new photos are
-      // pushed to Supabase in this task's scope — product/variant fields
-      // stay on the local mock record, exactly as before.
-      if (newLocalImages.length > 0) {
-        const sortOrderStart = images.length - newLocalImages.length;
-        const result = await addProductImages(
-          existing.supabaseProductId,
-          newLocalImages.map((img) => ({ file: img.file })),
-          sortOrderStart,
-          sortOrderStart === 0,
-        );
-        if (result.error) {
-          setSubmitError(result.error);
-          setIsSaving(false);
+      if (existing?.supabaseProductId) {
+        // Editing an already-Supabase-synced product: only new photos are
+        // pushed to Supabase in this task's scope — product/variant fields
+        // stay on the local mock record, exactly as before.
+        if (newLocalImages.length > 0) {
+          const sortOrderStart = images.length - newLocalImages.length;
+          const result = await addProductImages(
+            existing.supabaseProductId,
+            newLocalImages.map((img) => ({ file: img.file })),
+            sortOrderStart,
+            sortOrderStart === 0,
+          );
+          if (result.error) {
+            setSubmitError(result.error);
+            return;
+          }
+        }
+      } else {
+        const supabaseResult = await createProductInSupabase({
+          shopId: sellerSupabaseShopId,
+          shopName: sellerShopName,
+          name: name.trim(),
+          description: description.trim(),
+          category: categoryId,
+          subcategory: subId,
+          basePrice: parseInt(price) || 0,
+          status: SUPABASE_STATUS_FOR_FORM_STATUS[status],
+          descriptiveAttributes: buildDescriptiveAttributes(),
+          variants: buildVariantRows(),
+          images: newLocalImages.map((img) => ({ file: img.file })),
+        });
+        if ('error' in supabaseResult) {
+          setSubmitError(supabaseResult.error);
           return;
         }
-      }
-    } else {
-      const supabaseResult = await createProductInSupabase({
-        shopId: sellerSupabaseShopId,
-        shopName: sellerShopName,
-        name: name.trim(),
-        description: description.trim(),
-        category: categoryId,
-        subcategory: subId,
-        basePrice: parseInt(price) || 0,
-        status: SUPABASE_STATUS_FOR_FORM_STATUS[status],
-        descriptiveAttributes: buildDescriptiveAttributes(),
-        variants: buildVariantRows(),
-        images: newLocalImages.map((img) => ({ file: img.file })),
-      });
-      if ('error' in supabaseResult) {
-        setSubmitError(supabaseResult.error);
-        setIsSaving(false);
-        return;
+
+        const product = {
+          id: existing?.id ?? `p${Date.now()}`,
+          name: name.trim(),
+          shopId: sellerSupabaseShopId,
+          category: selectedCategory?.label ?? categoryId,
+          price: parseInt(price),
+          image: images[0]?.previewUrl ?? '',
+          stock: totalStock,
+          status,
+          variants: variantDefs.filter((v) => v.values.length > 0),
+          description: description.trim(),
+          supabaseProductId: supabaseResult.productId,
+        };
+        const localImages = images.map((img) => img.previewUrl);
+        if (existing) {
+          // Always the reference Supabase just confirmed — never the stale
+          // locally-generated one, even when re-syncing a legacy product.
+          updateSellerProduct(existing.id, { ...product, images: localImages, reference: supabaseResult.reference });
+        } else {
+          addSellerProduct({ ...product, images: localImages }, supabaseResult.reference);
+        }
       }
 
-      const product = {
-        id: existing?.id ?? `p${Date.now()}`,
-        name: name.trim(),
-        shopId: sellerSupabaseShopId,
-        category: selectedCategory?.label ?? categoryId,
-        price: parseInt(price),
-        image: images[0]?.previewUrl ?? '',
-        stock: totalStock,
-        status,
-        variants: variantDefs.filter((v) => v.values.length > 0),
-        description: description.trim(),
-        supabaseProductId: supabaseResult.productId,
-      };
-      const localImages = images.map((img) => img.previewUrl);
-      if (existing) {
-        // Always the reference Supabase just confirmed — never the stale
-        // locally-generated one, even when re-syncing a legacy product.
-        updateSellerProduct(existing.id, { ...product, images: localImages, reference: supabaseResult.reference });
-      } else {
-        addSellerProduct({ ...product, images: localImages }, supabaseResult.reference);
-      }
+      navigate('/seller/produits');
+    } finally {
+      setIsSaving(false);
     }
-
-    setIsSaving(false);
-    navigate('/seller/produits');
   };
 
   // === Color swatch rendering ===
@@ -878,6 +927,20 @@ export default function SellerProductForm({ productId }: { productId?: string })
               </div>
             );
           })}
+
+          {showsNotes && (
+            <div className="space-y-2.5">
+              <label className="text-sm font-medium text-ink">Notes</label>
+              <input
+                type="text"
+                className="input-field"
+                placeholder="Ex. caramel, vanille fouettée, cassonade"
+                value={notesInput}
+                onChange={(e) => setNotesInput(e.target.value)}
+              />
+              <p className="text-xs text-ink/45">Séparez les notes principales par des virgules. Purement descriptif — ne crée aucune variante.</p>
+            </div>
+          )}
         </div>
       )}
 

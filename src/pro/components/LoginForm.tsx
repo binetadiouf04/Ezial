@@ -1,13 +1,14 @@
 import { useState } from 'react';
 import type { Role } from '../data';
+import type { SellerShopInfo } from '../ProContext';
 import { ArrowLeft, Lock, KeyRound } from 'lucide-react';
 
 interface LoginFormProps {
   role: Role;
   onBack: () => void;
-  onLogin: (identifier: string, name: string, supabaseShopId?: string) => void;
+  onLogin: (identifier: string, name: string, shopInfo?: SellerShopInfo) => void;
   /** Seller-only: authenticates seller_code + password against Supabase Auth, then checks shop ownership. */
-  verifySeller?: (identifier: string, password: string) => Promise<{ shop: { sellerId: string; name: string; supabaseShopId: string } } | { error: string }>;
+  verifySeller?: (identifier: string, password: string) => Promise<{ shop: { sellerId: string; name: string; supabaseShopId: string; isOfficial: boolean } } | { error: string }>;
 }
 
 const roleConfig: Record<Role, { title: string; subtitle: string; placeholder: string; hint: string; demoId: string; demoName: string }> = {
@@ -65,7 +66,7 @@ export default function LoginForm({ role, onBack, onLogin, verifySeller }: Login
         setError(result?.error ?? 'Connexion impossible.');
         return;
       }
-      onLogin(result.shop.sellerId, result.shop.name, result.shop.supabaseShopId);
+      onLogin(result.shop.sellerId, result.shop.name, { supabaseShopId: result.shop.supabaseShopId, isOfficial: result.shop.isOfficial });
     } else {
       if (!identifier.trim()) {
         setError('Veuillez saisir votre identifiant.');
