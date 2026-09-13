@@ -5,7 +5,6 @@ import { getProduct } from '@/data/products';
 import { getShop } from '@/data/shops';
 import { categoryMap, type CategoryId } from '@/data/categories';
 import Header from '@/components/Header';
-import MobileBottomNav from '@/components/MobileBottomNav';
 import MobileCategoryDrawer from '@/components/MobileCategoryDrawer';
 import CartDrawer from '@/components/CartDrawer';
 import HomePage from '@/pages/HomePage';
@@ -197,10 +196,6 @@ function Layout() {
       )}
 
       <Footer />
-
-      {/* Mobile bottom padding for nav */}
-      <div className="h-16 lg:hidden" />
-      <MobileBottomNav />
     </div>
   );
 }

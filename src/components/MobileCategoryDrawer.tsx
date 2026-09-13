@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { X, ChevronRight, ChevronLeft } from 'lucide-react';
+import { X, ChevronRight, ChevronLeft, User } from 'lucide-react';
 import { categories, type CategoryId } from '@/data/categories';
 import { useApp } from '@/store/AppContext';
 
@@ -31,6 +31,13 @@ export default function MobileCategoryDrawer() {
             </nav>
           )}
         </div>
+        {!selectedCategory && (
+          <div className="border-t border-line p-3">
+            <button onClick={() => navigate('/profil')} className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-[15px] font-medium text-ink hover:bg-cream">
+              <User size={18} className="text-ink/60" /> Mon compte
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
