@@ -1,10 +1,17 @@
 import { useEffect, useRef, useState } from 'react';
 import { X, ZoomIn, Check } from 'lucide-react';
+import { PRODUCT_MEDIA_ASPECT_RATIO } from '@/lib/supabaseSellerProducts';
 
-const FRAME_W = 280;
-const FRAME_H = 350; // 4:5, matches ProductGallery's aspect ratio
-const OUTPUT_W = 840;
-const OUTPUT_H = 1050;
+// The crop frame's on-screen size — fixed (not viewport-scaled) so the same
+// drag/zoom math works identically on phone, tablet and desktop; 320px wide
+// comfortably fits the modal's own min width (384px card minus padding) at
+// every screen size this app targets (390px and up).
+const FRAME_W = 320;
+const FRAME_H = FRAME_W / PRODUCT_MEDIA_ASPECT_RATIO;
+// Baked at 4x the display size for print-quality e-commerce photos while
+// keeping the JPEG output small enough to upload quickly.
+const OUTPUT_W = FRAME_W * 4;
+const OUTPUT_H = FRAME_H * 4;
 
 interface Props {
   file: File;
@@ -13,10 +20,17 @@ interface Props {
 }
 
 /**
- * Post-upload crop/reposition step: the photo is shown "cover"-fit inside a
- * fixed 4:5 frame, draggable and zoomable, and only the frame's content is
- * baked into the final image on confirm. Built with plain pointer events —
- * no cropping library — so the modal has no new dependency.
+ * The one crop tool used everywhere a product photo needs cropping — new
+ * upload, re-crop of an already-saved photo, or the file picked to replace
+ * one. The frame is fixed at Ezial's standard product-image ratio (see
+ * PRODUCT_MEDIA_ASPECT_RATIO — the same ratio ProductCard and
+ * ProductGallery render at, so what the vendor sees here is exactly what
+ * every catalog surface will show, never a separate desktop/mobile crop).
+ * A rule-of-thirds grid helps composition. The photo is always "cover"-fit
+ * behind the frame and the drag offset is clamped to the frame's own
+ * bounds, so the frame can never contain empty space. Built with plain
+ * pointer events (unify mouse + single-finger touch) — no cropping
+ * library, no new dependency.
  */
 export default function ImageCropModal({ file, onCancel, onConfirm }: Props) {
   const [imgUrl, setImgUrl] = useState<string | null>(null);
@@ -37,6 +51,10 @@ export default function ImageCropModal({ file, onCancel, onConfirm }: Props) {
   const displayW = naturalSize ? naturalSize.w * displayScale : FRAME_W;
   const displayH = naturalSize ? naturalSize.h * displayScale : FRAME_H;
 
+  // The image always covers the frame at every zoom level (baseScale is a
+  // "cover" fit, never "contain"), and offsets are clamped to the image's
+  // own edges — together this makes an empty corner in the frame
+  // impossible, whatever the source photo's original proportions.
   const clampOffset = (x: number, y: number) => ({
     x: Math.min(0, Math.max(FRAME_W - displayW, x)),
     y: Math.min(0, Math.max(FRAME_H - displayH, y)),
@@ -74,9 +92,12 @@ export default function ImageCropModal({ file, onCancel, onConfirm }: Props) {
     canvas.height = OUTPUT_H;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
+    // Same offset/scale the vendor sees on screen, just rescaled from the
+    // frame's display size to the output canvas's — so the saved file is
+    // pixel-for-pixel what the frame showed, never an approximation.
     const factor = OUTPUT_W / FRAME_W;
     ctx.drawImage(img, offset.x * factor, offset.y * factor, displayW * factor, displayH * factor);
-    canvas.toBlob((blob) => { if (blob) onConfirm(blob); }, 'image/jpeg', 0.9);
+    canvas.toBlob((blob) => { if (blob) onConfirm(blob); }, 'image/jpeg', 0.92);
   };
 
   return (
@@ -86,10 +107,12 @@ export default function ImageCropModal({ file, onCancel, onConfirm }: Props) {
           <h3 className="font-display text-base font-semibold text-ink">Recadrer la photo</h3>
           <button onClick={onCancel} aria-label="Fermer"><X size={18} className="text-ink/40" /></button>
         </div>
-        <p className="mb-3 text-xs text-ink/45">Glissez pour repositionner, utilisez le curseur pour zoomer.</p>
+        <p className="mb-3 text-xs text-ink/45">
+          Format standard Ezial (4:5). Glissez à un doigt pour repositionner, utilisez le curseur pour zoomer — seul l'intérieur du cadre sera conservé.
+        </p>
 
         <div
-          className="relative mx-auto touch-none select-none overflow-hidden rounded-lg bg-ink/5"
+          className="relative mx-auto touch-none select-none overflow-hidden rounded-lg bg-ink/5 ring-2 ring-white shadow-[0_0_0_1px_rgba(0,0,0,0.12)]"
           style={{ width: FRAME_W, height: FRAME_H }}
           onPointerDown={onPointerDown}
           onPointerMove={onPointerMove}
@@ -107,6 +130,15 @@ export default function ImageCropModal({ file, onCancel, onConfirm }: Props) {
               style={{ left: offset.x, top: offset.y, width: displayW, height: displayH }}
             />
           )}
+
+          {/* Rule-of-thirds composition grid — purely visual, never
+              intercepts the drag/zoom gestures underneath it. */}
+          <div className="pointer-events-none absolute inset-0">
+            <div className="absolute left-1/3 top-0 h-full w-px bg-white/70" />
+            <div className="absolute left-2/3 top-0 h-full w-px bg-white/70" />
+            <div className="absolute top-1/3 left-0 w-full h-px bg-white/70" />
+            <div className="absolute top-2/3 left-0 w-full h-px bg-white/70" />
+          </div>
         </div>
 
         <div className="mt-4 flex items-center gap-2.5">

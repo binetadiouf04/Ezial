@@ -18,6 +18,14 @@ export interface VariantRowInput {
   stock: number;
 }
 
+// The one standard ratio (width / height) for every product photo across
+// the app — ProductCard and ProductGallery already both render at 4:5
+// (aspect-[4/5]); ImageCropModal locks its frame to this exact same value
+// so a vendor cropping a photo sees precisely the shape it will have
+// everywhere it's displayed, never a mismatched crop between Home, the
+// catalog grid and the product page.
+export const PRODUCT_MEDIA_ASPECT_RATIO = 4 / 5;
+
 // Media limits — enforced client-side in SellerProductForm before upload,
 // not just documented here.
 export const MAX_PRODUCT_MEDIA_ITEMS = 10;
@@ -402,10 +410,18 @@ export interface ExistingProductImage {
   brandingOverlay: BrandingOverlay | null;
 }
 
+// select('*') on purpose, not an explicit column list: media_type,
+// original_storage_path and branding_overlay only exist once
+// migration-media.sql has actually been run against this Supabase project.
+// Naming those columns explicitly would make the whole query fail (and
+// silently return zero images to the edit form — the exact bug this
+// comment is here to prevent) on any project that hasn't run it yet.
+// '*' always succeeds and the mapping below already defaults every new
+// field with `??` when the column is genuinely absent from a row.
 export async function fetchProductImages(productId: string): Promise<ExistingProductImage[]> {
   const { data, error } = await supabase
     .from('product_images')
-    .select('id, storage_path, is_primary, sort_order, media_type, original_storage_path, branding_overlay')
+    .select('*')
     .eq('product_id', productId)
     .order('sort_order', { ascending: true });
   if (error || !data) return [];
