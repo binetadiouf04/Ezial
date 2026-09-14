@@ -26,6 +26,10 @@ export interface Product {
   // mock catalog. Used as an honest recency signal (never a fabricated
   // "trending" score) by the Tendances fallback ranking.
   createdAt?: string;
+  // Ordered photo+video list for the product gallery. Absent on the static
+  // mock catalog (which only ever has photos) — ProductGallery falls back
+  // to `images` mapped to type 'image' when this is undefined.
+  media?: { url: string; type: 'image' | 'video' }[];
 }
 
 const I = {

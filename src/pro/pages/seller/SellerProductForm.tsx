@@ -9,10 +9,19 @@ import {
   updateProductInSupabase,
   fetchProductForEdit,
   deleteProductImage,
-  addProductImages,
+  addProductMedia,
+  reorderProductMedia,
+  MAX_PRODUCT_MEDIA_ITEMS,
+  MAX_PRODUCT_VIDEOS,
+  MAX_VIDEO_SIZE_MB,
+  ACCEPTED_VIDEO_MIME_TYPES,
   type SupabaseProductStatus,
+  type NewProductMedia,
 } from '@/lib/supabaseSellerProducts';
-import { ArrowLeft, X, Package, ChevronDown, Check, Camera, Star } from 'lucide-react';
+import { resolveImageUrl } from '@/lib/supabaseCatalog';
+import ImageCropModal from '../../components/ImageCropModal';
+import LogoOverlayModal, { type OverlayResult } from '../../components/LogoOverlayModal';
+import { ArrowLeft, X, Package, ChevronDown, Check, Camera, Star, Video, ArrowUp, ArrowDown, Sparkles } from 'lucide-react';
 
 // products.status in Supabase only accepts draft/active/flagged/disabled —
 // there is no 'published' value there. The form's own draft/published
@@ -210,15 +219,28 @@ function SelectableChip({ label, selected, onClick }: { label: string; selected:
   );
 }
 
-// One photo in the form's gallery. `existing` is present only for a photo
-// already persisted as a Supabase product_images row (needed to delete the
-// right Storage object + row if removed); `file` is present only for a
-// newly-selected, not-yet-uploaded photo.
-interface ImageItem {
+// One photo or video in the form's media gallery. `existing` is present
+// only for media already persisted as a Supabase product_images row
+// (needed to delete the right Storage objects + row if removed or
+// re-branded); `file` is present only for a newly-selected/edited,
+// not-yet-uploaded item. `originalFile`/`logoFile`/`brandingOverlay` are
+// set only when a vendor logo overlay was applied — `file` is then the
+// composited result, `originalFile` the untouched source a re-branding
+// starts from again (never stacking overlays).
+interface MediaItem {
   key: string;
+  kind: 'image' | 'video';
   previewUrl: string;
   file?: File;
-  existing?: { id: string; storagePath: string };
+  originalFile?: File;
+  logoFile?: File;
+  brandingOverlay?: { x: number; y: number; width: number; opacity: number };
+  existing?: {
+    id: string;
+    storagePath: string;
+    originalStoragePath: string | null;
+    brandingOverlayLogoPath: string | null;
+  };
 }
 
 export default function SellerProductForm({ productId }: { productId?: string }) {
@@ -241,11 +263,18 @@ export default function SellerProductForm({ productId }: { productId?: string })
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [price, setPrice] = useState('');
-  const [images, setImages] = useState<ImageItem[]>([]);
+  const [images, setImages] = useState<MediaItem[]>([]);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [imageActionError, setImageActionError] = useState('');
   const [submitError, setSubmitError] = useState('');
   const [isSaving, setIsSaving] = useState(false);
+  // Photos awaiting the crop/reposition step, processed one at a time.
+  const [pendingCropFiles, setPendingCropFiles] = useState<File[]>([]);
+  // Media currently open in the logo-branding modal, and the plain
+  // (un-composited) file it should be applied to.
+  const [brandingTargetKey, setBrandingTargetKey] = useState<string | null>(null);
+  const [brandingBaseFile, setBrandingBaseFile] = useState<File | null>(null);
+  const [brandingLoading, setBrandingLoading] = useState(false);
 
   // Options state: which values are selected per option group
   const [selections, setSelections] = useState<OptionSelection>({});
@@ -294,7 +323,17 @@ export default function SellerProductForm({ productId }: { productId?: string })
       setName(data.name);
       setDescription(data.description);
       setPrice(String(data.basePrice));
-      setImages(data.images.map((img) => ({ key: img.id, previewUrl: img.url, existing: { id: img.id, storagePath: img.storagePath } })));
+      setImages(data.images.map((img) => ({
+        key: img.id,
+        kind: img.mediaType === 'video' ? 'video' as const : 'image' as const,
+        previewUrl: img.url,
+        existing: {
+          id: img.id,
+          storagePath: img.storagePath,
+          originalStoragePath: img.originalStoragePath,
+          brandingOverlayLogoPath: img.brandingOverlay?.logoStoragePath ?? null,
+        },
+      })));
 
       const typeproduitValues = data.descriptiveAttributes['Type de produit'];
       const isMakeupCat = data.category === 'beaute' && data.subcategory === 'maquillage';
@@ -437,38 +476,155 @@ export default function SellerProductForm({ productId }: { productId?: string })
 
   // === Handlers ===
 
+  const totalMediaCount = images.length + pendingCropFiles.length;
+  const videoCount = images.filter((i) => i.kind === 'video').length;
+
+  // New photos go through the crop/reposition step (ImageCropModal) before
+  // they're added to the gallery — queued one at a time so only one modal
+  // is ever open, however many files were selected at once.
   const handleAddFiles = (files: FileList | null) => {
     if (!files) return;
-    const newImages: ImageItem[] = [];
-    Array.from(files).forEach((file) => {
-      if (!file.type.startsWith('image/')) return;
-      newImages.push({ key: `local-${Date.now()}-${Math.random().toString(36).slice(2)}`, previewUrl: URL.createObjectURL(file), file });
-    });
-    if (newImages.length > 0) setImages((prev) => [...prev, ...newImages]);
+    const imageFiles = Array.from(files).filter((f) => f.type.startsWith('image/'));
+    const room = MAX_PRODUCT_MEDIA_ITEMS - totalMediaCount;
+    if (room <= 0) { setImageActionError(`Limite de ${MAX_PRODUCT_MEDIA_ITEMS} photos/vidéos par produit atteinte.`); return; }
+    const accepted = imageFiles.slice(0, room);
+    setImageActionError(accepted.length < imageFiles.length ? `Seules ${accepted.length} photo(s) ont été ajoutées (limite de ${MAX_PRODUCT_MEDIA_ITEMS} atteinte).` : '');
+    if (accepted.length > 0) setPendingCropFiles((prev) => [...prev, ...accepted]);
   };
 
-  // Removing a photo that's already a real Supabase product_images row
-  // deletes the Storage file + the row immediately — never left dangling.
+  const handleCropConfirm = (blob: Blob) => {
+    const file = new File([blob], `photo-${Date.now()}.jpg`, { type: 'image/jpeg' });
+    setImages((prev) => [...prev, { key: `local-${Date.now()}-${Math.random().toString(36).slice(2)}`, kind: 'image', previewUrl: URL.createObjectURL(file), file }]);
+    setPendingCropFiles((prev) => prev.slice(1));
+  };
+  const handleCropCancel = () => setPendingCropFiles((prev) => prev.slice(1));
+
+  const handleAddVideo = (files: FileList | null) => {
+    const file = files?.[0];
+    if (!file) return;
+    setImageActionError('');
+    if (videoCount >= MAX_PRODUCT_VIDEOS) { setImageActionError('Une seule vidéo par produit est autorisée.'); return; }
+    if (totalMediaCount >= MAX_PRODUCT_MEDIA_ITEMS) { setImageActionError(`Limite de ${MAX_PRODUCT_MEDIA_ITEMS} photos/vidéos par produit atteinte.`); return; }
+    if (!ACCEPTED_VIDEO_MIME_TYPES.includes(file.type)) { setImageActionError('Format vidéo non supporté (MP4, WebM ou MOV uniquement).'); return; }
+    if (file.size > MAX_VIDEO_SIZE_MB * 1024 * 1024) { setImageActionError(`La vidéo dépasse la taille maximale de ${MAX_VIDEO_SIZE_MB} Mo.`); return; }
+    setImages((prev) => [...prev, { key: `local-video-${Date.now()}`, kind: 'video', previewUrl: URL.createObjectURL(file), file }]);
+  };
+
+  // Persists sort_order + is_primary for every already-persisted (existing)
+  // row in one pass, matching the array order shown in the form — called
+  // after any reorder, primary change or removal so Supabase never drifts
+  // from what the seller sees.
+  const persistExistingOrder = (list: MediaItem[]) => {
+    if (!existingProductId) return;
+    const rows = list
+      .map((img, i) => (img.existing ? { id: img.existing.id, sortOrder: i, isPrimary: i === 0 } : null))
+      .filter((r): r is { id: string; sortOrder: number; isPrimary: boolean } => Boolean(r));
+    if (rows.length > 0) {
+      reorderProductMedia(rows).then((r) => { if (r.error) setImageActionError(r.error); });
+    }
+  };
+
+  const moveImage = (key: string, direction: -1 | 1) => {
+    const idx = images.findIndex((i) => i.key === key);
+    const swapIdx = idx + direction;
+    if (idx < 0 || swapIdx < 0 || swapIdx >= images.length) return;
+    const next = [...images];
+    [next[idx], next[swapIdx]] = [next[swapIdx], next[idx]];
+    setImages(next);
+    persistExistingOrder(next);
+  };
+
+  // Removing a photo/video that's already a real Supabase product_images
+  // row deletes the Storage file(s) — main, plus original + logo when a
+  // branding overlay was applied — and the row itself immediately, never
+  // left dangling.
   const removeImage = async (key: string) => {
     const target = images.find((img) => img.key === key);
     if (!target) return;
     setImageActionError('');
     if (target.existing) {
-      const result = await deleteProductImage(target.existing.id, target.existing.storagePath);
+      const result = await deleteProductImage(target.existing.id, target.existing.storagePath, [
+        target.existing.originalStoragePath,
+        target.existing.brandingOverlayLogoPath,
+      ]);
       if (result.error) {
         setImageActionError(result.error);
         return;
       }
     }
-    setImages((prev) => prev.filter((img) => img.key !== key));
+    const next = images.filter((img) => img.key !== key);
+    setImages(next);
+    persistExistingOrder(next);
   };
 
   const setPrimaryImage = (key: string) => {
-    setImages((prev) => {
-      const img = prev.find((i) => i.key === key);
-      if (!img) return prev;
-      return [img, ...prev.filter((i) => i.key !== key)];
-    });
+    const img = images.find((i) => i.key === key);
+    if (!img) return;
+    const next = [img, ...images.filter((i) => i.key !== key)];
+    setImages(next);
+    persistExistingOrder(next);
+  };
+
+  // Opens the branding modal on the plain (un-composited) version of a
+  // photo: a not-yet-uploaded item already has it locally (`originalFile`
+  // if it was branded before, else `file` itself); an already-persisted
+  // one has to be fetched back from Storage first since only its URL is
+  // known client-side.
+  const openBranding = async (item: MediaItem) => {
+    setImageActionError('');
+    if (item.file) {
+      setBrandingBaseFile(item.originalFile ?? item.file);
+      setBrandingTargetKey(item.key);
+      return;
+    }
+    if (item.existing) {
+      setBrandingLoading(true);
+      try {
+        const sourceUrl = item.existing.originalStoragePath ? resolveImageUrl(item.existing.originalStoragePath) : item.previewUrl;
+        const res = await fetch(sourceUrl);
+        const blob = await res.blob();
+        setBrandingBaseFile(new File([blob], 'photo.jpg', { type: blob.type || 'image/jpeg' }));
+        setBrandingTargetKey(item.key);
+      } catch {
+        setImageActionError('Impossible de charger la photo pour appliquer le logo.');
+      } finally {
+        setBrandingLoading(false);
+      }
+    }
+  };
+
+  // Applying a logo to an already-persisted photo deletes that row/files
+  // immediately (same "immediate" pattern as removeImage) and turns the
+  // item into a fresh not-yet-uploaded one carrying the composite — it's
+  // inserted as new, in the same array position, when the form is saved.
+  const handleBrandingConfirm = async (result: OverlayResult) => {
+    const target = images.find((i) => i.key === brandingTargetKey);
+    if (!target) return;
+    const compositeFile = new File([result.compositeBlob], `photo-branded-${Date.now()}.jpg`, { type: 'image/jpeg' });
+    const originalFile = brandingBaseFile ?? target.originalFile ?? target.file;
+    if (target.existing) {
+      const del = await deleteProductImage(target.existing.id, target.existing.storagePath, [
+        target.existing.originalStoragePath,
+        target.existing.brandingOverlayLogoPath,
+      ]);
+      if (del.error) {
+        setImageActionError(del.error);
+        setBrandingTargetKey(null);
+        setBrandingBaseFile(null);
+        return;
+      }
+    }
+    setImages((prev) => prev.map((img) => (img.key === target.key ? {
+      ...img,
+      previewUrl: URL.createObjectURL(compositeFile),
+      file: compositeFile,
+      originalFile: originalFile ?? undefined,
+      logoFile: result.logoFile,
+      brandingOverlay: result.overlay,
+      existing: undefined,
+    } : img)));
+    setBrandingTargetKey(null);
+    setBrandingBaseFile(null);
   };
 
   const toggleSingleChoice = (groupId: string, value: string) => {
@@ -554,7 +710,7 @@ export default function SellerProductForm({ productId }: { productId?: string })
     if (!name.trim()) e.name = 'Le nom du produit est obligatoire';
     if (!description.trim()) e.description = 'La description est obligatoire';
     if (!price || parseInt(price) <= 0) e.price = 'Le prix est obligatoire';
-    if (images.length === 0) e.images = 'Ajoutez au moins une photo.';
+    if (!images.some((img) => img.kind === 'image')) e.images = 'Ajoutez au moins une photo.';
     setErrors(e);
     return e;
   };
@@ -645,8 +801,25 @@ export default function SellerProductForm({ productId }: { productId?: string })
         values: effectiveValues(g.id),
       }));
 
-      const newLocalImages = images.filter((img): img is ImageItem & { file: File } => Boolean(img.file));
-      const localImages = images.map((img) => img.previewUrl);
+      // localImages feeds the seller's own local mock product record (used
+      // by the Pro product list UI only) — videos are excluded since it's
+      // rendered as plain <img> thumbnails there, exactly like the public
+      // catalog's `images: string[]` excludes them for the same reason.
+      const localImages = images.filter((img) => img.kind === 'image').map((img) => img.previewUrl);
+      const toNewMedia = (img: MediaItem): NewProductMedia => ({
+        file: img.file as File,
+        mediaType: img.kind,
+        originalFile: img.originalFile,
+        logoFile: img.logoFile,
+        brandingOverlay: img.brandingOverlay,
+      });
+      // Position in the FULL media array, not just among new items — a
+      // reordered or branding-replaced item can land anywhere relative to
+      // already-persisted photos, so sort_order/is_primary must reflect its
+      // real index, never an assumed "appended at the end" range.
+      const newMediaWithPosition = images
+        .map((img, i) => (img.file ? { media: toNewMedia(img), sortOrder: i, isPrimary: i === 0 } : null))
+        .filter((x): x is { media: NewProductMedia; sortOrder: number; isPrimary: boolean } => Boolean(x));
 
       if (existingProductId) {
         // === True edit: UPDATE the same products row — same id, same
@@ -668,14 +841,8 @@ export default function SellerProductForm({ productId }: { productId?: string })
           return;
         }
 
-        if (newLocalImages.length > 0) {
-          const sortOrderStart = images.length - newLocalImages.length;
-          const imagesResult = await addProductImages(
-            existingProductId,
-            newLocalImages.map((img) => ({ file: img.file })),
-            sortOrderStart,
-            sortOrderStart === 0,
-          );
+        if (newMediaWithPosition.length > 0) {
+          const imagesResult = await addProductMedia(existingProductId, newMediaWithPosition);
           if (imagesResult.error) {
             setSubmitError(imagesResult.error);
             return;
@@ -709,7 +876,7 @@ export default function SellerProductForm({ productId }: { productId?: string })
           status: SUPABASE_STATUS_FOR_FORM_STATUS[status],
           descriptiveAttributes: buildDescriptiveAttributes(),
           variants: buildVariantRows(),
-          images: newLocalImages.map((img) => ({ file: img.file })),
+          images: newMediaWithPosition.map((x) => x.media),
         });
         if ('error' in supabaseResult) {
           setSubmitError(supabaseResult.error);
@@ -722,7 +889,7 @@ export default function SellerProductForm({ productId }: { productId?: string })
           shopId: sellerSupabaseShopId,
           category: selectedCategory?.label ?? categoryId,
           price: parseInt(price),
-          image: images[0]?.previewUrl ?? '',
+          image: localImages[0] ?? '',
           stock: totalStock,
           status,
           variants: variantDefs.filter((v) => v.values.length > 0),
@@ -985,41 +1152,63 @@ export default function SellerProductForm({ productId }: { productId?: string })
         </div>
       </div>
 
-      {/* 5. Photos */}
+      {/* 5. Photos & vidéo */}
       <div className="card p-5 space-y-4">
         <div>
-          <h2 className="text-sm font-semibold text-ink">Photos du produit</h2>
-          <p className="mt-1 text-xs text-ink/45">Ajoutez des photos claires de votre produit. Vous pouvez sélectionner plusieurs photos — la première devient la photo principale, les autres forment la galerie. Ezial les adapte automatiquement à l'affichage, aucun format précis n'est requis.</p>
+          <h2 className="text-sm font-semibold text-ink">Photos et vidéo du produit</h2>
+          <p className="mt-1 text-xs text-ink/45">
+            Jusqu'à {MAX_PRODUCT_MEDIA_ITEMS} photos et {MAX_PRODUCT_VIDEOS} vidéo par produit. La photo marquée "Principale" est la première affichée. Utilisez les flèches pour réordonner, l'étoile pour changer la photo principale, et l'icône logo pour superposer votre marque.
+          </p>
         </div>
 
         {images.length > 0 && (
-          <div className="grid grid-cols-3 gap-2.5">
+          <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
             {images.map((img, i) => (
               <div key={img.key} className="relative group rounded-lg overflow-hidden bg-cream aspect-square">
-                <img src={img.previewUrl} alt={`Photo ${i + 1}`} className="h-full w-full object-cover" />
-                {i === 0 && (
+                {img.kind === 'video' ? (
+                  <video src={img.previewUrl} className="h-full w-full object-cover" muted playsInline />
+                ) : (
+                  <img src={img.previewUrl} alt={`Photo ${i + 1}`} className="h-full w-full object-cover" />
+                )}
+                {img.kind === 'video' && (
+                  <span className="absolute left-1 top-1 flex items-center gap-0.5 rounded bg-ink/70 px-1.5 py-0.5 text-[9px] font-medium text-white">
+                    <Video size={9} /> Vidéo
+                  </span>
+                )}
+                {i === 0 && img.kind === 'image' && (
                   <span className="absolute bottom-1 left-1 rounded bg-burgundy px-1.5 py-0.5 text-[9px] font-medium text-white flex items-center gap-0.5">
                     <Star size={8} fill="white" /> Principale
                   </span>
                 )}
-                <div className="absolute top-1 right-1 flex gap-1">
-                  {i !== 0 && (
-                    <button
-                      type="button"
-                      onClick={() => setPrimaryImage(img.key)}
-                      className="rounded-full bg-white/90 p-1 text-ink/50 hover:text-burgundy transition-colors"
-                      title="Définir comme photo principale"
-                    >
-                      <Star size={12} />
+
+                <div className="absolute top-1 right-1 flex flex-col items-end gap-1">
+                  <div className="flex gap-1">
+                    {i !== 0 && img.kind === 'image' && (
+                      <button type="button" onClick={() => setPrimaryImage(img.key)} className="rounded-full bg-white/90 p-1 text-ink/50 hover:text-burgundy transition-colors" title="Définir comme photo principale">
+                        <Star size={12} />
+                      </button>
+                    )}
+                    {img.kind === 'image' && (
+                      <button type="button" onClick={() => openBranding(img)} disabled={brandingLoading} className="rounded-full bg-white/90 p-1 text-ink/50 hover:text-burgundy transition-colors disabled:opacity-50" title="Superposer un logo">
+                        <Sparkles size={12} />
+                      </button>
+                    )}
+                    <button type="button" onClick={() => removeImage(img.key)} className="rounded-full bg-white/90 p-1 text-ink/50 hover:text-burgundy transition-colors" title="Supprimer">
+                      <X size={12} />
                     </button>
-                  )}
-                  <button
-                    type="button"
-                    onClick={() => removeImage(img.key)}
-                    className="rounded-full bg-white/90 p-1 text-ink/50 hover:text-burgundy transition-colors"
-                  >
-                    <X size={12} />
-                  </button>
+                  </div>
+                  <div className="flex gap-1">
+                    {i > 0 && (
+                      <button type="button" onClick={() => moveImage(img.key, -1)} className="rounded-full bg-white/90 p-1 text-ink/50 hover:text-burgundy transition-colors" title="Déplacer avant">
+                        <ArrowUp size={12} />
+                      </button>
+                    )}
+                    {i < images.length - 1 && (
+                      <button type="button" onClick={() => moveImage(img.key, 1)} className="rounded-full bg-white/90 p-1 text-ink/50 hover:text-burgundy transition-colors" title="Déplacer après">
+                        <ArrowDown size={12} />
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
             ))}
@@ -1027,18 +1216,20 @@ export default function SellerProductForm({ productId }: { productId?: string })
         )}
         {imageActionError && <p className="text-xs text-burgundy">{imageActionError}</p>}
 
-        <label className="flex flex-col items-center justify-center rounded-lg border-2 border-dashed border-line cursor-pointer hover:border-burgundy/30 transition-colors py-6">
-          <Camera size={24} className="text-ink/30" />
-          <span className="mt-2 text-sm font-medium text-ink/60">Ajouter des photos</span>
-          <span className="mt-0.5 text-xs text-ink/35">Sélectionnez une ou plusieurs images</span>
-          <input
-            type="file"
-            accept="image/*"
-            multiple
-            className="hidden"
-            onChange={(e) => handleAddFiles(e.target.files)}
-          />
-        </label>
+        <div className="grid gap-2.5 sm:grid-cols-2">
+          <label className="flex flex-col items-center justify-center rounded-lg border-2 border-dashed border-line cursor-pointer hover:border-burgundy/30 transition-colors py-6">
+            <Camera size={22} className="text-ink/30" />
+            <span className="mt-2 text-sm font-medium text-ink/60">Ajouter des photos</span>
+            <span className="mt-0.5 text-xs text-ink/35">{images.length}/{MAX_PRODUCT_MEDIA_ITEMS} médias</span>
+            <input type="file" accept="image/*" multiple className="hidden" onChange={(e) => { handleAddFiles(e.target.files); e.target.value = ''; }} />
+          </label>
+          <label className={`flex flex-col items-center justify-center rounded-lg border-2 border-dashed border-line py-6 transition-colors ${videoCount >= MAX_PRODUCT_VIDEOS ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer hover:border-burgundy/30'}`}>
+            <Video size={22} className="text-ink/30" />
+            <span className="mt-2 text-sm font-medium text-ink/60">Ajouter une vidéo</span>
+            <span className="mt-0.5 text-xs text-ink/35">MP4/WebM/MOV, {MAX_VIDEO_SIZE_MB} Mo max</span>
+            <input type="file" accept="video/mp4,video/webm,video/quicktime" disabled={videoCount >= MAX_PRODUCT_VIDEOS} className="hidden" onChange={(e) => { handleAddVideo(e.target.files); e.target.value = ''; }} />
+          </label>
+        </div>
 
         {errors.images && <p className="text-xs text-burgundy">{errors.images}</p>}
         {images.length === 0 && (
@@ -1047,6 +1238,13 @@ export default function SellerProductForm({ productId }: { productId?: string })
           </div>
         )}
       </div>
+
+      {pendingCropFiles[0] && (
+        <ImageCropModal file={pendingCropFiles[0]} onCancel={handleCropCancel} onConfirm={handleCropConfirm} />
+      )}
+      {brandingTargetKey && brandingBaseFile && (
+        <LogoOverlayModal baseFile={brandingBaseFile} onCancel={() => { setBrandingTargetKey(null); setBrandingBaseFile(null); }} onConfirm={handleBrandingConfirm} />
+      )}
 
       {/* 6. Prix de base */}
       <div className="card p-5 space-y-4">

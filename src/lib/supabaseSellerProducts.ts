@@ -18,9 +18,39 @@ export interface VariantRowInput {
   stock: number;
 }
 
-export interface NewProductImage {
-  file: File;
+// Media limits — enforced client-side in SellerProductForm before upload,
+// not just documented here.
+export const MAX_PRODUCT_MEDIA_ITEMS = 10;
+export const MAX_PRODUCT_VIDEOS = 1;
+export const MAX_VIDEO_SIZE_MB = 50;
+export const ACCEPTED_VIDEO_MIME_TYPES = ['video/mp4', 'video/webm', 'video/quicktime'];
+
+export type MediaType = 'image' | 'video';
+
+export interface BrandingOverlay {
+  logoStoragePath: string;
+  x: number;
+  y: number;
+  width: number;
+  opacity: number;
 }
+
+// One photo or video to upload. `originalFile`/`logoFile`/`brandingOverlay`
+// are present only when the vendor applied a logo overlay to this image:
+// `file` is then the already-composited result, `originalFile` the
+// untouched source (kept so the overlay can be redone or removed later),
+// and `logoFile` the logo itself — uploaded alongside so
+// `brandingOverlay.logoStoragePath` can point at a real Storage object.
+export interface NewProductMedia {
+  file: File;
+  mediaType: MediaType;
+  originalFile?: File;
+  logoFile?: File;
+  brandingOverlay?: Omit<BrandingOverlay, 'logoStoragePath'>;
+}
+
+// Back-compat alias — the shape a plain (non-branded) photo upload needs.
+export type NewProductImage = { file: File };
 
 // The real products_status_check constraint only allows these four values —
 // 'published' does not exist in the Supabase schema. Typing this here (not
@@ -39,7 +69,7 @@ export interface CreateProductInput {
   status: SupabaseProductStatus;
   descriptiveAttributes: Record<string, string[]>;
   variants: VariantRowInput[];
-  images: NewProductImage[];
+  images: NewProductMedia[];
 }
 
 export interface CreateProductResult {
@@ -94,22 +124,52 @@ function isReferenceConflict(error: { code?: string; message?: string } | null |
 
 const MAX_REFERENCE_ATTEMPTS = 5;
 
-async function uploadImages(
+export interface UploadedMediaRow {
+  storagePath: string;
+  mediaType: MediaType;
+  originalStoragePath?: string;
+  brandingOverlay?: BrandingOverlay;
+}
+
+// Uploads every file a media item needs (main file, plus the original and
+// the logo when a branding overlay was applied) and resolves
+// brandingOverlay.logoStoragePath to the path it was actually uploaded to.
+// `uploadedSoFar` on failure lists every Storage path written before the
+// failing item, so the caller's cleanup removes exactly those, no more.
+async function uploadMedia(
   uid: string,
   productId: string,
-  images: NewProductImage[],
-): Promise<{ paths: string[] } | { error: string; uploadedSoFar: string[] }> {
+  items: NewProductMedia[],
+): Promise<{ rows: UploadedMediaRow[] } | { error: string; uploadedSoFar: string[] }> {
   const uploadedSoFar: string[] = [];
-  for (let i = 0; i < images.length; i++) {
-    const file = images[i].file;
-    const path = `${uid}/${productId}/${i}-${sanitizeFileName(file.name)}`;
-    const { error } = await supabase.storage.from(PRODUCT_IMAGES_BUCKET).upload(path, file);
-    if (error) {
-      return { error: `L'envoi de l'image "${file.name}" a échoué : ${error.message}.`, uploadedSoFar };
+  const rows: UploadedMediaRow[] = [];
+
+  for (let i = 0; i < items.length; i++) {
+    const item = items[i];
+    const upload = async (file: File, suffix: string) => {
+      const path = `${uid}/${productId}/${i}${suffix}-${sanitizeFileName(file.name)}`;
+      const { error } = await supabase.storage.from(PRODUCT_IMAGES_BUCKET).upload(path, file);
+      if (error) throw new Error(`L'envoi de "${file.name}" a échoué : ${error.message}.`);
+      uploadedSoFar.push(path);
+      return path;
+    };
+
+    try {
+      const storagePath = await upload(item.file, '');
+      let originalStoragePath: string | undefined;
+      let brandingOverlay: BrandingOverlay | undefined;
+      if (item.originalFile) originalStoragePath = await upload(item.originalFile, '-original');
+      if (item.logoFile && item.brandingOverlay) {
+        const logoStoragePath = await upload(item.logoFile, '-logo');
+        brandingOverlay = { ...item.brandingOverlay, logoStoragePath };
+      }
+      rows.push({ storagePath, mediaType: item.mediaType, originalStoragePath, brandingOverlay });
+    } catch (err) {
+      return { error: err instanceof Error ? err.message : String(err), uploadedSoFar };
     }
-    uploadedSoFar.push(path);
   }
-  return { paths: uploadedSoFar };
+
+  return { rows };
 }
 
 // Best-effort compensating delete. Each step's own result is checked —
@@ -209,19 +269,22 @@ export async function createProductInSupabase(
     }
 
     if (input.images.length > 0) {
-      const uploadResult = await uploadImages(uid, productId, input.images);
+      const uploadResult = await uploadMedia(uid, productId, input.images);
       if ('error' in uploadResult) {
         uploadedPaths = uploadResult.uploadedSoFar;
         const { cleanedUp } = await cleanupFailedProduct(productId, uploadedPaths);
         return { error: failureMessage(uploadResult.error, productId, cleanedUp) };
       }
-      uploadedPaths = uploadResult.paths;
+      uploadedPaths = uploadResult.rows.flatMap((r) => [r.storagePath, r.originalStoragePath, r.brandingOverlay?.logoStoragePath].filter((p): p is string => Boolean(p)));
 
-      const imageRows = uploadedPaths.map((storagePath, i) => ({
+      const imageRows = uploadResult.rows.map((r, i) => ({
         product_id: productId,
-        storage_path: storagePath,
+        storage_path: r.storagePath,
         is_primary: i === 0,
         sort_order: i,
+        media_type: r.mediaType,
+        original_storage_path: r.originalStoragePath ?? null,
+        branding_overlay: r.brandingOverlay ?? null,
       }));
       const { error: imagesError } = await supabase.from('product_images').insert(imageRows);
       if (imagesError) {
@@ -334,12 +397,15 @@ export interface ExistingProductImage {
   url: string;
   isPrimary: boolean;
   sortOrder: number;
+  mediaType: MediaType;
+  originalStoragePath: string | null;
+  brandingOverlay: BrandingOverlay | null;
 }
 
 export async function fetchProductImages(productId: string): Promise<ExistingProductImage[]> {
   const { data, error } = await supabase
     .from('product_images')
-    .select('id, storage_path, is_primary, sort_order')
+    .select('id, storage_path, is_primary, sort_order, media_type, original_storage_path, branding_overlay')
     .eq('product_id', productId)
     .order('sort_order', { ascending: true });
   if (error || !data) return [];
@@ -349,16 +415,42 @@ export async function fetchProductImages(productId: string): Promise<ExistingPro
     url: resolveImageUrl((row.storage_path as string) ?? ''),
     isPrimary: Boolean(row.is_primary),
     sortOrder: (row.sort_order as number) ?? 0,
+    mediaType: (row.media_type as MediaType) ?? 'image',
+    originalStoragePath: (row.original_storage_path as string | null) ?? null,
+    brandingOverlay: (row.branding_overlay as BrandingOverlay | null) ?? null,
   }));
 }
 
-export async function deleteProductImage(imageId: string, storagePath: string): Promise<{ error?: string }> {
-  if (storagePath) {
-    const { error: storageError } = await supabase.storage.from(PRODUCT_IMAGES_BUCKET).remove([storagePath]);
+// Removes every Storage object this row owns (main file, plus the original
+// and logo when a branding overlay was applied) so branding never leaves
+// orphaned files behind, then deletes the row itself.
+export async function deleteProductImage(
+  imageId: string,
+  storagePath: string,
+  extraPaths: (string | null | undefined)[] = [],
+): Promise<{ error?: string }> {
+  const paths = [storagePath, ...extraPaths].filter((p): p is string => Boolean(p));
+  if (paths.length > 0) {
+    const { error: storageError } = await supabase.storage.from(PRODUCT_IMAGES_BUCKET).remove(paths);
     if (storageError) return { error: `Suppression du fichier impossible : ${storageError.message}` };
   }
   const { error: dbError } = await supabase.from('product_images').delete().eq('id', imageId);
   if (dbError) return { error: `Suppression de l'image impossible : ${dbError.message}` };
+  return {};
+}
+
+// Persists a full reorder + primary-flag pass over already-existing
+// product_images rows in one go — called after the seller drags/moves a
+// photo or changes the primary photo, so sort_order in Supabase always
+// matches what the form shows.
+export async function reorderProductMedia(
+  rows: { id: string; sortOrder: number; isPrimary: boolean }[],
+): Promise<{ error?: string }> {
+  const results = await Promise.all(
+    rows.map((r) => supabase.from('product_images').update({ sort_order: r.sortOrder, is_primary: r.isPrimary }).eq('id', r.id)),
+  );
+  const failed = results.find((r) => r.error);
+  if (failed?.error) return { error: `Impossible d'enregistrer l'ordre des photos : ${failed.error.message}` };
   return {};
 }
 
@@ -476,28 +568,35 @@ export async function updateProductInSupabase(productId: string, input: UpdatePr
 // an edit — mirrors the create flow's upload step, but for a product that
 // already has an id. sortOrderStart lets new photos append after whatever
 // existing images are already there.
-export async function addProductImages(
+// Each item carries its own final sort_order/isPrimary (the position it
+// actually occupies in the seller's full media array, which — thanks to
+// reordering and branding-triggered replacement — is not necessarily
+// contiguous with the other new items) rather than an assumed
+// append-at-the-end range.
+export async function addProductMedia(
   productId: string,
-  images: NewProductImage[],
-  sortOrderStart: number,
-  markFirstAsPrimary: boolean,
+  items: { media: NewProductMedia; sortOrder: number; isPrimary: boolean }[],
 ): Promise<{ error?: string }> {
   const { data: userData, error: userError } = await supabase.auth.getUser();
   const uid = userData?.user?.id;
   if (userError || !uid) return { error: 'Session vendeur expirée. Reconnectez-vous et réessayez.' };
 
-  const uploadResult = await uploadImages(uid, productId, images);
+  const uploadResult = await uploadMedia(uid, productId, items.map((i) => i.media));
   if ('error' in uploadResult) return { error: uploadResult.error };
 
-  const imageRows = uploadResult.paths.map((storagePath, i) => ({
+  const imageRows = uploadResult.rows.map((r, i) => ({
     product_id: productId,
-    storage_path: storagePath,
-    is_primary: markFirstAsPrimary && i === 0,
-    sort_order: sortOrderStart + i,
+    storage_path: r.storagePath,
+    is_primary: items[i].isPrimary,
+    sort_order: items[i].sortOrder,
+    media_type: r.mediaType,
+    original_storage_path: r.originalStoragePath ?? null,
+    branding_overlay: r.brandingOverlay ?? null,
   }));
   const { error: imagesError } = await supabase.from('product_images').insert(imageRows);
   if (imagesError) {
-    await supabase.storage.from(PRODUCT_IMAGES_BUCKET).remove(uploadResult.paths);
+    const allPaths = uploadResult.rows.flatMap((r) => [r.storagePath, r.originalStoragePath, r.brandingOverlay?.logoStoragePath].filter((p): p is string => Boolean(p)));
+    await supabase.storage.from(PRODUCT_IMAGES_BUCKET).remove(allPaths);
     return { error: `Impossible d'enregistrer les nouvelles images : ${imagesError.message}` };
   }
   return {};

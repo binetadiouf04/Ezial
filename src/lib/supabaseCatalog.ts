@@ -96,6 +96,11 @@ interface ProductImageRow {
   is_primary?: boolean | null;
   sort_order?: number | null;
   created_at?: string;
+  // Added by the media migration (see migration-media.sql). Absent/null on
+  // any row inserted before that migration ran — treated as 'image'.
+  media_type?: string | null;
+  original_storage_path?: string | null;
+  branding_overlay?: Record<string, unknown> | null;
 }
 
 interface ProductVariantRow {
@@ -134,12 +139,28 @@ function mapShop(row: ShopRow): Shop {
   };
 }
 
-function imagesForProduct(productId: string, imageRows: ProductImageRow[]): string[] {
+function sortedRowsForProduct(productId: string, imageRows: ProductImageRow[]): ProductImageRow[] {
   return imageRows
     .filter((img) => img.product_id === productId)
-    .sort((a, b) => (b.is_primary ? 1 : 0) - (a.is_primary ? 1 : 0) || (a.sort_order ?? 0) - (b.sort_order ?? 0))
+    .sort((a, b) => (b.is_primary ? 1 : 0) - (a.is_primary ? 1 : 0) || (a.sort_order ?? 0) - (b.sort_order ?? 0));
+}
+
+// Excludes video rows on purpose — `images: string[]` is consumed broadly
+// (ProductCard, category thumbnails...) by code that only ever renders an
+// <img>, so a video URL must never end up in it.
+function imagesForProduct(productId: string, imageRows: ProductImageRow[]): string[] {
+  return sortedRowsForProduct(productId, imageRows)
+    .filter((img) => img.media_type !== 'video')
     .map((img) => resolveImageUrl(img.storage_path ?? ''))
     .filter(Boolean);
+}
+
+// Full ordered photo+video list (primary first, then sort_order) for the
+// product gallery, which — unlike `images` — knows how to render a video.
+function mediaForProduct(productId: string, imageRows: ProductImageRow[]): { url: string; type: 'image' | 'video' }[] {
+  return sortedRowsForProduct(productId, imageRows)
+    .map((img) => ({ url: resolveImageUrl(img.storage_path ?? ''), type: img.media_type === 'video' ? ('video' as const) : ('image' as const) }))
+    .filter((item) => item.url);
 }
 
 function variantRowsForProduct(productId: string, variantRows: ProductVariantRow[]): ProductVariantRow[] {
@@ -191,6 +212,7 @@ function detailsFromDescriptiveAttributes(attrs: Record<string, string[]> | null
 function mapProduct(row: ProductRow, imageRows: ProductImageRow[], variantRows: ProductVariantRow[]): Product {
   const promoActive = isPromoActive(row);
   const images = imagesForProduct(row.id, imageRows);
+  const media = mediaForProduct(row.id, imageRows);
   const variants = variantRowsForProduct(row.id, variantRows);
   const stockFromVariants = variants.reduce((sum, v) => sum + (v.stock ?? 0), 0);
 
@@ -204,6 +226,7 @@ function mapProduct(row: ProductRow, imageRows: ProductImageRow[], variantRows: 
     price: promoActive ? (row.promo_price ?? row.base_price) : row.base_price,
     oldPrice: promoActive ? row.base_price : undefined,
     images: images.length > 0 ? images : [FALLBACK_PRODUCT_IMAGE],
+    media: media.length > 0 ? media : [{ url: FALLBACK_PRODUCT_IMAGE, type: 'image' as const }],
     // No Supabase equivalent — neutral defaults, not invented columns.
     rating: undefined,
     reviewCount: undefined,

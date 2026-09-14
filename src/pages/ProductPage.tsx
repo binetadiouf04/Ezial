@@ -94,8 +94,8 @@ export default function ProductPage({ productId }: { productId: string }) {
         <span className="text-ink/70 line-clamp-1">{product.name}</span>
       </nav>
       <div className="grid gap-8 lg:grid-cols-2 lg:gap-14">
-        <div className="relative lg:sticky lg:top-[90px] lg:self-start">
-          <ProductGallery images={product.images} alt={product.name} />
+        <div className="relative mx-auto w-full max-w-[420px] lg:sticky lg:top-[90px] lg:max-w-[448px] lg:self-start">
+          <ProductGallery media={product.media ?? product.images.map((url) => ({ url, type: 'image' as const }))} alt={product.name} />
           <div className="absolute right-2.5 top-2.5 z-10"><FavoriteButton productId={product.id} /></div>
         </div>
         <div className="space-y-6">
