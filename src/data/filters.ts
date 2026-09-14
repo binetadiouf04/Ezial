@@ -72,6 +72,16 @@ const hygieneFilters: FilterGroup[] = [
   globalPriceFilter,
 ];
 
+// Manucure & Pédicure: Longueur/Forme/Type de style only ever apply to Faux
+// ongles — SellerProductForm adds them conditionally on top of this base
+// list, the same way it already does for Encens & Parfums de maison.
+const manucurePedicureTypes = ['Faux ongles', 'Soins', 'Henné', 'Vernis'];
+
+const manucurePedicureFilters: FilterGroup[] = [
+  { id: 'typeproduit', label: 'Type de produit', options: manucurePedicureTypes },
+  globalPriceFilter,
+];
+
 const vetementsFemmeFilters: FilterGroup[] = [
   { id: 'style', label: 'Style', options: clothingStyles },
   { id: 'type', label: 'Type de vêtement', options: clothingTypesFemme },
@@ -126,6 +136,7 @@ export const subcategoryFilters: Record<string, FilterGroup[]> = {
   'beaute/skincare': skincareFilters,
   'beaute/soins-capillaires': haircareFilters,
   'beaute/hygiene': hygieneFilters,
+  'beaute/mains-et-pieds': manucurePedicureFilters,
   'vetements/femme': vetementsFemmeFilters,
   'vetements/homme': vetementsHommeFilters,
   'chaussures/femme': chaussuresFemmeFilters,

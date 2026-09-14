@@ -19,7 +19,7 @@ const SUPABASE_STATUS_FOR_FORM_STATUS: Record<'draft' | 'published', SupabasePro
 // Which filter groups are single-choice (radio-like) vs descriptive multi-choice
 // (checkbox-like, but never split stock) vs true variant dimensions (checkbox-like
 // AND generate one stock/price line per selected value).
-const SINGLE_CHOICE_IDS = new Set(['type', 'style', 'texture', 'matiere', 'peau', 'typeproduit']);
+const SINGLE_CHOICE_IDS = new Set(['type', 'style', 'texture', 'matiere', 'peau', 'typeproduit', 'longueurongles']);
 // The one exception to 'type' being single-choice: for Vêtements > Femme,
 // several clothing types can describe the same product (e.g. "Robes" and
 // "Tenues de plage"). Still purely descriptive — 'type' was never a variant
@@ -45,6 +45,13 @@ const ENCENS_TYPE_OPTIONS = ['Gowé', 'Sarkhtan', 'Nakk', 'Bant'];
 // Parfum d'ambiance — never Encens) — also descriptive/multi-choice only,
 // same reasoning as ENCENS_TYPE_OPTIONS above.
 const ENCENS_MAISON_NOTES_OPTIONS = ['Orientale', 'Fruitée', 'Florale', 'Boisée'];
+
+// Manucure & Pédicure > Faux ongles only — Longueur/Forme/Type de style are
+// purely descriptive (none of these ids are in VARIANT_DIMENSION_IDS), and
+// never shown for Soins, Henné or Vernis.
+const NAIL_LENGTH_OPTIONS = ['Court', 'Moyen', 'Long'];
+const NAIL_SHAPE_OPTIONS = ['Carré', 'Amande', 'Coffin', 'Stiletto', 'Ovale', 'Rond'];
+const NAIL_STYLE_OPTIONS = ['French', 'Nude', 'Marbré', 'Floral', '3D', 'Strass', 'Pailleté', 'Chromé', 'Léopard', 'Abstrait'];
 
 // Human labels for validate()'s error keys, used to build a clear summary
 // of exactly which field is blocking "Publier"/"Enregistrer en brouillon".
@@ -238,6 +245,11 @@ export default function SellerProductForm({ productId }: { productId?: string })
 
   const isMakeup = categoryId === 'beaute' && subId === 'maquillage';
 
+  // Manucure & Pédicure: Longueur/Forme/Type de style only ever apply to
+  // Faux ongles — never Soins, Henné or Vernis.
+  const isManucurePedicure = categoryId === 'beaute' && subId === 'mains-et-pieds';
+  const showsNailFields = isManucurePedicure && selectedTypeProduit === 'Faux ongles';
+
   const optionGroups: FilterGroup[] = useMemo(() => {
     if (!categoryId) return [];
     let groups = getFilters(categoryId, subId || undefined).filter((g) => g.id !== 'prix');
@@ -252,9 +264,17 @@ export default function SellerProductForm({ productId }: { productId?: string })
     if (showsVolume) groups = [...groups, { id: 'volume', label: 'Volume', options: VOLUME_BASE_OPTIONS }];
     if (showsEncensType) groups = [...groups, { id: 'typeencens', label: 'Type', options: ENCENS_TYPE_OPTIONS }];
     if (showsEncensNotesChips) groups = [...groups, { id: 'notesambiance', label: 'Notes', options: ENCENS_MAISON_NOTES_OPTIONS }];
+    if (showsNailFields) {
+      groups = [
+        ...groups,
+        { id: 'longueurongles', label: 'Longueur', options: NAIL_LENGTH_OPTIONS },
+        { id: 'formeongles', label: 'Forme', options: NAIL_SHAPE_OPTIONS },
+        { id: 'styleongles', label: 'Type / style', options: NAIL_STYLE_OPTIONS },
+      ];
+    }
 
     return groups;
-  }, [categoryId, subId, isMakeup, selectedTypeProduit, showsVolume, showsEncensType, showsEncensNotesChips]);
+  }, [categoryId, subId, isMakeup, selectedTypeProduit, showsVolume, showsEncensType, showsEncensNotesChips, showsNailFields]);
 
   // Only "true" variant dimensions (taille, couleur, volume, longueur,
   // densité) generate stock/price combinations — everything else (style, type,
@@ -349,15 +369,22 @@ export default function SellerProductForm({ productId }: { productId?: string })
       const current = prev[groupId] ?? [];
       const next: OptionSelection = { ...prev, [groupId]: current[0] === value ? [] : [value] };
       // Changing "Type de produit" invalidates choices tied to the previous
-      // type: maquillage shades depend on it, and so does everything shown
-      // for Encens & Parfums de maison (Type/Volume/Notes vary per type —
-      // e.g. never leave "Gowé" saved after switching to Parfum d'ambiance).
+      // type: maquillage shades depend on it, so does everything shown for
+      // Encens & Parfums de maison (Type/Volume/Notes vary per type — e.g.
+      // never leave "Gowé" saved after switching to Parfum d'ambiance), and
+      // so does Longueur/Forme/Style for Manucure & Pédicure (never leave
+      // "Carré" saved after switching away from Faux ongles).
       if (groupId === 'typeproduit') {
         next.couleur = [];
         if (isEncensMaison) {
           next.typeencens = [];
           next.volume = [];
           next.notesambiance = [];
+        }
+        if (isManucurePedicure) {
+          next.longueurongles = [];
+          next.formeongles = [];
+          next.styleongles = [];
         }
       }
       return next;

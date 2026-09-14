@@ -25,7 +25,7 @@ export const categories: Category[] = [
   { id: 'beaute', label: 'Beauté', subcategories: [
     { id: 'maquillage', label: 'Maquillage' }, { id: 'skincare', label: 'Skincare' },
     { id: 'soins-capillaires', label: 'Soins capillaires' }, { id: 'hygiene', label: 'Hygiène & soins corporels' },
-    { id: 'mains-et-pieds', label: 'Mains et pieds' },
+    { id: 'mains-et-pieds', label: 'Manucure & Pédicure' },
   ]},
   { id: 'cheveux', label: 'Cheveux', subcategories: [
     { id: 'perruques', label: 'Perruques' }, { id: 'meches', label: 'Mèches' },
