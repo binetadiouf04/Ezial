@@ -101,7 +101,7 @@ export default function AdminLayout() {
         </nav>
         <div className="p-3 border-t border-line space-y-1">
           <button onClick={() => { window.location.hash = '/'; }} className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-ink/50 hover:bg-cream hover:text-ink transition-colors">
-            <ArrowLeft size={18} /> Marketplace
+            <ArrowLeft size={18} /> Retourner sur Ezial Marketplace
           </button>
           <button onClick={logout} className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-ink/50 hover:bg-burgundy/5 hover:text-burgundy transition-colors">
             <LogOut size={18} /> Déconnexion
@@ -109,10 +109,24 @@ export default function AdminLayout() {
         </div>
       </aside>
 
-      {/* Mobile top bar */}
-      <div className="lg:hidden sticky top-0 z-20 border-b border-line bg-white px-4 py-3 flex items-center justify-between">
-        <span className="text-sm font-semibold text-ink">Ezial Admin</span>
-        <button onClick={logout} className="text-ink/40 hover:text-burgundy"><LogOut size={18} /></button>
+      {/* Mobile top bar — both actions shown as explicit text, never a bare
+          ambiguous icon: the marketplace link stays compact ("Marketplace"),
+          Déconnexion always spells itself out in full. */}
+      <div className="lg:hidden sticky top-0 z-20 border-b border-line bg-white px-3 py-2.5 flex items-center justify-between gap-2">
+        <span className="truncate text-sm font-semibold text-ink">Ezial Admin</span>
+        <div className="flex flex-shrink-0 items-center gap-1.5">
+          <button
+            onClick={() => { window.location.hash = '/'; }}
+            className="flex items-center gap-1.5 rounded-lg border border-line px-2.5 py-1.5 text-xs font-medium text-ink/60 hover:border-burgundy/30 hover:text-burgundy transition-colors"
+          >
+            <ArrowLeft size={14} />
+            <span className="hidden sm:inline">Retourner sur Ezial Marketplace</span>
+            <span className="sm:hidden">Marketplace</span>
+          </button>
+          <button onClick={logout} className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-burgundy hover:bg-burgundy/5 transition-colors">
+            <LogOut size={14} /> Déconnexion
+          </button>
+        </div>
       </div>
 
       <div className="flex-1 min-w-0">

@@ -21,7 +21,7 @@ import {
 import { resolveImageUrl } from '@/lib/supabaseCatalog';
 import ImageCropModal from '../../components/ImageCropModal';
 import LogoOverlayModal, { type OverlayResult } from '../../components/LogoOverlayModal';
-import { ArrowLeft, X, Package, ChevronDown, Check, Camera, Star, Video, ArrowUp, ArrowDown, Sparkles } from 'lucide-react';
+import { ArrowLeft, X, Package, ChevronDown, Check, Camera, Star, Video, ArrowUp, ArrowDown, Sparkles, Crop, RefreshCw } from 'lucide-react';
 
 // products.status in Supabase only accepts draft/active/flagged/disabled —
 // there is no 'published' value there. The form's own draft/published
@@ -627,6 +627,84 @@ export default function SellerProductForm({ productId }: { productId?: string })
     setBrandingBaseFile(null);
   };
 
+  // Replace-with-a-new-file and re-crop-the-current-photo both end up doing
+  // the same thing: open the crop modal on some source file, then swap the
+  // item's content for whatever comes out of it. They share this one
+  // target/source pair and confirm/cancel pair rather than duplicating the
+  // "delete old persisted row, then splice in a fresh local item" logic
+  // twice.
+  const [recropTargetKey, setRecropTargetKey] = useState<string | null>(null);
+  const [recropSourceFile, setRecropSourceFile] = useState<File | null>(null);
+  const [recropLoading, setRecropLoading] = useState(false);
+
+  const openRecrop = async (item: MediaItem) => {
+    setImageActionError('');
+    if (item.file) {
+      setRecropSourceFile(item.file);
+      setRecropTargetKey(item.key);
+      return;
+    }
+    if (item.existing) {
+      setRecropLoading(true);
+      try {
+        const res = await fetch(item.previewUrl);
+        const blob = await res.blob();
+        setRecropSourceFile(new File([blob], 'photo.jpg', { type: blob.type || 'image/jpeg' }));
+        setRecropTargetKey(item.key);
+      } catch {
+        setImageActionError('Impossible de charger la photo pour la recadrer.');
+      } finally {
+        setRecropLoading(false);
+      }
+    }
+  };
+
+  // "Remplacer" picks a brand-new file, then routes it through the same
+  // crop step as any newly-added photo before it replaces the old content.
+  const handleReplaceFile = (key: string, files: FileList | null) => {
+    const file = files?.[0];
+    if (!file || !file.type.startsWith('image/')) return;
+    setImageActionError('');
+    setRecropSourceFile(file);
+    setRecropTargetKey(key);
+  };
+
+  // Confirming either flow deletes the old persisted row/files immediately
+  // (a re-crop or a replacement both change storage_path's actual content,
+  // so the old object can never be kept) and turns the item into a fresh
+  // not-yet-uploaded one — inserted as new, in the same array position, on
+  // save. Any prior branding is dropped: the vendor re-applies the logo
+  // (Sparkles button) if they still want it on the new crop.
+  const handleRecropConfirm = async (blob: Blob) => {
+    const target = images.find((i) => i.key === recropTargetKey);
+    if (!target) { setRecropTargetKey(null); setRecropSourceFile(null); return; }
+    const newFile = new File([blob], `photo-${Date.now()}.jpg`, { type: 'image/jpeg' });
+    if (target.existing) {
+      const del = await deleteProductImage(target.existing.id, target.existing.storagePath, [
+        target.existing.originalStoragePath,
+        target.existing.brandingOverlayLogoPath,
+      ]);
+      if (del.error) {
+        setImageActionError(del.error);
+        setRecropTargetKey(null);
+        setRecropSourceFile(null);
+        return;
+      }
+    }
+    setImages((prev) => prev.map((img) => (img.key === target.key ? {
+      ...img,
+      previewUrl: URL.createObjectURL(newFile),
+      file: newFile,
+      originalFile: undefined,
+      logoFile: undefined,
+      brandingOverlay: undefined,
+      existing: undefined,
+    } : img)));
+    setRecropTargetKey(null);
+    setRecropSourceFile(null);
+  };
+  const handleRecropCancel = () => { setRecropTargetKey(null); setRecropSourceFile(null); };
+
   const toggleSingleChoice = (groupId: string, value: string) => {
     setSelections((prev) => {
       const current = prev[groupId] ?? [];
@@ -1157,7 +1235,7 @@ export default function SellerProductForm({ productId }: { productId?: string })
         <div>
           <h2 className="text-sm font-semibold text-ink">Photos et vidéo du produit</h2>
           <p className="mt-1 text-xs text-ink/45">
-            Jusqu'à {MAX_PRODUCT_MEDIA_ITEMS} photos et {MAX_PRODUCT_VIDEOS} vidéo par produit. La photo marquée "Principale" est la première affichée. Utilisez les flèches pour réordonner, l'étoile pour changer la photo principale, et l'icône logo pour superposer votre marque.
+            Jusqu'à {MAX_PRODUCT_MEDIA_ITEMS} photos et {MAX_PRODUCT_VIDEOS} vidéo par produit — y compris les photos déjà enregistrées. Flèches : réordonner. Étoile : photo principale. Recadrer : repositionner/zoomer. Remplacer : envoyer une nouvelle photo. Logo : superposer votre marque.
           </p>
         </div>
 
@@ -1181,34 +1259,42 @@ export default function SellerProductForm({ productId }: { productId?: string })
                   </span>
                 )}
 
-                <div className="absolute top-1 right-1 flex flex-col items-end gap-1">
-                  <div className="flex gap-1">
-                    {i !== 0 && img.kind === 'image' && (
-                      <button type="button" onClick={() => setPrimaryImage(img.key)} className="rounded-full bg-white/90 p-1 text-ink/50 hover:text-burgundy transition-colors" title="Définir comme photo principale">
-                        <Star size={12} />
+                <div className="absolute top-1 left-1 flex gap-1">
+                  {i > 0 && (
+                    <button type="button" onClick={() => moveImage(img.key, -1)} className="rounded-full bg-white/90 p-1 text-ink/50 hover:text-burgundy transition-colors" title="Déplacer avant">
+                      <ArrowUp size={12} />
+                    </button>
+                  )}
+                  {i < images.length - 1 && (
+                    <button type="button" onClick={() => moveImage(img.key, 1)} className="rounded-full bg-white/90 p-1 text-ink/50 hover:text-burgundy transition-colors" title="Déplacer après">
+                      <ArrowDown size={12} />
+                    </button>
+                  )}
+                </div>
+
+                <div className="absolute top-1 right-1 flex flex-wrap justify-end gap-1 max-w-[85%]">
+                  {i !== 0 && img.kind === 'image' && (
+                    <button type="button" onClick={() => setPrimaryImage(img.key)} className="rounded-full bg-white/90 p-1 text-ink/50 hover:text-burgundy transition-colors" title="Définir comme photo principale">
+                      <Star size={12} />
+                    </button>
+                  )}
+                  {img.kind === 'image' && (
+                    <>
+                      <button type="button" onClick={() => openRecrop(img)} disabled={recropLoading} className="rounded-full bg-white/90 p-1 text-ink/50 hover:text-burgundy transition-colors disabled:opacity-50" title="Recadrer / repositionner / zoomer">
+                        <Crop size={12} />
                       </button>
-                    )}
-                    {img.kind === 'image' && (
+                      <label className="rounded-full bg-white/90 p-1 text-ink/50 hover:text-burgundy transition-colors cursor-pointer" title="Remplacer par une nouvelle photo">
+                        <RefreshCw size={12} />
+                        <input type="file" accept="image/*" className="hidden" onChange={(e) => { handleReplaceFile(img.key, e.target.files); e.target.value = ''; }} />
+                      </label>
                       <button type="button" onClick={() => openBranding(img)} disabled={brandingLoading} className="rounded-full bg-white/90 p-1 text-ink/50 hover:text-burgundy transition-colors disabled:opacity-50" title="Superposer un logo">
                         <Sparkles size={12} />
                       </button>
-                    )}
-                    <button type="button" onClick={() => removeImage(img.key)} className="rounded-full bg-white/90 p-1 text-ink/50 hover:text-burgundy transition-colors" title="Supprimer">
-                      <X size={12} />
-                    </button>
-                  </div>
-                  <div className="flex gap-1">
-                    {i > 0 && (
-                      <button type="button" onClick={() => moveImage(img.key, -1)} className="rounded-full bg-white/90 p-1 text-ink/50 hover:text-burgundy transition-colors" title="Déplacer avant">
-                        <ArrowUp size={12} />
-                      </button>
-                    )}
-                    {i < images.length - 1 && (
-                      <button type="button" onClick={() => moveImage(img.key, 1)} className="rounded-full bg-white/90 p-1 text-ink/50 hover:text-burgundy transition-colors" title="Déplacer après">
-                        <ArrowDown size={12} />
-                      </button>
-                    )}
-                  </div>
+                    </>
+                  )}
+                  <button type="button" onClick={() => removeImage(img.key)} className="rounded-full bg-white/90 p-1 text-ink/50 hover:text-burgundy transition-colors" title="Supprimer">
+                    <X size={12} />
+                  </button>
                 </div>
               </div>
             ))}
@@ -1244,6 +1330,9 @@ export default function SellerProductForm({ productId }: { productId?: string })
       )}
       {brandingTargetKey && brandingBaseFile && (
         <LogoOverlayModal baseFile={brandingBaseFile} onCancel={() => { setBrandingTargetKey(null); setBrandingBaseFile(null); }} onConfirm={handleBrandingConfirm} />
+      )}
+      {recropTargetKey && recropSourceFile && (
+        <ImageCropModal file={recropSourceFile} onCancel={handleRecropCancel} onConfirm={handleRecropConfirm} />
       )}
 
       {/* 6. Prix de base */}

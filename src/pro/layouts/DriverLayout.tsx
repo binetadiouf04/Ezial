@@ -1,5 +1,5 @@
 import { usePro } from '../ProContext';
-import { Home, Truck, Wallet, User, LogOut } from 'lucide-react';
+import { Home, Truck, Wallet, User, LogOut, ArrowLeft } from 'lucide-react';
 import DriverHome from '../pages/driver/DriverHome';
 import DriverMissions from '../pages/driver/DriverMissions';
 import DriverMissionDetail from '../pages/driver/DriverMissionDetail';
@@ -35,15 +35,26 @@ export default function DriverLayout() {
 
   return (
     <div className="min-h-screen bg-cream/30">
-      {/* Mobile top bar */}
-      <div className="sticky top-0 z-20 border-b border-line bg-white/95 backdrop-blur-md px-4 py-3 flex items-center justify-between">
-        <div>
+      {/* Top bar — no side menu on this layout, so both actions are shown
+          directly as explicit text, never a bare ambiguous icon. */}
+      <div className="sticky top-0 z-20 border-b border-line bg-white/95 backdrop-blur-md px-4 py-3 flex items-center justify-between gap-2">
+        <div className="min-w-0">
           <p className="text-[11px] text-ink/40 font-medium uppercase tracking-wider">Ezial Livreur</p>
-          <p className="text-sm font-semibold text-ink">{name}</p>
+          <p className="truncate text-sm font-semibold text-ink">{name}</p>
         </div>
-        <button onClick={logout} className="rounded-lg p-2 text-ink/40 hover:text-burgundy transition-colors">
-          <LogOut size={18} />
-        </button>
+        <div className="flex flex-shrink-0 items-center gap-1.5">
+          <button
+            onClick={() => { window.location.hash = '/'; }}
+            className="flex items-center gap-1.5 rounded-lg border border-line px-2.5 py-1.5 text-xs font-medium text-ink/60 hover:border-burgundy/30 hover:text-burgundy transition-colors"
+          >
+            <ArrowLeft size={14} />
+            <span className="hidden sm:inline">Retourner sur Ezial Marketplace</span>
+            <span className="sm:hidden">Marketplace</span>
+          </button>
+          <button onClick={logout} className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-burgundy hover:bg-burgundy/5 transition-colors">
+            <LogOut size={14} /> Déconnexion
+          </button>
+        </div>
       </div>
 
       {/* Main content */}
