@@ -280,3 +280,54 @@ export async function fetchActiveCatalogFromSupabase(): Promise<SupabaseCatalogR
     errors,
   };
 }
+
+export interface SupabaseProductDetailResult {
+  /** null when the id doesn't resolve to any publicly visible product — either it doesn't exist, or it isn't 'active' (draft/flagged/disabled are never returned here). */
+  product: Product | null;
+  /** null when the product's shop row itself couldn't be found — the product can still render without it. */
+  shop: Shop | null;
+  error?: string;
+}
+
+/**
+ * Resolves a single product by id straight from Supabase — used by
+ * ProductPage so a real product's own detail page doesn't depend on the
+ * static mock catalog at all. Mirrors fetchActiveCatalogFromSupabase's
+ * shape/mapping exactly (same row types, same mapProduct/mapShop), just
+ * scoped to one id instead of the whole catalog.
+ *
+ * The 'active' filter is applied client-side here for the same reason as
+ * above — a draft/flagged/disabled product must never be reachable by
+ * guessing or sharing its URL, on top of whatever RLS already enforces.
+ */
+export async function fetchProductDetailFromSupabase(productId: string): Promise<SupabaseProductDetailResult> {
+  const { data: productRow, error: productError } = await supabase
+    .from('products')
+    .select('*')
+    .eq('id', productId)
+    .eq('status', 'active')
+    .maybeSingle();
+
+  if (productError) return { product: null, shop: null, error: productError.message };
+  if (!productRow) return { product: null, shop: null };
+
+  const row = productRow as ProductRow;
+
+  const [imagesRes, variantsRes, shopRes] = await Promise.all([
+    supabase.from('product_images').select('*').eq('product_id', row.id),
+    supabase.from('product_variants').select('*').eq('product_id', row.id),
+    supabase.from('shops').select('*').eq('id', row.shop_id).maybeSingle(),
+  ]);
+
+  // Images/variants/shop failures are non-fatal — the product itself was
+  // found, so it still renders (just without that piece) rather than
+  // turning a partial failure into a full "not found".
+  const imageRows = (imagesRes.data ?? []) as ProductImageRow[];
+  const variantRows = (variantsRes.data ?? []) as ProductVariantRow[];
+  const shopRow = (shopRes.data ?? null) as ShopRow | null;
+
+  return {
+    product: mapProduct(row, imageRows, variantRows),
+    shop: shopRow ? mapShop(shopRow) : null,
+  };
+}

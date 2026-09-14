@@ -1,7 +1,8 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useApp } from '@/store/AppContext';
 import { getProduct, getVariantPrice, getProductsFromSameShop, getSimilarProducts } from '@/data/products';
-import { getShop } from '@/data/shops';
+import { getShop, registerSupabaseShops } from '@/data/shops';
+import { fetchProductDetailFromSupabase } from '@/lib/supabaseCatalog';
 import { categoryMap } from '@/data/categories';
 import ProductGallery from '@/components/ProductGallery';
 import VariantSelector from '@/components/VariantSelector';
@@ -16,7 +17,38 @@ type Tab = (typeof tabs)[number];
 
 export default function ProductPage({ productId }: { productId: string }) {
   const { navigate, addToCart } = useApp();
-  const product = getProduct(productId);
+  // The static mock catalog resolves synchronously and stays the fallback
+  // for its own ids; a real Supabase product is never in it, so its id
+  // falls through to the fetch below instead of an immediate "not found".
+  const mockProduct = getProduct(productId);
+  const [supabaseProduct, setSupabaseProduct] = useState<ReturnType<typeof getProduct>>(undefined);
+  const [supabaseShop, setSupabaseShop] = useState<ReturnType<typeof getShop>>(undefined);
+  const [loading, setLoading] = useState(!mockProduct);
+  const [loadError, setLoadError] = useState('');
+
+  useEffect(() => {
+    if (mockProduct) return; // resolved synchronously — nothing to fetch
+    let cancelled = false;
+    setLoading(true);
+    setLoadError('');
+    setSupabaseProduct(undefined);
+    setSupabaseShop(undefined);
+    fetchProductDetailFromSupabase(productId).then(({ product, shop, error }) => {
+      if (cancelled) return;
+      if (error) { setLoadError(error); setLoading(false); return; }
+      // Registered so getShop() (used elsewhere on this same page, and by
+      // any other component reached afterward) can resolve this shop too —
+      // without this, a shop only ever known via this direct product fetch
+      // would stay invisible to getShop() for the rest of the session.
+      if (shop) registerSupabaseShops([shop]);
+      setSupabaseProduct(product ?? undefined);
+      setSupabaseShop(shop ?? undefined);
+      setLoading(false);
+    });
+    return () => { cancelled = true; };
+  }, [productId, mockProduct]);
+
+  const product = mockProduct ?? supabaseProduct;
   const [variants, setVariants] = useState<Record<string, string>>({});
   const [qty, setQty] = useState(1);
   const [tab, setTab] = useState<Tab>('Description');
@@ -28,9 +60,11 @@ export default function ProductPage({ productId }: { productId: string }) {
     return getVariantPrice(product, variants);
   }, [product, variants]);
 
+  if (loading) return <div className="container-pro py-20 text-center text-ink/50">Chargement du produit…</div>;
+  if (loadError) return <div className="container-pro py-20 text-center text-ink/50">Une erreur est survenue lors du chargement du produit.</div>;
   if (!product) return <div className="container-pro py-20 text-center text-ink/50">Produit introuvable.</div>;
 
-  const shop = getShop(product.shopId);
+  const shop = mockProduct ? getShop(product.shopId) : (supabaseShop ?? getShop(product.shopId));
   const cat = categoryMap[product.category];
   const outOfStock = product.stock === 0;
   const lowStock = product.stock > 0 && product.stock <= 3;
