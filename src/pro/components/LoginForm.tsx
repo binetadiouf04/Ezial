@@ -9,6 +9,8 @@ interface LoginFormProps {
   onLogin: (identifier: string, name: string, shopInfo?: SellerShopInfo) => void;
   /** Seller-only: authenticates seller_code + password against Supabase Auth, then checks shop ownership. */
   verifySeller?: (identifier: string, password: string) => Promise<{ shop: { sellerId: string; name: string; supabaseShopId: string; isOfficial: boolean } } | { error: string }>;
+  /** Admin-only: authenticates email + password against Supabase Auth, then checks public.admins membership. */
+  verifyAdmin?: (email: string, password: string) => Promise<{ name: string } | { error: string }>;
 }
 
 const roleConfig: Record<Role, { title: string; subtitle: string; placeholder: string; hint: string; demoId: string; demoName: string }> = {
@@ -38,7 +40,7 @@ const roleConfig: Record<Role, { title: string; subtitle: string; placeholder: s
   },
 };
 
-export default function LoginForm({ role, onBack, onLogin, verifySeller }: LoginFormProps) {
+export default function LoginForm({ role, onBack, onLogin, verifySeller, verifyAdmin }: LoginFormProps) {
   const cfg = roleConfig[role];
   const [email, setEmail] = useState('');
   const [identifier, setIdentifier] = useState('');
@@ -53,7 +55,14 @@ export default function LoginForm({ role, onBack, onLogin, verifySeller }: Login
         setError('Veuillez remplir tous les champs.');
         return;
       }
-      onLogin(email.trim(), cfg.demoName);
+      setIsVerifying(true);
+      const result = await verifyAdmin?.(email.trim(), password);
+      setIsVerifying(false);
+      if (!result || 'error' in result) {
+        setError(result?.error ?? 'Connexion impossible.');
+        return;
+      }
+      onLogin(email.trim(), result.name);
     } else if (role === 'seller') {
       if (!identifier.trim() || !password.trim()) {
         setError('Veuillez saisir votre identifiant et votre mot de passe.');

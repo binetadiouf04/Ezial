@@ -1,13 +1,19 @@
 import { useMemo } from 'react';
 import { useApp } from '@/store/AppContext';
-import { products } from '@/data/products';
+import { getShop } from '@/data/shops';
+import { rankForTrending } from '@/lib/productRanking';
 import ProductGrid from '@/components/ProductGrid';
 import CategorySidebar from '@/components/CategorySidebar';
 import { ChevronRight } from 'lucide-react';
 
+const isOfficialShop = (shopId: string): boolean => getShop(shopId)?.isOfficial === true;
+
 export default function TrendingPage() {
-  const { navigate } = useApp();
-  const trendingProducts = useMemo(() => products.filter((p) => p.isTrending), []);
+  const { navigate, catalogProducts } = useApp();
+  // Same MVP fallback as the Home preview: real activity data doesn't exist
+  // yet, so this ranks by real product recency instead of simulating an
+  // engagement score — see rankForTrending.
+  const trendingProducts = useMemo(() => rankForTrending(catalogProducts, { isOfficialShop }), [catalogProducts]);
 
   return (
     <div className="container-pro flex gap-8 py-6">

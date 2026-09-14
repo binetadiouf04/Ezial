@@ -1,13 +1,12 @@
 import { useMemo } from 'react';
 import { useApp } from '@/store/AppContext';
-import { products } from '@/data/products';
 import ProductGrid from '@/components/ProductGrid';
 import CategorySidebar from '@/components/CategorySidebar';
 import { ChevronRight } from 'lucide-react';
 
 export default function PromoPage() {
-  const { navigate } = useApp();
-  const promoProducts = useMemo(() => products.filter((p) => p.isPromo), []);
+  const { navigate, catalogProducts } = useApp();
+  const promoProducts = useMemo(() => catalogProducts.filter((p) => p.isPromo), [catalogProducts]);
 
   return (
     <div className="container-pro flex gap-8 py-6">

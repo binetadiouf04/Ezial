@@ -22,6 +22,10 @@ export interface Product {
   hairMaterial?: string;
   gender?: 'femme' | 'homme';
   shoeGender?: 'femme' | 'homme';
+  // Real Supabase products.created_at, ISO string — absent on the static
+  // mock catalog. Used as an honest recency signal (never a fabricated
+  // "trending" score) by the Tendances fallback ranking.
+  createdAt?: string;
 }
 
 const I = {

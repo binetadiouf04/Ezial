@@ -1,14 +1,14 @@
 import { useEffect, useState } from 'react';
 import { useApp } from '@/store/AppContext';
-import { products as mockProducts, type Product } from '@/data/products';
-import { shops as mockShops, registerSupabaseShops, getShop, type Shop } from '@/data/shops';
-import { homeCircleTiles } from '@/data/categories';
+import type { Product } from '@/data/products';
+import { getShop } from '@/data/shops';
+import { homeCircleTiles, type HomeCircleTile } from '@/data/categories';
 import ProductCard from '@/components/ProductCard';
 import ShopCard from '@/components/ShopCard';
 import HeroCarousel, { type HeroSlide } from '@/components/HeroCarousel';
 import DiscoverMarquee from '@/components/DiscoverMarquee';
-import { fetchActiveCatalogFromSupabase } from '@/lib/supabaseCatalog';
-import { rankProducts } from '@/lib/productRanking';
+import { rankProducts, rankForTrending } from '@/lib/productRanking';
+import { fetchHeroSlides, fetchDiscoverTiles } from '@/lib/supabaseHomeContent';
 import { ChevronRight } from 'lucide-react';
 
 // Phase 1: resolves "official shop" purely from Supabase shops.is_official
@@ -17,31 +17,14 @@ import { ChevronRight } from 'lucide-react';
 // won't need to change.
 const isOfficialShop = (shopId: string): boolean => getShop(shopId)?.isOfficial === true;
 
-// TRANSITIONAL — merges the Supabase catalog into the mock one instead of
-// replacing it outright, so the homepage stays populated while the real
-// catalog is still thin. A Supabase product wins over a mock product that
-// shares its reference; mock products with no matching reference are kept
-// as-is. Remove this merge (and mockProducts) once the Supabase catalog is
-// filled enough to stand on its own — see fetchActiveCatalogFromSupabase().
-function mergeCatalogs(mock: Product[], supabase: Product[]): Product[] {
-  const supabaseRefs = new Set(supabase.map((p) => p.reference).filter(Boolean));
-  const remainingMock = mock.filter((p) => !supabaseRefs.has(p.reference));
-  return [...supabase, ...remainingMock];
-}
+// Each automatic section shows at most this many products on the Home —
+// "Voir tout" links to the full, uncapped list on its own page.
+const HOME_SECTION_LIMIT = 9;
+const HOME_SHOPS_LIMIT = 6;
 
-// Same transitional merge as mergeCatalogs, but for the "Boutiques à
-// découvrir" shop grid — deduped by id (shops have no shared "reference"
-// field to match mock vs. Supabase rows on, but a real Supabase shop's id
-// is a UUID that will never collide with a mock shop's slug-style id).
-function mergeShops(mock: Shop[], supabase: Shop[]): Shop[] {
-  const supabaseIds = new Set(supabase.map((s) => s.id));
-  const remainingMock = mock.filter((s) => !supabaseIds.has(s.id));
-  return [...supabase, ...remainingMock];
-}
-
-// Homepage-only preview row for a product section: a capped selection (~6 on
-// desktop) with a "Voir tout" link to the full list, horizontally swipeable
-// on mobile instead of wrapping into extra rows.
+// Homepage-only preview row for a product section: a capped selection with
+// a "Voir tout" link to the full list, horizontally swipeable on mobile
+// instead of wrapping into extra rows.
 function HomeProductPreview({
   eyebrow,
   title,
@@ -55,7 +38,7 @@ function HomeProductPreview({
   seeAllRoute: string;
   onNavigate: (route: string) => void;
 }) {
-  const preview = products.slice(0, 6);
+  const preview = products.slice(0, HOME_SECTION_LIMIT);
   return (
     <>
       <div className="mb-6 flex items-end justify-between">
@@ -77,7 +60,10 @@ function HomeProductPreview({
   );
 }
 
-const heroSlides: HeroSlide[] = [
+// Static fallback content — used until (or unless) an admin has published
+// active rows in hero_slides / home_discover_tiles. Never removed outright:
+// an empty Home would be worse than showing this curated default.
+const staticHeroSlides: HeroSlide[] = [
   {
     id: 'mode-femme',
     image: 'https://images.pexels.com/photos/38277759/pexels-photo-38277759.jpeg?auto=compress&cs=tinysrgb&h=900&w=1600',
@@ -126,32 +112,25 @@ const heroSlides: HeroSlide[] = [
 ];
 
 export default function HomePage() {
-  const { navigate } = useApp();
-  // The mock catalog renders immediately; if the Supabase catalog fetch
-  // succeeds, its products/shops are merged in (see mergeCatalogs/mergeShops
-  // above). On failure (or while still loading), the mock catalog stays
-  // as-is — never left empty.
-  const [products, setProducts] = useState<Product[]>(mockProducts);
-  const [displayShops, setDisplayShops] = useState<Shop[]>(mockShops);
+  const { navigate, catalogProducts: products, catalogShops: displayShops } = useApp();
+
+  // Hero and "À découvrir" are manually managed from the admin (hero_slides /
+  // home_discover_tiles) — the static arrays above/in categories.ts are only
+  // ever shown until an admin has published active rows, or if the tables
+  // can't be reached (migration not run yet, network error, etc.).
+  const [heroSlides, setHeroSlides] = useState<HeroSlide[]>(staticHeroSlides);
+  const [discoverTiles, setDiscoverTiles] = useState<HomeCircleTile[]>(homeCircleTiles);
 
   useEffect(() => {
     let cancelled = false;
-    fetchActiveCatalogFromSupabase()
-      .then((result) => {
-        if (cancelled) return;
-        if (result.errors.length === 0) {
-          // Registered before the merge so ProductCard's getShop() can
-          // resolve a real Supabase product's shop (name, logo, link) —
-          // without this, a Supabase product's shopId never matches
-          // anything in the static mock shop list.
-          registerSupabaseShops(result.shops);
-          setProducts(mergeCatalogs(mockProducts, result.products));
-          setDisplayShops(mergeShops(mockShops, result.shops));
-        }
-      })
-      .catch(() => {
-        // Fetch itself failed unexpectedly — keep the mock catalog as-is.
-      });
+    fetchHeroSlides().then(({ slides, error }) => {
+      if (cancelled || error) return;
+      if (slides.length > 0) setHeroSlides(slides);
+    });
+    fetchDiscoverTiles().then(({ tiles, error }) => {
+      if (cancelled || error) return;
+      if (tiles.length > 0) setDiscoverTiles(tiles);
+    });
     return () => { cancelled = true; };
   }, []);
 
@@ -161,9 +140,13 @@ export default function HomePage() {
   // preserved within each tier, then ranked so official products still
   // surface even when they wouldn't have landed in a random slice.
   const rankingContext = { isOfficialShop };
-  const trending = rankProducts(products.filter((p) => p.isTrending), rankingContext);
+  // Tendances: real activity data (consultations/favoris/panier/achats)
+  // doesn't exist yet — rankForTrending falls back to real product recency
+  // (products.created_at) instead of simulating engagement numbers.
+  const trending = rankForTrending(products, rankingContext);
   const promos = rankProducts(products.filter((p) => p.isPromo), rankingContext);
-  const pourVous = rankProducts([...products].sort(() => 0.5 - Math.random()), rankingContext).slice(0, 8);
+  const pourVous = rankProducts([...products].sort(() => 0.5 - Math.random()), rankingContext);
+  const featuredShops = displayShops.slice(0, HOME_SHOPS_LIMIT);
 
   return (
     <div>
@@ -178,7 +161,7 @@ export default function HomePage() {
 
         <section>
           <div className="mb-5 flex items-end justify-between"><h2 className="section-title">À découvrir</h2></div>
-          <DiscoverMarquee tiles={homeCircleTiles} onNavigate={navigate} />
+          <DiscoverMarquee tiles={discoverTiles} onNavigate={navigate} />
         </section>
       </div>
 
@@ -198,8 +181,11 @@ export default function HomePage() {
         </section>
 
         <section>
-          <div className="mb-6 flex items-end justify-between"><div><p className="eyebrow mb-1.5">Boutiques à découvrir</p><h2 className="section-title">Nos vendeurs sélectionnés</h2></div></div>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">{displayShops.map((shop) => <ShopCard key={shop.id} shop={shop} />)}</div>
+          <div className="mb-6 flex items-end justify-between">
+            <div><p className="eyebrow mb-1.5">Boutiques à découvrir</p><h2 className="section-title">Nos vendeurs sélectionnés</h2></div>
+            <button onClick={() => navigate('/boutiques')} className="flex items-center gap-1 text-sm font-medium text-burgundy hover:underline whitespace-nowrap">Voir toutes les boutiques <ChevronRight size={15} /></button>
+          </div>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">{featuredShops.map((shop) => <ShopCard key={shop.id} shop={shop} />)}</div>
         </section>
 
         <section className="border-t border-line pt-12">

@@ -1,13 +1,12 @@
 import { useMemo } from 'react';
 import { useApp } from '@/store/AppContext';
-import { products } from '@/data/products';
 import ProductGrid from '@/components/ProductGrid';
 import CategorySidebar from '@/components/CategorySidebar';
 import { ChevronRight } from 'lucide-react';
 
 export default function ForYouPage() {
-  const { navigate } = useApp();
-  const forYouProducts = useMemo(() => [...products].sort(() => 0.5 - Math.random()), []);
+  const { navigate, catalogProducts } = useApp();
+  const forYouProducts = useMemo(() => [...catalogProducts].sort(() => 0.5 - Math.random()), [catalogProducts]);
 
   return (
     <div className="container-pro flex gap-8 py-6">

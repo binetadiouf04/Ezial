@@ -33,3 +33,22 @@ export function rankProducts(products: Product[], ctx: RankingContext): Product[
     .sort((a, b) => b.score - a.score || a.index - b.index)
     .map((entry) => entry.product);
 }
+
+// "Tendances" MVP fallback: there is no real view/favorite/cart/purchase
+// activity table yet, so this never fabricates an engagement score — it
+// ranks by the one honest signal already available, product recency
+// (products.created_at, real Supabase products only). Products with a real
+// timestamp sort by most-recent-first; the static mock catalog has none,
+// so mock products fall after every real one, kept in their existing
+// relative order (their own curated isTrending flag as a last tie-break)
+// rather than disappearing outright. Phase 2 (real activity data) replaces
+// the comparator's body the same way scoreProduct is meant to evolve.
+export function rankForTrending(products: Product[], ctx: RankingContext): Product[] {
+  const byRecency = [...products].sort((a, b) => {
+    if (a.createdAt && b.createdAt) return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+    if (a.createdAt && !b.createdAt) return -1;
+    if (!a.createdAt && b.createdAt) return 1;
+    return (b.isTrending ? 1 : 0) - (a.isTrending ? 1 : 0);
+  });
+  return rankProducts(byRecency, ctx);
+}

@@ -4,6 +4,7 @@ import { missions as initialMissions, type Mission, type Product, type Shop, typ
 import { shops as initialShops, products as initialProducts, transactions as initialTransactions, driverTransactions as initialDriverTransactions, orders as initialOrders, drivers as initialDrivers, moderationHistory as initialModerationHistory, blogPosts as initialBlogPosts } from './data';
 import { assignShopPrefixes, nextReferenceForShop } from '@/utils/reference';
 import { signInSeller, restoreSellerSession, signOutSeller } from '@/lib/supabaseSellerAuth';
+import { signInAdmin, restoreAdminSession } from '@/lib/supabaseAdminAuth';
 
 type Route = string;
 
@@ -108,6 +109,11 @@ interface ProState extends AuthState {
   // Auth, then verifies the account owns a real shop (shops.owner_id =
   // auth.uid()) before granting access.
   verifySellerLogin: (identifier: string, password: string) => Promise<{ shop: { sellerId: string; name: string; supabaseShopId: string; isOfficial: boolean } } | { error: string }>;
+  // Admin login — authenticates a real email + password against Supabase
+  // Auth, then verifies the account is listed in public.admins before
+  // granting access. Needed so RLS on manually-managed content (Hero,
+  // "À découvrir") can actually restrict writes to admins.
+  verifyAdminLogin: (email: string, password: string) => Promise<{ name: string } | { error: string }>;
   // Seller transactions
   sellerTransactions: typeof initialTransactions;
   // Driver state
@@ -229,12 +235,30 @@ export function ProProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    if (parsed.role !== 'seller') {
-      // Admin/driver sessions are unchanged mock state — no Supabase involved.
-      setRole(parsed.role);
+    if (parsed.role === 'driver') {
+      // Driver sessions are unchanged mock state — no Supabase involved.
+      setRole('driver');
       setIdentifier(parsed.identifier);
       setName(parsed.name);
-      setRoute(parsed.role === 'admin' ? '/admin' : '/driver');
+      setRoute('/driver');
+      return;
+    }
+
+    if (parsed.role === 'admin') {
+      // Admin sessions are never trusted from sessionStorage alone — the
+      // real Supabase session must still exist AND still be listed in
+      // public.admins before the admin area opens.
+      (async () => {
+        const admin = await restoreAdminSession();
+        if (!admin) {
+          sessionStorage.removeItem('ezial-pro-auth');
+          return;
+        }
+        setRole('admin');
+        setIdentifier(parsed.identifier);
+        setName(admin.name);
+        setRoute('/admin');
+      })();
       return;
     }
 
@@ -363,6 +387,12 @@ export function ProProvider({ children }: { children: ReactNode }) {
     const result = await signInSeller(id, password);
     if ('error' in result) return { error: result.error };
     return { shop: { sellerId: id.toUpperCase(), name: result.shopName, supabaseShopId: result.shopId, isOfficial: result.isOfficial } };
+  }, []);
+
+  const verifyAdminLogin = useCallback(async (email: string, password: string): Promise<{ name: string } | { error: string }> => {
+    const result = await signInAdmin(email.trim(), password);
+    if ('error' in result) return { error: result.error };
+    return { name: result.name };
   }, []);
 
   // === Driver actions ===
@@ -653,6 +683,7 @@ export function ProProvider({ children }: { children: ReactNode }) {
     sellerSupabaseShopId,
     sellerShopIsOfficial,
     verifySellerLogin,
+    verifyAdminLogin,
     sellerTransactions,
     driverAvailable,
     setDriverAvailable,

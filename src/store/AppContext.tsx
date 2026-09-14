@@ -1,5 +1,7 @@
 import { createContext, useContext, useEffect, useState, useCallback, type ReactNode } from 'react';
 import { products as allProducts, type Product } from '@/data/products';
+import { shops as mockShops, registerSupabaseShops, type Shop } from '@/data/shops';
+import { fetchActiveCatalogFromSupabase } from '@/lib/supabaseCatalog';
 
 export interface CartItem { productId: string; shopId: string; quantity: number; variants: Record<string, string>; unitPrice?: number; }
 export interface SavedItem { productId: string; shopId: string; quantity: number; variants: Record<string, string>; unitPrice?: number; }
@@ -56,6 +58,11 @@ export interface Order {
 
 interface AppState {
   route: string; navigate: (route: string) => void;
+  // Real Supabase catalog merged with the still-temporary mock catalog —
+  // fetched once here (not per-page) so Home, Promotions, Tendances,
+  // Sélection personnalisée and the shops listing all see the same real
+  // products/shops instead of each re-fetching independently.
+  catalogProducts: Product[]; catalogShops: Shop[];
   favorites: string[]; toggleFavorite: (productId: string) => void; isFavorite: (productId: string) => boolean;
   cart: CartItem[]; addToCart: (item: CartItem) => void; removeFromCart: (index: number) => void;
   updateQuantity: (index: number, quantity: number) => void; clearCart: () => void;
@@ -154,8 +161,36 @@ const defaultCustomerInfo: CustomerInfo = {
   landmark: "Près de la route de l'aéroport, porte bleue",
 };
 
+// TRANSITIONAL — merges the Supabase catalog into the mock one instead of
+// replacing it outright, so the app stays populated while the real catalog
+// is still thin. A Supabase product wins over a mock product that shares
+// its reference; mock products with no matching reference are kept as-is.
+// Remove this merge (and the mock products) once the Supabase catalog is
+// filled enough to stand on its own — see fetchActiveCatalogFromSupabase().
+function mergeCatalogs(mock: Product[], supabase: Product[]): Product[] {
+  const supabaseRefs = new Set(supabase.map((p) => p.reference).filter(Boolean));
+  const remainingMock = mock.filter((p) => !supabaseRefs.has(p.reference));
+  return [...supabase, ...remainingMock];
+}
+
+// Same transitional merge as mergeCatalogs, but for shops — deduped by id
+// (shops have no shared "reference" field to match mock vs. Supabase rows
+// on, but a real Supabase shop's id is a UUID that will never collide with
+// a mock shop's slug-style id).
+function mergeShops(mock: Shop[], supabase: Shop[]): Shop[] {
+  const supabaseIds = new Set(supabase.map((s) => s.id));
+  const remainingMock = mock.filter((s) => !supabaseIds.has(s.id));
+  return [...supabase, ...remainingMock];
+}
+
 export function AppProvider({ children }: { children: ReactNode }) {
   const [route, setRoute] = useState(getInitialRoute());
+  // The mock catalog renders immediately; if the Supabase catalog fetch
+  // succeeds, its products/shops are merged in (see mergeCatalogs/mergeShops
+  // above). On failure (or while still loading), the mock catalog stays
+  // as-is — never left empty.
+  const [catalogProducts, setCatalogProducts] = useState<Product[]>(allProducts);
+  const [catalogShops, setCatalogShops] = useState<Shop[]>(mockShops);
   const [favorites, setFavorites] = useState<string[]>([]);
   const [cart, setCart] = useState<CartItem[]>([]);
   const [savedItems, setSavedItems] = useState<SavedItem[]>([]);
@@ -171,6 +206,27 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const onHash = () => setRoute(window.location.hash.replace(/^#/, '') || '/');
     window.addEventListener('hashchange', onHash);
     return () => window.removeEventListener('hashchange', onHash);
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchActiveCatalogFromSupabase()
+      .then((result) => {
+        if (cancelled) return;
+        if (result.errors.length === 0) {
+          // Registered before the merge so ProductCard's getShop() can
+          // resolve a real Supabase product's shop (name, logo, link) —
+          // without this, a Supabase product's shopId never matches
+          // anything in the static mock shop list.
+          registerSupabaseShops(result.shops);
+          setCatalogProducts(mergeCatalogs(allProducts, result.products));
+          setCatalogShops(mergeShops(mockShops, result.shops));
+        }
+      })
+      .catch(() => {
+        // Fetch itself failed unexpectedly — keep the mock catalog as-is.
+      });
+    return () => { cancelled = true; };
   }, []);
 
   const navigate = useCallback((r: string) => {
@@ -255,7 +311,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const updateCustomerInfo = useCallback((info: CustomerInfo) => setCustomerInfo(info), []);
 
   const value: AppState = {
-    route, navigate, favorites, toggleFavorite, isFavorite,
+    route, navigate, catalogProducts, catalogShops, favorites, toggleFavorite, isFavorite,
     cart, addToCart, removeFromCart, updateQuantity, clearCart,
     saveForLater, moveToCart, removeFromSaved, savedItems,
     cartCount, cartSubtotal, cartOpen, setCartOpen, categoryDrawerOpen, setCategoryDrawerOpen,

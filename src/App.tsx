@@ -25,6 +25,7 @@ import InfoPage from '@/pages/InfoPage';
 import PromoPage from '@/pages/PromoPage';
 import TrendingPage from '@/pages/TrendingPage';
 import ForYouPage from '@/pages/ForYouPage';
+import ShopsPage from '@/pages/ShopsPage';
 
 function RouteView() {
   const { route } = useApp();
@@ -70,6 +71,9 @@ function RouteView() {
     const shopId = clean.split('/')[2];
     if (shopId) return <ShopPage shopId={shopId} />;
   }
+
+  // Shops listing: /boutiques
+  if (clean === '/boutiques') return <ShopsPage />;
 
   // Static pages
   if (clean === '/favoris') return <FavoritesPage />;
@@ -144,6 +148,7 @@ function pageMetaFor(route: string): { title: string; description: string } {
   if (clean === '/promos') return { title: `Promotions — ${SITE_TITLE}`, description: 'Toutes les offres et promotions en cours sur Ezial.' };
   if (clean === '/tendances') return { title: `Tendances — ${SITE_TITLE}`, description: 'Les produits tendances du moment sur Ezial.' };
   if (clean === '/pour-vous') return { title: `Sélection pour vous — ${SITE_TITLE}`, description: 'Notre sélection de produits personnalisée sur Ezial.' };
+  if (clean === '/boutiques') return { title: `Boutiques — ${SITE_TITLE}`, description: 'Toutes les boutiques actives sur Ezial.' };
   if (clean.startsWith('/recherche')) return { title: `Recherche — ${SITE_TITLE}`, description: DEFAULT_DESCRIPTION };
   return { title: `${SITE_TITLE} — Mode, beauté & lifestyle à Dakar`, description: DEFAULT_DESCRIPTION };
 }

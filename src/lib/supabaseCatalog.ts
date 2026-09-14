@@ -225,6 +225,7 @@ function mapProduct(row: ProductRow, imageRows: ProductImageRow[], variantRows: 
     hairMaterial: undefined,
     gender: undefined,
     shoeGender: undefined,
+    createdAt: row.created_at,
   };
 }
 

@@ -7,7 +7,8 @@ export interface HeroSlide {
   id: string;
   image: string;
   imagePosition?: string;
-  eyebrow: string;
+  /** Optional subtitle shown above the title. */
+  eyebrow?: string;
   title: string;
   ctaLabel: string;
   ctaRoute: string;
@@ -65,7 +66,7 @@ export default function HeroCarousel({ slides }: { slides: HeroSlide[] }) {
             />
             <div className="absolute inset-0 bg-gradient-to-t from-ink/70 via-ink/10 to-transparent" />
             <div className="absolute inset-x-0 bottom-0 p-5 sm:p-8 lg:p-10">
-              <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.18em] text-white/85">{slide.eyebrow}</p>
+              {slide.eyebrow && <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.18em] text-white/85">{slide.eyebrow}</p>}
               <h2 className="font-display max-w-xs text-2xl font-semibold leading-tight text-white sm:max-w-sm sm:text-3xl lg:text-4xl">{slide.title}</h2>
               <button
                 onClick={() => navigate(slide.ctaRoute)}
