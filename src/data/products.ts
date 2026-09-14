@@ -302,18 +302,23 @@ export function getVariantPrice(product: Product, selected: Record<string, strin
   return { price: product.price, oldPrice: product.oldPrice };
 }
 
-export function getProductsFromSameShop(product: Product): Product[] {
-  return products.filter((p) => p.shopId === product.shopId && p.id !== product.id);
+// `pool` defaults to the static mock catalog for any caller that hasn't
+// been updated to pass the real+mock merged catalog (AppContext's
+// catalogProducts) — but every current caller does pass it, so real
+// Supabase products are always included in "same shop" / "similar
+// products" recommendations, not just the mock ones.
+export function getProductsFromSameShop(product: Product, pool: Product[] = products): Product[] {
+  return pool.filter((p) => p.shopId === product.shopId && p.id !== product.id);
 }
 
-export function getSimilarProducts(product: Product, excludeIds: string[] = []): Product[] {
+export function getSimilarProducts(product: Product, pool: Product[] = products, excludeIds: string[] = [], limit = 8): Product[] {
   const exclude = new Set([product.id, ...excludeIds]);
-  const sameSub = products.filter((p) => !exclude.has(p.id) && p.category === product.category && p.subcategory === product.subcategory);
-  const sameCat = products.filter((p) => !exclude.has(p.id) && p.category === product.category && p.subcategory !== product.subcategory);
+  const sameSub = pool.filter((p) => !exclude.has(p.id) && p.category === product.category && p.subcategory === product.subcategory);
+  const sameCat = pool.filter((p) => !exclude.has(p.id) && p.category === product.category && p.subcategory !== product.subcategory);
   const priceMin = product.price * 0.5;
   const priceMax = product.price * 2;
-  const similarPrice = products.filter((p) => !exclude.has(p.id) && p.category !== product.category && p.price >= priceMin && p.price <= priceMax);
+  const similarPrice = pool.filter((p) => !exclude.has(p.id) && p.category !== product.category && p.price >= priceMin && p.price <= priceMax);
   const scored = [...sameSub.map((p) => ({ p, score: 5 })), ...sameCat.map((p) => ({ p, score: 3 })), ...similarPrice.map((p) => ({ p, score: 1 }))];
   scored.sort((a, b) => b.score - a.score || (b.p.isTrending ? 1 : 0) - (a.p.isTrending ? 1 : 0));
-  return scored.slice(0, 8).map((s) => s.p);
+  return scored.slice(0, limit).map((s) => s.p);
 }

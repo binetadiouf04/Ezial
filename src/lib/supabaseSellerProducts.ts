@@ -362,6 +362,116 @@ export async function deleteProductImage(imageId: string, storagePath: string): 
   return {};
 }
 
+// === Edit mode: load a full product for editing, and save it back ===
+
+export interface EditableProductVariant {
+  id: string;
+  attributes: Record<string, string>;
+  price: number;
+  stock: number;
+}
+
+export interface EditableProduct {
+  id: string;
+  shopId: string;
+  reference: string;
+  name: string;
+  description: string;
+  category: string;
+  subcategory: string;
+  basePrice: number;
+  status: SupabaseProductStatus;
+  descriptiveAttributes: Record<string, string[]>;
+  variants: EditableProductVariant[];
+  images: ExistingProductImage[];
+  isPromo: boolean;
+  promoPrice: number | null;
+}
+
+// Scoped to the seller's own shop (like fetchSellerProducts) so editing
+// never reads — let alone later updates — a product belonging to a
+// different shop, on top of whatever RLS already enforces.
+export async function fetchProductForEdit(productId: string, shopId: string): Promise<EditableProduct | null> {
+  const { data: row, error } = await supabase
+    .from('products')
+    .select('id, shop_id, reference, name, description, category, subcategory, base_price, status, descriptive_attributes, is_promo, promo_price')
+    .eq('id', productId)
+    .eq('shop_id', shopId)
+    .maybeSingle();
+  if (error || !row) return null;
+
+  const [{ data: variantRows }, images] = await Promise.all([
+    supabase.from('product_variants').select('id, attributes, price, stock').eq('product_id', productId),
+    fetchProductImages(productId),
+  ]);
+
+  return {
+    id: row.id as string,
+    shopId: row.shop_id as string,
+    reference: (row.reference as string) ?? '',
+    name: (row.name as string) ?? '',
+    description: (row.description as string) ?? '',
+    category: (row.category as string) ?? '',
+    subcategory: (row.subcategory as string) ?? '',
+    basePrice: (row.base_price as number) ?? 0,
+    status: (row.status as SupabaseProductStatus) ?? 'draft',
+    descriptiveAttributes: (row.descriptive_attributes as Record<string, string[]>) ?? {},
+    variants: (variantRows ?? []).map((v) => ({
+      id: v.id as string,
+      attributes: (v.attributes as Record<string, string>) ?? {},
+      price: (v.price as number) ?? 0,
+      stock: (v.stock as number) ?? 0,
+    })),
+    images,
+    isPromo: Boolean(row.is_promo),
+    promoPrice: (row.promo_price as number) ?? null,
+  };
+}
+
+export interface UpdateProductInput {
+  name: string;
+  description: string;
+  category: string;
+  subcategory: string;
+  basePrice: number;
+  status: SupabaseProductStatus;
+  descriptiveAttributes: Record<string, string[]>;
+  variants: VariantRowInput[];
+}
+
+// Updates the existing products row in place (same id, same reference,
+// same shop_id — none of those columns are ever touched here) and
+// replaces its product_variants wholesale with the current desired set.
+// Never touches product_images — photo add/remove already happens
+// immediately elsewhere (addProductImages / deleteProductImage).
+export async function updateProductInSupabase(productId: string, input: UpdateProductInput): Promise<{ error?: string }> {
+  const { error: productError } = await supabase
+    .from('products')
+    .update({
+      name: input.name,
+      description: input.description,
+      category: input.category,
+      subcategory: input.subcategory,
+      base_price: input.basePrice,
+      status: input.status,
+      descriptive_attributes: input.descriptiveAttributes,
+    })
+    .eq('id', productId);
+  if (productError) return { error: `Impossible de mettre à jour le produit : ${productError.message}` };
+
+  const { error: deleteError } = await supabase.from('product_variants').delete().eq('product_id', productId);
+  if (deleteError) return { error: `Impossible de mettre à jour les variantes : ${deleteError.message}` };
+
+  if (input.variants.length > 0) {
+    const { error: insertError } = await supabase.from('product_variants').insert(
+      input.variants.map((v) => ({ product_id: productId, attributes: v.attributes, price: v.price, stock: v.stock })),
+    );
+    if (insertError) return { error: `Impossible d'enregistrer les variantes : ${insertError.message}` };
+  }
+
+  return {};
+}
+
 // Adds newly-selected photos to an already-Supabase-synced product during
 // an edit — mirrors the create flow's upload step, but for a product that
 // already has an id. sortOrderStart lets new photos append after whatever

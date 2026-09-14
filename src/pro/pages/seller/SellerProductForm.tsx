@@ -4,7 +4,14 @@ import { categories, categoryMap, type CategoryId } from '@/data/categories';
 import { getFilters, type FilterGroup } from '@/data/filters';
 import { getColor } from '@/data/colors';
 import VendorNoticeBanner from '../../components/VendorNoticeBanner';
-import { createProductInSupabase, fetchProductImages, deleteProductImage, addProductImages, type SupabaseProductStatus } from '@/lib/supabaseSellerProducts';
+import {
+  createProductInSupabase,
+  updateProductInSupabase,
+  fetchProductForEdit,
+  deleteProductImage,
+  addProductImages,
+  type SupabaseProductStatus,
+} from '@/lib/supabaseSellerProducts';
 import { ArrowLeft, X, Package, ChevronDown, Check, Camera, Star } from 'lucide-react';
 
 // products.status in Supabase only accepts draft/active/flagged/disabled —
@@ -128,6 +135,50 @@ interface OptionSelection {
   [groupId: string]: string[];
 }
 
+// Pure, standalone version of the option-groups derivation — used by both
+// the live form (its useMemo just calls this) and the edit-mode loader,
+// which needs the exact same category-specific group list to reconstruct
+// `selections`/`comboData` from a loaded product's descriptive_attributes
+// and variants. Keeping one implementation avoids the two ever drifting
+// apart.
+function computeOptionGroups(categoryId: string, subId: string, selectedTypeProduit: string | undefined, isMakeup: boolean): FilterGroup[] {
+  if (!categoryId) return [];
+  let groups = getFilters(categoryId, subId || undefined).filter((g) => g.id !== 'prix');
+
+  if (isMakeup) {
+    groups = groups.filter((g) => g.id !== 'couleur');
+    const shades = selectedTypeProduit ? makeupColorsByType[selectedTypeProduit] : undefined;
+    if (shades && shades.length > 0) {
+      groups = [...groups, { id: 'couleur', label: 'Couleur / Teinte', options: shades, collapsible: true }];
+    }
+  }
+
+  const isEncensMaison = categoryId === 'parfums' && subId === 'encens-parfums-maison';
+  const showsEncensType = isEncensMaison && selectedTypeProduit === 'Encens';
+  const showsEncensVolume = isEncensMaison && (selectedTypeProduit === 'Huile à brûler' || selectedTypeProduit === 'Parfum d\'ambiance');
+  const showsEncensNotesChips = isEncensMaison && Boolean(selectedTypeProduit) && selectedTypeProduit !== 'Encens';
+  const showsVolume =
+    (categoryId === 'beaute' && (subId === 'skincare' || subId === 'hygiene')) ||
+    (categoryId === 'parfums' && (subId === 'parfums-femme' || subId === 'parfums-homme' || subId === 'huiles-brumes')) ||
+    showsEncensVolume;
+  const isManucurePedicure = categoryId === 'beaute' && subId === 'mains-et-pieds';
+  const showsNailFields = isManucurePedicure && selectedTypeProduit === 'Faux ongles';
+
+  if (showsVolume) groups = [...groups, { id: 'volume', label: 'Volume', options: VOLUME_BASE_OPTIONS }];
+  if (showsEncensType) groups = [...groups, { id: 'typeencens', label: 'Type', options: ENCENS_TYPE_OPTIONS }];
+  if (showsEncensNotesChips) groups = [...groups, { id: 'notesambiance', label: 'Notes', options: ENCENS_MAISON_NOTES_OPTIONS }];
+  if (showsNailFields) {
+    groups = [
+      ...groups,
+      { id: 'longueurongles', label: 'Longueur', options: NAIL_LENGTH_OPTIONS },
+      { id: 'formeongles', label: 'Forme', options: NAIL_SHAPE_OPTIONS },
+      { id: 'styleongles', label: 'Type / style', options: NAIL_STYLE_OPTIONS },
+    ];
+  }
+
+  return groups;
+}
+
 // A generated combination for the stock matrix
 interface Combo {
   key: string; // unique key like "36|Noir"
@@ -171,34 +222,30 @@ interface ImageItem {
 }
 
 export default function SellerProductForm({ productId }: { productId?: string }) {
-  const { navigate, name: sellerShopName, sellerProducts, addSellerProduct, updateSellerProduct, getLatestModeration, sellerSupabaseShopId } = usePro();
-  const existing = productId ? sellerProducts.find((p) => p.id === productId) : undefined;
-  const latestModeration = existing ? getLatestModeration('product', existing.id) : null;
+  const { navigate, name: sellerShopName, addSellerProduct, updateSellerProduct, getLatestModeration, sellerSupabaseShopId } = usePro();
+  const isEditing = Boolean(productId);
+  const latestModeration = productId ? getLatestModeration('product', productId) : null;
 
-  const [categoryId, setCategoryId] = useState<string>(existing?.category ?? '');
+  // The real product being edited — loaded straight from Supabase by id
+  // below (never from ProContext's in-memory mock sellerProducts list,
+  // which only ever reflects this browser session and is empty again after
+  // a reload: that's what made "Modifier" behave like "Ajouter" before).
+  const [existingProductId, setExistingProductId] = useState<string | null>(null);
+  const [existingReference, setExistingReference] = useState('');
+  const [existingStatus, setExistingStatus] = useState<SupabaseProductStatus | null>(null);
+  const [loadingExisting, setLoadingExisting] = useState(isEditing);
+  const [loadError, setLoadError] = useState('');
+
+  const [categoryId, setCategoryId] = useState<string>('');
   const [subId, setSubId] = useState<string>('');
-  const [name, setName] = useState(existing?.name ?? '');
-  const [description, setDescription] = useState(existing?.description ?? '');
-  const [price, setPrice] = useState(existing?.price.toString() ?? '');
-  // Photos already synced to Supabase are reloaded in full via the effect
-  // below; a legacy (mock-only) product falls back to its single `image`.
-  const [images, setImages] = useState<ImageItem[]>(
-    existing && !existing.supabaseProductId ? [{ key: 'legacy-0', previewUrl: existing.image }] : [],
-  );
+  const [name, setName] = useState('');
+  const [description, setDescription] = useState('');
+  const [price, setPrice] = useState('');
+  const [images, setImages] = useState<ImageItem[]>([]);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [imageActionError, setImageActionError] = useState('');
   const [submitError, setSubmitError] = useState('');
   const [isSaving, setIsSaving] = useState(false);
-
-  useEffect(() => {
-    if (!existing?.supabaseProductId) return;
-    let cancelled = false;
-    fetchProductImages(existing.supabaseProductId).then((rows) => {
-      if (cancelled) return;
-      setImages(rows.map((row) => ({ key: row.id, previewUrl: row.url, existing: { id: row.id, storagePath: row.storagePath } })));
-    });
-    return () => { cancelled = true; };
-  }, [existing?.supabaseProductId]);
 
   // Options state: which values are selected per option group
   const [selections, setSelections] = useState<OptionSelection>({});
@@ -217,26 +264,112 @@ export default function SellerProductForm({ productId }: { productId?: string })
   // Stock + price per combination (used when the product has real variants)
   const [comboData, setComboData] = useState<Record<string, { stock: number; price: number }>>({});
   // Plain stock (used when the product has no variant dimension at all)
-  const [simpleStock, setSimpleStock] = useState(existing?.stock.toString() ?? '');
+  const [simpleStock, setSimpleStock] = useState('');
+
+  // Loads the real product once, then reconstructs every piece of form
+  // state from it: category/subcategory (which together with "Type de
+  // produit" drive computeOptionGroups), descriptive_attributes for purely
+  // descriptive groups, and each variant row's attributes for the true
+  // variant dimensions (taille/couleur/volume/longueur/densité) — grouped
+  // back into `selections` and `comboData` the same way the live form
+  // would have produced them.
+  useEffect(() => {
+    if (!productId || !sellerSupabaseShopId) { setLoadingExisting(false); return; }
+    let cancelled = false;
+    setLoadingExisting(true);
+    setLoadError('');
+    fetchProductForEdit(productId, sellerSupabaseShopId).then((data) => {
+      if (cancelled) return;
+      if (!data) {
+        setLoadError("Produit introuvable, ou vous n'avez pas accès à ce produit.");
+        setLoadingExisting(false);
+        return;
+      }
+
+      setExistingProductId(data.id);
+      setExistingReference(data.reference);
+      setExistingStatus(data.status);
+      setCategoryId(data.category);
+      setSubId(data.subcategory);
+      setName(data.name);
+      setDescription(data.description);
+      setPrice(String(data.basePrice));
+      setImages(data.images.map((img) => ({ key: img.id, previewUrl: img.url, existing: { id: img.id, storagePath: img.storagePath } })));
+
+      const typeproduitValues = data.descriptiveAttributes['Type de produit'];
+      const isMakeupCat = data.category === 'beaute' && data.subcategory === 'maquillage';
+      const groups = computeOptionGroups(data.category, data.subcategory, typeproduitValues?.[0], isMakeupCat);
+      const variantDimGroups = groups.filter((g) => VARIANT_DIMENSION_IDS.has(g.id));
+
+      const newSelections: OptionSelection = {};
+      if (typeproduitValues && typeproduitValues.length > 0) newSelections.typeproduit = typeproduitValues;
+
+      let customMl = '';
+      for (const g of groups) {
+        if (g.id === 'typeproduit') continue;
+        if (g.id === 'volume') {
+          // "Autre" is saved as the resolved value (e.g. "75 ml"), not the
+          // literal word "Autre" — any value outside the fixed presets must
+          // re-select "Autre" and restore the manual ml figure.
+          const presets = VOLUME_BASE_OPTIONS.filter((o) => o !== 'Autre');
+          const raw = new Set<string>();
+          for (const v of data.variants) { const val = v.attributes['Volume']; if (val) raw.add(val); }
+          const chips = new Set<string>();
+          for (const val of raw) {
+            if (presets.includes(val)) chips.add(val);
+            else { chips.add('Autre'); const m = val.match(/(\d+(?:[.,]\d+)?)/); if (m) customMl = m[1]; }
+          }
+          if (chips.size > 0) newSelections.volume = [...chips];
+          continue;
+        }
+        if (VARIANT_DIMENSION_IDS.has(g.id)) {
+          const values = new Set<string>();
+          for (const v of data.variants) { const val = v.attributes[g.label]; if (val) values.add(val); }
+          if (values.size > 0) newSelections[g.id] = [...values];
+        } else {
+          const values = data.descriptiveAttributes[g.label];
+          if (values && values.length > 0) newSelections[g.id] = values;
+        }
+      }
+      setSelections(newSelections);
+      if (customMl) setCustomVolumeMl(customMl);
+
+      if (data.category === 'parfums' && data.subcategory === 'huiles-brumes') {
+        setNotesInput((data.descriptiveAttributes['Notes'] ?? []).join(', '));
+      }
+
+      const newComboData: Record<string, { stock: number; price: number }> = {};
+      let anyPriceDiffers = false;
+      for (const v of data.variants) {
+        const parts = variantDimGroups.map((g) => v.attributes[g.label]).filter(Boolean);
+        if (parts.length === 0 || parts.length !== variantDimGroups.length) continue;
+        newComboData[parts.join('|')] = { stock: v.stock, price: v.price };
+        if (v.price !== data.basePrice) anyPriceDiffers = true;
+      }
+      setComboData(newComboData);
+      setPriceByOption(anyPriceDiffers);
+
+      if (Object.keys(newComboData).length === 0) {
+        setSimpleStock(String(data.variants[0]?.stock ?? 0));
+      }
+
+      setLoadingExisting(false);
+    }).catch(() => {
+      if (cancelled) return;
+      setLoadError('Erreur lors du chargement du produit.');
+      setLoadingExisting(false);
+    });
+    return () => { cancelled = true; };
+  }, [productId, sellerSupabaseShopId]);
 
   const selectedCategory = categoryId ? categoryMap[categoryId as CategoryId] : null;
   const selectedTypeProduit = selections.typeproduit?.[0];
 
-  // Encens & Parfums de maison: which extra fields show depends entirely on
-  // the selected "Type de produit" — Type (Gowé...) only for Encens; Volume
-  // + Notes for Huile à brûler / Parfum d'ambiance; Notes only for
-  // Diffuseur / Bougie; nothing extra until a type is picked.
+  // Used by toggleSingleChoice to know which extra selections to clear when
+  // "Type de produit" changes — computeOptionGroups derives the same
+  // category-specific conditions to decide which groups actually render.
   const isEncensMaison = categoryId === 'parfums' && subId === 'encens-parfums-maison';
-  const showsEncensType = isEncensMaison && selectedTypeProduit === 'Encens';
-  const showsEncensVolume = isEncensMaison && (selectedTypeProduit === 'Huile à brûler' || selectedTypeProduit === 'Parfum d\'ambiance');
-  // Every Encens & Parfums de maison type except Encens itself shows the
-  // descriptive Notes chips (Orientale/Fruitée/Florale/Boisée).
-  const showsEncensNotesChips = isEncensMaison && Boolean(selectedTypeProduit) && selectedTypeProduit !== 'Encens';
-
-  const showsVolume =
-    (categoryId === 'beaute' && (subId === 'skincare' || subId === 'hygiene')) ||
-    (categoryId === 'parfums' && (subId === 'parfums-femme' || subId === 'parfums-homme' || subId === 'huiles-brumes')) ||
-    showsEncensVolume;
+  const isManucurePedicure = categoryId === 'beaute' && subId === 'mains-et-pieds';
 
   // Brumes: a simple free-text "Notes" field (caramel, vanille fouettée...)
   // — descriptive only, not a chip list, since scent notes aren't a fixed
@@ -245,36 +378,10 @@ export default function SellerProductForm({ productId }: { productId?: string })
 
   const isMakeup = categoryId === 'beaute' && subId === 'maquillage';
 
-  // Manucure & Pédicure: Longueur/Forme/Type de style only ever apply to
-  // Faux ongles — never Soins, Henné or Vernis.
-  const isManucurePedicure = categoryId === 'beaute' && subId === 'mains-et-pieds';
-  const showsNailFields = isManucurePedicure && selectedTypeProduit === 'Faux ongles';
-
-  const optionGroups: FilterGroup[] = useMemo(() => {
-    if (!categoryId) return [];
-    let groups = getFilters(categoryId, subId || undefined).filter((g) => g.id !== 'prix');
-
-    if (isMakeup) {
-      groups = groups.filter((g) => g.id !== 'couleur');
-      const shades = selectedTypeProduit ? makeupColorsByType[selectedTypeProduit] : undefined;
-      if (shades && shades.length > 0) {
-        groups = [...groups, { id: 'couleur', label: 'Couleur / Teinte', options: shades, collapsible: true }];
-      }
-    }
-    if (showsVolume) groups = [...groups, { id: 'volume', label: 'Volume', options: VOLUME_BASE_OPTIONS }];
-    if (showsEncensType) groups = [...groups, { id: 'typeencens', label: 'Type', options: ENCENS_TYPE_OPTIONS }];
-    if (showsEncensNotesChips) groups = [...groups, { id: 'notesambiance', label: 'Notes', options: ENCENS_MAISON_NOTES_OPTIONS }];
-    if (showsNailFields) {
-      groups = [
-        ...groups,
-        { id: 'longueurongles', label: 'Longueur', options: NAIL_LENGTH_OPTIONS },
-        { id: 'formeongles', label: 'Forme', options: NAIL_SHAPE_OPTIONS },
-        { id: 'styleongles', label: 'Type / style', options: NAIL_STYLE_OPTIONS },
-      ];
-    }
-
-    return groups;
-  }, [categoryId, subId, isMakeup, selectedTypeProduit, showsVolume, showsEncensType, showsEncensNotesChips, showsNailFields]);
+  const optionGroups: FilterGroup[] = useMemo(
+    () => computeOptionGroups(categoryId, subId, selectedTypeProduit, isMakeup),
+    [categoryId, subId, selectedTypeProduit, isMakeup],
+  );
 
   // Only "true" variant dimensions (taille, couleur, volume, longueur,
   // densité) generate stock/price combinations — everything else (style, type,
@@ -539,24 +646,57 @@ export default function SellerProductForm({ productId }: { productId?: string })
       }));
 
       const newLocalImages = images.filter((img): img is ImageItem & { file: File } => Boolean(img.file));
+      const localImages = images.map((img) => img.previewUrl);
 
-      if (existing?.supabaseProductId) {
-        // Editing an already-Supabase-synced product: only new photos are
-        // pushed to Supabase in this task's scope — product/variant fields
-        // stay on the local mock record, exactly as before.
+      if (existingProductId) {
+        // === True edit: UPDATE the same products row — same id, same
+        // reference, same shop_id, all three left untouched by the update
+        // itself. Variants are replaced wholesale with the current set;
+        // photo add/remove already happened immediately elsewhere.
+        const updateResult = await updateProductInSupabase(existingProductId, {
+          name: name.trim(),
+          description: description.trim(),
+          category: categoryId,
+          subcategory: subId,
+          basePrice: parseInt(price) || 0,
+          status: SUPABASE_STATUS_FOR_FORM_STATUS[status],
+          descriptiveAttributes: buildDescriptiveAttributes(),
+          variants: buildVariantRows(),
+        });
+        if (updateResult.error) {
+          setSubmitError(updateResult.error);
+          return;
+        }
+
         if (newLocalImages.length > 0) {
           const sortOrderStart = images.length - newLocalImages.length;
-          const result = await addProductImages(
-            existing.supabaseProductId,
+          const imagesResult = await addProductImages(
+            existingProductId,
             newLocalImages.map((img) => ({ file: img.file })),
             sortOrderStart,
             sortOrderStart === 0,
           );
-          if (result.error) {
-            setSubmitError(result.error);
+          if (imagesResult.error) {
+            setSubmitError(imagesResult.error);
             return;
           }
         }
+
+        updateSellerProduct(existingProductId, {
+          id: existingProductId,
+          reference: existingReference,
+          name: name.trim(),
+          shopId: sellerSupabaseShopId,
+          category: selectedCategory?.label ?? categoryId,
+          price: parseInt(price) || 0,
+          image: localImages[0] ?? '',
+          images: localImages,
+          stock: totalStock,
+          status,
+          variants: variantDefs.filter((v) => v.values.length > 0),
+          description: description.trim(),
+          supabaseProductId: existingProductId,
+        });
       } else {
         const supabaseResult = await createProductInSupabase({
           shopId: sellerSupabaseShopId,
@@ -577,7 +717,7 @@ export default function SellerProductForm({ productId }: { productId?: string })
         }
 
         const product = {
-          id: existing?.id ?? `p${Date.now()}`,
+          id: `p${Date.now()}`,
           name: name.trim(),
           shopId: sellerSupabaseShopId,
           category: selectedCategory?.label ?? categoryId,
@@ -589,14 +729,7 @@ export default function SellerProductForm({ productId }: { productId?: string })
           description: description.trim(),
           supabaseProductId: supabaseResult.productId,
         };
-        const localImages = images.map((img) => img.previewUrl);
-        if (existing) {
-          // Always the reference Supabase just confirmed — never the stale
-          // locally-generated one, even when re-syncing a legacy product.
-          updateSellerProduct(existing.id, { ...product, images: localImages, reference: supabaseResult.reference });
-        } else {
-          addSellerProduct({ ...product, images: localImages }, supabaseResult.reference);
-        }
+        addSellerProduct({ ...product, images: localImages }, supabaseResult.reference);
       }
 
       navigate('/seller/produits');
@@ -773,15 +906,42 @@ export default function SellerProductForm({ productId }: { productId?: string })
   const nameExample = (subId && examplesBySubcategory[`${categoryId}/${subId}`]?.name) || (categoryId && examplesByCategory[categoryId]?.name) || 'Ex. Nom du produit';
   const descriptionExample = (subId && examplesBySubcategory[`${categoryId}/${subId}`]?.description) || (categoryId && examplesByCategory[categoryId]?.description) || 'Ex. Décrivez le produit : matière, usage, points forts…';
 
+  const backButton = (
+    <button onClick={() => navigate('/seller/produits')} className="flex items-center gap-1.5 text-sm text-ink/50 hover:text-ink transition-colors">
+      <ArrowLeft size={16} /> Produits
+    </button>
+  );
+
+  if (isEditing && loadingExisting) {
+    return (
+      <div className="space-y-5">
+        {backButton}
+        <div className="card p-10 text-center text-sm text-ink/50">Chargement du produit…</div>
+      </div>
+    );
+  }
+
+  if (isEditing && loadError) {
+    return (
+      <div className="space-y-5">
+        {backButton}
+        <div className="card p-10 text-center text-sm text-burgundy">{loadError}</div>
+      </div>
+    );
+  }
+
+  // In edit mode, an already-published (active) product keeps "Publier" as
+  // a confusing label for a save that isn't really publishing anything new
+  // — "Enregistrer les modifications" better matches what's happening.
+  const primaryLabel = isSaving ? 'Enregistrement…' : (isEditing && existingStatus === 'active') ? 'Enregistrer les modifications' : 'Publier';
+
   return (
     <div className="space-y-5">
-      <button onClick={() => navigate('/seller/produits')} className="flex items-center gap-1.5 text-sm text-ink/50 hover:text-ink transition-colors">
-        <ArrowLeft size={16} /> Produits
-      </button>
+      {backButton}
 
       <div className="flex items-center gap-3 flex-wrap">
-        <h1 className="font-display text-2xl font-semibold text-ink">{existing ? 'Modifier le produit' : 'Ajouter un produit'}</h1>
-        {existing && <span className="rounded-full bg-cream px-2.5 py-1 text-xs font-mono font-medium text-ink/60">Réf. {existing.reference}</span>}
+        <h1 className="font-display text-2xl font-semibold text-ink">{isEditing ? 'Modifier le produit' : 'Ajouter un produit'}</h1>
+        {isEditing && existingReference && <span className="rounded-full bg-cream px-2.5 py-1 text-xs font-mono font-medium text-ink/60">Réf. {existingReference}</span>}
       </div>
 
       {latestModeration && <VendorNoticeBanner entry={latestModeration} />}
@@ -1008,7 +1168,7 @@ export default function SellerProductForm({ productId }: { productId?: string })
       {/* Actions */}
       <div className="flex gap-3">
         <button onClick={() => handleSubmit('draft')} disabled={isSaving} className="btn-outline flex-1">{isSaving ? 'Enregistrement…' : 'Enregistrer en brouillon'}</button>
-        <button onClick={() => handleSubmit('published')} disabled={isSaving} className="btn-primary flex-1">{isSaving ? 'Enregistrement…' : 'Publier'}</button>
+        <button onClick={() => handleSubmit('published')} disabled={isSaving} className="btn-primary flex-1">{primaryLabel}</button>
       </div>
     </div>
   );

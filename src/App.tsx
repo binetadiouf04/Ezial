@@ -26,6 +26,7 @@ import PromoPage from '@/pages/PromoPage';
 import TrendingPage from '@/pages/TrendingPage';
 import ForYouPage from '@/pages/ForYouPage';
 import ShopsPage from '@/pages/ShopsPage';
+import SimilarProductsPage from '@/pages/SimilarProductsPage';
 
 function RouteView() {
   const { route } = useApp();
@@ -58,6 +59,13 @@ function RouteView() {
   if (clean.startsWith('/recherche')) {
     const q = route.split('?q=')[1] ? decodeURIComponent(route.split('?q=')[1]) : '';
     return <SearchPage query={q} />;
+  }
+
+  // Similar products: /produit/:id/similaires (must be checked before the
+  // plain /produit/:id route below)
+  if (clean.startsWith('/produit/') && clean.endsWith('/similaires')) {
+    const productId = clean.split('/')[2];
+    if (productId) return <SimilarProductsPage productId={productId} />;
   }
 
   // Product: /produit/:id

@@ -12,11 +12,15 @@ import FavoriteButton from '@/components/FavoriteButton';
 import ProductCarousel from '@/components/ProductCarousel';
 import { ChevronRight, Truck, Store, Plus, Minus, Check } from 'lucide-react';
 
-const tabs = ['Description', 'Détails', 'Avis'] as const;
+const tabs = ['Description', 'Avis'] as const;
 type Tab = (typeof tabs)[number];
 
+// "Vous aimerez aussi" preview cap on the product page itself — "Voir
+// tout" (/produit/:id/similaires) shows the full, uncapped list.
+const SIMILAR_PREVIEW_LIMIT = 9;
+
 export default function ProductPage({ productId }: { productId: string }) {
-  const { navigate, addToCart } = useApp();
+  const { navigate, addToCart, catalogProducts } = useApp();
   // The static mock catalog resolves synchronously and stays the fallback
   // for its own ids; a real Supabase product is never in it, so its id
   // falls through to the fetch below instead of an immediate "not found".
@@ -68,9 +72,9 @@ export default function ProductPage({ productId }: { productId: string }) {
   const cat = categoryMap[product.category];
   const outOfStock = product.stock === 0;
   const lowStock = product.stock > 0 && product.stock <= 3;
-  const sameShopProducts = getProductsFromSameShop(product);
+  const sameShopProducts = getProductsFromSameShop(product, catalogProducts);
   const relatedIds = sameShopProducts.map((p) => p.id);
-  const similarProducts = getSimilarProducts(product, relatedIds);
+  const similarProducts = getSimilarProducts(product, catalogProducts, relatedIds, SIMILAR_PREVIEW_LIMIT);
   const requiredVariants = product.variants.map((v) => v.name);
   const allSelected = requiredVariants.every((name) => variants[name]);
 
@@ -128,8 +132,17 @@ export default function ProductPage({ productId }: { productId: string }) {
               {tabs.map((t) => <button key={t} onClick={() => setTab(t)} className={`whitespace-nowrap border-b-2 pb-2.5 text-sm font-medium transition-colors ${tab === t ? 'border-burgundy text-burgundy' : 'border-transparent text-ink/50 hover:text-ink'}`}>{t}{t === 'Avis' && product.reviewCount ? ` (${product.reviewCount})` : ''}</button>)}
             </div>
             <div className="py-5 text-sm text-ink/70">
-              {tab === 'Description' && <p>{product.description}</p>}
-              {tab === 'Détails' && <dl className="grid grid-cols-2 gap-y-3">{product.details.map((d) => <div key={d.label}><dt className="text-xs text-ink/40">{d.label}</dt><dd className="mt-0.5 font-medium text-ink">{d.value}</dd></div>)}</dl>}
+              {tab === 'Description' && (
+                <div className="space-y-5">
+                  <p>{product.description}</p>
+                  {product.details.length > 0 && (
+                    <div className="border-t border-line pt-5">
+                      <h3 className="mb-3 text-sm font-semibold text-ink">Caractéristiques</h3>
+                      <dl className="grid grid-cols-2 gap-y-3">{product.details.map((d) => <div key={d.label}><dt className="text-xs text-ink/40">{d.label}</dt><dd className="mt-0.5 font-medium text-ink">{d.value}</dd></div>)}</dl>
+                    </div>
+                  )}
+                </div>
+              )}
               {tab === 'Avis' && <div className="space-y-5">{product.reviews.length === 0 ? <p className="text-ink/50">Aucun avis pour l'instant.</p> : product.reviews.map((rev) => (
                 <div key={rev.id} className="border-b border-line pb-4 last:border-0">
                   <div className="flex items-center justify-between">
@@ -147,7 +160,10 @@ export default function ProductPage({ productId }: { productId: string }) {
       </div>
       {similarProducts.length > 0 && (
         <section className="mt-16">
-          <div className="mb-5"><h2 className="section-title">Vous aimerez aussi</h2></div>
+          <div className="mb-5 flex items-center justify-between">
+            <h2 className="section-title">Vous aimerez aussi</h2>
+            <button onClick={() => navigate(`/produit/${product.id}/similaires`)} className="flex items-center gap-1 text-sm font-medium text-burgundy hover:underline whitespace-nowrap">Voir tout <ChevronRight size={15} /></button>
+          </div>
           <ProductCarousel products={similarProducts} />
         </section>
       )}
