@@ -1239,61 +1239,88 @@ export default function SellerProductForm({ productId }: { productId?: string })
           </p>
         </div>
 
+        {/* Each photo/video is a full card, not a small overlaid thumbnail —
+            every action below is its own >=44x44px tap target with a
+            visible label (touch has no hover, so a title-only tooltip is
+            not enough on mobile/tablet). */}
         {images.length > 0 && (
-          <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {images.map((img, i) => (
-              <div key={img.key} className="relative group rounded-lg overflow-hidden bg-cream aspect-square">
-                {img.kind === 'video' ? (
-                  <video src={img.previewUrl} className="h-full w-full object-cover" muted playsInline />
-                ) : (
-                  <img src={img.previewUrl} alt={`Photo ${i + 1}`} className="h-full w-full object-cover" />
-                )}
-                {img.kind === 'video' && (
-                  <span className="absolute left-1 top-1 flex items-center gap-0.5 rounded bg-ink/70 px-1.5 py-0.5 text-[9px] font-medium text-white">
-                    <Video size={9} /> Vidéo
-                  </span>
-                )}
-                {i === 0 && img.kind === 'image' && (
-                  <span className="absolute bottom-1 left-1 rounded bg-burgundy px-1.5 py-0.5 text-[9px] font-medium text-white flex items-center gap-0.5">
-                    <Star size={8} fill="white" /> Principale
-                  </span>
-                )}
+              <div key={img.key} className="rounded-xl border border-line bg-white p-3 space-y-2.5">
+                <div className="flex items-center gap-3">
+                  <div className="relative h-16 w-16 flex-shrink-0 overflow-hidden rounded-lg bg-cream">
+                    {img.kind === 'video' ? (
+                      <video src={img.previewUrl} className="h-full w-full object-cover" muted playsInline />
+                    ) : (
+                      <img src={img.previewUrl} alt={`Photo ${i + 1}`} className="h-full w-full object-cover" />
+                    )}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-medium text-ink truncate">{img.kind === 'video' ? 'Vidéo' : `Photo ${i + 1}`}</p>
+                    {i === 0 && img.kind === 'image' && (
+                      <p className="mt-0.5 flex items-center gap-1 text-xs font-medium text-burgundy"><Star size={11} fill="currentColor" /> Photo principale</p>
+                    )}
+                  </div>
+                </div>
 
-                <div className="absolute top-1 left-1 flex gap-1">
+                <div className="flex flex-wrap gap-2">
                   {i > 0 && (
-                    <button type="button" onClick={() => moveImage(img.key, -1)} className="rounded-full bg-white/90 p-1 text-ink/50 hover:text-burgundy transition-colors" title="Déplacer avant">
-                      <ArrowUp size={12} />
+                    <button
+                      type="button"
+                      onClick={() => moveImage(img.key, -1)}
+                      className="inline-flex h-11 items-center gap-1.5 rounded-lg border border-line px-3 text-xs font-medium text-ink/60 hover:border-burgundy/30 hover:text-burgundy transition-colors"
+                    >
+                      <ArrowUp size={16} /> Avant
                     </button>
                   )}
                   {i < images.length - 1 && (
-                    <button type="button" onClick={() => moveImage(img.key, 1)} className="rounded-full bg-white/90 p-1 text-ink/50 hover:text-burgundy transition-colors" title="Déplacer après">
-                      <ArrowDown size={12} />
+                    <button
+                      type="button"
+                      onClick={() => moveImage(img.key, 1)}
+                      className="inline-flex h-11 items-center gap-1.5 rounded-lg border border-line px-3 text-xs font-medium text-ink/60 hover:border-burgundy/30 hover:text-burgundy transition-colors"
+                    >
+                      <ArrowDown size={16} /> Après
                     </button>
                   )}
-                </div>
-
-                <div className="absolute top-1 right-1 flex flex-wrap justify-end gap-1 max-w-[85%]">
                   {i !== 0 && img.kind === 'image' && (
-                    <button type="button" onClick={() => setPrimaryImage(img.key)} className="rounded-full bg-white/90 p-1 text-ink/50 hover:text-burgundy transition-colors" title="Définir comme photo principale">
-                      <Star size={12} />
+                    <button
+                      type="button"
+                      onClick={() => setPrimaryImage(img.key)}
+                      className="inline-flex h-11 items-center gap-1.5 rounded-lg border border-line px-3 text-xs font-medium text-ink/60 hover:border-burgundy/30 hover:text-burgundy transition-colors"
+                    >
+                      <Star size={16} /> Principale
                     </button>
                   )}
                   {img.kind === 'image' && (
                     <>
-                      <button type="button" onClick={() => openRecrop(img)} disabled={recropLoading} className="rounded-full bg-white/90 p-1 text-ink/50 hover:text-burgundy transition-colors disabled:opacity-50" title="Recadrer / repositionner / zoomer">
-                        <Crop size={12} />
+                      <button
+                        type="button"
+                        onClick={() => openRecrop(img)}
+                        disabled={recropLoading}
+                        className="inline-flex h-11 items-center gap-1.5 rounded-lg border border-line px-3 text-xs font-medium text-ink/60 hover:border-burgundy/30 hover:text-burgundy transition-colors disabled:opacity-50"
+                      >
+                        <Crop size={16} /> Recadrer
                       </button>
-                      <label className="rounded-full bg-white/90 p-1 text-ink/50 hover:text-burgundy transition-colors cursor-pointer" title="Remplacer par une nouvelle photo">
-                        <RefreshCw size={12} />
+                      <label className="inline-flex h-11 cursor-pointer items-center gap-1.5 rounded-lg border border-line px-3 text-xs font-medium text-ink/60 hover:border-burgundy/30 hover:text-burgundy transition-colors">
+                        <RefreshCw size={16} /> Remplacer
                         <input type="file" accept="image/*" className="hidden" onChange={(e) => { handleReplaceFile(img.key, e.target.files); e.target.value = ''; }} />
                       </label>
-                      <button type="button" onClick={() => openBranding(img)} disabled={brandingLoading} className="rounded-full bg-white/90 p-1 text-ink/50 hover:text-burgundy transition-colors disabled:opacity-50" title="Superposer un logo">
-                        <Sparkles size={12} />
+                      <button
+                        type="button"
+                        onClick={() => openBranding(img)}
+                        disabled={brandingLoading}
+                        className="inline-flex h-11 items-center gap-1.5 rounded-lg border border-line px-3 text-xs font-medium text-ink/60 hover:border-burgundy/30 hover:text-burgundy transition-colors disabled:opacity-50"
+                      >
+                        <Sparkles size={16} /> Logo
                       </button>
                     </>
                   )}
-                  <button type="button" onClick={() => removeImage(img.key)} className="rounded-full bg-white/90 p-1 text-ink/50 hover:text-burgundy transition-colors" title="Supprimer">
-                    <X size={12} />
+                  <button
+                    type="button"
+                    onClick={() => removeImage(img.key)}
+                    className="inline-flex h-11 items-center gap-1.5 rounded-lg border border-line px-3 text-xs font-medium text-burgundy/70 hover:border-burgundy/40 hover:text-burgundy transition-colors"
+                  >
+                    <X size={16} /> Supprimer
                   </button>
                 </div>
               </div>
