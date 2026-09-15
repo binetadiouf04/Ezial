@@ -11,8 +11,12 @@ export interface GalleryMediaItem {
 // aspect-ratio (kept identical across breakpoints for visual consistency)
 // combined with a max-height cap means the box never grows into a huge
 // height just because it has more available width — the exact failure mode
-// reported on iPad. object-contain guarantees no image is ever stretched
-// or cropped out of proportion.
+// reported on iPad. object-cover guarantees the 4:5 box is always
+// completely filled — no letterbox band on either side — for both a
+// freshly-cropped (exactly 4:5) photo and a legacy photo whose stored file
+// isn't exactly 4:5; ImageCropModal is what actually chooses what gets
+// shown before that crop, so nothing is lost that the vendor didn't
+// already frame out.
 export default function ProductGallery({ media, alt }: { media: GalleryMediaItem[]; alt: string }) {
   const [active, setActive] = useState(0);
   const touchStartX = useRef<number | null>(null);
@@ -39,7 +43,7 @@ export default function ProductGallery({ media, alt }: { media: GalleryMediaItem
   return (
     <div className="mx-auto w-full max-w-[420px] lg:max-w-[448px]">
       <div
-        className="relative w-full overflow-hidden rounded-xl bg-cream aspect-[4/5] max-h-[62vh] sm:max-h-[520px] lg:max-h-[560px]"
+        className="relative w-full overflow-hidden rounded-xl bg-cream aspect-[4/5] max-h-[62vh] sm:max-h-[525px] lg:max-h-[560px]"
         onTouchStart={onTouchStart}
         onTouchEnd={onTouchEnd}
       >
@@ -47,14 +51,14 @@ export default function ProductGallery({ media, alt }: { media: GalleryMediaItem
           <video
             key={active}
             src={current.url}
-            className="h-full w-full object-contain fade-in"
+            className="h-full w-full object-cover fade-in"
             controls
             muted
             playsInline
             preload="metadata"
           />
         ) : (
-          <SmartImage key={active} src={current.url} alt={alt} className="h-full w-full object-contain fade-in" />
+          <SmartImage key={active} src={current.url} alt={alt} className="h-full w-full object-cover fade-in" />
         )}
 
         {count > 1 && (

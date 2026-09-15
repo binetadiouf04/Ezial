@@ -25,6 +25,15 @@ type Gesture =
 // call from a stable, once-attached native event listener (see the wheel
 // effect below) without ever going stale.
 const clampZoom = (z: number) => Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, z));
+// A hair over the exact "cover" scale — floating-point division/
+// multiplication (e.g. FRAME_H / naturalHeight, then naturalHeight *
+// thatScale again) doesn't always round-trip to exactly FRAME_H, and a
+// sub-pixel shortfall there is exactly the kind of hairline gap the
+// vendor is reporting as a white band. Over-covering by 0.5% is invisible
+// but makes that shortfall structurally impossible.
+const COVER_MARGIN = 1.005;
+const computeBaseScale = (naturalW: number, naturalH: number) =>
+  Math.max(FRAME_W / naturalW, FRAME_H / naturalH) * COVER_MARGIN;
 const clampOffset = (x: number, y: number, w: number, h: number) => ({
   x: Math.min(0, Math.max(FRAME_W - w, x)),
   y: Math.min(0, Math.max(FRAME_H - h, y)),
@@ -80,7 +89,7 @@ export default function ImageCropModal({ file, onCancel, onConfirm }: Props) {
     return () => URL.revokeObjectURL(url);
   }, [file]);
 
-  const baseScale = naturalSize ? Math.max(FRAME_W / naturalSize.w, FRAME_H / naturalSize.h) : 1;
+  const baseScale = naturalSize ? computeBaseScale(naturalSize.w, naturalSize.h) : 1;
   const displayScale = baseScale * zoom;
   const displayW = naturalSize ? naturalSize.w * displayScale : FRAME_W;
   const displayH = naturalSize ? naturalSize.h * displayScale : FRAME_H;
@@ -100,7 +109,7 @@ export default function ImageCropModal({ file, onCancel, onConfirm }: Props) {
   const anchorZoomAt = (point: Point, newZoom: number) => {
     const ns = naturalSizeRef.current;
     if (!ns) return;
-    const bScale = Math.max(FRAME_W / ns.w, FRAME_H / ns.h);
+    const bScale = computeBaseScale(ns.w, ns.h);
     const startDisplayScale = bScale * zoomRef.current;
     const newDisplayScale = bScale * newZoom;
     const off = offsetRef.current;

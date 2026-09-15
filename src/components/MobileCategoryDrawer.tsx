@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { X, ChevronRight, ChevronLeft, User } from 'lucide-react';
+import { X, ChevronRight, ChevronLeft, User, Home, LayoutGrid, Store, Percent } from 'lucide-react';
 import { categories, type CategoryId } from '@/data/categories';
 import { useApp } from '@/store/AppContext';
 
@@ -16,28 +16,48 @@ export default function MobileCategoryDrawer() {
         <div className="flex items-center justify-between border-b border-line px-4 py-4">
           {selectedCategory ? (
             <button onClick={() => setSelectedCat(null)} className="flex items-center gap-1 text-sm font-medium text-ink"><ChevronLeft size={18} /><span className="font-display text-base font-semibold">{selectedCategory.label}</span></button>
-          ) : <h2 className="font-display text-base font-semibold tracking-wide">Catégories</h2>}
+          ) : <h2 className="font-display text-base font-semibold tracking-wide">Menu</h2>}
           <button onClick={() => setCategoryDrawerOpen(false)} className="flex h-9 w-9 items-center justify-center rounded-full hover:bg-cream" aria-label="Fermer"><X size={20} /></button>
         </div>
-        <div className="flex-1 overflow-y-auto py-2">
-          {!selectedCategory ? (
-            <nav className="divide-y divide-line">
-              {categories.map((cat) => <button key={cat.id} onClick={() => setSelectedCat(cat.id)} className="flex w-full items-center justify-between px-4 py-3.5 text-left hover:bg-cream"><span className="text-[15px] font-medium text-ink">{cat.label}</span><ChevronRight size={18} className="text-ink/30" /></button>)}
-            </nav>
-          ) : (
-            <nav className="divide-y divide-line">
-              <button onClick={() => navigate(`/categorie/${selectedCategory.id}`)} className="flex w-full items-center justify-between px-4 py-3.5 text-left hover:bg-cream"><span className="text-[15px] font-semibold text-burgundy">Tout {selectedCategory.label}</span><ChevronRight size={18} className="text-burgundy" /></button>
-              {selectedCategory.subcategories.map((sub) => <button key={sub.id} onClick={() => navigate(`/categorie/${selectedCategory.id}/${sub.id}`)} className="flex w-full items-center justify-between px-4 py-3.5 pl-6 text-left hover:bg-cream"><span className="text-[15px] text-ink/80">{sub.label}</span><ChevronRight size={16} className="text-ink/25" /></button>)}
+
+        <div className="flex-1 overflow-y-auto">
+          {/* Primary destinations first, mobile-first with large tap
+              targets — deliberately short: Home, the category list right
+              below, shops, promos, account. No secondary/rarely-used
+              links here. */}
+          {!selectedCategory && (
+            <nav className="divide-y divide-line border-b border-line">
+              <button onClick={() => navigate('/')} className="flex w-full items-center gap-3 px-4 py-3.5 text-left hover:bg-cream">
+                <Home size={18} className="text-ink/60" /><span className="text-[15px] font-medium text-ink">Accueil</span>
+              </button>
+              <button onClick={() => setSelectedCat(null)} className="flex w-full items-center gap-3 px-4 py-3.5 text-left hover:bg-cream">
+                <LayoutGrid size={18} className="text-ink/60" /><span className="text-[15px] font-medium text-ink">Toutes les catégories</span>
+              </button>
+              <button onClick={() => navigate('/boutiques')} className="flex w-full items-center gap-3 px-4 py-3.5 text-left hover:bg-cream">
+                <Store size={18} className="text-ink/60" /><span className="text-[15px] font-medium text-ink">Boutiques</span>
+              </button>
+              <button onClick={() => navigate('/promos')} className="flex w-full items-center gap-3 px-4 py-3.5 text-left hover:bg-cream">
+                <Percent size={18} className="text-ink/60" /><span className="text-[15px] font-medium text-ink">Promotions</span>
+              </button>
+              <button onClick={() => navigate('/profil')} className="flex w-full items-center gap-3 px-4 py-3.5 text-left hover:bg-cream">
+                <User size={18} className="text-ink/60" /><span className="text-[15px] font-medium text-ink">Mon compte</span>
+              </button>
             </nav>
           )}
-        </div>
-        {!selectedCategory && (
-          <div className="border-t border-line p-3">
-            <button onClick={() => navigate('/profil')} className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-[15px] font-medium text-ink hover:bg-cream">
-              <User size={18} className="text-ink/60" /> Mon compte
-            </button>
+
+          <div className="py-2">
+            {!selectedCategory ? (
+              <nav className="divide-y divide-line">
+                {categories.map((cat) => <button key={cat.id} onClick={() => setSelectedCat(cat.id)} className="flex w-full items-center justify-between px-4 py-3.5 text-left hover:bg-cream"><span className="text-[15px] font-medium text-ink">{cat.label}</span><ChevronRight size={18} className="text-ink/30" /></button>)}
+              </nav>
+            ) : (
+              <nav className="divide-y divide-line">
+                <button onClick={() => navigate(`/categorie/${selectedCategory.id}`)} className="flex w-full items-center justify-between px-4 py-3.5 text-left hover:bg-cream"><span className="text-[15px] font-semibold text-burgundy">Tout {selectedCategory.label}</span><ChevronRight size={18} className="text-burgundy" /></button>
+                {selectedCategory.subcategories.map((sub) => <button key={sub.id} onClick={() => navigate(`/categorie/${selectedCategory.id}/${sub.id}`)} className="flex w-full items-center justify-between px-4 py-3.5 pl-6 text-left hover:bg-cream"><span className="text-[15px] text-ink/80">{sub.label}</span><ChevronRight size={16} className="text-ink/25" /></button>)}
+              </nav>
+            )}
           </div>
-        )}
+        </div>
       </div>
     </div>
   );
