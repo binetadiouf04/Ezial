@@ -1,11 +1,13 @@
 import { useState, useEffect, useCallback } from 'react';
 import { usePro } from '../../ProContext';
 import VendorNoticeBanner from '../../components/VendorNoticeBanner';
+import ShopLocationMap from '../../components/ShopLocationMap';
 import { fetchShopLocation, updateShopLocation } from '@/lib/supabaseSellerShop';
-import { Check, KeyRound, Image as ImageIcon, Camera, MapPin, Loader2, AlertTriangle, AlertCircle } from 'lucide-react';
+import { Check, KeyRound, Image as ImageIcon, Camera, MapPin, Loader2, AlertTriangle, AlertCircle, Navigation, Pencil } from 'lucide-react';
 import SmartImage from '@/components/SmartImage';
 
 type LocationStatus = 'idle' | 'requesting' | 'denied' | 'unsupported' | 'error';
+type LocationMode = 'gps' | 'manual';
 
 export default function SellerShop() {
   const { sellerShop, updateSellerShop, updateSellerPin, identifier, sellerSupabaseShopId, getLatestModeration } = usePro();
@@ -37,6 +39,15 @@ export default function SellerShop() {
   const [locationLoaded, setLocationLoaded] = useState(false);
   const [locationStatus, setLocationStatus] = useState<LocationStatus>('idle');
   const [locationSaved, setLocationSaved] = useState(false);
+  const [locationMode, setLocationMode] = useState<LocationMode>('gps');
+
+  // Manual entry — the seller's own device position (e.g. this Ezial Pro
+  // session) is never assumed to be where the shop actually is. Kept as
+  // free-text strings while typing; only parsed/validated on save.
+  const [manualLat, setManualLat] = useState('');
+  const [manualLng, setManualLng] = useState('');
+  const [manualError, setManualError] = useState('');
+  const [manualSaving, setManualSaving] = useState(false);
 
   useEffect(() => {
     if (!sellerSupabaseShopId) { setLocationLoaded(true); return; }
@@ -68,6 +79,43 @@ export default function SellerShop() {
       { enableHighAccuracy: true, timeout: 10000 },
     );
   }, [sellerSupabaseShopId]);
+
+  const openManualMode = () => {
+    if (location) { setManualLat(String(location.latitude)); setManualLng(String(location.longitude)); }
+    setManualError('');
+    setLocationMode('manual');
+  };
+
+  const handleMapPick = (lat: number, lng: number) => {
+    setManualLat(lat.toFixed(6));
+    setManualLng(lng.toFixed(6));
+  };
+
+  const parsedManualLat = parseFloat(manualLat);
+  const parsedManualLng = parseFloat(manualLng);
+  const manualPosition = Number.isFinite(parsedManualLat) && Number.isFinite(parsedManualLng)
+    ? { lat: parsedManualLat, lng: parsedManualLng }
+    : null;
+
+  const handleSaveManualLocation = async () => {
+    if (!sellerSupabaseShopId) return;
+    if (!Number.isFinite(parsedManualLat) || parsedManualLat < -90 || parsedManualLat > 90) {
+      setManualError('Latitude invalide (doit être comprise entre -90 et 90).');
+      return;
+    }
+    if (!Number.isFinite(parsedManualLng) || parsedManualLng < -180 || parsedManualLng > 180) {
+      setManualError('Longitude invalide (doit être comprise entre -180 et 180).');
+      return;
+    }
+    setManualError('');
+    setManualSaving(true);
+    const result = await updateShopLocation(sellerSupabaseShopId, parsedManualLat, parsedManualLng);
+    setManualSaving(false);
+    if ('error' in result && result.error) { setManualError(result.error); return; }
+    setLocation({ latitude: parsedManualLat, longitude: parsedManualLng });
+    setLocationSaved(true);
+    setTimeout(() => setLocationSaved(false), 2000);
+  };
 
   const handleSave = () => {
     updateSellerShop(form);
@@ -282,22 +330,66 @@ export default function SellerShop() {
             ) : (
               <p className="flex items-center gap-1.5 text-sm font-medium text-amber-700"><AlertTriangle size={15} /> Localisation GPS non enregistrée</p>
             )}
+            <p className="text-xs text-ink/45 leading-relaxed">
+              La position enregistrée doit représenter l'emplacement réel de la boutique — pas l'endroit où vous vous trouvez en ce moment. Si vous administrez Ezial Pro loin de votre boutique, utilisez la saisie manuelle plutôt que votre position actuelle.
+            </p>
 
-            <div className="flex items-center gap-3">
-              <button type="button" onClick={requestShopLocation} disabled={locationStatus === 'requesting'} className="btn-outline">
-                {locationStatus === 'requesting' ? <><Loader2 size={15} className="animate-spin" /> Détection en cours...</> : <><MapPin size={15} /> {location ? 'Mettre à jour ma position' : 'Utiliser ma position actuelle'}</>}
+            {/* Mode toggle */}
+            <div className="flex flex-wrap gap-2">
+              <button type="button" onClick={() => setLocationMode('gps')} className={locationMode === 'gps' ? 'btn-primary' : 'btn-outline'}>
+                <Navigation size={14} /> Utiliser ma position actuelle
               </button>
-              {locationSaved && <span className="flex items-center gap-1 text-sm text-green-600"><Check size={14} /> Position enregistrée</span>}
+              <button type="button" onClick={openManualMode} className={locationMode === 'manual' ? 'btn-primary' : 'btn-outline'}>
+                <Pencil size={14} /> Définir la localisation manuellement
+              </button>
             </div>
 
-            {locationStatus === 'denied' && (
-              <p className="flex items-start gap-1.5 text-xs text-burgundy"><AlertCircle size={13} className="mt-0.5 flex-shrink-0" /> Accès à la position refusé. Autorisez la géolocalisation dans les réglages de votre navigateur.</p>
+            {locationMode === 'gps' && (
+              <div className="space-y-3 rounded-lg border border-line p-3.5">
+                <p className="text-xs text-ink/50">À utiliser uniquement lorsque vous vous trouvez physiquement dans la boutique.</p>
+                <div className="flex items-center gap-3">
+                  <button type="button" onClick={requestShopLocation} disabled={locationStatus === 'requesting'} className="btn-outline">
+                    {locationStatus === 'requesting' ? <><Loader2 size={15} className="animate-spin" /> Détection en cours...</> : <><MapPin size={15} /> {location ? 'Mettre à jour avec ma position actuelle' : 'Utiliser ma position actuelle'}</>}
+                  </button>
+                  {locationSaved && <span className="flex items-center gap-1 text-sm text-green-600"><Check size={14} /> Position enregistrée</span>}
+                </div>
+                {locationStatus === 'denied' && (
+                  <p className="flex items-start gap-1.5 text-xs text-burgundy"><AlertCircle size={13} className="mt-0.5 flex-shrink-0" /> Accès à la position refusé. Autorisez la géolocalisation dans les réglages de votre navigateur.</p>
+                )}
+                {locationStatus === 'unsupported' && (
+                  <p className="flex items-start gap-1.5 text-xs text-burgundy"><AlertCircle size={13} className="mt-0.5 flex-shrink-0" /> Votre navigateur ne prend pas en charge la géolocalisation.</p>
+                )}
+                {locationStatus === 'error' && (
+                  <p className="flex items-start gap-1.5 text-xs text-burgundy"><AlertCircle size={13} className="mt-0.5 flex-shrink-0" /> Impossible d'enregistrer la position. Réessayez.</p>
+                )}
+              </div>
             )}
-            {locationStatus === 'unsupported' && (
-              <p className="flex items-start gap-1.5 text-xs text-burgundy"><AlertCircle size={13} className="mt-0.5 flex-shrink-0" /> Votre navigateur ne prend pas en charge la géolocalisation.</p>
-            )}
-            {locationStatus === 'error' && (
-              <p className="flex items-start gap-1.5 text-xs text-burgundy"><AlertCircle size={13} className="mt-0.5 flex-shrink-0" /> Impossible d'enregistrer la position. Réessayez.</p>
+
+            {locationMode === 'manual' && (
+              <div className="space-y-3 rounded-lg border border-line p-3.5">
+                <p className="text-xs text-ink/50">
+                  Adresse déclarée : {form.pickupAddress ? <span className="font-medium text-ink/70">{form.pickupAddress}</span> : 'non renseignée — voir le champ "Adresse / quartier" ci-dessus'}
+                </p>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-medium text-ink/60 mb-1.5">Latitude</label>
+                    <input type="number" step="any" inputMode="decimal" className="input-field" placeholder="14.6928" value={manualLat} onChange={(e) => setManualLat(e.target.value)} />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-ink/60 mb-1.5">Longitude</label>
+                    <input type="number" step="any" inputMode="decimal" className="input-field" placeholder="-17.4467" value={manualLng} onChange={(e) => setManualLng(e.target.value)} />
+                  </div>
+                </div>
+                <ShopLocationMap position={manualPosition} onChange={handleMapPick} />
+                <p className="text-xs text-ink/40">Cliquez sur la carte ou faites glisser le repère pour ajuster précisément l'emplacement réel de la boutique.</p>
+                {manualError && <p className="text-xs text-burgundy">{manualError}</p>}
+                <div className="flex items-center gap-3">
+                  <button type="button" onClick={handleSaveManualLocation} disabled={manualSaving} className="btn-primary">
+                    {manualSaving ? <><Loader2 size={15} className="animate-spin" /> Enregistrement...</> : 'Enregistrer cette position'}
+                  </button>
+                  {locationSaved && <span className="flex items-center gap-1 text-sm text-green-600"><Check size={14} /> Position enregistrée</span>}
+                </div>
+              </div>
             )}
           </>
         )}
