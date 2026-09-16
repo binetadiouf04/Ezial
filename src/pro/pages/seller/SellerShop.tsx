@@ -3,7 +3,8 @@ import { usePro } from '../../ProContext';
 import VendorNoticeBanner from '../../components/VendorNoticeBanner';
 import ShopLocationMap from '../../components/ShopLocationMap';
 import { fetchShopLocation, updateShopLocation } from '@/lib/supabaseSellerShop';
-import { Check, KeyRound, Image as ImageIcon, Camera, MapPin, Loader2, AlertTriangle, AlertCircle, Navigation, Pencil } from 'lucide-react';
+import { searchAddress, type GeocodeResult } from '@/lib/geocoding';
+import { Check, KeyRound, Image as ImageIcon, Camera, MapPin, Loader2, AlertTriangle, AlertCircle, Navigation, Pencil, Search } from 'lucide-react';
 import SmartImage from '@/components/SmartImage';
 
 type LocationStatus = 'idle' | 'requesting' | 'denied' | 'unsupported' | 'error';
@@ -42,12 +43,18 @@ export default function SellerShop() {
   const [locationMode, setLocationMode] = useState<LocationMode>('gps');
 
   // Manual entry — the seller's own device position (e.g. this Ezial Pro
-  // session) is never assumed to be where the shop actually is. Kept as
-  // free-text strings while typing; only parsed/validated on save.
-  const [manualLat, setManualLat] = useState('');
-  const [manualLng, setManualLng] = useState('');
+  // session) is never assumed to be where the shop actually is. Coordinates
+  // are only ever set via an address search or by pointing at the map —
+  // never typed as raw numbers, and never shown to the seller as numbers.
+  const [manualPosition, setManualPosition] = useState<{ lat: number; lng: number } | null>(null);
+  const [manualAdjusted, setManualAdjusted] = useState(false);
   const [manualError, setManualError] = useState('');
   const [manualSaving, setManualSaving] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searching, setSearching] = useState(false);
+  const [searchError, setSearchError] = useState('');
+  const [searchResults, setSearchResults] = useState<GeocodeResult[] | null>(null);
+  const [selectedLabel, setSelectedLabel] = useState<string | null>(null);
 
   useEffect(() => {
     if (!sellerSupabaseShopId) { setLocationLoaded(true); return; }
@@ -81,38 +88,59 @@ export default function SellerShop() {
   }, [sellerSupabaseShopId]);
 
   const openManualMode = () => {
-    if (location) { setManualLat(String(location.latitude)); setManualLng(String(location.longitude)); }
+    setManualPosition(location ? { lat: location.latitude, lng: location.longitude } : null);
+    setManualAdjusted(false);
+    setSelectedLabel(null);
+    setSearchQuery('');
+    setSearchResults(null);
+    setSearchError('');
     setManualError('');
     setLocationMode('manual');
   };
 
-  const handleMapPick = (lat: number, lng: number) => {
-    setManualLat(lat.toFixed(6));
-    setManualLng(lng.toFixed(6));
+  const applySearchResult = (result: GeocodeResult) => {
+    setManualPosition({ lat: result.lat, lng: result.lng });
+    setSelectedLabel(result.label);
+    setManualAdjusted(false);
+    setSearchResults(null);
+    setSearchError('');
   };
 
-  const parsedManualLat = parseFloat(manualLat);
-  const parsedManualLng = parseFloat(manualLng);
-  const manualPosition = Number.isFinite(parsedManualLat) && Number.isFinite(parsedManualLng)
-    ? { lat: parsedManualLat, lng: parsedManualLng }
-    : null;
+  const handleSearchAddress = async () => {
+    const query = searchQuery.trim();
+    if (!query || searching) return;
+    setSearching(true);
+    setSearchError('');
+    setSearchResults(null);
+    try {
+      const results = await searchAddress(query);
+      if (results.length === 0) {
+        setSearchError('Adresse introuvable. Essayez avec le quartier, la commune ou un lieu connu à proximité.');
+      } else if (results.length === 1) {
+        applySearchResult(results[0]);
+      } else {
+        setSearchResults(results);
+      }
+    } catch {
+      setSearchError('La recherche a échoué. Vérifiez votre connexion et réessayez.');
+    } finally {
+      setSearching(false);
+    }
+  };
+
+  const handleMapPick = (lat: number, lng: number) => {
+    setManualPosition({ lat, lng });
+    setManualAdjusted(true);
+  };
 
   const handleSaveManualLocation = async () => {
-    if (!sellerSupabaseShopId) return;
-    if (!Number.isFinite(parsedManualLat) || parsedManualLat < -90 || parsedManualLat > 90) {
-      setManualError('Latitude invalide (doit être comprise entre -90 et 90).');
-      return;
-    }
-    if (!Number.isFinite(parsedManualLng) || parsedManualLng < -180 || parsedManualLng > 180) {
-      setManualError('Longitude invalide (doit être comprise entre -180 et 180).');
-      return;
-    }
+    if (!sellerSupabaseShopId || !manualPosition) return;
     setManualError('');
     setManualSaving(true);
-    const result = await updateShopLocation(sellerSupabaseShopId, parsedManualLat, parsedManualLng);
+    const result = await updateShopLocation(sellerSupabaseShopId, manualPosition.lat, manualPosition.lng);
     setManualSaving(false);
     if ('error' in result && result.error) { setManualError(result.error); return; }
-    setLocation({ latitude: parsedManualLat, longitude: parsedManualLng });
+    setLocation({ latitude: manualPosition.lat, longitude: manualPosition.lng });
     setLocationSaved(true);
     setTimeout(() => setLocationSaved(false), 2000);
   };
@@ -370,21 +398,50 @@ export default function SellerShop() {
                 <p className="text-xs text-ink/50">
                   Adresse déclarée : {form.pickupAddress ? <span className="font-medium text-ink/70">{form.pickupAddress}</span> : 'non renseignée — voir le champ "Adresse / quartier" ci-dessus'}
                 </p>
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-xs font-medium text-ink/60 mb-1.5">Latitude</label>
-                    <input type="number" step="any" inputMode="decimal" className="input-field" placeholder="14.6928" value={manualLat} onChange={(e) => setManualLat(e.target.value)} />
+
+                <div>
+                  <label className="block text-xs font-medium text-ink/60 mb-1.5">Rechercher une adresse ou un lieu</label>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      className="input-field min-w-0 flex-1"
+                      placeholder="Ex. : Sacré-Cœur 3, Dakar"
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); void handleSearchAddress(); } }}
+                    />
+                    <button type="button" onClick={() => void handleSearchAddress()} disabled={searching || !searchQuery.trim()} className="btn-outline flex-shrink-0">
+                      {searching ? <Loader2 size={15} className="animate-spin" /> : <Search size={15} />}
+                      <span className="hidden sm:inline">Rechercher</span>
+                    </button>
                   </div>
-                  <div>
-                    <label className="block text-xs font-medium text-ink/60 mb-1.5">Longitude</label>
-                    <input type="number" step="any" inputMode="decimal" className="input-field" placeholder="-17.4467" value={manualLng} onChange={(e) => setManualLng(e.target.value)} />
-                  </div>
+                  <p className="mt-1.5 text-xs text-ink/40">Exemple : Cité Soprim, Dakar · Sea Plaza Dakar · Sacré-Cœur 3, Dakar</p>
                 </div>
+
+                {searchError && <p className="flex items-start gap-1.5 text-xs text-burgundy"><AlertCircle size={13} className="mt-0.5 flex-shrink-0" /> {searchError}</p>}
+
+                {searchResults && searchResults.length > 0 && (
+                  <div className="divide-y divide-line overflow-hidden rounded-lg border border-line">
+                    {searchResults.map((r) => (
+                      <button key={r.id} type="button" onClick={() => applySearchResult(r)} className="block w-full px-3 py-2.5 text-left text-sm text-ink/75 hover:bg-cream/60">
+                        {r.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                {(selectedLabel || manualAdjusted) && (
+                  <div className="rounded-lg bg-cream/50 p-2.5 space-y-0.5">
+                    {selectedLabel && <p className="flex items-start gap-1.5 text-sm text-ink/75"><MapPin size={14} className="mt-0.5 flex-shrink-0 text-burgundy" /> {selectedLabel}</p>}
+                    {manualAdjusted && <p className="text-xs text-ink/45">Position ajustée manuellement sur la carte.</p>}
+                  </div>
+                )}
+
                 <ShopLocationMap position={manualPosition} onChange={handleMapPick} />
                 <p className="text-xs text-ink/40">Cliquez sur la carte ou faites glisser le repère pour ajuster précisément l'emplacement réel de la boutique.</p>
                 {manualError && <p className="text-xs text-burgundy">{manualError}</p>}
                 <div className="flex items-center gap-3">
-                  <button type="button" onClick={handleSaveManualLocation} disabled={manualSaving} className="btn-primary">
+                  <button type="button" onClick={() => void handleSaveManualLocation()} disabled={manualSaving || !manualPosition} className="btn-primary">
                     {manualSaving ? <><Loader2 size={15} className="animate-spin" /> Enregistrement...</> : 'Enregistrer cette position'}
                   </button>
                   {locationSaved && <span className="flex items-center gap-1 text-sm text-green-600"><Check size={14} /> Position enregistrée</span>}
