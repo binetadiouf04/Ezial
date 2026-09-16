@@ -52,7 +52,19 @@ export default function LocationPickerMap({ position, onChange }: Props) {
     mapRef.current = map;
     markerRef.current = marker;
 
+    // The container isn't necessarily at its final size the instant this
+    // effect runs (e.g. right after a conditional re-render on mobile) —
+    // Leaflet caches whatever size it reads at creation time, which can
+    // otherwise leave the map mispositioned/oversized until the user
+    // interacts with it. A re-measure on the next frame, plus on resize
+    // (orientation change), keeps it correctly sized.
+    const raf = requestAnimationFrame(() => map.invalidateSize());
+    const handleResize = () => map.invalidateSize();
+    window.addEventListener('resize', handleResize);
+
     return () => {
+      cancelAnimationFrame(raf);
+      window.removeEventListener('resize', handleResize);
       map.remove();
       mapRef.current = null;
       markerRef.current = null;
@@ -71,5 +83,5 @@ export default function LocationPickerMap({ position, onChange }: Props) {
     }
   }, [position]);
 
-  return <div ref={containerRef} className="h-56 w-full rounded-lg border border-line" />;
+  return <div ref={containerRef} className="h-56 w-full overflow-hidden rounded-lg border border-line" />;
 }

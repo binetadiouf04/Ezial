@@ -58,7 +58,10 @@
     @apply border-burgundy bg-burgundy/5 text-burgundy;
   }
   .input-field {
-    @apply w-full rounded-xl border border-line bg-white px-4 py-3 text-sm text-ink placeholder:text-ink/35 transition-colors focus:border-burgundy focus:outline-none focus:ring-1 focus:ring-burgundy/20;
+    /* text-base (16px), not text-sm — iOS Safari auto-zooms the whole page
+       on focus for any input/select/textarea with a smaller computed font
+       size, forcing the user to manually pinch back out afterwards. */
+    @apply w-full rounded-xl border border-line bg-white px-4 py-3 text-base text-ink placeholder:text-ink/35 transition-colors focus:border-burgundy focus:outline-none focus:ring-1 focus:ring-burgundy/20;
   }
   .section-title {
     @apply font-display text-2xl font-semibold tracking-tightish text-ink sm:text-3xl;
