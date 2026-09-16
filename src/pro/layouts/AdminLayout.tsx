@@ -1,8 +1,7 @@
 import { usePro } from '../ProContext';
-import { LayoutDashboard, ShoppingBag, Package, Store, Truck, Users, Wallet, Newspaper, LogOut, ArrowLeft, Image, LayoutGrid } from 'lucide-react';
+import { LayoutDashboard, ShoppingBag, Package, Store, Wallet, LogOut, ArrowLeft, Layers } from 'lucide-react';
 import AdminDashboard from '../pages/admin/AdminDashboard';
-import AdminHero from '../pages/admin/AdminHero';
-import AdminDiscover from '../pages/admin/AdminDiscover';
+import AdminContent from '../pages/admin/AdminContent';
 import AdminOrders from '../pages/admin/AdminOrders';
 import AdminOrderDetail from '../pages/admin/AdminOrderDetail';
 import AdminProducts from '../pages/admin/AdminProducts';
@@ -23,11 +22,7 @@ const navItems = [
   { route: '/admin/commandes', label: 'Commandes', icon: ShoppingBag },
   { route: '/admin/produits', label: 'Produits', icon: Package },
   { route: '/admin/boutiques', label: 'Boutiques', icon: Store },
-  { route: '/admin/hero', label: 'Hero (Home)', icon: Image },
-  { route: '/admin/decouvrir', label: 'À découvrir (Home)', icon: LayoutGrid },
-  { route: '/admin/blog', label: 'Blog', icon: Newspaper },
-  { route: '/admin/livraisons', label: 'Livraisons', icon: Truck },
-  { route: '/admin/livreurs', label: 'Livreurs', icon: Users },
+  { route: '/admin/contenu', label: 'Contenu', icon: Layers },
   { route: '/admin/finances', label: 'Finances', icon: Wallet },
 ];
 
@@ -51,8 +46,7 @@ export default function AdminLayout() {
     if (productDetailMatch) return <AdminProductDetail productId={productDetailMatch[1]} />;
     if (clean === '/admin/boutiques') return <AdminShops />;
     if (shopDetailMatch) return <AdminShopDetail shopId={shopDetailMatch[1]} />;
-    if (clean === '/admin/hero') return <AdminHero />;
-    if (clean === '/admin/decouvrir') return <AdminDiscover />;
+    if (clean === '/admin/contenu') return <AdminContent />;
     if (clean === '/admin/blog') return <AdminBlog />;
     if (clean === '/admin/blog/nouveau') return <AdminBlogForm />;
     if (blogEditMatch) return <AdminBlogForm postId={blogEditMatch[1]} />;

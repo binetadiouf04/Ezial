@@ -4,7 +4,7 @@ import { fetchAdminOrderDetail, type AdminOrderDetail as AdminOrderDetailData } 
 import { formatFCFA } from '../../data';
 import { paymentLabels } from '@/data/payments';
 import { StatusChip } from '../../components/StatusChip';
-import { ArrowLeft, Store, CreditCard, Phone, Loader2 } from 'lucide-react';
+import { ArrowLeft, Store, CreditCard, Phone, Loader2, Truck, Clock } from 'lucide-react';
 
 function formatDateTime(iso: string): string {
   if (!iso) return '';
@@ -97,6 +97,22 @@ export default function AdminOrderDetail({ orderId }: { orderId: string }) {
           </div>
         </div>
       </div>
+
+      {/* Delivery info — only relevant for delivery orders; per-shop status
+          already shown below via StatusChip covers the delivery state
+          itself (picked_up/delivering/delivered...). */}
+      {order.fulfillmentType === 'delivery' && (order.deliveryNeighborhood || order.deliveryAddress || order.deliveryNotes || order.preferredDeliveryDate || order.preferredDeliverySlot) && (
+        <div className="card p-5 space-y-2">
+          <h2 className="text-sm font-semibold text-ink flex items-center gap-1.5"><Truck size={15} className="text-ink/40" /> Livraison</h2>
+          {(order.deliveryAddress || order.deliveryNeighborhood) && (
+            <p className="text-sm text-ink">{[order.deliveryAddress, order.deliveryNeighborhood].filter(Boolean).join(', ')}</p>
+          )}
+          {(order.preferredDeliveryDate || order.preferredDeliverySlot) && (
+            <p className="text-sm text-ink/70 flex items-center gap-1.5"><Clock size={13} className="text-ink/40" /> {[order.preferredDeliveryDate, order.preferredDeliverySlot].filter(Boolean).join(' · ')}</p>
+          )}
+          {order.deliveryNotes && <p className="text-sm text-ink/55 italic">"{order.deliveryNotes}"</p>}
+        </div>
+      )}
 
       {/* Shops (order_shops) & items */}
       <div>

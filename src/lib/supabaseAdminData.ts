@@ -124,6 +124,13 @@ export interface AdminOrderDetail {
   deliveryFee: number;
   totalAmount: number;
   shops: AdminOrderShopGroup[];
+  // Delivery-only info (fulfillmentType === 'delivery'), read defensively —
+  // see the header note on uncertain `orders` column names.
+  deliveryNeighborhood: string | null;
+  deliveryAddress: string | null;
+  deliveryNotes: string | null;
+  preferredDeliveryDate: string | null;
+  preferredDeliverySlot: string | null;
 }
 
 export async function fetchAdminOrderDetail(orderId: string): Promise<AdminOrderDetail | null> {
@@ -176,6 +183,11 @@ export async function fetchAdminOrderDetail(orderId: string): Promise<AdminOrder
     deliveryFee: (order.delivery_fee as number) ?? 0,
     totalAmount: (order.total_amount as number) ?? 0,
     shops: shopsGrouped,
+    deliveryNeighborhood: firstString(order.neighborhood, order.delivery_neighborhood),
+    deliveryAddress: firstString(order.delivery_address, order.address),
+    deliveryNotes: firstString(order.delivery_notes, order.notes),
+    preferredDeliveryDate: firstString(order.preferred_delivery_date, order.delivery_date),
+    preferredDeliverySlot: firstString(order.preferred_delivery_slot, order.delivery_slot),
   };
 }
 
