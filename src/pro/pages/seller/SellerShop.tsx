@@ -1,11 +1,14 @@
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { usePro } from '../../ProContext';
 import VendorNoticeBanner from '../../components/VendorNoticeBanner';
-import { Check, KeyRound, Image as ImageIcon, Camera } from 'lucide-react';
+import { fetchShopLocation, updateShopLocation } from '@/lib/supabaseSellerShop';
+import { Check, KeyRound, Image as ImageIcon, Camera, MapPin, Loader2, AlertTriangle, AlertCircle } from 'lucide-react';
 import SmartImage from '@/components/SmartImage';
 
+type LocationStatus = 'idle' | 'requesting' | 'denied' | 'unsupported' | 'error';
+
 export default function SellerShop() {
-  const { sellerShop, updateSellerShop, updateSellerPin, identifier, getLatestModeration } = usePro();
+  const { sellerShop, updateSellerShop, updateSellerPin, identifier, sellerSupabaseShopId, getLatestModeration } = usePro();
   const latestModeration = sellerShop ? getLatestModeration('shop', sellerShop.id) : null;
   const [form, setForm] = useState({
     name: sellerShop?.name ?? '',
@@ -26,6 +29,45 @@ export default function SellerShop() {
   const [confirmPin, setConfirmPin] = useState('');
   const [pinError, setPinError] = useState('');
   const [pinSaved, setPinSaved] = useState(false);
+
+  // Shop location (shops.latitude/longitude) — read/written directly on the
+  // real Supabase shop row via sellerSupabaseShopId, never through the mock
+  // sellerShop/updateSellerShop state which has no coordinate fields.
+  const [location, setLocation] = useState<{ latitude: number; longitude: number } | null>(null);
+  const [locationLoaded, setLocationLoaded] = useState(false);
+  const [locationStatus, setLocationStatus] = useState<LocationStatus>('idle');
+  const [locationSaved, setLocationSaved] = useState(false);
+
+  useEffect(() => {
+    if (!sellerSupabaseShopId) { setLocationLoaded(true); return; }
+    let cancelled = false;
+    (async () => {
+      const loc = await fetchShopLocation(sellerSupabaseShopId);
+      if (cancelled) return;
+      if (loc && loc.latitude != null && loc.longitude != null) setLocation({ latitude: loc.latitude, longitude: loc.longitude });
+      setLocationLoaded(true);
+    })();
+    return () => { cancelled = true; };
+  }, [sellerSupabaseShopId]);
+
+  const requestShopLocation = useCallback(() => {
+    if (!sellerSupabaseShopId) return;
+    if (!('geolocation' in navigator)) { setLocationStatus('unsupported'); return; }
+    setLocationStatus('requesting');
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        const { latitude, longitude } = pos.coords;
+        const result = await updateShopLocation(sellerSupabaseShopId, latitude, longitude);
+        if ('error' in result && result.error) { setLocationStatus('error'); return; }
+        setLocation({ latitude, longitude });
+        setLocationStatus('idle');
+        setLocationSaved(true);
+        setTimeout(() => setLocationSaved(false), 2000);
+      },
+      () => { setLocationStatus('denied'); },
+      { enableHighAccuracy: true, timeout: 10000 },
+    );
+  }, [sellerSupabaseShopId]);
 
   const handleSave = () => {
     updateSellerShop(form);
@@ -74,6 +116,13 @@ export default function SellerShop() {
       </div>
 
       {latestModeration && <VendorNoticeBanner entry={latestModeration} />}
+
+      {locationLoaded && !location && (
+        <div className="card flex items-start gap-2.5 border-amber-300 bg-amber-50 p-4">
+          <AlertTriangle size={18} className="mt-0.5 flex-shrink-0 text-amber-600" />
+          <p className="text-sm font-medium text-amber-800">Ajoutez la localisation de votre boutique pour pouvoir recevoir des commandes en livraison.</p>
+        </div>
+      )}
 
       {/* Seller identifier — read-only */}
       <div className="card p-4 flex items-center justify-between">
@@ -211,6 +260,47 @@ export default function SellerShop() {
           <button onClick={handleSave} className="btn-primary">Enregistrer</button>
           {saved && <span className="flex items-center gap-1 text-sm text-green-600"><Check size={14} /> Enregistré</span>}
         </div>
+      </div>
+
+      {/* Shop GPS location — separate from the text address above. Used
+          only to compute delivery fees server-side; never shown to
+          customers. */}
+      <div className="card p-5 space-y-4">
+        <div>
+          <h2 className="text-sm font-semibold text-ink flex items-center gap-1.5"><MapPin size={15} className="text-ink/40" /> Localisation de la boutique</h2>
+          <p className="mt-1 text-xs text-ink/45">
+            Cette position GPS sert uniquement à calculer les frais de livraison de vos commandes. Elle n'est jamais affichée publiquement aux clients.
+          </p>
+        </div>
+
+        {!sellerSupabaseShopId ? (
+          <p className="text-xs text-ink/40">Disponible une fois votre boutique connectée à votre compte vendeur.</p>
+        ) : (
+          <>
+            {location ? (
+              <p className="flex items-center gap-1.5 text-sm font-medium text-green-700"><Check size={15} /> Localisation GPS enregistrée</p>
+            ) : (
+              <p className="flex items-center gap-1.5 text-sm font-medium text-amber-700"><AlertTriangle size={15} /> Localisation GPS non enregistrée</p>
+            )}
+
+            <div className="flex items-center gap-3">
+              <button type="button" onClick={requestShopLocation} disabled={locationStatus === 'requesting'} className="btn-outline">
+                {locationStatus === 'requesting' ? <><Loader2 size={15} className="animate-spin" /> Détection en cours...</> : <><MapPin size={15} /> {location ? 'Mettre à jour ma position' : 'Utiliser ma position actuelle'}</>}
+              </button>
+              {locationSaved && <span className="flex items-center gap-1 text-sm text-green-600"><Check size={14} /> Position enregistrée</span>}
+            </div>
+
+            {locationStatus === 'denied' && (
+              <p className="flex items-start gap-1.5 text-xs text-burgundy"><AlertCircle size={13} className="mt-0.5 flex-shrink-0" /> Accès à la position refusé. Autorisez la géolocalisation dans les réglages de votre navigateur.</p>
+            )}
+            {locationStatus === 'unsupported' && (
+              <p className="flex items-start gap-1.5 text-xs text-burgundy"><AlertCircle size={13} className="mt-0.5 flex-shrink-0" /> Votre navigateur ne prend pas en charge la géolocalisation.</p>
+            )}
+            {locationStatus === 'error' && (
+              <p className="flex items-start gap-1.5 text-xs text-burgundy"><AlertCircle size={13} className="mt-0.5 flex-shrink-0" /> Impossible d'enregistrer la position. Réessayez.</p>
+            )}
+          </>
+        )}
       </div>
     </div>
   );

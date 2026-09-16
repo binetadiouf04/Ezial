@@ -307,11 +307,19 @@ export default function CheckoutPage() {
               {hasDeliveryShops && (
                 <div className="rounded-xl border border-line p-4 space-y-3">
                   <h3 className="text-sm font-semibold text-ink flex items-center gap-1.5"><MapPin size={16} className="text-burgundy" /> Position de livraison</h3>
+                  <p className="text-xs font-medium text-ink/70 leading-relaxed">
+                    Cette position est utilisée pour calculer vos frais de livraison.
+                  </p>
                   <p className="text-xs text-ink/55 leading-relaxed">
-                    Ezial calcule le frais de livraison à partir de la distance réelle entre les boutiques et vous. Cela utilise la position actuelle de votre appareil, pas encore l'adresse saisie ci-dessus.
+                    Ezial utilise la position GPS actuelle de votre appareil, pas encore l'adresse saisie ci-dessus, pour calculer la distance réelle entre les boutiques et vous.
                   </p>
                   {locationStatus === 'granted' && location ? (
-                    <p className="flex items-center gap-1.5 text-sm font-medium text-green-700"><Check size={15} /> Position détectée</p>
+                    <div className="space-y-2">
+                      <p className="flex items-center gap-1.5 text-sm font-medium text-green-700"><Check size={15} /> Position détectée</p>
+                      <button type="button" onClick={requestLocation} className="btn-outline w-full">
+                        <MapPin size={15} /> Actualiser ma position
+                      </button>
+                    </div>
                   ) : (
                     <button type="button" onClick={requestLocation} disabled={locationStatus === 'requesting'} className="btn-outline w-full">
                       {locationStatus === 'requesting' ? <><Loader2 size={15} className="animate-spin" /> Détection en cours...</> : <><MapPin size={15} /> Utiliser ma position actuelle</>}
