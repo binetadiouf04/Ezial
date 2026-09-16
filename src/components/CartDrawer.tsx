@@ -1,13 +1,13 @@
 import { X, ShoppingBag, Plus, Minus, Trash2 } from 'lucide-react';
 import { useApp, type CartItem } from '@/store/AppContext';
-import { getProduct, formatFCFA } from '@/data/products';
+import { formatFCFA } from '@/data/products';
 import { getShop } from '@/data/shops';
 import SmartImage from './SmartImage';
 
 interface CartRow extends CartItem { index: number; }
 
 export default function CartDrawer() {
-  const { cartOpen, setCartOpen, cart, removeFromCart, updateQuantity, cartSubtotal, navigate } = useApp();
+  const { cartOpen, setCartOpen, cart, removeFromCart, updateQuantity, cartSubtotal, navigate, catalogProducts } = useApp();
   if (!cartOpen) return null;
 
   const groups: Record<string, CartRow[]> = {};
@@ -35,7 +35,7 @@ export default function CartDrawer() {
                   <div key={shopId}>
                     {shop && <button onClick={() => { setCartOpen(false); navigate(`/boutique/${shop.id}`); }} className="mb-3 block text-[11px] font-semibold uppercase tracking-wider text-ink/50 hover:text-burgundy">{shop.name}</button>}
                     <div className="space-y-3">
-                      {items.map((item) => { const product = getProduct(item.productId); if (!product) return null; return (
+                      {items.map((item) => { const product = catalogProducts.find((p) => p.id === item.productId); if (!product) return null; return (
                         <div key={item.index} className="flex gap-3">
                           <SmartImage src={product.images[0]} alt="" className="h-20 w-16 flex-shrink-0 rounded-lg object-cover" />
                           <div className="flex-1 min-w-0">

@@ -48,7 +48,7 @@ type Tab = 'orders' | 'favorites' | 'info';
 const requiredFields: (keyof CustomerInfo)[] = ['firstName', 'lastName', 'phone'];
 
 export default function ProfilePage() {
-  const { orders, favorites, navigate, customerInfo, updateCustomerInfo } = useApp();
+  const { orders, favorites, navigate, customerInfo, updateCustomerInfo, catalogProducts } = useApp();
   const [tab, setTab] = useState<Tab>('orders');
   const [infoForm, setInfoForm] = useState<CustomerInfo>(customerInfo);
   const [infoSaved, setInfoSaved] = useState(false);
@@ -136,7 +136,7 @@ export default function ProfilePage() {
                   </div>
                   <div className="flex gap-2 mb-3">
                     {order.items.slice(0, 4).map((item, i) => {
-                      const p = getProduct(item.productId);
+                      const p = catalogProducts.find((cp) => cp.id === item.productId);
                       if (!p) return null;
                       return <SmartImage key={i} src={p.images[0]} alt="" className="h-12 w-10 rounded object-cover flex-shrink-0" />;
                     })}

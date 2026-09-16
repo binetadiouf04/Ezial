@@ -188,6 +188,7 @@ function variantOptionsForProduct(productId: string, variantRows: ProductVariant
 /** Each row is one full attribute combination with its own price/stock — maps 1:1 to VariantPrice. */
 function variantPricesForProduct(productId: string, variantRows: ProductVariantRow[]): VariantPrice[] {
   return variantRowsForProduct(productId, variantRows).map((row) => ({
+    id: row.id,
     conditions: row.attributes as Record<string, string>,
     price: row.price ?? 0,
     stock: row.stock ?? undefined,

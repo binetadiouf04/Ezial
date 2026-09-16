@@ -3,8 +3,8 @@ import { products as allProducts, type Product } from '@/data/products';
 import { shops as mockShops, registerSupabaseShops, type Shop } from '@/data/shops';
 import { fetchActiveCatalogFromSupabase } from '@/lib/supabaseCatalog';
 
-export interface CartItem { productId: string; shopId: string; quantity: number; variants: Record<string, string>; unitPrice?: number; }
-export interface SavedItem { productId: string; shopId: string; quantity: number; variants: Record<string, string>; unitPrice?: number; }
+export interface CartItem { productId: string; shopId: string; quantity: number; variants: Record<string, string>; unitPrice?: number; variantId?: string; }
+export interface SavedItem { productId: string; shopId: string; quantity: number; variants: Record<string, string>; unitPrice?: number; variantId?: string; }
 
 export type ShopPrepStatus = 'preparing' | 'ready' | 'collected';
 export type PickupStepStatus = 'preparing' | 'ready_for_pickup' | 'picked_up';
@@ -43,7 +43,16 @@ export interface ShopFulfillment {
 }
 
 export interface Order {
+  // The human-readable order number (e.g. "EZI-000123") — for a real
+  // Supabase order this is orders.order_number, generated server-side by
+  // create_order(), never locally. Used as the display/routing id exactly
+  // like the old locally-generated id was, so every page that already
+  // reads order.id keeps working unchanged.
   id: string;
+  // Real Supabase orders.id (uuid) — absent for anything not yet backed
+  // by a real order. Not read by any page today; kept for future use
+  // (e.g. re-fetching the order) without another shape change.
+  supabaseOrderId?: string;
   date: string;
   customer: { firstName: string; lastName: string; phone: string; quartier: string; landmark?: string; instructions?: string };
   items: CartItem[];
@@ -139,14 +148,6 @@ export const quartierToZone: Record<string, DeliveryZone> = deliveryZones.reduce
 export const quartiers = Object.keys(quartierToZone);
 
 export const deliveryWindows = ['09h–12h', '12h–15h', '15h–18h', '18h–20h'];
-
-export function generatePickupCode(): string {
-  return Math.floor(1000 + Math.random() * 9000).toString();
-}
-
-export function generateOrderId(): string {
-  return `EZI-${Math.floor(10000 + Math.random() * 90000)}`;
-}
 
 export function generateAddressId(): string {
   return `addr-${Math.floor(1000 + Math.random() * 9000)}`;
@@ -263,7 +264,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setCart((prev) => {
       const item = prev[index];
       if (!item) return prev;
-      setSavedItems((s) => [...s, { productId: item.productId, shopId: item.shopId, quantity: item.quantity, variants: item.variants }]);
+      setSavedItems((s) => [...s, { productId: item.productId, shopId: item.shopId, quantity: item.quantity, variants: item.variants, variantId: item.variantId }]);
       return prev.filter((_, i) => i !== index);
     });
   }, []);
@@ -275,7 +276,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setCart((c) => {
         const idx = c.findIndex((i) => i.productId === item.productId && JSON.stringify(i.variants) === JSON.stringify(item.variants));
         if (idx >= 0) { const next = [...c]; next[idx] = { ...next[idx], quantity: next[idx].quantity + item.quantity }; return next; }
-        return [...c, { productId: item.productId, shopId: item.shopId, quantity: item.quantity, variants: item.variants }];
+        return [...c, { productId: item.productId, shopId: item.shopId, quantity: item.quantity, variants: item.variants, variantId: item.variantId }];
       });
       return prev.filter((_, i) => i !== index);
     });
@@ -284,7 +285,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const removeFromSaved = useCallback((index: number) => setSavedItems((prev) => prev.filter((_, i) => i !== index)), []);
 
   const cartCount = cart.reduce((sum, i) => sum + i.quantity, 0);
-  const cartSubtotal = cart.reduce((sum, i) => { const p = allProducts.find((p) => p.id === i.productId); return sum + (p ? (i.unitPrice ?? p.price) * i.quantity : 0); }, 0);
+  const cartSubtotal = cart.reduce((sum, i) => { const p = catalogProducts.find((p) => p.id === i.productId); return sum + (p ? (i.unitPrice ?? p.price) * i.quantity : 0); }, 0);
   const addOrder = useCallback((order: Order) => setOrders((prev) => [order, ...prev]), []);
 
   const addAddress = useCallback((addr: Address) => {

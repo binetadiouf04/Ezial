@@ -8,6 +8,10 @@ export interface VariantPrice {
   price: number;
   oldPrice?: number;
   stock?: number;
+  // Real Supabase product_variants.id — absent on the static mock catalog.
+  // Lets checkout send the exact row to price/lock server-side instead of
+  // asking create_order() to re-guess it from the selected attributes.
+  id?: string;
 }
 export interface Product {
   id: string; reference: string; name: string; shopId: string; category: CategoryId; subcategory: string;
@@ -277,6 +281,14 @@ export const products: Product[] = [
 
 export const productMap: Record<string, Product> = products.reduce((acc, p) => ({ ...acc, [p.id]: p }), {} as Record<string, Product>);
 export const getProduct = (id: string): Product | undefined => productMap[id];
+
+// Mock products use readable slug ids (e.g. "robe-longue-satinee"); every
+// real Supabase row has a UUID primary key. A real order can only ever
+// reference a real product_id (products/product_variants live in
+// Supabase, not in this static file), so checkout uses this to detect
+// and block a mock item before it ever reaches create_order().
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+export const isRealCatalogId = (id: string): boolean => UUID_RE.test(id);
 export const productsByCategory = (categoryId: string): Product[] => products.filter((p) => p.category === categoryId);
 export const productsBySubcategory = (categoryId: string, subId: string): Product[] => products.filter((p) => p.category === categoryId && p.subcategory === subId);
 export const productsByShop = (shopId: string): Product[] => products.filter((p) => p.shopId === shopId);
@@ -299,10 +311,23 @@ export function discountPercent(price: number, oldPrice?: number): number | null
   return Math.round(((oldPrice - price) / oldPrice) * 100);
 }
 
-export function getVariantPrice(product: Product, selected: Record<string, string>): { price: number; oldPrice?: number } {
+// Mirrors EXACTLY the promo logic in create_order()'s SQL (see
+// migration comments): when a promo is active, the discount is applied
+// as the ratio between the product's own promo/base price to whatever
+// variant price is actually charged — never the raw variant price
+// unadjusted, and never promo_price charged verbatim regardless of the
+// variant. `product.price`/`product.oldPrice` already carry
+// promo/base for the no-variant case (see mapProduct in
+// supabaseCatalog.ts), so that ratio is derived from them directly
+// without needing the raw Supabase promo columns here.
+export function getVariantPrice(product: Product, selected: Record<string, string>): { price: number; oldPrice?: number; variantId?: string } {
+  const promoRatio = product.isPromo && product.oldPrice && product.oldPrice > 0 ? product.price / product.oldPrice : null;
   if (!product.variantPrices || product.variantPrices.length === 0) return { price: product.price, oldPrice: product.oldPrice };
   const match = product.variantPrices.find((vp) => Object.entries(vp.conditions).every(([key, val]) => selected[key] === val));
-  if (match) return { price: match.price, oldPrice: match.oldPrice };
+  if (match) {
+    const price = promoRatio ? Math.round(match.price * promoRatio) : match.price;
+    return { price, oldPrice: promoRatio ? match.price : match.oldPrice, variantId: match.id };
+  }
   return { price: product.price, oldPrice: product.oldPrice };
 }
 

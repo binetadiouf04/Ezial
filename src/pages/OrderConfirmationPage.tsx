@@ -1,5 +1,5 @@
 import { useApp } from '@/store/AppContext';
-import { getProduct, formatFCFA } from '@/data/products';
+import { formatFCFA } from '@/data/products';
 import { getShop } from '@/data/shops';
 import { paymentLabels } from '@/data/payments';
 import { CheckCircle2, Truck, Store, MapPin, Smartphone, Clock } from 'lucide-react';
@@ -8,7 +8,7 @@ import SmartImage from '@/components/SmartImage';
 const paymentIcons: Record<string, typeof Smartphone> = { wave: Smartphone, orange: Smartphone };
 
 export default function OrderConfirmationPage({ orderId }: { orderId: string }) {
-  const { orders, navigate } = useApp();
+  const { orders, navigate, catalogProducts } = useApp();
   const order = orders.find((o) => o.id === orderId);
 
   if (!order) {
@@ -42,7 +42,7 @@ export default function OrderConfirmationPage({ orderId }: { orderId: string }) 
         <h2 className="text-sm font-semibold text-ink mb-4">Articles</h2>
         <div className="space-y-4">
           {order.items.map((item, i) => {
-            const p = getProduct(item.productId);
+            const p = catalogProducts.find((cp) => cp.id === item.productId);
             if (!p) return null;
             const price = item.unitPrice ?? p.price;
             const shop = getShop(item.shopId);

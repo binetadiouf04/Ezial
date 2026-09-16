@@ -1,11 +1,12 @@
 import { useApp } from '@/store/AppContext';
-import { getProduct, formatFCFA } from '@/data/products';
+import { formatFCFA, isRealCatalogId } from '@/data/products';
 import { getShop } from '@/data/shops';
-import { Plus, Minus, Trash2, ShoppingBag, ChevronRight, ArrowLeftRight, Bookmark } from 'lucide-react';
+import { Plus, Minus, Trash2, ShoppingBag, ChevronRight, ArrowLeftRight, Bookmark, AlertTriangle } from 'lucide-react';
 import SmartImage from '@/components/SmartImage';
 
 export default function CartPage() {
-  const { cart, removeFromCart, updateQuantity, cartSubtotal, navigate, saveForLater, savedItems, moveToCart, removeFromSaved } = useApp();
+  const { cart, removeFromCart, updateQuantity, cartSubtotal, navigate, saveForLater, savedItems, moveToCart, removeFromSaved, catalogProducts } = useApp();
+  const hasMockItem = cart.some((item) => !isRealCatalogId(item.productId));
 
   if (cart.length === 0 && savedItems.length === 0) {
     return (
@@ -45,13 +46,19 @@ export default function CartPage() {
                   )}
                   <div className="space-y-4">
                     {entries.map(({ item, index }) => {
-                      const product = getProduct(item.productId);
+                      const product = catalogProducts.find((p) => p.id === item.productId);
                       if (!product) return null;
+                      const isMock = !isRealCatalogId(item.productId);
                       return (
                         <div key={index} className="flex gap-4">
                           <SmartImage src={product.images[0]} alt="" className="h-24 w-20 flex-shrink-0 rounded-lg object-cover" />
                           <div className="flex-1 min-w-0">
                             <button onClick={() => navigate(`/produit/${product.id}`)} className="text-sm font-medium text-ink leading-snug line-clamp-2 hover:text-burgundy">{product.name}</button>
+                            {isMock && (
+                              <p className="mt-1 flex items-center gap-1 text-xs font-medium text-burgundy">
+                                <AlertTriangle size={12} /> Produit de démonstration — à retirer avant de commander
+                              </p>
+                            )}
                             {Object.entries(item.variants).map(([k, v]) => <p key={k} className="text-xs text-ink/45 mt-0.5">{k}: {v}</p>)}
                             <div className="mt-3 flex items-center justify-between">
                               <div className="flex items-center border border-line rounded-full">
@@ -87,7 +94,13 @@ export default function CartPage() {
               <div className="flex justify-between text-sm"><span className="text-ink/60">Livraison</span><span className="text-ink/50">Calculée à l'étape suivante</span></div>
               <p className="text-xs text-ink/40 leading-relaxed">Les frais de livraison seront calculés à l'étape suivante.</p>
               <div className="border-t border-line pt-3 flex justify-between"><span className="font-medium text-ink">Total estimé</span><span className="font-semibold text-ink">{formatFCFA(cartSubtotal)}</span></div>
-              <button onClick={() => navigate('/checkout')} className="btn-primary w-full">Passer la commande <ChevronRight size={16} /></button>
+              {hasMockItem && (
+                <p className="flex items-start gap-1.5 rounded-lg bg-burgundy/5 p-2.5 text-xs text-burgundy">
+                  <AlertTriangle size={14} className="mt-0.5 flex-shrink-0" />
+                  Un ou plusieurs produits de démonstration sont dans votre panier et doivent être retirés avant de commander.
+                </p>
+              )}
+              <button onClick={() => navigate('/checkout')} disabled={hasMockItem} className="btn-primary w-full disabled:opacity-50 disabled:cursor-not-allowed">Passer la commande <ChevronRight size={16} /></button>
               <button onClick={() => navigate('/')} className="btn-ghost w-full">Continuer mes achats</button>
             </div>
           </div>
@@ -100,7 +113,7 @@ export default function CartPage() {
           <h2 className="font-display text-lg font-semibold mb-4 flex items-center gap-2"><Bookmark size={18} className="text-ink/40" /> Sauvegardés pour plus tard</h2>
           <div className="space-y-3">
             {savedItems.map((saved, idx) => {
-              const product = getProduct(saved.productId);
+              const product = catalogProducts.find((p) => p.id === saved.productId);
               if (!product) return null;
               const shop = getShop(saved.shopId);
               return (

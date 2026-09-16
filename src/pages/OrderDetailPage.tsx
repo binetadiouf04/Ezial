@@ -1,5 +1,5 @@
 import { useApp, type DeliveryStepStatus, type PickupStepStatus, type Order } from '@/store/AppContext';
-import { getProduct, formatFCFA } from '@/data/products';
+import { formatFCFA } from '@/data/products';
 import { getShop } from '@/data/shops';
 import { DeliveryTimeline, PickupTimeline } from '@/components/OrderTimeline';
 import { paymentLabels } from '@/data/payments';
@@ -44,7 +44,7 @@ function getOrderStatusColor(order: Order): string {
 }
 
 export default function OrderDetailPage({ orderId }: { orderId: string }) {
-  const { orders, navigate } = useApp();
+  const { orders, navigate, catalogProducts } = useApp();
   const order = orders.find((o) => o.id === orderId);
 
   if (!order) {
@@ -84,7 +84,7 @@ export default function OrderDetailPage({ orderId }: { orderId: string }) {
             <h2 className="text-sm font-semibold text-ink mb-4">Articles</h2>
             <div className="space-y-4">
               {order.items.map((item, i) => {
-                const p = getProduct(item.productId);
+                const p = catalogProducts.find((cp) => cp.id === item.productId);
                 if (!p) return null;
                 const price = item.unitPrice ?? p.price;
                 const shop = getShop(item.shopId);

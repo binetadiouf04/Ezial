@@ -1,10 +1,11 @@
 import { useState } from 'react';
-import { useApp, type Order, type ShopFulfillment, type DeliveryPreference, quartierToZone, deliveryWindows, generateOrderId, generatePickupCode } from '@/store/AppContext';
-import { getProduct, formatFCFA } from '@/data/products';
+import { useApp, type Order, type ShopFulfillment, type DeliveryPreference, type DeliveryStepStatus, quartierToZone, deliveryWindows } from '@/store/AppContext';
+import { formatFCFA, isRealCatalogId } from '@/data/products';
 import { getShop } from '@/data/shops';
 import { paymentMethods as paymentMethodsData } from '@/data/payments';
+import { createOrderInSupabase, type CreateOrderPayload, type CreateOrderShopFulfillmentInput, type CreatedOrderResult } from '@/lib/supabaseOrders';
 import CheckoutSteps from '@/components/CheckoutSteps';
-import { Check, Truck, Store, Smartphone, Wallet, Clock, Loader2, AlertCircle } from 'lucide-react';
+import { Check, Truck, Store, Smartphone, Wallet, Clock, Loader2, AlertCircle, AlertTriangle, MapPin } from 'lucide-react';
 import SmartImage from '@/components/SmartImage';
 
 const paymentIcons: Record<string, typeof Smartphone> = { wave: Smartphone, orange: Smartphone, paypal: Wallet };
@@ -16,18 +17,39 @@ function tomorrowISO(): string {
   return d.toISOString().split('T')[0];
 }
 
+type LocationStatus = 'idle' | 'requesting' | 'granted' | 'denied' | 'unsupported';
+
 export default function CheckoutPage() {
-  const { cart, cartSubtotal, clearCart, navigate, addOrder } = useApp();
+  const { cart, cartSubtotal, clearCart, navigate, addOrder, catalogProducts } = useApp();
   const [step, setStep] = useState(0);
-  const [form, setForm] = useState({ firstName: '', lastName: '', phone: '', quartier: 'Plateau', landmark: '', instructions: '' });
+  const [form, setForm] = useState({ firstName: '', lastName: '', phone: '', email: '', quartier: 'Plateau', address: '', landmark: '', instructions: '' });
   const [preference, setPreference] = useState<DeliveryPreference>({ type: 'none' });
   const [payment, setPayment] = useState('wave');
   const [shopFulfillments, setShopFulfillments] = useState<Record<string, 'delivery' | 'pickup'>>({});
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [processing, setProcessing] = useState(false);
+  const [submitError, setSubmitError] = useState('');
+  const [location, setLocation] = useState<{ lat: number; lng: number } | null>(null);
+  const [locationStatus, setLocationStatus] = useState<LocationStatus>('idle');
+
+  const hasMockItem = cart.some((item) => !isRealCatalogId(item.productId));
 
   if (cart.length === 0) {
     return <div className="container-pro py-20 text-center"><p className="text-sm text-ink/60">Votre panier est vide</p><button onClick={() => navigate('/')} className="btn-primary mt-4">Découvrir les produits</button></div>;
+  }
+
+  // Un produit de démonstration Ezial n'existe pas dans Supabase — aucune
+  // commande réelle ne peut jamais le référencer. On bloque tout le
+  // parcours plutôt que de le retirer nous-mêmes ou de l'ignorer en
+  // silence.
+  if (hasMockItem) {
+    return (
+      <div className="container-pro py-20 text-center max-w-md mx-auto">
+        <AlertTriangle size={42} className="mx-auto text-burgundy" />
+        <p className="mt-4 text-sm text-ink/70">Un ou plusieurs produits de démonstration Ezial sont encore dans votre panier et doivent être retirés avant de finaliser votre commande.</p>
+        <button onClick={() => navigate('/panier')} className="btn-primary mt-6">Retourner au panier</button>
+      </div>
+    );
   }
 
   const shopIdsInCart = [...new Set(cart.map((i) => i.shopId))];
@@ -37,9 +59,12 @@ export default function CheckoutPage() {
   const getShopFulfillment = (shopId: string): 'delivery' | 'pickup' => shopFulfillments[shopId] ?? 'delivery';
 
   const hasDeliveryShops = shopsInCart.some((s) => getShopFulfillment(s.id) === 'delivery');
-  // ONE consolidated delivery fee — not per shop
-  const deliveryFee = hasDeliveryShops ? zone.fee : 0;
-  const total = cartSubtotal + deliveryFee;
+  // Estimation affichée pendant le parcours uniquement — le frais réel est
+  // calculé par create_order() à partir de la distance boutiques -> client
+  // (voir la RPC) et peut différer légèrement de cette estimation par
+  // quartier ; le montant définitif s'affiche sur la confirmation.
+  const estimatedDeliveryFee = hasDeliveryShops ? zone.fee : 0;
+  const estimatedTotal = cartSubtotal + estimatedDeliveryFee;
 
   const validateInfo = () => {
     const e: Record<string, string> = {};
@@ -50,41 +75,114 @@ export default function CheckoutPage() {
     return Object.keys(e).length === 0;
   };
 
-  const placeOrder = () => {
-    setProcessing(true);
-    setTimeout(() => {
-      const orderId = generateOrderId();
-      const fulfillments: ShopFulfillment[] = shopsInCart.map((s) => {
-        const type = getShopFulfillment(s.id);
-        return {
-          shopId: s.id,
-          type,
-          deliveryFee: 0, // internal per-shop fee is 0; delivery is consolidated at order level
-          zone: type === 'delivery' ? zone : undefined,
-          pickupCode: type === 'pickup' ? generatePickupCode() : undefined,
-          status: 'preparing' as const,
-          pickupStatus: type === 'pickup' ? 'preparing' as const : undefined,
-        };
-      });
+  // Position du LIVREUR jamais utilisée ici — c'est la position de
+  // l'appareil du client au moment du checkout qui sert de point de
+  // livraison. Approximation MVP assumée : voir le message affiché dans
+  // l'étape "Réception". Aucune coordonnée n'est jamais inventée si
+  // l'accès est refusé ou indisponible.
+  const requestLocation = () => {
+    if (!('geolocation' in navigator)) { setLocationStatus('unsupported'); return; }
+    setLocationStatus('requesting');
+    navigator.geolocation.getCurrentPosition(
+      (pos) => { setLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude }); setLocationStatus('granted'); },
+      () => { setLocationStatus('denied'); },
+      { enableHighAccuracy: true, timeout: 10000 },
+    );
+  };
 
-      const order: Order = {
-        id: orderId,
-        date: new Date().toISOString(),
-        customer: form,
-        items: cart,
-        subtotal: cartSubtotal,
-        delivery: deliveryFee,
-        total,
-        shopFulfillments: fulfillments,
-        preference: hasDeliveryShops ? preference : undefined,
-        payment,
-        status: 'confirmed',
+  const mapToLocalOrder = (result: CreatedOrderResult): Order => {
+    const fulfillments: ShopFulfillment[] = result.shops.map((s) => ({
+      shopId: s.shop_id,
+      type: s.fulfillment_type,
+      deliveryFee: 0, // frais consolidé au niveau de la commande, jamais par boutique
+      pickupCode: s.pickup_code ?? undefined,
+      status: 'preparing',
+      pickupStatus: s.fulfillment_type === 'pickup' ? 'preparing' : undefined,
+    }));
+    return {
+      // order_number généré par create_order() — jamais localement.
+      id: result.order.order_number,
+      supabaseOrderId: result.order.id,
+      date: result.order.created_at,
+      customer: form,
+      items: result.items.map((it) => ({
+        productId: it.product_id,
+        shopId: it.shop_id,
+        quantity: it.quantity,
+        variants: it.selected_options ?? {},
+        unitPrice: it.unit_price,
+        variantId: it.variant_id ?? undefined,
+      })),
+      subtotal: result.order.products_subtotal,
+      delivery: result.order.delivery_fee,
+      total: result.order.total_amount,
+      shopFulfillments: fulfillments,
+      preference: hasDeliveryShops ? preference : undefined,
+      payment,
+      status: (result.order.status as DeliveryStepStatus) ?? 'confirmed',
+    };
+  };
+
+  const placeOrder = async () => {
+    if (hasDeliveryShops && !location) {
+      setSubmitError('Position de livraison manquante. Autorisez la géolocalisation ou choisissez le retrait en boutique.');
+      return;
+    }
+    setSubmitError('');
+    setProcessing(true);
+    // finally garantit que "processing" ne reste jamais bloqué, y compris
+    // sur une exception inattendue — le panier n'est jamais vidé tant que
+    // la commande n'est pas réellement créée dans Supabase.
+    try {
+      const shopFulfillmentsPayload: Record<string, CreateOrderShopFulfillmentInput> = {};
+      for (const shop of shopsInCart) {
+        const type = getShopFulfillment(shop.id);
+        shopFulfillmentsPayload[shop.id] = {
+          type,
+          date: type === 'delivery' && preference.type === 'preferred' ? preference.date ?? null : null,
+          window: type === 'delivery' && preference.type === 'preferred' ? preference.window ?? null : null,
+        };
+      }
+
+      // Jamais de prix, sous-total, réduction, frais de livraison ou total
+      // dans ce payload — create_order() relit tout depuis Supabase.
+      const payload: CreateOrderPayload = {
+        firstName: form.firstName.trim(),
+        lastName: form.lastName.trim(),
+        phone: form.phone.trim(),
+        email: form.email.trim() || undefined,
+        neighborhood: form.quartier,
+        deliveryAddress: form.address.trim() || undefined,
+        deliveryNotes: [form.landmark.trim() && `Point de repère : ${form.landmark.trim()}`, form.instructions.trim()].filter(Boolean).join('. ') || undefined,
+        latitude: hasDeliveryShops ? location?.lat ?? null : null,
+        longitude: hasDeliveryShops ? location?.lng ?? null : null,
+        preferredDeliveryDate: hasDeliveryShops && preference.type === 'preferred' ? preference.date ?? null : null,
+        preferredDeliverySlot: hasDeliveryShops && preference.type === 'preferred' ? preference.window ?? null : null,
+        paymentMethod: payment,
+        shopFulfillments: shopFulfillmentsPayload,
+        items: cart.map((item) => ({
+          productId: item.productId,
+          variantId: item.variantId ?? null,
+          selectedOptions: item.variants,
+          quantity: item.quantity,
+        })),
       };
+
+      const outcome = await createOrderInSupabase(payload);
+      if ('error' in outcome) {
+        setSubmitError(outcome.error);
+        return;
+      }
+
+      const order = mapToLocalOrder(outcome.result);
       addOrder(order);
       clearCart();
+      navigate(`/commande/${order.id}`);
+    } catch (err) {
+      setSubmitError(err instanceof Error ? err.message : 'Une erreur est survenue. Réessayez.');
+    } finally {
       setProcessing(false);
-      navigate(`/commande/${orderId}`);
-    }, 1800);
+    }
   };
 
   const steps = [
@@ -124,10 +222,18 @@ export default function CheckoutPage() {
                 {errors.phone && <p className="mt-1 text-xs text-burgundy">{errors.phone}</p>}
               </div>
               <div>
+                <label className="block text-xs font-medium text-ink/60 mb-1.5">Email (optionnel)</label>
+                <input type="email" className="input-field" placeholder="vous@exemple.com" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
+              </div>
+              <div>
                 <label className="block text-xs font-medium text-ink/60 mb-1.5">Quartier</label>
                 <select className="input-field" value={form.quartier} onChange={(e) => setForm({ ...form, quartier: e.target.value })}>
                   {Object.keys(quartierToZone).map((q) => <option key={q} value={q}>{q}</option>)}
                 </select>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-ink/60 mb-1.5">Adresse de livraison</label>
+                <input className="input-field" placeholder="Ex : Villa 12, Rue 4, Sacré-Cœur 3" value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} />
               </div>
               <div>
                 <label className="block text-xs font-medium text-ink/60 mb-1.5">Point de repère (optionnel)</label>
@@ -190,10 +296,33 @@ export default function CheckoutPage() {
                     <Truck size={20} className="text-burgundy" />
                     <div>
                       <p className="text-sm font-semibold text-ink">Livraison Ezial</p>
-                      <p className="text-xs text-ink/55">Dakar sous 4–48 h · {formatFCFA(zone.fee)}</p>
+                      <p className="text-xs text-ink/55">Dakar sous 4–48 h · ~{formatFCFA(zone.fee)} (estimation)</p>
                     </div>
                   </div>
-                  <p className="mt-2 text-xs text-ink/45 leading-relaxed">Ezial regroupe vos articles des différentes boutiques en une seule livraison vers votre adresse.</p>
+                  <p className="mt-2 text-xs text-ink/45 leading-relaxed">Ezial regroupe vos articles des différentes boutiques en une seule livraison vers votre adresse. Le frais exact est calculé à la validation, selon la distance réelle.</p>
+                </div>
+              )}
+
+              {/* Position de livraison — requise dès qu'une boutique livre */}
+              {hasDeliveryShops && (
+                <div className="rounded-xl border border-line p-4 space-y-3">
+                  <h3 className="text-sm font-semibold text-ink flex items-center gap-1.5"><MapPin size={16} className="text-burgundy" /> Position de livraison</h3>
+                  <p className="text-xs text-ink/55 leading-relaxed">
+                    Ezial calcule le frais de livraison à partir de la distance réelle entre les boutiques et vous. Cela utilise la position actuelle de votre appareil, pas encore l'adresse saisie ci-dessus.
+                  </p>
+                  {locationStatus === 'granted' && location ? (
+                    <p className="flex items-center gap-1.5 text-sm font-medium text-green-700"><Check size={15} /> Position détectée</p>
+                  ) : (
+                    <button type="button" onClick={requestLocation} disabled={locationStatus === 'requesting'} className="btn-outline w-full">
+                      {locationStatus === 'requesting' ? <><Loader2 size={15} className="animate-spin" /> Détection en cours...</> : <><MapPin size={15} /> Utiliser ma position actuelle</>}
+                    </button>
+                  )}
+                  {locationStatus === 'denied' && (
+                    <p className="flex items-start gap-1.5 text-xs text-burgundy"><AlertCircle size={13} className="mt-0.5 flex-shrink-0" /> Accès à la position refusé. Autorisez la géolocalisation dans les réglages de votre navigateur, ou choisissez le retrait en boutique si disponible.</p>
+                  )}
+                  {locationStatus === 'unsupported' && (
+                    <p className="flex items-start gap-1.5 text-xs text-burgundy"><AlertCircle size={13} className="mt-0.5 flex-shrink-0" /> Votre navigateur ne prend pas en charge la géolocalisation. Choisissez le retrait en boutique si disponible.</p>
+                  )}
                 </div>
               )}
 
@@ -242,7 +371,7 @@ export default function CheckoutPage() {
 
               <div className="flex gap-3">
                 <button onClick={() => setStep(0)} className="btn-outline flex-1">Retour</button>
-                <button onClick={() => setStep(2)} className="btn-primary flex-1">Continuer</button>
+                <button onClick={() => setStep(2)} disabled={hasDeliveryShops && !location} className="btn-primary flex-1 disabled:opacity-50 disabled:cursor-not-allowed">Continuer</button>
               </div>
             </div>
           )}
@@ -257,7 +386,7 @@ export default function CheckoutPage() {
                 <h3 className="text-sm font-semibold text-ink">Votre commande</h3>
                 <div className="space-y-4">
                   {cart.map((item, i) => {
-                    const p = getProduct(item.productId);
+                    const p = catalogProducts.find((cp) => cp.id === item.productId);
                     if (!p) return null;
                     const price = item.unitPrice ?? p.price;
                     const shop = getShop(item.shopId);
@@ -279,8 +408,9 @@ export default function CheckoutPage() {
                 </div>
                 <div className="border-t border-line pt-3 space-y-1.5 text-sm">
                   <div className="flex justify-between"><span className="text-ink/60">Produits</span><span className="font-medium">{formatFCFA(cartSubtotal)}</span></div>
-                  <div className="flex justify-between"><span className="text-ink/60">Livraison Ezial</span><span className="font-medium">{deliveryFee > 0 ? formatFCFA(deliveryFee) : 'Gratuit'}</span></div>
-                  <div className="border-t border-line pt-1.5 flex justify-between"><span className="font-medium text-ink">Total</span><span className="font-semibold text-ink">{formatFCFA(total)}</span></div>
+                  <div className="flex justify-between"><span className="text-ink/60">Livraison Ezial (estimation)</span><span className="font-medium">{estimatedDeliveryFee > 0 ? formatFCFA(estimatedDeliveryFee) : 'Gratuit'}</span></div>
+                  <div className="border-t border-line pt-1.5 flex justify-between"><span className="font-medium text-ink">Total estimé</span><span className="font-semibold text-ink">{formatFCFA(estimatedTotal)}</span></div>
+                  {hasDeliveryShops && <p className="text-[11px] text-ink/40">Le montant exact de la livraison est calculé à la validation et confirmé sur votre reçu.</p>}
                 </div>
               </div>
 
@@ -298,10 +428,16 @@ export default function CheckoutPage() {
                 })}
               </div>
 
+              {submitError && (
+                <p className="flex items-start gap-1.5 rounded-lg bg-burgundy/5 p-3 text-sm text-burgundy">
+                  <AlertCircle size={15} className="mt-0.5 flex-shrink-0" /> {submitError}
+                </p>
+              )}
+
               <div className="flex gap-3">
                 <button onClick={() => setStep(1)} className="btn-outline flex-1" disabled={processing}>Retour</button>
                 <button onClick={placeOrder} className="btn-primary flex-1" disabled={processing}>
-                  {processing ? <><Loader2 size={17} className="animate-spin" /> Traitement...</> : `Payer ${formatFCFA(total)}`}
+                  {processing ? <><Loader2 size={17} className="animate-spin" /> Traitement...</> : `Payer ${formatFCFA(estimatedTotal)} (estimé)`}
                 </button>
               </div>
             </div>
@@ -314,7 +450,7 @@ export default function CheckoutPage() {
             <h3 className="text-sm font-semibold text-ink">Votre commande</h3>
             <div className="max-h-56 space-y-3 overflow-y-auto">
               {cart.map((item, i) => {
-                const p = getProduct(item.productId);
+                const p = catalogProducts.find((cp) => cp.id === item.productId);
                 if (!p) return null;
                 const price = item.unitPrice ?? p.price;
                 const shop = getShop(item.shopId);
@@ -337,11 +473,11 @@ export default function CheckoutPage() {
               <div className="flex justify-between"><span className="text-ink/60">Produits</span><span className="font-medium">{formatFCFA(cartSubtotal)}</span></div>
               <div className="flex justify-between">
                 <span className="text-ink/60">Livraison Ezial</span>
-                <span className="font-medium">{step >= 1 && deliveryFee > 0 ? formatFCFA(deliveryFee) : step < 1 ? 'À calculer' : deliveryFee > 0 ? formatFCFA(deliveryFee) : 'Gratuit'}</span>
+                <span className="font-medium">{step >= 1 && estimatedDeliveryFee > 0 ? `~${formatFCFA(estimatedDeliveryFee)}` : step < 1 ? 'À calculer' : 'Gratuit'}</span>
               </div>
               <div className="border-t border-line pt-1.5 flex justify-between">
-                <span className="font-medium text-ink">Total</span>
-                <span className="font-semibold text-ink">{formatFCFA(total)}</span>
+                <span className="font-medium text-ink">Total estimé</span>
+                <span className="font-semibold text-ink">{formatFCFA(estimatedTotal)}</span>
               </div>
             </div>
           </div>

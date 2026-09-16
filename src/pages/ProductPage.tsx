@@ -82,7 +82,7 @@ export default function ProductPage({ productId }: { productId: string }) {
 
   const handleAdd = (buyNow = false) => {
     if (!allSelected) { setError('Veuillez sélectionner: ' + requiredVariants.filter((v) => !variants[v]).join(', ')); return; }
-    addToCart({ productId: product.id, shopId: product.shopId, quantity: qty, variants, unitPrice: dynamicPrice.price });
+    addToCart({ productId: product.id, shopId: product.shopId, quantity: qty, variants, unitPrice: dynamicPrice.price, variantId: dynamicPrice.variantId });
     if (buyNow) navigate('/checkout'); else { setAdded(true); setTimeout(() => setAdded(false), 2000); }
   };
 
