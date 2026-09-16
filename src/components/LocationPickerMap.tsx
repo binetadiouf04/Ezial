@@ -7,9 +7,8 @@ import 'leaflet/dist/leaflet.css';
 const DAKAR_CENTER: [number, number] = [14.6928, -17.4467];
 
 interface Props {
-  // The point to show. null means "no valid pair yet" (e.g. the seller is
-  // mid-typing an incomplete number) — the map keeps showing its last
-  // position instead of jumping to Dakar on every keystroke.
+  // The point to show. null means "nothing chosen yet" — the map falls
+  // back to the Dakar-centered default view instead of jumping around.
   position: { lat: number; lng: number } | null;
   onChange: (lat: number, lng: number) => void;
 }
@@ -24,7 +23,7 @@ const markerIcon = L.divIcon({
   iconAnchor: [9, 9],
 });
 
-export default function ShopLocationMap({ position, onChange }: Props) {
+export default function LocationPickerMap({ position, onChange }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
   const markerRef = useRef<L.Marker | null>(null);

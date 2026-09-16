@@ -4,8 +4,10 @@ import { formatFCFA, isRealCatalogId } from '@/data/products';
 import { getShop } from '@/data/shops';
 import { paymentMethods as paymentMethodsData } from '@/data/payments';
 import { createOrderInSupabase, type CreateOrderPayload, type CreateOrderShopFulfillmentInput, type CreatedOrderResult } from '@/lib/supabaseOrders';
+import { searchAddress, type GeocodeResult } from '@/lib/geocoding';
 import CheckoutSteps from '@/components/CheckoutSteps';
-import { Check, Truck, Store, Smartphone, Wallet, Clock, Loader2, AlertCircle, AlertTriangle, MapPin } from 'lucide-react';
+import LocationPickerMap from '@/components/LocationPickerMap';
+import { Check, Truck, Store, Smartphone, Wallet, Clock, Loader2, AlertCircle, AlertTriangle, MapPin, Navigation, Search } from 'lucide-react';
 import SmartImage from '@/components/SmartImage';
 
 const paymentIcons: Record<string, typeof Smartphone> = { wave: Smartphone, orange: Smartphone, paypal: Wallet };
@@ -18,6 +20,7 @@ function tomorrowISO(): string {
 }
 
 type LocationStatus = 'idle' | 'requesting' | 'granted' | 'denied' | 'unsupported';
+type LocationMode = 'gps' | 'manual';
 
 export default function CheckoutPage() {
   const { cart, cartSubtotal, clearCart, navigate, addOrder, catalogProducts } = useApp();
@@ -31,6 +34,18 @@ export default function CheckoutPage() {
   const [submitError, setSubmitError] = useState('');
   const [location, setLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [locationStatus, setLocationStatus] = useState<LocationStatus>('idle');
+  const [locationMode, setLocationMode] = useState<LocationMode>('gps');
+
+  // Manual address search — the delivery position is independent from the
+  // typed deliveryAddress text (form.address): picking a search result or
+  // dragging the map marker here never writes into form.address, and no
+  // raw coordinate is ever shown to the customer.
+  const [manualAdjusted, setManualAdjusted] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searching, setSearching] = useState(false);
+  const [searchError, setSearchError] = useState('');
+  const [searchResults, setSearchResults] = useState<GeocodeResult[] | null>(null);
+  const [selectedLabel, setSelectedLabel] = useState<string | null>(null);
 
   const hasMockItem = cart.some((item) => !isRealCatalogId(item.productId));
 
@@ -88,6 +103,50 @@ export default function CheckoutPage() {
       () => { setLocationStatus('denied'); },
       { enableHighAccuracy: true, timeout: 10000 },
     );
+  };
+
+  const openManualLocationMode = () => {
+    setManualAdjusted(false);
+    setSelectedLabel(null);
+    setSearchQuery('');
+    setSearchResults(null);
+    setSearchError('');
+    setLocationMode('manual');
+  };
+
+  const applySearchResult = (result: GeocodeResult) => {
+    setLocation({ lat: result.lat, lng: result.lng });
+    setSelectedLabel(result.label);
+    setManualAdjusted(false);
+    setSearchResults(null);
+    setSearchError('');
+  };
+
+  const handleSearchAddress = async () => {
+    const query = searchQuery.trim();
+    if (!query || searching) return;
+    setSearching(true);
+    setSearchError('');
+    setSearchResults(null);
+    try {
+      const results = await searchAddress(query);
+      if (results.length === 0) {
+        setSearchError('Adresse introuvable. Essayez avec le quartier, la commune ou un lieu connu à proximité.');
+      } else if (results.length === 1) {
+        applySearchResult(results[0]);
+      } else {
+        setSearchResults(results);
+      }
+    } catch {
+      setSearchError('La recherche a échoué. Vérifiez votre connexion et réessayez.');
+    } finally {
+      setSearching(false);
+    }
+  };
+
+  const handleMapPick = (lat: number, lng: number) => {
+    setLocation({ lat, lng });
+    setManualAdjusted(true);
   };
 
   const mapToLocalOrder = (result: CreatedOrderResult): Order => {
@@ -310,26 +369,81 @@ export default function CheckoutPage() {
                   <p className="text-xs font-medium text-ink/70 leading-relaxed">
                     Cette position est utilisée pour calculer vos frais de livraison.
                   </p>
-                  <p className="text-xs text-ink/55 leading-relaxed">
-                    Ezial utilise la position GPS actuelle de votre appareil, pas encore l'adresse saisie ci-dessus, pour calculer la distance réelle entre les boutiques et vous.
-                  </p>
-                  {locationStatus === 'granted' && location ? (
-                    <div className="space-y-2">
-                      <p className="flex items-center gap-1.5 text-sm font-medium text-green-700"><Check size={15} /> Position détectée</p>
-                      <button type="button" onClick={requestLocation} className="btn-outline w-full">
-                        <MapPin size={15} /> Actualiser ma position
-                      </button>
-                    </div>
+
+                  {location ? (
+                    <p className="flex items-center gap-1.5 text-sm font-medium text-green-700"><Check size={15} /> Position de livraison définie</p>
                   ) : (
-                    <button type="button" onClick={requestLocation} disabled={locationStatus === 'requesting'} className="btn-outline w-full">
-                      {locationStatus === 'requesting' ? <><Loader2 size={15} className="animate-spin" /> Détection en cours...</> : <><MapPin size={15} /> Utiliser ma position actuelle</>}
+                    <p className="flex items-center gap-1.5 text-sm font-medium text-amber-700"><AlertTriangle size={15} /> Position de livraison non définie</p>
+                  )}
+
+                  {/* Mode toggle */}
+                  <div className="flex flex-wrap gap-2">
+                    <button type="button" onClick={() => setLocationMode('gps')} className={locationMode === 'gps' ? 'btn-primary' : 'btn-outline'}>
+                      <Navigation size={14} /> Utiliser ma position actuelle
                     </button>
+                    <button type="button" onClick={openManualLocationMode} className={locationMode === 'manual' ? 'btn-primary' : 'btn-outline'}>
+                      <Search size={14} /> Rechercher une adresse
+                    </button>
+                  </div>
+
+                  {locationMode === 'gps' && (
+                    <div className="space-y-2 rounded-lg border border-line p-3.5">
+                      <p className="text-xs text-ink/50">Utilise la position GPS actuelle de votre appareil.</p>
+                      <button type="button" onClick={requestLocation} disabled={locationStatus === 'requesting'} className="btn-outline w-full">
+                        {locationStatus === 'requesting' ? <><Loader2 size={15} className="animate-spin" /> Détection en cours...</> : <><MapPin size={15} /> {locationStatus === 'granted' ? 'Actualiser ma position' : 'Utiliser ma position actuelle'}</>}
+                      </button>
+                      {locationStatus === 'denied' && (
+                        <p className="flex items-start gap-1.5 text-xs text-burgundy"><AlertCircle size={13} className="mt-0.5 flex-shrink-0" /> Accès à la position refusé. Autorisez la géolocalisation dans les réglages de votre navigateur, ou choisissez le retrait en boutique si disponible.</p>
+                      )}
+                      {locationStatus === 'unsupported' && (
+                        <p className="flex items-start gap-1.5 text-xs text-burgundy"><AlertCircle size={13} className="mt-0.5 flex-shrink-0" /> Votre navigateur ne prend pas en charge la géolocalisation. Choisissez le retrait en boutique si disponible.</p>
+                      )}
+                    </div>
                   )}
-                  {locationStatus === 'denied' && (
-                    <p className="flex items-start gap-1.5 text-xs text-burgundy"><AlertCircle size={13} className="mt-0.5 flex-shrink-0" /> Accès à la position refusé. Autorisez la géolocalisation dans les réglages de votre navigateur, ou choisissez le retrait en boutique si disponible.</p>
-                  )}
-                  {locationStatus === 'unsupported' && (
-                    <p className="flex items-start gap-1.5 text-xs text-burgundy"><AlertCircle size={13} className="mt-0.5 flex-shrink-0" /> Votre navigateur ne prend pas en charge la géolocalisation. Choisissez le retrait en boutique si disponible.</p>
+
+                  {locationMode === 'manual' && (
+                    <div className="space-y-3 rounded-lg border border-line p-3.5">
+                      <div>
+                        <label className="block text-xs font-medium text-ink/60 mb-1.5">Rechercher une adresse ou un lieu</label>
+                        <div className="flex gap-2">
+                          <input
+                            type="text"
+                            className="input-field min-w-0 flex-1"
+                            placeholder="Ex. : Sacré-Cœur 3, Dakar"
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); void handleSearchAddress(); } }}
+                          />
+                          <button type="button" onClick={() => void handleSearchAddress()} disabled={searching || !searchQuery.trim()} className="btn-outline flex-shrink-0">
+                            {searching ? <Loader2 size={15} className="animate-spin" /> : <Search size={15} />}
+                            <span className="hidden sm:inline">Rechercher</span>
+                          </button>
+                        </div>
+                        <p className="mt-1.5 text-xs text-ink/40">Exemple : Cité Soprim, Dakar · Sea Plaza Dakar · Sacré-Cœur 3, Dakar</p>
+                      </div>
+
+                      {searchError && <p className="flex items-start gap-1.5 text-xs text-burgundy"><AlertCircle size={13} className="mt-0.5 flex-shrink-0" /> {searchError}</p>}
+
+                      {searchResults && searchResults.length > 0 && (
+                        <div className="divide-y divide-line overflow-hidden rounded-lg border border-line">
+                          {searchResults.map((r) => (
+                            <button key={r.id} type="button" onClick={() => applySearchResult(r)} className="block w-full px-3 py-2.5 text-left text-sm text-ink/75 hover:bg-cream/60">
+                              {r.label}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+
+                      {(selectedLabel || manualAdjusted) && (
+                        <div className="rounded-lg bg-cream/50 p-2.5 space-y-0.5">
+                          {selectedLabel && <p className="flex items-start gap-1.5 text-sm text-ink/75"><MapPin size={14} className="mt-0.5 flex-shrink-0 text-burgundy" /> {selectedLabel}</p>}
+                          {manualAdjusted && <p className="text-xs text-ink/45">Position ajustée manuellement sur la carte.</p>}
+                        </div>
+                      )}
+
+                      <LocationPickerMap position={location} onChange={handleMapPick} />
+                      <p className="text-xs text-ink/40">Cliquez sur la carte ou faites glisser le repère pour préciser l'emplacement exact de livraison. Vous pouvez rechercher une autre adresse à tout moment.</p>
+                    </div>
                   )}
                 </div>
               )}

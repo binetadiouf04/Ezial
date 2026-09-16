@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { usePro } from '../../ProContext';
 import VendorNoticeBanner from '../../components/VendorNoticeBanner';
-import ShopLocationMap from '../../components/ShopLocationMap';
+import LocationPickerMap from '@/components/LocationPickerMap';
 import { fetchShopLocation, updateShopLocation } from '@/lib/supabaseSellerShop';
 import { searchAddress, type GeocodeResult } from '@/lib/geocoding';
 import { Check, KeyRound, Image as ImageIcon, Camera, MapPin, Loader2, AlertTriangle, AlertCircle, Navigation, Pencil, Search } from 'lucide-react';
@@ -437,7 +437,7 @@ export default function SellerShop() {
                   </div>
                 )}
 
-                <ShopLocationMap position={manualPosition} onChange={handleMapPick} />
+                <LocationPickerMap position={manualPosition} onChange={handleMapPick} />
                 <p className="text-xs text-ink/40">Cliquez sur la carte ou faites glisser le repère pour ajuster précisément l'emplacement réel de la boutique.</p>
                 {manualError && <p className="text-xs text-burgundy">{manualError}</p>}
                 <div className="flex items-center gap-3">
