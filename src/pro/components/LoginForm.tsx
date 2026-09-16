@@ -13,13 +13,12 @@ interface LoginFormProps {
   verifyAdmin?: (email: string, password: string) => Promise<{ name: string } | { error: string }>;
 }
 
-const roleConfig: Record<Role, { title: string; subtitle: string; placeholder: string; hint: string; demoId: string; demoName: string }> = {
+const roleConfig: Record<Role, { title: string; subtitle: string; placeholder: string; hint: string; demoId?: string; demoName: string }> = {
   admin: {
     title: 'Administration',
     subtitle: "Accès réservé à l'équipe EZIAL.",
     placeholder: 'admin@ezial.sn',
     hint: 'Saisissez votre email et mot de passe.',
-    demoId: 'admin@ezial.sn',
     demoName: 'Admin EZIAL',
   },
   seller: {
@@ -86,12 +85,7 @@ export default function LoginForm({ role, onBack, onLogin, verifySeller, verifyA
   };
 
   const fillDemo = () => {
-    if (role === 'admin') {
-      setEmail(cfg.demoId);
-      setPassword('ezial2026');
-    } else {
-      setIdentifier(cfg.demoId);
-    }
+    if (cfg.demoId) setIdentifier(cfg.demoId);
     setError('');
   };
 
@@ -174,11 +168,13 @@ export default function LoginForm({ role, onBack, onLogin, verifySeller, verifyA
           </button>
         </form>
 
-        <div className="mt-5 border-t border-line pt-4">
-          <button onClick={fillDemo} className="text-xs font-medium text-burgundy hover:underline">
-            Utiliser le compte de démonstration ({cfg.demoId})
-          </button>
-        </div>
+        {cfg.demoId && (
+          <div className="mt-5 border-t border-line pt-4">
+            <button onClick={fillDemo} className="text-xs font-medium text-burgundy hover:underline">
+              Utiliser le compte de démonstration ({cfg.demoId})
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

@@ -13,25 +13,30 @@ export interface AdminAuthInfo {
 const GENERIC_LOGIN_ERROR = 'Email ou mot de passe incorrect.';
 const NOT_ADMIN_ERROR = "Ce compte n'a pas d'accès administrateur.";
 
-async function adminForCurrentUser(): Promise<AdminAuthInfo | null> {
-  const { data: userData, error: userError } = await supabase.auth.getUser();
-  if (userError || !userData.user) return null;
+// Only public.admins.user_id is guaranteed to exist — a display name column
+// is optional, so this never fails the admin check just because a specific
+// column (e.g. `name`) isn't present in the real table.
+function adminNameFrom(row: Record<string, unknown>): string {
+  const name = row.name ?? row.full_name ?? row.display_name;
+  return typeof name === 'string' && name.trim() ? name : 'Admin EZIAL';
+}
 
-  const { data: admin, error: adminError } = await supabase
+async function isListedAsAdmin(userId: string): Promise<AdminAuthInfo | null> {
+  const { data, error } = await supabase
     .from('admins')
-    .select('name')
-    .eq('user_id', userData.user.id)
+    .select('*')
+    .eq('user_id', userId)
     .maybeSingle();
-  if (adminError || !admin) return null;
+  if (error || !data) return null;
 
-  return { name: (admin.name as string) || 'Admin EZIAL' };
+  return { name: adminNameFrom(data) };
 }
 
 export async function signInAdmin(email: string, password: string): Promise<AdminAuthInfo | { error: string }> {
-  const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
-  if (signInError) return { error: GENERIC_LOGIN_ERROR };
+  const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({ email, password });
+  if (signInError || !signInData.user) return { error: GENERIC_LOGIN_ERROR };
 
-  const admin = await adminForCurrentUser();
+  const admin = await isListedAsAdmin(signInData.user.id);
   if (!admin) {
     // Authenticated, but not listed in public.admins — never leave a
     // half-authenticated admin session standing.
@@ -47,7 +52,7 @@ export async function restoreAdminSession(): Promise<AdminAuthInfo | null> {
   const { data, error } = await supabase.auth.getSession();
   if (error || !data.session) return null;
 
-  const admin = await adminForCurrentUser();
+  const admin = await isListedAsAdmin(data.session.user.id);
   if (!admin) {
     await supabase.auth.signOut();
     return null;
