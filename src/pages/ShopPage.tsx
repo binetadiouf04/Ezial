@@ -1,9 +1,9 @@
 import { useState, useMemo } from 'react';
+import { useApp } from '@/store/AppContext';
 import { getShop } from '@/data/shops';
-import { productsByShop } from '@/data/products';
 import ProductGrid from '@/components/ProductGrid';
 import Rating from '@/components/Rating';
-import { UserPlus, Check } from 'lucide-react';
+import { UserPlus, Check, Package, MapPin } from 'lucide-react';
 import SmartImage from '@/components/SmartImage';
 
 const tabs = ['Accueil', 'Produits', 'Avis'] as const;
@@ -17,12 +17,24 @@ const sortOptions = [
 type SortId = (typeof sortOptions)[number]['id'];
 
 export default function ShopPage({ shopId }: { shopId: string }) {
+  const { catalogProducts } = useApp();
   const shop = getShop(shopId);
   const [tab, setTab] = useState<Tab>('Accueil');
   const [following, setFollowing] = useState(false);
   const [sort, setSort] = useState<SortId>('recent');
 
-  const allProducts = productsByShop(shopId);
+  // Real shops resolve their products from the merged Supabase+mock
+  // catalog (catalogProducts is already scoped to status = 'active' by
+  // fetchActiveCatalogFromSupabase — a draft/flagged/disabled product is
+  // never returned in it, let alone shown here) — never from the
+  // standalone static mock product list, which has no idea a real
+  // seller's products even exist. That mismatch is exactly why a real
+  // shop's "Produits" tab could stay empty despite the shop actually
+  // having active products in Supabase.
+  const allProducts = useMemo(
+    () => catalogProducts.filter((p) => p.shopId === shopId),
+    [catalogProducts, shopId],
+  );
 
   const sortedProducts = useMemo(() => {
     const result = [...allProducts];
@@ -36,39 +48,58 @@ export default function ShopPage({ shopId }: { shopId: string }) {
 
   if (!shop) return <div className="container-pro py-20 text-center text-ink/50">Boutique introuvable.</div>;
 
+  const location = shop.address || shop.city;
+
   return (
     <div className="py-6">
-      <div className="relative h-48 w-full overflow-hidden rounded-2xl bg-cream sm:h-64"><SmartImage src={shop.banner} alt={shop.name} className="h-full w-full object-cover" /><div className="absolute inset-0 bg-gradient-to-t from-ink/40 to-transparent" /></div>
+      <div className="relative h-40 w-full overflow-hidden rounded-2xl bg-cream sm:h-56 lg:h-64">
+        <SmartImage src={shop.banner} alt={shop.name} className="h-full w-full object-cover" />
+        <div className="absolute inset-0 bg-gradient-to-t from-ink/40 to-transparent" />
+      </div>
       <div className="container-pro">
-        <div className="relative -mt-12 flex flex-col gap-4 sm:-mt-16 sm:flex-row sm:items-end">
-          <SmartImage src={shop.logo} alt={shop.name} className="h-24 w-24 rounded-full border-4 border-white object-cover shadow-sm sm:h-28 sm:w-28" />
-          <div className="flex-1 pb-1">
-            <h1 className="font-display text-2xl font-semibold text-ink sm:text-3xl">{shop.name}</h1>
-            <div className="mt-1.5 flex flex-wrap items-center gap-3 text-sm text-ink/55"><span>{shop.followers.toLocaleString('fr-FR')} abonnés</span><span className="text-line">·</span><Rating rating={shop.rating} count={shop.reviewCount} /><span className="text-line">·</span><span>{shop.city}</span></div>
+        <div className="relative -mt-10 flex flex-col gap-4 sm:-mt-14 sm:flex-row sm:items-end lg:-mt-16">
+          <SmartImage src={shop.logo} alt={shop.name} className="h-20 w-20 flex-shrink-0 rounded-full border-4 border-white object-cover shadow-sm sm:h-24 sm:w-24 lg:h-28 lg:w-28" />
+          <div className="flex-1 min-w-0 pb-1">
+            <h1 className="font-display text-xl font-semibold text-ink sm:text-2xl lg:text-3xl">{shop.name}</h1>
+            <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-ink/55">
+              {shop.followers > 0 && <span>{shop.followers.toLocaleString('fr-FR')} abonnés</span>}
+              {shop.rating > 0 && <Rating rating={shop.rating} count={shop.reviewCount} />}
+              <span className="flex items-center gap-1"><Package size={14} /> {allProducts.length} produit{allProducts.length !== 1 ? 's' : ''}</span>
+              {location && <span className="flex items-center gap-1"><MapPin size={14} /> {location}</span>}
+            </div>
           </div>
-          <button onClick={() => setFollowing((f) => !f)} className={following ? 'btn-outline' : 'btn-primary'}>{following ? <><Check size={16} /> Suivi</> : <><UserPlus size={16} /> Suivre</>}</button>
+          <button onClick={() => setFollowing((f) => !f)} className={following ? 'btn-outline flex-shrink-0' : 'btn-primary flex-shrink-0'}>{following ? <><Check size={16} /> Suivi</> : <><UserPlus size={16} /> Suivre</>}</button>
         </div>
-        <p className="mt-5 max-w-2xl text-sm text-ink/65">{shop.description}</p>
+        {shop.description && <p className="mt-5 max-w-2xl text-sm text-ink/65">{shop.description}</p>}
         <div className="mt-6 flex gap-5 border-b border-line overflow-x-auto no-scrollbar">
           {tabs.map((t) => <button key={t} onClick={() => setTab(t)} className={`whitespace-nowrap border-b-2 pb-3 text-sm font-medium transition-colors ${tab === t ? 'border-burgundy text-burgundy' : 'border-transparent text-ink/50 hover:text-ink'}`}>{t}</button>)}
         </div>
         <div className="mt-8">
-          {tab === 'Accueil' && <div className="space-y-8"><section><h2 className="mb-4 text-sm font-semibold uppercase tracking-wider text-ink/50">Produits phares</h2><ProductGrid products={allProducts.slice(0, 4)} columns={4} /></section></div>}
+          {tab === 'Accueil' && (
+            <div className="space-y-8">
+              <section>
+                <h2 className="mb-4 text-sm font-semibold uppercase tracking-wider text-ink/50">Produits phares</h2>
+                <ProductGrid products={allProducts.slice(0, 4)} columns={4} />
+              </section>
+            </div>
+          )}
           {tab === 'Produits' && (
             <div>
-              <div className="mb-5 flex items-center gap-2">
-                <span className="text-xs text-ink/45">Trier par</span>
-                <select value={sort} onChange={(e) => setSort(e.target.value as SortId)} className="rounded-full border border-line bg-white px-4 py-2 text-sm font-medium text-ink focus:border-burgundy focus:outline-none">
-                  {sortOptions.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
-                </select>
-              </div>
+              {allProducts.length > 0 && (
+                <div className="mb-5 flex items-center gap-2">
+                  <span className="text-xs text-ink/45">Trier par</span>
+                  <select value={sort} onChange={(e) => setSort(e.target.value as SortId)} className="rounded-full border border-line bg-white px-4 py-2 text-sm font-medium text-ink focus:border-burgundy focus:outline-none">
+                    {sortOptions.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
+                  </select>
+                </div>
+              )}
               <ProductGrid products={sortedProducts} columns={4} />
             </div>
           )}
           {tab === 'Avis' && (
             <div className="mx-auto max-w-2xl space-y-5 py-4">
               <div className="flex items-center gap-6 rounded-xl border border-line p-6">
-                <div className="text-center"><p className="font-display text-4xl font-semibold text-ink">{shop.rating}</p><Rating rating={shop.rating} showCount={false} /></div>
+                <div className="text-center"><p className="font-display text-4xl font-semibold text-ink">{shop.rating || '—'}</p>{shop.rating > 0 && <Rating rating={shop.rating} showCount={false} />}</div>
                 <div className="text-sm text-ink/60"><p>{shop.reviewCount} avis vérifiés</p><p className="mt-1">Tous les avis proviennent d'achats confirmés sur EZIAL.</p></div>
               </div>
               <div className="space-y-4">{allProducts.flatMap((p) => p.reviews).slice(0, 4).map((rev) => (

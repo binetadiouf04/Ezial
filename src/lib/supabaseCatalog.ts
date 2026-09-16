@@ -129,7 +129,11 @@ function mapShop(row: ShopRow): Shop {
     // No Supabase equivalent — neutral defaults, not invented columns.
     followers: 0,
     description: row.description ?? '',
-    city: '',
+    // shops.neighborhood ("quartier") is the closest real-data fit for the
+    // Shop.city field the UI already renders — previously hardcoded to ''
+    // here, which silently dropped a real shop's location everywhere it's
+    // displayed (ShopPage, ShopCard).
+    city: row.neighborhood ?? '',
     rating: 0,
     reviewCount: 0,
     address: row.address_text ?? '',

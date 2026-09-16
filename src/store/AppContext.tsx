@@ -213,15 +213,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
     fetchActiveCatalogFromSupabase()
       .then((result) => {
         if (cancelled) return;
-        if (result.errors.length === 0) {
-          // Registered before the merge so ProductCard's getShop() can
-          // resolve a real Supabase product's shop (name, logo, link) —
-          // without this, a Supabase product's shopId never matches
-          // anything in the static mock shop list.
-          registerSupabaseShops(result.shops);
-          setCatalogProducts(mergeCatalogs(allProducts, result.products));
-          setCatalogShops(mergeShops(mockShops, result.shops));
-        }
+        // Merge whatever came back even if `errors` isn't empty —
+        // fetchActiveCatalogFromSupabase already documents its errors as
+        // non-fatal (e.g. only the product_images or product_variants
+        // query failed) and mergeCatalogs/mergeShops are safe with a
+        // partial or empty Supabase array (they just fall back to the mock
+        // catalog for anything missing). Gating the whole merge behind
+        // zero errors discarded good shop/product data — real Supabase
+        // shops and products, and their "Produits" listing — over a single
+        // unrelated sub-query hiccup.
+        registerSupabaseShops(result.shops);
+        setCatalogProducts(mergeCatalogs(allProducts, result.products));
+        setCatalogShops(mergeShops(mockShops, result.shops));
       })
       .catch(() => {
         // Fetch itself failed unexpectedly — keep the mock catalog as-is.
