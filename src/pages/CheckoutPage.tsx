@@ -5,6 +5,7 @@ import { getShop } from '@/data/shops';
 import { paymentMethods as paymentMethodsData } from '@/data/payments';
 import { createOrderInSupabase, type CreateOrderPayload, type CreateOrderShopFulfillmentInput, type CreatedOrderResult } from '@/lib/supabaseOrders';
 import { searchAddress, type GeocodeResult } from '@/lib/geocoding';
+import { estimateDeliveryFee, DELIVERY_FEE_FLOOR } from '@/lib/deliveryEstimate';
 import CheckoutSteps from '@/components/CheckoutSteps';
 import LocationPickerMap from '@/components/LocationPickerMap';
 import { Check, Truck, Store, Smartphone, Wallet, Clock, Loader2, AlertCircle, AlertTriangle, MapPin, Navigation, Search } from 'lucide-react';
@@ -70,16 +71,32 @@ export default function CheckoutPage() {
 
   const shopIdsInCart = [...new Set(cart.map((i) => i.shopId))];
   const shopsInCart = shopIdsInCart.map((id) => getShop(id)).filter((s): s is NonNullable<typeof s> => Boolean(s));
-  const zone = quartierToZone[form.quartier];
 
   const getShopFulfillment = (shopId: string): 'delivery' | 'pickup' => shopFulfillments[shopId] ?? 'delivery';
 
   const hasDeliveryShops = shopsInCart.some((s) => getShopFulfillment(s.id) === 'delivery');
-  // Estimation affichée pendant le parcours uniquement — le frais réel est
-  // calculé par create_order() à partir de la distance boutiques -> client
-  // (voir la RPC) et peut différer légèrement de cette estimation par
-  // quartier ; le montant définitif s'affiche sur la confirmation.
-  const estimatedDeliveryFee = hasDeliveryShops ? zone.fee : 0;
+
+  // Live mirror of create_order()'s own formula (Haversine, 100 FCFA/km,
+  // min 800, max 4000) — for display only, recalculated the instant the
+  // delivery position or the shop coordinates change. Never sent to the
+  // RPC and never assumed to be the final charge: the amount actually
+  // billed always comes back from create_order() itself. If any delivery
+  // shop hasn't set its real coordinates yet in Ezial Pro, this stays
+  // null rather than showing a number that could be wrong.
+  const deliveryShopsInCart = shopsInCart.filter((s) => getShopFulfillment(s.id) === 'delivery');
+  const deliveryShopCoords = deliveryShopsInCart.length > 0 && deliveryShopsInCart.every((s) => s.latitude != null && s.longitude != null)
+    ? deliveryShopsInCart.map((s) => ({ lat: s.latitude as number, lng: s.longitude as number }))
+    : null;
+  const deliveryFeeEstimate = hasDeliveryShops && location && deliveryShopCoords
+    ? estimateDeliveryFee(deliveryShopCoords, location)
+    : null;
+  const deliveryFeeKnown = deliveryFeeEstimate !== null;
+  const deliveryFeeText = !hasDeliveryShops
+    ? 'Gratuit'
+    : deliveryFeeKnown
+      ? `Livraison estimée : ${formatFCFA(deliveryFeeEstimate)}`
+      : `Livraison à partir de ${formatFCFA(DELIVERY_FEE_FLOOR)}`;
+  const estimatedDeliveryFee = hasDeliveryShops ? (deliveryFeeKnown ? deliveryFeeEstimate : DELIVERY_FEE_FLOOR) : 0;
   const estimatedTotal = cartSubtotal + estimatedDeliveryFee;
 
   const validateInfo = () => {
@@ -364,7 +381,7 @@ export default function CheckoutPage() {
                     <Truck size={20} className="text-burgundy" />
                     <div>
                       <p className="text-sm font-semibold text-ink">Livraison Ezial</p>
-                      <p className="text-xs text-ink/55">Dakar sous 4–48 h · ~{formatFCFA(zone.fee)} (estimation)</p>
+                      <p className="text-xs text-ink/55">Dakar sous 4–48 h · {deliveryFeeText}</p>
                     </div>
                   </div>
                   <p className="mt-2 text-xs text-ink/45 leading-relaxed">Ezial regroupe vos articles des différentes boutiques en une seule livraison vers votre adresse. Le frais exact est calculé à la validation, selon la distance réelle.</p>
@@ -543,8 +560,8 @@ export default function CheckoutPage() {
                 </div>
                 <div className="border-t border-line pt-3 space-y-1.5 text-sm">
                   <div className="flex justify-between"><span className="text-ink/60">Produits</span><span className="font-medium">{formatFCFA(cartSubtotal)}</span></div>
-                  <div className="flex justify-between"><span className="text-ink/60">Livraison Ezial (estimation)</span><span className="font-medium">{estimatedDeliveryFee > 0 ? formatFCFA(estimatedDeliveryFee) : 'Gratuit'}</span></div>
-                  <div className="border-t border-line pt-1.5 flex justify-between"><span className="font-medium text-ink">Total estimé</span><span className="font-semibold text-ink">{formatFCFA(estimatedTotal)}</span></div>
+                  <div className="flex justify-between"><span className="text-ink/60">{hasDeliveryShops && deliveryFeeKnown ? 'Livraison Ezial (estimation)' : 'Livraison Ezial'}</span><span className="font-medium">{!hasDeliveryShops ? 'Gratuit' : deliveryFeeKnown ? formatFCFA(deliveryFeeEstimate) : `À partir de ${formatFCFA(DELIVERY_FEE_FLOOR)}`}</span></div>
+                  <div className="border-t border-line pt-1.5 flex justify-between"><span className="font-medium text-ink">{hasDeliveryShops && !deliveryFeeKnown ? 'Total à partir de' : 'Total estimé'}</span><span className="font-semibold text-ink">{formatFCFA(estimatedTotal)}</span></div>
                   {hasDeliveryShops && <p className="text-[11px] text-ink/40">Le montant exact de la livraison est calculé à la validation et confirmé sur votre reçu.</p>}
                 </div>
               </div>
@@ -572,7 +589,7 @@ export default function CheckoutPage() {
               <div className="flex gap-3">
                 <button onClick={() => setStep(1)} className="btn-outline flex-1" disabled={processing}>Retour</button>
                 <button onClick={placeOrder} className="btn-primary flex-1" disabled={processing}>
-                  {processing ? <><Loader2 size={17} className="animate-spin" /> Traitement...</> : `Payer ${formatFCFA(estimatedTotal)} (estimé)`}
+                  {processing ? <><Loader2 size={17} className="animate-spin" /> Traitement...</> : `Payer ${formatFCFA(estimatedTotal)} ${hasDeliveryShops && !deliveryFeeKnown ? '(à partir de)' : '(estimé)'}`}
                 </button>
               </div>
             </div>
@@ -608,10 +625,10 @@ export default function CheckoutPage() {
               <div className="flex justify-between"><span className="text-ink/60">Produits</span><span className="font-medium">{formatFCFA(cartSubtotal)}</span></div>
               <div className="flex justify-between">
                 <span className="text-ink/60">Livraison Ezial</span>
-                <span className="font-medium">{step >= 1 && estimatedDeliveryFee > 0 ? `~${formatFCFA(estimatedDeliveryFee)}` : step < 1 ? 'À calculer' : 'Gratuit'}</span>
+                <span className="font-medium">{!hasDeliveryShops ? 'Gratuit' : deliveryFeeKnown ? formatFCFA(deliveryFeeEstimate) : `À partir de ${formatFCFA(DELIVERY_FEE_FLOOR)}`}</span>
               </div>
               <div className="border-t border-line pt-1.5 flex justify-between">
-                <span className="font-medium text-ink">Total estimé</span>
+                <span className="font-medium text-ink">{hasDeliveryShops && !deliveryFeeKnown ? 'Total à partir de' : 'Total estimé'}</span>
                 <span className="font-semibold text-ink">{formatFCFA(estimatedTotal)}</span>
               </div>
             </div>

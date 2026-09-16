@@ -6,6 +6,13 @@ export interface Shop {
   // below (always falsy there). Drives which shop's products are
   // prioritized on the Home (see src/lib/productRanking.ts).
   isOfficial?: boolean;
+  // From Supabase shops.latitude/longitude — undefined for every static
+  // mock shop below (they have no real-world coordinates) and for any
+  // real shop that hasn't set its location yet in Ezial Pro. Used only to
+  // mirror the backend's delivery-fee estimate before checkout; the
+  // static mock shops here never resolve a distance-based estimate.
+  latitude?: number;
+  longitude?: number;
 }
 
 export const shops: Shop[] = [

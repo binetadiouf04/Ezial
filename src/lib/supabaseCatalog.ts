@@ -66,6 +66,8 @@ interface ShopRow {
   pin_hash?: string | null;
   active_product_limit?: number | null;
   is_official?: boolean | null;
+  latitude?: number | null;
+  longitude?: number | null;
   created_at?: string;
   updated_at?: string;
 }
@@ -140,6 +142,8 @@ function mapShop(row: ShopRow): Shop {
     pickupEnabled: false,
     pickupEta: '',
     isOfficial: Boolean(row.is_official),
+    latitude: row.latitude ?? undefined,
+    longitude: row.longitude ?? undefined,
   };
 }
 
