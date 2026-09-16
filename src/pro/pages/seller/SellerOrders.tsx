@@ -1,9 +1,9 @@
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { usePro } from '../../ProContext';
-import { orders, productsByShop, formatFCFA, formatDateTime } from '../../data';
+import { fetchSellerOrders, type SellerOrderSummary } from '@/lib/supabaseSellerOrders';
+import { formatFCFA } from '@/data/products';
 import { StatusChip } from '../../components/StatusChip';
-import { Truck, Store, ChevronRight, Search } from 'lucide-react';
-import SmartImage from '@/components/SmartImage';
+import { Truck, Store, ChevronRight, Search, Loader2, AlertCircle } from 'lucide-react';
 
 type Filter = 'all' | 'confirmed' | 'preparing' | 'ready' | 'done';
 
@@ -15,42 +15,45 @@ const filterLabels: Record<Filter, string> = {
   done: 'Terminées',
 };
 
+function formatDateTime(iso: string): string {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  return d.toLocaleString('fr-FR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
+}
+
 export default function SellerOrders() {
-  const { navigate, getSubOrderStatus } = usePro();
+  const { navigate, sellerSupabaseShopId } = usePro();
   const [filter, setFilter] = useState<Filter>('all');
   const [search, setSearch] = useState('');
-  const shopId = 'maison-fatou';
-  const shopProducts = productsByShop(shopId);
+  const [orders, setOrders] = useState<SellerOrderSummary[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
 
-  const sellerOrders = orders
-    .map((o) => {
-      const sub = o.subOrders.find((s) => s.shopId === shopId);
-      if (!sub) return null;
-      return {
-        id: o.id,
-        customerName: o.customerName,
-        date: o.date,
-        fulfillment: o.fulfillment,
-        subStatus: getSubOrderStatus(o.id, shopId, sub.status),
-        items: sub.items,
-      };
-    })
-    .filter(Boolean) as { id: string; customerName: string; date: string; fulfillment: 'delivery' | 'pickup'; subStatus: string; items: { productId: string; productName: string; quantity: number; variants: Record<string, string> }[] }[];
+  const load = useCallback(async () => {
+    if (!sellerSupabaseShopId) { setLoading(false); return; }
+    setLoading(true);
+    setLoadError('');
+    try {
+      const rows = await fetchSellerOrders(sellerSupabaseShopId);
+      setOrders(rows);
+    } catch {
+      setLoadError("Impossible de charger les commandes. Réessayez.");
+    } finally {
+      setLoading(false);
+    }
+  }, [sellerSupabaseShopId]);
 
-  const filtered = sellerOrders.filter((o) => {
-    if (filter === 'confirmed' && o.subStatus !== 'confirmed') return false;
-    if (filter === 'preparing' && o.subStatus !== 'preparing') return false;
-    if (filter === 'ready' && o.subStatus !== 'ready' && o.subStatus !== 'ready_for_pickup') return false;
-    if (filter === 'done' && o.subStatus !== 'delivered' && o.subStatus !== 'picked_up') return false;
-    if (search && !o.id.toLowerCase().includes(search.toLowerCase())) return false;
+  useEffect(() => { void load(); }, [load]);
+
+  const filtered = orders.filter((o) => {
+    if (filter === 'confirmed' && o.status !== 'confirmed') return false;
+    if (filter === 'preparing' && o.status !== 'preparing') return false;
+    if (filter === 'ready' && o.status !== 'ready' && o.status !== 'ready_for_pickup') return false;
+    if (filter === 'done' && !['picked_up', 'delivering', 'delivered', 'collected'].includes(o.status)) return false;
+    if (search && !o.orderNumber.toLowerCase().includes(search.toLowerCase())) return false;
     return true;
   });
-
-  const sellerSubtotal = (items: { productId: string; quantity: number }[]) =>
-    items.reduce((sum, item) => {
-      const p = shopProducts.find((pp) => pp.id === item.productId);
-      return sum + (p ? p.price * item.quantity : 0);
-    }, 0);
 
   return (
     <div className="space-y-6">
@@ -59,75 +62,75 @@ export default function SellerOrders() {
         <p className="mt-1 text-sm text-ink/55">Les commandes contenant vos produits</p>
       </div>
 
-      {/* Search */}
-      <div className="relative">
-        <Search size={16} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-ink/35" />
-        <input className="input-field pl-10" placeholder="Rechercher par n° de commande..." value={search} onChange={(e) => setSearch(e.target.value)} />
-      </div>
-
-      {/* Filters */}
-      <div className="flex gap-2 overflow-x-auto">
-        {(Object.keys(filterLabels) as Filter[]).map((f) => (
-          <button
-            key={f}
-            onClick={() => setFilter(f)}
-            className={`whitespace-nowrap rounded-full px-4 py-1.5 text-sm font-medium transition-colors ${filter === f ? 'bg-burgundy text-white' : 'bg-white border border-line text-ink/60 hover:border-ink/20'}`}
-          >
-            {filterLabels[f]}
-          </button>
-        ))}
-      </div>
-
-      {/* Order list */}
-      <div className="space-y-3">
-        {filtered.length === 0 ? (
-          <div className="card p-10 text-center">
-            <p className="text-sm text-ink/45">Aucune commande pour le moment.</p>
+      {!sellerSupabaseShopId ? (
+        <div className="card p-10 text-center">
+          <p className="text-sm text-ink/45">Disponible une fois votre boutique connectée à votre compte vendeur.</p>
+        </div>
+      ) : (
+        <>
+          {/* Search */}
+          <div className="relative">
+            <Search size={16} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-ink/35" />
+            <input className="input-field pl-10" placeholder="Rechercher par n° de commande..." value={search} onChange={(e) => setSearch(e.target.value)} />
           </div>
-        ) : (
-          filtered.map((order) => {
-            const subtotal = sellerSubtotal(order.items);
-            return (
-              <button key={order.id} onClick={() => navigate(`/seller/commandes/${order.id}`)} className="card w-full p-4 text-left transition-all hover:border-ink/20 hover:card-shadow">
-                <div className="flex items-start justify-between gap-3 mb-3">
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className="font-mono text-sm font-semibold text-ink">{order.id}</span>
-                      <StatusChip status={order.subStatus} />
-                    </div>
-                    <p className="mt-1 text-xs text-ink/45">{formatDateTime(order.date)}</p>
-                  </div>
-                  <span className="text-xs text-ink/50 flex items-center gap-1 flex-shrink-0">
-                    {order.fulfillment === 'pickup' ? <><Store size={12} /> Retrait</> : <><Truck size={12} /> Livraison Ezial</>}
-                  </span>
-                </div>
-                {/* Products */}
-                <div className="space-y-2">
-                  {order.items.map((item, i) => {
-                    const p = shopProducts.find((pp) => pp.id === item.productId);
-                    return (
-                      <div key={i} className="flex items-center gap-2.5">
-                        {p && <SmartImage src={p.image} alt="" className="h-10 w-9 rounded object-cover flex-shrink-0" />}
-                        <div className="flex-1 min-w-0">
-                          <p className="text-xs font-medium text-ink line-clamp-1">{item.productName}</p>
-                          {Object.entries(item.variants).length > 0 && (
-                            <p className="text-[11px] text-ink/45">{Object.entries(item.variants).map(([k, v]) => `${k}: ${v}`).join(' · ')}</p>
-                          )}
-                          <p className="text-[11px] text-ink/45">Quantité : {item.quantity}</p>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-                <div className="flex items-center justify-between border-t border-line mt-3 pt-3">
-                  <span className="text-sm font-semibold text-ink">{formatFCFA(subtotal)}</span>
-                  <span className="flex items-center gap-1 text-xs font-medium text-burgundy">Voir la commande <ChevronRight size={14} /></span>
-                </div>
+
+          {/* Filters */}
+          <div className="flex gap-2 overflow-x-auto">
+            {(Object.keys(filterLabels) as Filter[]).map((f) => (
+              <button
+                key={f}
+                onClick={() => setFilter(f)}
+                className={`whitespace-nowrap rounded-full px-4 py-1.5 text-sm font-medium transition-colors ${filter === f ? 'bg-burgundy text-white' : 'bg-white border border-line text-ink/60 hover:border-ink/20'}`}
+              >
+                {filterLabels[f]}
               </button>
-            );
-          })
-        )}
-      </div>
+            ))}
+          </div>
+
+          {loadError && (
+            <p className="flex items-start gap-1.5 rounded-lg bg-burgundy/5 p-3 text-sm text-burgundy">
+              <AlertCircle size={15} className="mt-0.5 flex-shrink-0" /> {loadError}
+            </p>
+          )}
+
+          {/* Order list */}
+          {loading ? (
+            <div className="card p-10 text-center">
+              <Loader2 size={20} className="mx-auto animate-spin text-ink/30" />
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {filtered.length === 0 ? (
+                <div className="card p-10 text-center">
+                  <p className="text-sm text-ink/45">Aucune commande pour le moment.</p>
+                </div>
+              ) : (
+                filtered.map((order) => (
+                  <button key={order.orderShopId} onClick={() => navigate(`/seller/commandes/${order.orderShopId}`)} className="card w-full p-4 text-left transition-all hover:border-ink/20 hover:card-shadow">
+                    <div className="flex flex-wrap items-start justify-between gap-2 mb-3">
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="font-mono text-sm font-semibold text-ink">{order.orderNumber}</span>
+                          <StatusChip status={order.status} />
+                        </div>
+                        <p className="mt-1 text-xs text-ink/45">{formatDateTime(order.createdAt)} · {order.customerName}</p>
+                      </div>
+                      <span className="text-xs text-ink/50 flex items-center gap-1 flex-shrink-0">
+                        {order.fulfillmentType === 'pickup' ? <><Store size={12} /> Retrait</> : <><Truck size={12} /> Livraison Ezial</>}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between border-t border-line pt-3">
+                      <span className="text-xs text-ink/50">{order.itemCount} article{order.itemCount > 1 ? 's' : ''}</span>
+                      <span className="text-sm font-semibold text-ink">{formatFCFA(order.shopSubtotal)}</span>
+                      <span className="flex items-center gap-1 text-xs font-medium text-burgundy">Voir <ChevronRight size={14} /></span>
+                    </div>
+                  </button>
+                ))
+              )}
+            </div>
+          )}
+        </>
+      )}
     </div>
   );
 }
