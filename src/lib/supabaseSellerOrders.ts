@@ -156,6 +156,15 @@ export interface SellerOrderDetail {
   preferredDate: string | null;
   preferredSlot: string | null;
   deliveryNotes: string | null;
+  // Gift order — deliveryAddress/neighborhood/deliveryNotes above are
+  // already the RECIPIENT's when isGift (create_order() stores them that
+  // way). customerName/customerPhone above always stay the buyer's.
+  isGift: boolean;
+  giftRecipientName: string | null;
+  giftRecipientPhone: string | null;
+  giftMessage: string | null;
+  giftWrap: boolean;
+  giftWrapFee: number;
   items: SellerOrderItem[];
 }
 
@@ -213,6 +222,12 @@ export async function fetchSellerOrderDetail(shopId: string, orderShopId: string
     preferredDate: firstString(order.preferred_delivery_date, order.delivery_date),
     preferredSlot: firstString(order.preferred_delivery_slot, order.delivery_slot, order.delivery_window),
     deliveryNotes: firstString(order.delivery_notes, order.notes, order.instructions),
+    isGift: Boolean(order.is_gift),
+    giftRecipientName: firstString(order.gift_recipient_name),
+    giftRecipientPhone: firstString(order.gift_recipient_phone),
+    giftMessage: firstString(order.gift_message),
+    giftWrap: Boolean(order.gift_wrap),
+    giftWrapFee: (order.gift_wrap_fee as number) ?? 0,
     items: items.map((it) => ({
       id: it.id,
       productId: it.product_id,

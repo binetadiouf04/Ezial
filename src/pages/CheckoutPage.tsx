@@ -9,11 +9,15 @@ import { searchAddress, type GeocodeResult } from '@/lib/geocoding';
 import { estimateDeliveryFee, DELIVERY_FEE_FLOOR } from '@/lib/deliveryEstimate';
 import CheckoutSteps from '@/components/CheckoutSteps';
 import LocationPickerMap from '@/components/LocationPickerMap';
-import { Check, Truck, Store, Smartphone, Wallet, Clock, Loader2, AlertCircle, AlertTriangle, MapPin, Navigation, Search, ArrowLeft } from 'lucide-react';
+import { Check, Truck, Store, Smartphone, Wallet, Clock, Loader2, AlertCircle, AlertTriangle, MapPin, Navigation, Search, ArrowLeft, Gift } from 'lucide-react';
 import SmartImage from '@/components/SmartImage';
 
 const paymentIcons: Record<string, typeof Smartphone> = { wave: Smartphone, orange: Smartphone, paypal: Wallet };
 const paymentMethods = paymentMethodsData.map((p) => ({ ...p, icon: paymentIcons[p.id] ?? Smartphone }));
+
+// Mirrors create_order()'s own fixed amount — for display only. The real
+// charge always comes back from the RPC's response.
+const GIFT_WRAP_FEE = 2000;
 
 function tomorrowISO(): string {
   const d = new Date();
@@ -62,6 +66,20 @@ export default function CheckoutPage() {
   const [location, setLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [locationStatus, setLocationStatus] = useState<LocationStatus>('idle');
   const [locationMode, setLocationMode] = useState<LocationMode>('gps');
+
+  // Gift order — kept out of the persisted draft on purpose (recipient
+  // details are typically one-off, unlike the buyer's own info). When
+  // active, the recipient's own address/landmark replace the buyer's for
+  // delivery purposes; the buyer's firstName/lastName/phone/email are never
+  // touched.
+  const [isGift, setIsGift] = useState(false);
+  const [giftRecipientName, setGiftRecipientName] = useState('');
+  const [giftRecipientPhone, setGiftRecipientPhone] = useState('');
+  const [giftRecipientAddress, setGiftRecipientAddress] = useState('');
+  const [giftRecipientLandmark, setGiftRecipientLandmark] = useState('');
+  const [giftShowBuyerName, setGiftShowBuyerName] = useState(false);
+  const [giftMessage, setGiftMessage] = useState('');
+  const [giftWrap, setGiftWrap] = useState(false);
 
   // Manual address search — the delivery position is independent from the
   // typed deliveryAddress text (form.address): picking a search result or
@@ -125,14 +143,21 @@ export default function CheckoutPage() {
       ? `Livraison estimée : ${formatFCFA(deliveryFeeEstimate)}`
       : `Livraison à partir de ${formatFCFA(DELIVERY_FEE_FLOOR)}`;
   const estimatedDeliveryFee = hasDeliveryShops ? (deliveryFeeKnown ? deliveryFeeEstimate : DELIVERY_FEE_FLOOR) : 0;
-  const estimatedTotal = cartSubtotal + estimatedDeliveryFee;
+  const estimatedGiftWrapFee = giftWrap ? GIFT_WRAP_FEE : 0;
+  const estimatedTotal = cartSubtotal + estimatedDeliveryFee + estimatedGiftWrapFee;
 
   const validateInfo = () => {
     const e: Record<string, string> = {};
     if (!form.firstName.trim()) e.firstName = 'Ce champ est obligatoire.';
     if (!form.lastName.trim()) e.lastName = 'Ce champ est obligatoire.';
     if (!form.phone.trim()) e.phone = 'Ce champ est obligatoire.';
-    if (hasDeliveryShops && !form.address.trim()) e.address = 'L\'adresse est obligatoire pour une commande avec livraison.';
+    if (isGift) {
+      if (!giftRecipientName.trim()) e.giftRecipientName = 'Ce champ est obligatoire.';
+      if (!giftRecipientPhone.trim()) e.giftRecipientPhone = 'Ce champ est obligatoire.';
+      if (hasDeliveryShops && !giftRecipientAddress.trim()) e.giftRecipientAddress = 'L\'adresse du destinataire est obligatoire pour une commande avec livraison.';
+    } else if (hasDeliveryShops && !form.address.trim()) {
+      e.address = 'L\'adresse est obligatoire pour une commande avec livraison.';
+    }
     setErrors(e);
     return Object.keys(e).length === 0;
   };
@@ -266,13 +291,24 @@ export default function CheckoutPage() {
         phone: form.phone.trim(),
         email: form.email.trim() || undefined,
         neighborhood: form.quartier,
-        deliveryAddress: form.address.trim() || undefined,
-        deliveryNotes: [form.landmark.trim() && `Point de repère : ${form.landmark.trim()}`, form.instructions.trim()].filter(Boolean).join('. ') || undefined,
+        // Cadeau : la destination réelle du colis est celle du destinataire,
+        // jamais celle de l'acheteur — firstName/lastName/phone/email
+        // au-dessus restent toujours ceux de l'acheteur.
+        deliveryAddress: (isGift ? giftRecipientAddress.trim() : form.address.trim()) || undefined,
+        deliveryNotes: isGift
+          ? (giftRecipientLandmark.trim() ? `Point de repère : ${giftRecipientLandmark.trim()}` : undefined)
+          : [form.landmark.trim() && `Point de repère : ${form.landmark.trim()}`, form.instructions.trim()].filter(Boolean).join('. ') || undefined,
         latitude: hasDeliveryShops ? location?.lat ?? null : null,
         longitude: hasDeliveryShops ? location?.lng ?? null : null,
         preferredDeliveryDate: hasDeliveryShops && preference.type === 'preferred' ? preference.date ?? null : null,
         preferredDeliverySlot: hasDeliveryShops && preference.type === 'preferred' ? preference.window ?? null : null,
         paymentMethod: payment,
+        isGift,
+        giftRecipientName: isGift ? giftRecipientName.trim() : undefined,
+        giftRecipientPhone: isGift ? giftRecipientPhone.trim() : undefined,
+        giftShowBuyerName: isGift ? giftShowBuyerName : undefined,
+        giftMessage: isGift ? (giftMessage.trim() || undefined) : undefined,
+        giftWrap: isGift ? giftWrap : undefined,
         shopFulfillments: shopFulfillmentsPayload,
         items: cart.map((item) => ({
           productId: item.productId,
@@ -349,7 +385,7 @@ export default function CheckoutPage() {
                 </select>
               </div>
               <div>
-                <label className="block text-xs font-medium text-ink/60 mb-1.5">Adresse de livraison{hasDeliveryShops && <span className="text-burgundy"> *</span>}</label>
+                <label className="block text-xs font-medium text-ink/60 mb-1.5">Adresse de livraison{hasDeliveryShops && !isGift && <span className="text-burgundy"> *</span>}</label>
                 <input className="input-field" placeholder="Ex : Villa 12, Rue 4, Sacré-Cœur 3" value={form.address} onChange={(e) => { setForm({ ...form, address: e.target.value }); setErrors((prev) => { const next = { ...prev }; delete next.address; return next; }); }} />
                 {errors.address && <p className="mt-1 text-xs text-burgundy">{errors.address}</p>}
               </div>
@@ -361,6 +397,51 @@ export default function CheckoutPage() {
                 <label className="block text-xs font-medium text-ink/60 mb-1.5">Instructions pour la livraison (facultatif)</label>
                 <textarea className="input-field" rows={2} placeholder="Ex. Appelez-moi en arrivant, portail noir..." value={form.instructions} onChange={(e) => setForm({ ...form, instructions: e.target.value })} />
               </div>
+
+              <div className="border-t border-line pt-4 space-y-3">
+                <label className="flex cursor-pointer items-center gap-2.5">
+                  <input type="checkbox" className="h-4 w-4 rounded border-line text-burgundy focus:ring-burgundy" checked={isGift} onChange={(e) => setIsGift(e.target.checked)} />
+                  <span className="flex items-center gap-1.5 text-sm font-medium text-ink"><Gift size={15} className="text-ink/50" /> Cette commande est un cadeau</span>
+                </label>
+
+                {isGift && (
+                  <div className="space-y-4 rounded-xl border border-line bg-cream/30 p-4 fade-in">
+                    <p className="text-xs text-ink/50">Ces informations concernent le destinataire — elles remplacent les vôtres pour la livraison de cette commande.</p>
+                    <div>
+                      <label className="block text-xs font-medium text-ink/60 mb-1.5">Nom du destinataire</label>
+                      <input className="input-field" value={giftRecipientName} onChange={(e) => { setGiftRecipientName(e.target.value); setErrors((prev) => { const next = { ...prev }; delete next.giftRecipientName; return next; }); }} />
+                      {errors.giftRecipientName && <p className="mt-1 text-xs text-burgundy">{errors.giftRecipientName}</p>}
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-ink/60 mb-1.5">Téléphone du destinataire</label>
+                      <input className="input-field" placeholder="+221 ..." value={giftRecipientPhone} onChange={(e) => { setGiftRecipientPhone(e.target.value); setErrors((prev) => { const next = { ...prev }; delete next.giftRecipientPhone; return next; }); }} />
+                      {errors.giftRecipientPhone && <p className="mt-1 text-xs text-burgundy">{errors.giftRecipientPhone}</p>}
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-ink/60 mb-1.5">Adresse du destinataire{hasDeliveryShops && <span className="text-burgundy"> *</span>}</label>
+                      <input className="input-field" placeholder="Ex : Villa 12, Rue 4, Sacré-Cœur 3" value={giftRecipientAddress} onChange={(e) => { setGiftRecipientAddress(e.target.value); setErrors((prev) => { const next = { ...prev }; delete next.giftRecipientAddress; return next; }); }} />
+                      {errors.giftRecipientAddress && <p className="mt-1 text-xs text-burgundy">{errors.giftRecipientAddress}</p>}
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-ink/60 mb-1.5">Point de repère (optionnel)</label>
+                      <input className="input-field" placeholder="Ex: près de la pharmacie, en face de..." value={giftRecipientLandmark} onChange={(e) => setGiftRecipientLandmark(e.target.value)} />
+                    </div>
+                    <label className="flex cursor-pointer items-center gap-2.5">
+                      <input type="checkbox" className="h-4 w-4 rounded border-line text-burgundy focus:ring-burgundy" checked={giftShowBuyerName} onChange={(e) => setGiftShowBuyerName(e.target.checked)} />
+                      <span className="text-sm text-ink">Afficher mon nom au destinataire</span>
+                    </label>
+                    <div>
+                      <label className="block text-xs font-medium text-ink/60 mb-1.5">Ajouter un petit mot (optionnel)</label>
+                      <textarea className="input-field" rows={2} placeholder="Votre message pour le destinataire..." value={giftMessage} onChange={(e) => setGiftMessage(e.target.value)} />
+                    </div>
+                    <label className="flex cursor-pointer items-center gap-2.5">
+                      <input type="checkbox" className="h-4 w-4 rounded border-line text-burgundy focus:ring-burgundy" checked={giftWrap} onChange={(e) => setGiftWrap(e.target.checked)} />
+                      <span className="text-sm text-ink">Emballage cadeau <span className="text-ink/45">(+{formatFCFA(GIFT_WRAP_FEE)})</span></span>
+                    </label>
+                  </div>
+                )}
+              </div>
+
               <button onClick={() => { if (validateInfo()) setStep(1); }} className="btn-primary w-full">Continuer</button>
             </div>
           )}
@@ -595,9 +676,16 @@ export default function CheckoutPage() {
                 <div className="border-t border-line pt-3 space-y-1.5 text-sm">
                   <div className="flex justify-between"><span className="text-ink/60">Produits</span><span className="font-medium">{formatFCFA(cartSubtotal)}</span></div>
                   <div className="flex justify-between"><span className="text-ink/60">{hasDeliveryShops && deliveryFeeKnown ? 'Livraison Ezial (estimation)' : 'Livraison Ezial'}</span><span className="font-medium">{!hasDeliveryShops ? 'Gratuit' : deliveryFeeKnown ? formatFCFA(deliveryFeeEstimate) : `À partir de ${formatFCFA(DELIVERY_FEE_FLOOR)}`}</span></div>
+                  {isGift && giftWrap && <div className="flex justify-between"><span className="text-ink/60">Emballage cadeau</span><span className="font-medium">{formatFCFA(GIFT_WRAP_FEE)}</span></div>}
                   <div className="border-t border-line pt-1.5 flex justify-between"><span className="font-medium text-ink">{hasDeliveryShops && !deliveryFeeKnown ? 'Total à partir de' : 'Total estimé'}</span><span className="font-semibold text-ink">{formatFCFA(estimatedTotal)}</span></div>
                   {hasDeliveryShops && <p className="text-[11px] text-ink/40">Le montant exact de la livraison est calculé à la validation et confirmé sur votre reçu.</p>}
                 </div>
+                {isGift && (
+                  <div className="flex items-start gap-1.5 rounded-lg bg-cream/50 p-2.5 text-xs text-ink/60">
+                    <Gift size={13} className="mt-0.5 flex-shrink-0 text-burgundy" />
+                    <span>Commande cadeau pour {giftRecipientName || 'le destinataire'} — livrée à son adresse.</span>
+                  </div>
+                )}
               </div>
 
               <p className="text-sm text-ink/55">Choisissez votre mode de paiement. Simulation uniquement, aucun paiement réel.</p>
@@ -662,6 +750,12 @@ export default function CheckoutPage() {
                 <span className="text-ink/60">Livraison Ezial</span>
                 <span className="font-medium">{!hasDeliveryShops ? 'Gratuit' : deliveryFeeKnown ? formatFCFA(deliveryFeeEstimate) : `À partir de ${formatFCFA(DELIVERY_FEE_FLOOR)}`}</span>
               </div>
+              {isGift && giftWrap && (
+                <div className="flex justify-between">
+                  <span className="text-ink/60">Emballage cadeau</span>
+                  <span className="font-medium">{formatFCFA(GIFT_WRAP_FEE)}</span>
+                </div>
+              )}
               <div className="border-t border-line pt-1.5 flex justify-between">
                 <span className="font-medium text-ink">{hasDeliveryShops && !deliveryFeeKnown ? 'Total à partir de' : 'Total estimé'}</span>
                 <span className="font-semibold text-ink">{formatFCFA(estimatedTotal)}</span>

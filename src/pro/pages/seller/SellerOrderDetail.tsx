@@ -6,7 +6,7 @@ import {
 } from '@/lib/supabaseSellerOrders';
 import { formatFCFA } from '@/data/products';
 import { StatusChip } from '../../components/StatusChip';
-import { ArrowLeft, Truck, Store, Phone, Check, Package, Loader2, AlertCircle, Clock, MessageSquare } from 'lucide-react';
+import { ArrowLeft, Truck, Store, Phone, Check, Package, Loader2, AlertCircle, Clock, MessageSquare, Gift } from 'lucide-react';
 import SmartImage from '@/components/SmartImage';
 
 function formatDateTime(iso: string): string {
@@ -157,6 +157,18 @@ export default function SellerOrderDetail({ orderId }: { orderId: string }) {
           <p className="text-xs text-ink/40">Code de retrait : <span className="font-mono font-semibold text-ink">{order.pickupCode}</span></p>
         )}
       </div>
+
+      {/* Gift order — surfaced so the seller can prepare the package
+          accordingly (recipient is separate from the buyer shown above). */}
+      {order.isGift && (
+        <div className="card p-5 space-y-2 border-burgundy/20 bg-burgundy/5">
+          <h2 className="text-sm font-semibold text-ink flex items-center gap-1.5"><Gift size={15} className="text-burgundy" /> Commande cadeau</h2>
+          {order.giftRecipientName && <p className="text-sm text-ink">Destinataire : <span className="font-medium">{order.giftRecipientName}</span></p>}
+          {order.giftRecipientPhone && <p className="text-xs text-ink/55 flex items-center gap-1"><Phone size={11} /> {order.giftRecipientPhone}</p>}
+          {order.giftWrap && <p className="text-xs text-ink/55">Emballage cadeau demandé — {formatFCFA(order.giftWrapFee)}.</p>}
+          {order.giftMessage && <p className="text-sm text-ink/70 italic mt-1">"{order.giftMessage}"</p>}
+        </div>
+      )}
 
       {/* Status & action */}
       <div className="card p-5">

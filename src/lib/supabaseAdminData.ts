@@ -146,6 +146,17 @@ export interface AdminOrderDetail {
   deliveryNotes: string | null;
   preferredDeliveryDate: string | null;
   preferredDeliverySlot: string | null;
+  // Gift order — when isGift, deliveryAddress/deliveryNotes above are
+  // already the RECIPIENT's (create_order() stores them that way; see
+  // supabaseOrders.ts). customerName/customerPhone above always stay the
+  // buyer's, regardless of giftShowBuyerName (that flag only affects what
+  // the recipient — never the seller/admin — is told).
+  isGift: boolean;
+  giftRecipientName: string | null;
+  giftRecipientPhone: string | null;
+  giftMessage: string | null;
+  giftWrap: boolean;
+  giftWrapFee: number;
 }
 
 export async function fetchAdminOrderDetail(orderId: string): Promise<AdminOrderDetail | null> {
@@ -203,6 +214,12 @@ export async function fetchAdminOrderDetail(orderId: string): Promise<AdminOrder
     deliveryNotes: firstString(order.delivery_notes, order.notes),
     preferredDeliveryDate: firstString(order.preferred_delivery_date, order.delivery_date),
     preferredDeliverySlot: firstString(order.preferred_delivery_slot, order.delivery_slot),
+    isGift: Boolean(order.is_gift),
+    giftRecipientName: firstString(order.gift_recipient_name),
+    giftRecipientPhone: firstString(order.gift_recipient_phone),
+    giftMessage: firstString(order.gift_message),
+    giftWrap: Boolean(order.gift_wrap),
+    giftWrapFee: (order.gift_wrap_fee as number) ?? 0,
   };
 }
 

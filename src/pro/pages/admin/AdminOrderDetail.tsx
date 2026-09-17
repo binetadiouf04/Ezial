@@ -4,7 +4,7 @@ import { fetchAdminOrderDetail, type AdminOrderDetail as AdminOrderDetailData } 
 import { formatFCFA } from '../../data';
 import { paymentLabels } from '@/data/payments';
 import { StatusChip } from '../../components/StatusChip';
-import { ArrowLeft, Store, CreditCard, Phone, Loader2, Truck, Clock } from 'lucide-react';
+import { ArrowLeft, Store, CreditCard, Phone, Loader2, Truck, Clock, Gift } from 'lucide-react';
 
 function formatDateTime(iso: string): string {
   if (!iso) return '';
@@ -91,12 +91,31 @@ export default function AdminOrderDetail({ orderId }: { orderId: string }) {
             <span className="text-ink/55">Livraison Ezial</span>
             <span className="font-medium text-ink">{order.deliveryFee > 0 ? formatFCFA(order.deliveryFee) : 'Gratuit'}</span>
           </div>
+          {order.giftWrap && (
+            <div className="flex justify-between text-sm">
+              <span className="text-ink/55">Emballage cadeau</span>
+              <span className="font-medium text-ink">{formatFCFA(order.giftWrapFee)}</span>
+            </div>
+          )}
           <div className="flex justify-between text-sm pt-1.5 border-t border-line">
             <span className="font-semibold text-ink">Total payé</span>
             <span className="font-semibold text-ink">{formatFCFA(order.totalAmount)}</span>
           </div>
         </div>
       </div>
+
+      {/* Gift order — recipient info stays separate from the buyer's own
+          (shown above); the message is surfaced here so the seller/admin
+          can prepare the package accordingly. */}
+      {order.isGift && (
+        <div className="card p-5 space-y-2 border-burgundy/20 bg-burgundy/5">
+          <h2 className="text-sm font-semibold text-ink flex items-center gap-1.5"><Gift size={15} className="text-burgundy" /> Commande cadeau</h2>
+          {order.giftRecipientName && <p className="text-sm text-ink">Destinataire : <span className="font-medium">{order.giftRecipientName}</span></p>}
+          {order.giftRecipientPhone && <p className="text-xs text-ink/55 flex items-center gap-1"><Phone size={11} /> {order.giftRecipientPhone}</p>}
+          {order.giftWrap && <p className="text-xs text-ink/55">Emballage cadeau demandé.</p>}
+          {order.giftMessage && <p className="text-sm text-ink/70 italic mt-1">"{order.giftMessage}"</p>}
+        </div>
+      )}
 
       {/* Delivery info — only relevant for delivery orders; per-shop status
           already shown below via StatusChip covers the delivery state

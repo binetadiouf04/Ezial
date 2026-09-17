@@ -41,6 +41,17 @@ export interface CreateOrderPayload {
   preferredDeliveryDate?: string | null;
   preferredDeliverySlot?: string | null;
   paymentMethod: string;
+  // Gift order — when isGift is true, deliveryAddress/neighborhood/
+  // deliveryNotes/latitude/longitude above are the RECIPIENT's, never the
+  // buyer's own (firstName/lastName/phone/email always stay the buyer's).
+  // giftWrapFee is never sent — create_order() derives it itself from
+  // giftWrap and adds it to the real total_amount.
+  isGift?: boolean;
+  giftRecipientName?: string;
+  giftRecipientPhone?: string;
+  giftShowBuyerName?: boolean;
+  giftMessage?: string;
+  giftWrap?: boolean;
   shopFulfillments: Record<string, CreateOrderShopFulfillmentInput>;
   items: CreateOrderItemInput[];
 }
@@ -59,6 +70,13 @@ export interface CreatedOrderRow {
   discount_amount: number;
   delivery_fee: number;
   total_amount: number;
+  is_gift?: boolean;
+  gift_recipient_name?: string | null;
+  gift_recipient_phone?: string | null;
+  gift_show_buyer_name?: boolean;
+  gift_message?: string | null;
+  gift_wrap?: boolean;
+  gift_wrap_fee?: number;
   [key: string]: unknown;
 }
 export interface CreatedOrderShopRow {
