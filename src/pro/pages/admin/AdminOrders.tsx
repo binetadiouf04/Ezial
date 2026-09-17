@@ -12,12 +12,15 @@ function formatDate(iso: string): string {
   return d.toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' });
 }
 
+type Filter = 'all' | 'delivering';
+
 export default function AdminOrders() {
   const { navigate } = usePro();
   const [orders, setOrders] = useState<AdminOrderSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
   const [search, setSearch] = useState('');
+  const [filter, setFilter] = useState<Filter>('all');
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -33,15 +36,31 @@ export default function AdminOrders() {
 
   useEffect(() => { void load(); }, [load]);
 
-  const filtered = orders.filter((o) => {
-    if (!search.trim()) return true;
-    const q = search.toLowerCase();
-    return o.orderNumber.toLowerCase().includes(q) || o.customerName.toLowerCase().includes(q);
-  });
+  const filtered = orders
+    .filter((o) => (filter === 'delivering' ? o.hasActiveDelivery : true))
+    .filter((o) => {
+      if (!search.trim()) return true;
+      const q = search.toLowerCase();
+      return o.orderNumber.toLowerCase().includes(q) || o.customerName.toLowerCase().includes(q);
+    });
+
+  const deliveringCount = orders.filter((o) => o.hasActiveDelivery).length;
 
   return (
     <div className="space-y-5">
       <h1 className="font-display text-2xl font-semibold text-ink">Commandes</h1>
+
+      {/* Filter: all orders vs. deliveries still in progress (not yet
+          "Livrée") — folds delivery tracking into Commandes instead of a
+          separate main section. */}
+      <div className="flex gap-2">
+        <button onClick={() => setFilter('all')} className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${filter === 'all' ? 'bg-burgundy text-white' : 'bg-white border border-line text-ink/60 hover:border-ink/20'}`}>
+          Toutes
+        </button>
+        <button onClick={() => setFilter('delivering')} className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${filter === 'delivering' ? 'bg-burgundy text-white' : 'bg-white border border-line text-ink/60 hover:border-ink/20'}`}>
+          Livraisons en cours{deliveringCount > 0 ? ` (${deliveringCount})` : ''}
+        </button>
+      </div>
 
       {/* Search */}
       <div className="relative">

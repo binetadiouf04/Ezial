@@ -47,9 +47,14 @@ export interface AdminOrderSummary {
   totalAmount: number;
   fulfillmentType: string;
   status: string;
+  // True when at least one of this order's shops is a delivery not yet
+  // marked "delivered" — used by the Commandes page's "Livraisons en
+  // cours" filter, folding delivery tracking into Commandes instead of a
+  // separate main section.
+  hasActiveDelivery: boolean;
 }
 
-function mapOrderSummary(row: OrderRow): AdminOrderSummary {
+function mapOrderSummary(row: OrderRow, activeDeliveryOrderIds: Set<string>): AdminOrderSummary {
   return {
     id: row.id,
     orderNumber: row.order_number ?? '',
@@ -58,7 +63,13 @@ function mapOrderSummary(row: OrderRow): AdminOrderSummary {
     totalAmount: (row.total_amount as number) ?? 0,
     fulfillmentType: (row.fulfillment_type as string) ?? 'delivery',
     status: (row.status as string) ?? 'confirmed',
+    hasActiveDelivery: activeDeliveryOrderIds.has(row.id),
   };
+}
+
+async function fetchActiveDeliveryOrderIds(): Promise<Set<string>> {
+  const { data } = await supabase.from('order_shops').select('order_id, fulfillment_type, status').eq('fulfillment_type', 'delivery').neq('status', 'delivered');
+  return new Set((data ?? []).map((r) => r.order_id as string));
 }
 
 export interface AdminDashboardStats {
@@ -69,27 +80,31 @@ export interface AdminDashboardStats {
 }
 
 export async function fetchAdminDashboardStats(): Promise<AdminDashboardStats> {
-  const [ordersCountRes, shopsCountRes, productsCountRes, recentRes] = await Promise.all([
+  const [ordersCountRes, shopsCountRes, productsCountRes, recentRes, activeDeliveryIds] = await Promise.all([
     supabase.from('orders').select('id', { count: 'exact', head: true }),
     supabase.from('shops').select('id', { count: 'exact', head: true }),
     supabase.from('products').select('id', { count: 'exact', head: true }).eq('status', 'active'),
     supabase.from('orders').select('*').order('created_at', { ascending: false }).limit(5),
+    fetchActiveDeliveryOrderIds(),
   ]);
 
   return {
     totalOrders: ordersCountRes.count ?? 0,
     totalShops: shopsCountRes.count ?? 0,
     activeProducts: productsCountRes.count ?? 0,
-    recentOrders: ((recentRes.data ?? []) as OrderRow[]).map(mapOrderSummary),
+    recentOrders: ((recentRes.data ?? []) as OrderRow[]).map((row) => mapOrderSummary(row, activeDeliveryIds)),
   };
 }
 
 // === Orders ===
 
 export async function fetchAdminOrders(): Promise<AdminOrderSummary[]> {
-  const { data, error } = await supabase.from('orders').select('*').order('created_at', { ascending: false });
+  const [{ data, error }, activeDeliveryIds] = await Promise.all([
+    supabase.from('orders').select('*').order('created_at', { ascending: false }),
+    fetchActiveDeliveryOrderIds(),
+  ]);
   if (error || !data) return [];
-  return (data as OrderRow[]).map(mapOrderSummary);
+  return (data as OrderRow[]).map((row) => mapOrderSummary(row, activeDeliveryIds));
 }
 
 export interface AdminOrderItem {
