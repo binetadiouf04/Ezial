@@ -52,6 +52,10 @@ export interface CreateOrderPayload {
   giftShowBuyerName?: boolean;
   giftMessage?: string;
   giftWrap?: boolean;
+  // Promo code — create_order() re-validates it itself (existence/active/
+  // dates/minimum) via validate_promo_code() and computes the real
+  // discount server-side; never trust a discount amount computed here.
+  promoCode?: string;
   shopFulfillments: Record<string, CreateOrderShopFulfillmentInput>;
   items: CreateOrderItemInput[];
 }
@@ -77,6 +81,8 @@ export interface CreatedOrderRow {
   gift_message?: string | null;
   gift_wrap?: boolean;
   gift_wrap_fee?: number;
+  promo_code?: string | null;
+  promo_discount_amount?: number;
   [key: string]: unknown;
 }
 export interface CreatedOrderShopRow {

@@ -5,6 +5,7 @@ import PriceDisplay from '@/components/PriceDisplay';
 import { getShop } from '@/data/shops';
 import { paymentMethods as paymentMethodsData } from '@/data/payments';
 import { createOrderInSupabase, type CreateOrderPayload, type CreateOrderShopFulfillmentInput, type CreatedOrderResult } from '@/lib/supabaseOrders';
+import { validatePromoCode } from '@/lib/supabasePromoCode';
 import { searchAddress, type GeocodeResult } from '@/lib/geocoding';
 import { estimateDeliveryFee, DELIVERY_FEE_FLOOR } from '@/lib/deliveryEstimate';
 import CheckoutSteps from '@/components/CheckoutSteps';
@@ -80,6 +81,15 @@ export default function CheckoutPage() {
   const [giftShowBuyerName, setGiftShowBuyerName] = useState(false);
   const [giftMessage, setGiftMessage] = useState('');
   const [giftWrap, setGiftWrap] = useState(false);
+
+  // Promo code — this preview is purely for display; create_order() always
+  // re-validates and recomputes the discount itself server-side, so a code
+  // that becomes invalid between the preview and payment is simply rejected
+  // there, never silently trusted here.
+  const [promoInput, setPromoInput] = useState('');
+  const [appliedPromo, setAppliedPromo] = useState<{ code: string; discountAmount: number } | null>(null);
+  const [promoChecking, setPromoChecking] = useState(false);
+  const [promoError, setPromoError] = useState('');
 
   // Manual address search — the delivery position is independent from the
   // typed deliveryAddress text (form.address): picking a search result or
@@ -160,7 +170,24 @@ export default function CheckoutPage() {
       : `Livraison à partir de ${formatFCFA(DELIVERY_FEE_FLOOR)}`;
   const estimatedDeliveryFee = hasDeliveryShops ? (deliveryFeeKnown ? deliveryFeeEstimate : DELIVERY_FEE_FLOOR) : 0;
   const estimatedGiftWrapFee = giftWrap ? GIFT_WRAP_FEE : 0;
-  const estimatedTotal = cartSubtotal + estimatedDeliveryFee + estimatedGiftWrapFee;
+  const promoDiscount = appliedPromo?.discountAmount ?? 0;
+  const estimatedTotal = Math.max(0, cartSubtotal + estimatedDeliveryFee + estimatedGiftWrapFee - promoDiscount);
+
+  const handleApplyPromo = async () => {
+    if (!promoInput.trim() || promoChecking) return;
+    setPromoError('');
+    setPromoChecking(true);
+    const result = await validatePromoCode(promoInput, cartSubtotal);
+    setPromoChecking(false);
+    if (!result.valid) { setPromoError(result.message ?? 'Code promo invalide.'); setAppliedPromo(null); return; }
+    setAppliedPromo({ code: result.code ?? promoInput.trim().toUpperCase(), discountAmount: result.discountAmount ?? 0 });
+  };
+
+  const handleRemovePromo = () => {
+    setAppliedPromo(null);
+    setPromoInput('');
+    setPromoError('');
+  };
 
   const validateInfo = () => {
     const e: Record<string, string> = {};
@@ -326,6 +353,7 @@ export default function CheckoutPage() {
         giftShowBuyerName: isGift ? giftShowBuyerName : undefined,
         giftMessage: isGift ? (giftMessage.trim() || undefined) : undefined,
         giftWrap: isGift ? giftWrap : undefined,
+        promoCode: appliedPromo?.code,
         shopFulfillments: shopFulfillmentsPayload,
         items: cart.map((item) => ({
           productId: item.productId,
@@ -694,6 +722,7 @@ export default function CheckoutPage() {
                   <div className="flex justify-between"><span className="text-ink/60">Produits</span><span className="font-medium">{formatFCFA(cartSubtotal)}</span></div>
                   <div className="flex justify-between"><span className="text-ink/60">{hasDeliveryShops && deliveryFeeKnown ? 'Livraison Ezial (estimation)' : 'Livraison Ezial'}</span><span className="font-medium">{!hasDeliveryShops ? 'Gratuit' : deliveryFeeKnown ? formatFCFA(deliveryFeeEstimate) : `À partir de ${formatFCFA(DELIVERY_FEE_FLOOR)}`}</span></div>
                   {isGift && giftWrap && <div className="flex justify-between"><span className="text-ink/60">Emballage cadeau</span><span className="font-medium">{formatFCFA(GIFT_WRAP_FEE)}</span></div>}
+                  {appliedPromo && <div className="flex justify-between text-green-700"><span>Code promo {appliedPromo.code}</span><span className="font-medium">-{formatFCFA(appliedPromo.discountAmount)}</span></div>}
                   <div className="border-t border-line pt-1.5 flex justify-between"><span className="font-medium text-ink">{hasDeliveryShops && !deliveryFeeKnown ? 'Total à partir de' : 'Total estimé'}</span><span className="font-semibold text-ink">{formatFCFA(estimatedTotal)}</span></div>
                   {hasDeliveryShops && <p className="text-[11px] text-ink/40">Le montant exact de la livraison est calculé à la validation et confirmé sur votre reçu.</p>}
                 </div>
@@ -703,6 +732,27 @@ export default function CheckoutPage() {
                     <span>Commande cadeau pour {giftRecipientName || 'le destinataire'} — livrée à son adresse.</span>
                   </div>
                 )}
+              </div>
+
+              {/* Promo code — the discount shown is always confirmed by
+                  validate_promo_code() server-side; create_order() itself
+                  re-validates and recomputes it again authoritatively. */}
+              <div className="card p-4 space-y-2">
+                <label className="block text-xs font-medium text-ink/60">Code promo</label>
+                {appliedPromo ? (
+                  <div className="flex items-center justify-between rounded-lg bg-green-50 px-3 py-2.5">
+                    <span className="flex items-center gap-1.5 text-sm font-medium text-green-700"><Check size={15} /> {appliedPromo.code} appliqué — économie {formatFCFA(appliedPromo.discountAmount)}</span>
+                    <button onClick={handleRemovePromo} className="text-xs font-medium text-ink/50 hover:text-burgundy">Retirer</button>
+                  </div>
+                ) : (
+                  <div className="flex gap-2">
+                    <input className="input-field flex-1 uppercase" placeholder="Ex : EZIAL10" value={promoInput} onChange={(e) => { setPromoInput(e.target.value); setPromoError(''); }} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); void handleApplyPromo(); } }} />
+                    <button onClick={() => void handleApplyPromo()} disabled={promoChecking || !promoInput.trim()} className="btn-outline flex-shrink-0">
+                      {promoChecking ? <Loader2 size={15} className="animate-spin" /> : 'Appliquer'}
+                    </button>
+                  </div>
+                )}
+                {promoError && <p className="text-xs text-burgundy">{promoError}</p>}
               </div>
 
               <p className="text-sm text-ink/55">Choisissez votre mode de paiement. Simulation uniquement, aucun paiement réel.</p>
@@ -771,6 +821,12 @@ export default function CheckoutPage() {
                 <div className="flex justify-between">
                   <span className="text-ink/60">Emballage cadeau</span>
                   <span className="font-medium">{formatFCFA(GIFT_WRAP_FEE)}</span>
+                </div>
+              )}
+              {appliedPromo && (
+                <div className="flex justify-between text-green-700">
+                  <span>Code {appliedPromo.code}</span>
+                  <span className="font-medium">-{formatFCFA(appliedPromo.discountAmount)}</span>
                 </div>
               )}
               <div className="border-t border-line pt-1.5 flex justify-between">
