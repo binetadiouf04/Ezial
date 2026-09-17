@@ -1,23 +1,35 @@
 import { useState, useEffect, useCallback } from 'react';
 import { usePro } from '../../ProContext';
 import { fetchAdminShopDetail, type AdminShopDetail as AdminShopDetailData } from '@/lib/supabaseAdminData';
-import { formatFCFA } from '../../data';
+import { formatFCFA, shopModerationReasons } from '../../data';
 import { StatusChip } from '../../components/StatusChip';
-import { ArrowLeft, Phone, MapPin, Loader2 } from 'lucide-react';
+import FlagModal from '../../components/FlagModal';
+import { createModerationFlag, fetchModerationFlags, resolveModerationFlag, latestUnresolvedFlag, type ModerationFlagRow } from '@/lib/supabaseModeration';
+import { ArrowLeft, Phone, MapPin, Loader2, Flag } from 'lucide-react';
 import SmartImage from '@/components/SmartImage';
+
+function formatDateTime(iso: string): string {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  return d.toLocaleString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+}
 
 export default function AdminShopDetail({ shopId }: { shopId: string }) {
   const { navigate } = usePro();
   const [shop, setShop] = useState<AdminShopDetailData | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
+  const [flags, setFlags] = useState<ModerationFlagRow[]>([]);
+  const [showFlagModal, setShowFlagModal] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
     setLoadError('');
     try {
-      const detail = await fetchAdminShopDetail(shopId);
+      const [detail, flagRows] = await Promise.all([fetchAdminShopDetail(shopId), fetchModerationFlags('shop', shopId)]);
       setShop(detail);
+      setFlags(flagRows);
       if (!detail) setLoadError('Boutique introuvable.');
     } catch {
       setLoadError('Impossible de charger la boutique. Réessayez.');
@@ -27,6 +39,21 @@ export default function AdminShopDetail({ shopId }: { shopId: string }) {
   }, [shopId]);
 
   useEffect(() => { void load(); }, [load]);
+
+  const handleFlag = async (note: string) => {
+    const result = await createModerationFlag('shop', shopId, note);
+    if (!result.error) {
+      setShowFlagModal(false);
+      await load();
+    }
+  };
+
+  const handleResolve = async (flagId: string) => {
+    await resolveModerationFlag(flagId);
+    await load();
+  };
+
+  const activeFlag = latestUnresolvedFlag(flags);
 
   if (loading) {
     return <div className="py-16 text-center"><Loader2 size={20} className="mx-auto animate-spin text-ink/30" /></div>;
@@ -56,6 +83,19 @@ export default function AdminShopDetail({ shopId }: { shopId: string }) {
         </div>
         <StatusChip status={shop.status} size="md" />
       </div>
+
+      {activeFlag ? (
+        <div className="card border-orange-200 bg-orange-50 p-4 space-y-2">
+          <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-orange-700"><Flag size={14} /> Signalée</p>
+          <p className="text-sm text-orange-800">« {activeFlag.note} »</p>
+          <p className="text-xs text-orange-600/70">{formatDateTime(activeFlag.createdAt)}</p>
+          <button onClick={() => handleResolve(activeFlag.id)} className="btn-outline text-sm mt-1">Marquer comme résolu</button>
+        </div>
+      ) : (
+        <button onClick={() => setShowFlagModal(true)} className="flex items-center gap-1.5 text-sm font-medium text-burgundy hover:underline">
+          <Flag size={14} /> Signaler cette boutique
+        </button>
+      )}
 
       {/* Info */}
       <div className="card divide-y divide-line">
@@ -99,6 +139,10 @@ export default function AdminShopDetail({ shopId }: { shopId: string }) {
           )}
         </div>
       </div>
+
+      {showFlagModal && (
+        <FlagModal title="Signaler cette boutique" quickReasons={shopModerationReasons} onCancel={() => setShowFlagModal(false)} onConfirm={handleFlag} />
+      )}
     </div>
   );
 }

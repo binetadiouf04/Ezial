@@ -3,7 +3,8 @@ import { usePro } from '../../ProContext';
 import { categories, categoryMap, type CategoryId } from '@/data/categories';
 import { getFilters, type FilterGroup } from '@/data/filters';
 import { getColor } from '@/data/colors';
-import VendorNoticeBanner from '../../components/VendorNoticeBanner';
+import VendorNoticeBanner, { type VendorNotice } from '../../components/VendorNoticeBanner';
+import { fetchModerationFlags, latestUnresolvedFlag } from '@/lib/supabaseModeration';
 import {
   createProductInSupabase,
   updateProductInSupabase,
@@ -244,9 +245,22 @@ interface MediaItem {
 }
 
 export default function SellerProductForm({ productId }: { productId?: string }) {
-  const { navigate, name: sellerShopName, addSellerProduct, updateSellerProduct, getLatestModeration, sellerSupabaseShopId } = usePro();
+  const { navigate, name: sellerShopName, addSellerProduct, updateSellerProduct, sellerSupabaseShopId } = usePro();
   const isEditing = Boolean(productId);
-  const latestModeration = productId ? getLatestModeration('product', productId) : null;
+
+  // Real moderation flag on this product (public.moderation_flags), never
+  // the mock moderationHistory.
+  const [latestModeration, setLatestModeration] = useState<VendorNotice | null>(null);
+  useEffect(() => {
+    if (!productId) return;
+    let cancelled = false;
+    fetchModerationFlags('product', productId).then((flags) => {
+      if (cancelled) return;
+      const active = latestUnresolvedFlag(flags);
+      setLatestModeration(active ? { action: 'flagged', vendorMessage: active.note } : null);
+    });
+    return () => { cancelled = true; };
+  }, [productId]);
 
   // The real product being edited — loaded straight from Supabase by id
   // below (never from ProContext's in-memory mock sellerProducts list,

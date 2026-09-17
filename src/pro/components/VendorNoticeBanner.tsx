@@ -8,12 +8,19 @@ const titles: Partial<Record<ModerationEntry['action'], string>> = {
   suspended: 'SUSPENDU PAR EZIAL',
 };
 
+export interface VendorNotice {
+  action: ModerationEntry['action'];
+  reason?: string;
+  vendorMessage?: string;
+}
+
 /**
- * Vendor-facing notice built from the latest moderation entry. Only ever
- * reads `reason` and `vendorMessage` — `internalNote` must never be passed
+ * Vendor-facing notice built from the latest moderation entry (or, for
+ * shops/products, the latest real moderation_flags row). Only ever reads
+ * `reason` and `vendorMessage` — an `internalNote` must never be passed
  * to or rendered by this component.
  */
-export default function VendorNoticeBanner({ entry }: { entry: ModerationEntry | null }) {
+export default function VendorNoticeBanner({ entry }: { entry: VendorNotice | null }) {
   if (!entry || (entry.action !== 'refused' && entry.action !== 'flagged' && entry.action !== 'deactivated' && entry.action !== 'suspended')) {
     return null;
   }

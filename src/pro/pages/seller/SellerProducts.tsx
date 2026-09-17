@@ -3,7 +3,7 @@ import { usePro } from '../../ProContext';
 import { formatFCFA } from '../../data';
 import { categoryMap, type CategoryId } from '@/data/categories';
 import { StatusChip } from '../../components/StatusChip';
-import { Plus, Package, Pencil, AlertTriangle, Power } from 'lucide-react';
+import { Plus, Package, Pencil, AlertTriangle, Power, Flag } from 'lucide-react';
 import SmartImage from '@/components/SmartImage';
 import {
   fetchSellerProducts,
@@ -11,12 +11,14 @@ import {
   setSellerProductVariantStock,
   type SellerProductSummary,
 } from '@/lib/supabaseSellerProducts';
+import { fetchModerationFlagsForTargets, latestUnresolvedFlag, type ModerationFlagRow } from '@/lib/supabaseModeration';
 
 const MAX_ACTIVE = 25;
 
 export default function SellerProducts() {
   const { navigate, sellerSupabaseShopId, sellerShopIsOfficial } = usePro();
   const [products, setProducts] = useState<SellerProductSummary[]>([]);
+  const [flagsByProduct, setFlagsByProduct] = useState<Map<string, ModerationFlagRow[]>>(new Map());
   const [isLoading, setIsLoading] = useState(true);
   const [actionError, setActionError] = useState('');
 
@@ -30,9 +32,10 @@ export default function SellerProducts() {
     }
     let cancelled = false;
     setIsLoading(true);
-    fetchSellerProducts(sellerSupabaseShopId).then((rows) => {
+    fetchSellerProducts(sellerSupabaseShopId).then(async (rows) => {
       if (cancelled) return;
       setProducts(rows);
+      setFlagsByProduct(await fetchModerationFlagsForTargets('product', rows.map((p) => p.id)));
       setIsLoading(false);
     });
     return () => { cancelled = true; };
@@ -112,7 +115,9 @@ export default function SellerProducts() {
             <p className="mt-3 text-sm text-ink/55">Aucun produit</p>
           </div>
         ) : (
-          products.map((product) => (
+          products.map((product) => {
+            const activeFlag = latestUnresolvedFlag(flagsByProduct.get(product.id) ?? []);
+            return (
             <div key={product.id} className="flex items-center gap-3 p-4">
               <div className="h-14 w-14 flex-shrink-0 overflow-hidden rounded-lg bg-cream">
                 {product.imageUrl ? (
@@ -128,6 +133,9 @@ export default function SellerProducts() {
                   <StatusChip status={product.status} />
                   {stockLabel(product.stock)}
                 </div>
+                {activeFlag && (
+                  <p className="mt-1.5 flex items-start gap-1 text-xs text-orange-700"><Flag size={11} className="mt-0.5 flex-shrink-0" /> « {activeFlag.note} »</p>
+                )}
               </div>
               <div className="text-right flex-shrink-0">
                 <p className="text-sm font-semibold text-ink">{formatFCFA(product.price)}</p>
@@ -147,7 +155,8 @@ export default function SellerProducts() {
                 </div>
               </div>
             </div>
-          ))
+            );
+          })
         )}
       </div>
 

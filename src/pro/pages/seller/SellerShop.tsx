@@ -1,8 +1,9 @@
 import { useState, useEffect, useCallback } from 'react';
 import { usePro } from '../../ProContext';
-import VendorNoticeBanner from '../../components/VendorNoticeBanner';
+import VendorNoticeBanner, { type VendorNotice } from '../../components/VendorNoticeBanner';
 import LocationPickerMap from '@/components/LocationPickerMap';
 import { fetchShopLocation, updateShopLocation } from '@/lib/supabaseSellerShop';
+import { fetchModerationFlags, latestUnresolvedFlag } from '@/lib/supabaseModeration';
 import { searchAddress, type GeocodeResult } from '@/lib/geocoding';
 import { Check, KeyRound, Image as ImageIcon, Camera, MapPin, Loader2, AlertTriangle, AlertCircle, Navigation, Pencil, Search } from 'lucide-react';
 import SmartImage from '@/components/SmartImage';
@@ -11,8 +12,22 @@ type LocationStatus = 'idle' | 'requesting' | 'denied' | 'unsupported' | 'error'
 type LocationMode = 'gps' | 'manual';
 
 export default function SellerShop() {
-  const { sellerShop, updateSellerShop, updateSellerPin, identifier, sellerSupabaseShopId, getLatestModeration } = usePro();
-  const latestModeration = sellerShop ? getLatestModeration('shop', sellerShop.id) : null;
+  const { sellerShop, updateSellerShop, updateSellerPin, identifier, sellerSupabaseShopId } = usePro();
+
+  // Real moderation flag on this shop (public.moderation_flags), never the
+  // mock moderationHistory — adapted into VendorNoticeBanner's expected
+  // shape since that component only reads action/reason/vendorMessage.
+  const [latestModeration, setLatestModeration] = useState<VendorNotice | null>(null);
+  useEffect(() => {
+    if (!sellerSupabaseShopId) return;
+    let cancelled = false;
+    fetchModerationFlags('shop', sellerSupabaseShopId).then((flags) => {
+      if (cancelled) return;
+      const active = latestUnresolvedFlag(flags);
+      setLatestModeration(active ? { action: 'flagged', vendorMessage: active.note } : null);
+    });
+    return () => { cancelled = true; };
+  }, [sellerSupabaseShopId]);
   const [form, setForm] = useState({
     name: sellerShop?.name ?? '',
     description: sellerShop?.description ?? '',
