@@ -13,6 +13,7 @@ import AdminDeliveryDetail from '../pages/admin/AdminDeliveryDetail';
 import AdminDrivers from '../pages/admin/AdminDrivers';
 import AdminDriverDetail from '../pages/admin/AdminDriverDetail';
 import AdminFinances from '../pages/admin/AdminFinances';
+import AdminShopFinanceDetail from '../pages/admin/AdminShopFinanceDetail';
 import AdminBlog from '../pages/admin/AdminBlog';
 import AdminBlogForm from '../pages/admin/AdminBlogForm';
 import AdminBlogPreview from '../pages/admin/AdminBlogPreview';
@@ -35,6 +36,7 @@ export default function AdminLayout() {
   const shopDetailMatch = clean.match(/^\/admin\/boutiques\/(.+)$/);
   const deliveryDetailMatch = clean.match(/^\/admin\/livraisons\/(.+)$/);
   const driverDetailMatch = clean.match(/^\/admin\/livreurs\/(.+)$/);
+  const financeDetailMatch = clean.match(/^\/admin\/finances\/(.+)$/);
   const blogEditMatch = clean.match(/^\/admin\/blog\/modifier\/(.+)$/);
   const blogPreviewMatch = clean.match(/^\/admin\/blog\/apercu\/(.+)$/);
 
@@ -56,6 +58,7 @@ export default function AdminLayout() {
     if (clean === '/admin/livreurs') return <AdminDrivers />;
     if (driverDetailMatch) return <AdminDriverDetail driverId={driverDetailMatch[1]} />;
     if (clean === '/admin/finances') return <AdminFinances />;
+    if (financeDetailMatch) return <AdminShopFinanceDetail shopId={financeDetailMatch[1]} />;
     return <AdminDashboard />;
   };
 
