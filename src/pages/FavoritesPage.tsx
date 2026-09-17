@@ -1,11 +1,13 @@
 import { useApp } from '@/store/AppContext';
-import { products, getProduct } from '@/data/products';
 import ProductGrid from '@/components/ProductGrid';
 import { Heart } from 'lucide-react';
 
 export default function FavoritesPage() {
-  const { favorites, navigate } = useApp();
-  const favProducts = favorites.map((id) => getProduct(id)).filter(Boolean) as typeof products;
+  const { favorites, navigate, catalogProducts } = useApp();
+  // catalogProducts (mock + real Supabase catalog merged), never the static
+  // mock-only getProduct() — a favorited real Supabase product (UUID id)
+  // doesn't exist in the mock map and would silently vanish from this page.
+  const favProducts = favorites.map((id) => catalogProducts.find((p) => p.id === id)).filter(Boolean) as typeof catalogProducts;
 
   return (
     <div className="container-pro py-8">

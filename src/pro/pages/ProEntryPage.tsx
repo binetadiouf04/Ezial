@@ -3,13 +3,14 @@ import { usePro } from '../ProContext';
 import type { Role } from '../data';
 import RoleCard from '../components/RoleCard';
 import LoginForm from '../components/LoginForm';
+import SellerAuthPanel from '../components/SellerAuthPanel';
 import SellerLayout from '../layouts/SellerLayout';
 import DriverLayout from '../layouts/DriverLayout';
 import AdminLayout from '../layouts/AdminLayout';
 import { ArrowLeft } from 'lucide-react';
 
 export default function ProEntryPage() {
-  const { role, login, verifySellerLogin, verifyAdminLogin } = usePro();
+  const { role, login, verifySellerLogin, signUpSellerAccount, requestSellerPasswordReset, verifyAdminLogin } = usePro();
   const [selectedRole, setSelectedRole] = useState<Role | null>(null);
 
   // If seller is logged in, render the seller layout
@@ -27,7 +28,22 @@ export default function ProEntryPage() {
     return <AdminLayout />;
   }
 
-  // Login form for selected role
+  // Login form for selected role — seller gets its own richer panel
+  // (login/signup/forgot password); admin/driver keep the simple form.
+  if (selectedRole === 'seller') {
+    return (
+      <div className="min-h-screen bg-cream flex items-center justify-center p-4">
+        <SellerAuthPanel
+          onBack={() => setSelectedRole(null)}
+          onLogin={(id, name, shopInfo) => login('seller', id, name, shopInfo)}
+          verifySeller={verifySellerLogin}
+          signUpSeller={signUpSellerAccount}
+          requestPasswordReset={requestSellerPasswordReset}
+        />
+      </div>
+    );
+  }
+
   if (selectedRole) {
     return (
       <div className="min-h-screen bg-cream flex items-center justify-center p-4">

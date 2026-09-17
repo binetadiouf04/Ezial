@@ -1,8 +1,9 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useApp } from '@/store/AppContext';
-import { getProduct, getVariantPrice, getProductsFromSameShop, getSimilarProducts } from '@/data/products';
+import { getProduct, getVariantPrice, getProductsFromSameShop, getSimilarProducts, isRealCatalogId } from '@/data/products';
 import { getShop, registerSupabaseShops } from '@/data/shops';
 import { fetchProductDetailFromSupabase } from '@/lib/supabaseCatalog';
+import { fetchProductReviews, submitReview, deleteReview, type Review } from '@/lib/supabaseReviews';
 import { categoryMap } from '@/data/categories';
 import ProductGallery from '@/components/ProductGallery';
 import VariantSelector from '@/components/VariantSelector';
@@ -10,7 +11,8 @@ import PriceDisplay from '@/components/PriceDisplay';
 import Rating from '@/components/Rating';
 import FavoriteButton from '@/components/FavoriteButton';
 import ProductCarousel from '@/components/ProductCarousel';
-import { ChevronRight, Truck, Store, Plus, Minus, Check } from 'lucide-react';
+import SmartImage from '@/components/SmartImage';
+import { ChevronRight, Truck, Store, Plus, Minus, Check, Star, Camera, X, ShieldCheck, Loader2 } from 'lucide-react';
 
 const tabs = ['Description', 'Avis'] as const;
 type Tab = (typeof tabs)[number];
@@ -20,7 +22,7 @@ type Tab = (typeof tabs)[number];
 const SIMILAR_PREVIEW_LIMIT = 9;
 
 export default function ProductPage({ productId }: { productId: string }) {
-  const { navigate, addToCart, catalogProducts } = useApp();
+  const { navigate, addToCart, catalogProducts, customerUser } = useApp();
   // The static mock catalog resolves synchronously and stays the fallback
   // for its own ids; a real Supabase product is never in it, so its id
   // falls through to the fetch below instead of an immediate "not found".
@@ -58,6 +60,54 @@ export default function ProductPage({ productId }: { productId: string }) {
   const [tab, setTab] = useState<Tab>('Description');
   const [added, setAdded] = useState(false);
   const [error, setError] = useState('');
+
+  // Real reviews (Supabase) — only ever fetched for a real catalog product
+  // (mock demo products keep their static mock reviews, rendered further
+  // below unchanged).
+  const [reviews, setReviews] = useState<Review[]>([]);
+  const [reviewStats, setReviewStats] = useState<{ average: number; count: number }>({ average: 0, count: 0 });
+  const [myRating, setMyRating] = useState(0);
+  const [myComment, setMyComment] = useState('');
+  const [myPhotos, setMyPhotos] = useState<File[]>([]);
+  const [reviewSubmitting, setReviewSubmitting] = useState(false);
+  const [reviewError, setReviewError] = useState('');
+  const [reviewSaved, setReviewSaved] = useState(false);
+
+  const loadReviews = () => {
+    if (!product || !isRealCatalogId(product.id)) return;
+    fetchProductReviews(product.id).then(({ reviews: fetched, stats }) => {
+      setReviews(fetched);
+      setReviewStats(stats);
+      const mine = fetched.find((r) => r.userId === customerUser?.id);
+      if (mine) { setMyRating(mine.rating); setMyComment(mine.comment); }
+    });
+  };
+
+  useEffect(() => {
+    loadReviews();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [product?.id, customerUser?.id]);
+
+  const handleSubmitReview = async () => {
+    if (!product || !customerUser) return;
+    if (myRating < 1) { setReviewError('Choisissez une note de 1 à 5 étoiles.'); return; }
+    setReviewError('');
+    setReviewSubmitting(true);
+    const result = await submitReview(customerUser.id, { productId: product.id, rating: myRating, comment: myComment, photos: myPhotos });
+    setReviewSubmitting(false);
+    if (result.error) { setReviewError(result.error); return; }
+    setMyPhotos([]);
+    setReviewSaved(true);
+    setTimeout(() => setReviewSaved(false), 2000);
+    loadReviews();
+  };
+
+  const handleDeleteReview = async (reviewId: string) => {
+    await deleteReview(reviewId);
+    setMyRating(0);
+    setMyComment('');
+    loadReviews();
+  };
 
   const dynamicPrice = useMemo(() => {
     if (!product) return { price: 0, oldPrice: undefined };
@@ -103,7 +153,11 @@ export default function ProductPage({ productId }: { productId: string }) {
             {shop && <button onClick={() => navigate(`/boutique/${shop.id}`)} className="text-xs font-medium uppercase tracking-wider text-burgundy hover:underline">{shop.name}</button>}
             <h1 className="mt-1.5 font-display text-2xl font-semibold leading-tight text-ink sm:text-3xl">{product.name}</h1>
             <p className="mt-1 text-xs font-mono text-ink/40">Réf. {product.reference}</p>
-            {product.rating && product.reviewCount && <div className="mt-2.5"><Rating rating={product.rating} count={product.reviewCount} size="md" /></div>}
+            {isRealCatalogId(product.id) ? (
+              reviewStats.count > 0 && <div className="mt-2.5"><Rating rating={reviewStats.average} count={reviewStats.count} size="md" /></div>
+            ) : (
+              product.rating && product.reviewCount && <div className="mt-2.5"><Rating rating={product.rating} count={product.reviewCount} size="md" /></div>
+            )}
           </div>
           <PriceDisplay price={dynamicPrice.price} oldPrice={dynamicPrice.oldPrice ?? product.oldPrice} size="lg" />
           {outOfStock ? <p className="text-sm font-medium text-ink/50">Rupture de stock</p> : lowStock ? <p className="text-sm font-medium text-burgundy">Plus que {product.stock} disponibles</p> : null}
@@ -129,7 +183,10 @@ export default function ProductPage({ productId }: { productId: string }) {
           </div>
           <div className="border-t border-line pt-5">
             <div className="flex gap-5 border-b border-line">
-              {tabs.map((t) => <button key={t} onClick={() => setTab(t)} className={`whitespace-nowrap border-b-2 pb-2.5 text-sm font-medium transition-colors ${tab === t ? 'border-burgundy text-burgundy' : 'border-transparent text-ink/50 hover:text-ink'}`}>{t}{t === 'Avis' && product.reviewCount ? ` (${product.reviewCount})` : ''}</button>)}
+              {tabs.map((t) => {
+                const count = isRealCatalogId(product.id) ? reviewStats.count : product.reviewCount;
+                return <button key={t} onClick={() => setTab(t)} className={`whitespace-nowrap border-b-2 pb-2.5 text-sm font-medium transition-colors ${tab === t ? 'border-burgundy text-burgundy' : 'border-transparent text-ink/50 hover:text-ink'}`}>{t}{t === 'Avis' && count ? ` (${count})` : ''}</button>;
+              })}
             </div>
             <div className="py-5 text-sm text-ink/70">
               {tab === 'Description' && (
@@ -143,17 +200,85 @@ export default function ProductPage({ productId }: { productId: string }) {
                   )}
                 </div>
               )}
-              {tab === 'Avis' && <div className="space-y-5">{product.reviews.length === 0 ? <p className="text-ink/50">Aucun avis pour l'instant.</p> : product.reviews.map((rev) => (
-                <div key={rev.id} className="border-b border-line pb-4 last:border-0">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2"><span className="text-sm font-medium text-ink">{rev.author}</span>{rev.verified && <span className="rounded-full bg-cream px-2 py-0.5 text-[10px] font-semibold text-ink/60">Achat vérifié</span>}</div>
-                    <span className="text-xs text-ink/40">{rev.date}</span>
+              {tab === 'Avis' && (
+                isRealCatalogId(product.id) ? (
+                  <div className="space-y-6">
+                    {customerUser ? (
+                      <div className="rounded-xl border border-line p-4 space-y-3">
+                        <h3 className="text-sm font-semibold text-ink">{myRating > 0 ? 'Modifier mon avis' : 'Laisser un avis'}</h3>
+                        <div className="flex items-center gap-1">
+                          {[1, 2, 3, 4, 5].map((n) => (
+                            <button key={n} onClick={() => setMyRating(n)} type="button">
+                              <Star size={22} className={n <= myRating ? 'fill-champagne text-champagne' : 'text-line'} />
+                            </button>
+                          ))}
+                        </div>
+                        <textarea className="input-field" rows={2} placeholder="Votre avis (facultatif)" value={myComment} onChange={(e) => setMyComment(e.target.value)} />
+                        <div className="flex items-center gap-2">
+                          <label className="btn-outline cursor-pointer text-xs">
+                            <Camera size={13} /> Ajouter des photos ({myPhotos.length}/3)
+                            <input type="file" accept="image/*" multiple className="hidden" onChange={(e) => {
+                              const files = Array.from(e.target.files ?? []).slice(0, 3 - myPhotos.length);
+                              setMyPhotos((prev) => [...prev, ...files].slice(0, 3));
+                            }} />
+                          </label>
+                          {myPhotos.map((f, i) => (
+                            <div key={i} className="relative">
+                              <SmartImage src={URL.createObjectURL(f)} alt="" className="h-10 w-10 rounded object-cover" />
+                              <button onClick={() => setMyPhotos((prev) => prev.filter((_, idx) => idx !== i))} className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-ink text-white"><X size={10} /></button>
+                            </div>
+                          ))}
+                        </div>
+                        {reviewError && <p className="text-xs text-burgundy">{reviewError}</p>}
+                        <div className="flex items-center gap-3">
+                          <button onClick={() => void handleSubmitReview()} disabled={reviewSubmitting} className="btn-primary">
+                            {reviewSubmitting ? <Loader2 size={15} className="animate-spin" /> : 'Publier'}
+                          </button>
+                          {reviewSaved && <span className="flex items-center gap-1 text-sm text-green-600"><Check size={14} /> Avis enregistré</span>}
+                        </div>
+                      </div>
+                    ) : (
+                      <p className="text-sm text-ink/50">
+                        <button onClick={() => navigate('/profil')} className="font-medium text-burgundy hover:underline">Connectez-vous</button> pour laisser un avis.
+                      </p>
+                    )}
+
+                    {reviews.length === 0 ? <p className="text-ink/50">Aucun avis pour l'instant.</p> : reviews.map((rev) => (
+                      <div key={rev.id} className="border-b border-line pb-4 last:border-0">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-medium text-ink">Client Ezial</span>
+                            {rev.verifiedPurchase && <span className="flex items-center gap-1 rounded-full bg-cream px-2 py-0.5 text-[10px] font-semibold text-ink/60"><ShieldCheck size={11} /> Achat vérifié</span>}
+                          </div>
+                          <span className="text-xs text-ink/40">{new Date(rev.createdAt).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
+                        </div>
+                        <div className="mt-1.5"><Rating rating={rev.rating} showCount={false} /></div>
+                        {rev.comment && <p className="mt-2 text-sm text-ink/70">{rev.comment}</p>}
+                        {rev.images.length > 0 && (
+                          <div className="mt-2 flex gap-2">
+                            {rev.images.map((img) => <SmartImage key={img.id} src={img.url} alt="" className="h-16 w-16 rounded-lg object-cover" />)}
+                          </div>
+                        )}
+                        {customerUser?.id === rev.userId && (
+                          <button onClick={() => void handleDeleteReview(rev.id)} className="mt-2 text-xs font-medium text-burgundy hover:underline">Supprimer mon avis</button>
+                        )}
+                      </div>
+                    ))}
                   </div>
-                  <div className="mt-1.5"><Rating rating={rev.rating} showCount={false} /></div>
-                  <p className="mt-2 text-sm text-ink/70">{rev.text}</p>
-                  {rev.hasPhotos && <div className="mt-2 flex gap-2"><div className="h-16 w-16 rounded-lg bg-cream" /><div className="h-16 w-16 rounded-lg bg-cream" /></div>}
-                </div>
-              ))}</div>}
+                ) : (
+                  <div className="space-y-5">{product.reviews.length === 0 ? <p className="text-ink/50">Aucun avis pour l'instant.</p> : product.reviews.map((rev) => (
+                    <div key={rev.id} className="border-b border-line pb-4 last:border-0">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2"><span className="text-sm font-medium text-ink">{rev.author}</span>{rev.verified && <span className="rounded-full bg-cream px-2 py-0.5 text-[10px] font-semibold text-ink/60">Achat vérifié</span>}</div>
+                        <span className="text-xs text-ink/40">{rev.date}</span>
+                      </div>
+                      <div className="mt-1.5"><Rating rating={rev.rating} showCount={false} /></div>
+                      <p className="mt-2 text-sm text-ink/70">{rev.text}</p>
+                      {rev.hasPhotos && <div className="mt-2 flex gap-2"><div className="h-16 w-16 rounded-lg bg-cream" /><div className="h-16 w-16 rounded-lg bg-cream" /></div>}
+                    </div>
+                  ))}</div>
+                )
+              )}
             </div>
           </div>
         </div>

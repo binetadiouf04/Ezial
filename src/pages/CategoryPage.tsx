@@ -19,6 +19,18 @@ export default function CategoryPage({ categoryId, subId }: { categoryId: string
   const cat = categoryMap[categoryId as CategoryId];
   const sub = subId ? cat?.subcategories.find((s) => s.id === subId) : undefined;
   const filters: FilterGroup[] = getFilters(categoryId, subId);
+  // The "type" filter group (Type de vêtement / Type de chaussure...) is the
+  // real sub-subcategory list for Vêtements/Chaussures (Traditionnel,
+  // Robes, Ensembles...) — reused as-is from filters.ts, never duplicated
+  // into a second hardcoded list. Surfaced as chips right on the page (all
+  // screen sizes) instead of leaving it discoverable only inside the
+  // filters drawer/panel, which is the bug being fixed here.
+  const typeFilterGroup = sub ? filters.find((f) => f.id === 'type') : undefined;
+  const toggleTypeFilter = (opt: string) => {
+    const current = selectedFilters.type ?? [];
+    const next = current.includes(opt) ? current.filter((o) => o !== opt) : [...current, opt];
+    setSelectedFilters({ ...selectedFilters, type: next });
+  };
 
   const baseProducts: Product[] = useMemo(() => subId ? productsBySubcategory(categoryId, subId) : productsByCategory(categoryId), [categoryId, subId]);
 
@@ -69,6 +81,13 @@ export default function CategoryPage({ categoryId, subId }: { categoryId: string
           <p className="mt-2 text-sm text-ink/55">{filtered.length} produit{filtered.length > 1 ? 's' : ''}{!sub && cat.subcategories.length > 0 && ' · découvrez nos sous-catégories'}</p>
         </div>
         {!sub && <div className="mb-6 flex flex-wrap gap-2">{cat.subcategories.map((s) => <button key={s.id} onClick={() => navigate(`/categorie/${cat.id}/${s.id}`)} className="chip">{s.label}</button>)}</div>}
+        {typeFilterGroup && typeFilterGroup.options.length > 0 && (
+          <div className="mb-6 -mx-1 flex gap-2 overflow-x-auto px-1 pb-1 no-scrollbar sm:flex-wrap sm:overflow-visible">
+            {typeFilterGroup.options.map((opt) => (
+              <button key={opt} onClick={() => toggleTypeFilter(opt)} className={`chip flex-shrink-0 ${selectedFilters.type?.includes(opt) ? 'chip-active' : ''}`}>{opt}</button>
+            ))}
+          </div>
+        )}
         <div className="mb-6 flex items-center justify-between gap-3 border-b border-line pb-4">
           <button onClick={() => setFiltersOpen(true)} className="flex items-center gap-2 rounded-full border border-line px-4 py-2 text-sm font-medium text-ink hover:border-ink/30 lg:hidden"><SlidersHorizontal size={16} />Filtres</button>
           <div className="hidden lg:block" />

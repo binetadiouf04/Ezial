@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useApp } from '@/store/AppContext';
 import type { Product } from '@/data/products';
 import { getShop } from '@/data/shops';
@@ -16,6 +16,21 @@ import { ChevronRight } from 'lucide-react';
 // extend RankingContext with buyer-behavior signals; this function itself
 // won't need to change.
 const isOfficialShop = (shopId: string): boolean => getShop(shopId)?.isOfficial === true;
+
+// Fisher–Yates — `.sort(() => 0.5 - Math.random())` is not a valid
+// comparator and (combined with being re-run on every render) is what let
+// "Sélection personnalisée" reshuffle into a different top-9 on any
+// unrelated context change (e.g. toggling a favorite elsewhere), making it
+// look like a card/image had broken. Shuffling is now done once per
+// `products` identity via useMemo below, not on every render.
+function shuffleOnce<T>(items: T[]): T[] {
+  const result = [...items];
+  for (let i = result.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [result[i], result[j]] = [result[j], result[i]];
+  }
+  return result;
+}
 
 // Each automatic section shows at most this many products on the Home —
 // "Voir tout" links to the full, uncapped list on its own page.
@@ -145,7 +160,9 @@ export default function HomePage() {
   // (products.created_at) instead of simulating engagement numbers.
   const trending = rankForTrending(products, rankingContext);
   const promos = rankProducts(products.filter((p) => p.isPromo), rankingContext);
-  const pourVous = rankProducts([...products].sort(() => 0.5 - Math.random()), rankingContext);
+  // Shuffled once per `products` identity, not on every render — see
+  // shuffleOnce's comment above.
+  const pourVous = useMemo(() => rankProducts(shuffleOnce(products), { isOfficialShop }), [products]);
   const featuredShops = displayShops.slice(0, HOME_SHOPS_LIMIT);
 
   return (

@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { AppProvider, useApp } from '@/store/AppContext';
 import { ProProvider } from '@/pro/ProContext';
 import { getProduct } from '@/data/products';
@@ -27,6 +27,16 @@ import TrendingPage from '@/pages/TrendingPage';
 import ForYouPage from '@/pages/ForYouPage';
 import ShopsPage from '@/pages/ShopsPage';
 import SimilarProductsPage from '@/pages/SimilarProductsPage';
+import ResetPasswordPage from '@/pages/ResetPasswordPage';
+
+// A Supabase password-recovery link redirects back here with `type=recovery`
+// in the URL (as a hash fragment or a query param, depending on the auth
+// flow type configured on the project) — checked once, synchronously, on
+// first mount, so this never flips mid-session and never delays the normal
+// app's first paint for the common case (no recovery link).
+function isPasswordRecoveryLink(): boolean {
+  return /type=recovery/.test(window.location.hash) || /type=recovery/.test(window.location.search);
+}
 
 function RouteView() {
   const { route } = useApp();
@@ -214,6 +224,9 @@ function Layout() {
 }
 
 export default function App() {
+  const [isRecovery] = useState(isPasswordRecoveryLink);
+  if (isRecovery) return <ResetPasswordPage />;
+
   return (
     <AppProvider>
       <Layout />

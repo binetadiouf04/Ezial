@@ -3,7 +3,7 @@ import type { Role, DeliveryStep, ShopStatus, ProductStatus, ModerationEntry, Mo
 import { missions as initialMissions, type Mission, type Product, type Shop, type Driver, type DriverTransaction, type Order, type Transaction } from './data';
 import { shops as initialShops, products as initialProducts, transactions as initialTransactions, driverTransactions as initialDriverTransactions, orders as initialOrders, drivers as initialDrivers, moderationHistory as initialModerationHistory, blogPosts as initialBlogPosts } from './data';
 import { assignShopPrefixes, nextReferenceForShop } from '@/utils/reference';
-import { signInSeller, restoreSellerSession, signOutSeller } from '@/lib/supabaseSellerAuth';
+import { signInSeller, restoreSellerSession, signOutSeller, signUpSeller, requestSellerPasswordReset, type SignUpSellerInput } from '@/lib/supabaseSellerAuth';
 import { signInAdmin, restoreAdminSession } from '@/lib/supabaseAdminAuth';
 
 type Route = string;
@@ -109,6 +109,10 @@ interface ProState extends AuthState {
   // Auth, then verifies the account owns a real shop (shops.owner_id =
   // auth.uid()) before granting access.
   verifySellerLogin: (identifier: string, password: string) => Promise<{ shop: { sellerId: string; name: string; supabaseShopId: string; isOfficial: boolean } } | { error: string }>;
+  // Self-service shop signup (new sellers only) — creates the real
+  // Supabase Auth user + a 'draft' shop row in one step.
+  signUpSellerAccount: (input: SignUpSellerInput) => Promise<{ shop: { sellerId: string; name: string; supabaseShopId: string; isOfficial: boolean } } | { error: string }>;
+  requestSellerPasswordReset: (email: string) => Promise<{ error?: string }>;
   // Admin login — authenticates a real email + password against Supabase
   // Auth, then verifies the account is listed in public.admins before
   // granting access. Needed so RLS on manually-managed content (Hero,
@@ -388,6 +392,14 @@ export function ProProvider({ children }: { children: ReactNode }) {
     if ('error' in result) return { error: result.error };
     return { shop: { sellerId: id.toUpperCase(), name: result.shopName, supabaseShopId: result.shopId, isOfficial: result.isOfficial } };
   }, []);
+
+  const signUpSellerAccount = useCallback(async (input: SignUpSellerInput): Promise<{ shop: { sellerId: string; name: string; supabaseShopId: string; isOfficial: boolean } } | { error: string }> => {
+    const result = await signUpSeller(input);
+    if ('error' in result) return { error: result.error };
+    return { shop: { sellerId: result.shopId, name: result.shopName, supabaseShopId: result.shopId, isOfficial: result.isOfficial } };
+  }, []);
+
+  const requestSellerPasswordResetAction = useCallback(async (email: string) => requestSellerPasswordReset(email), []);
 
   const verifyAdminLogin = useCallback(async (email: string, password: string): Promise<{ name: string } | { error: string }> => {
     const result = await signInAdmin(email.trim(), password);
@@ -683,6 +695,8 @@ export function ProProvider({ children }: { children: ReactNode }) {
     sellerSupabaseShopId,
     sellerShopIsOfficial,
     verifySellerLogin,
+    signUpSellerAccount,
+    requestSellerPasswordReset: requestSellerPasswordResetAction,
     verifyAdminLogin,
     sellerTransactions,
     driverAvailable,

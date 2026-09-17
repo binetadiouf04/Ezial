@@ -2,6 +2,15 @@ import { createContext, useContext, useEffect, useState, useCallback, type React
 import { products as allProducts, type Product } from '@/data/products';
 import { shops as mockShops, registerSupabaseShops, type Shop } from '@/data/shops';
 import { fetchActiveCatalogFromSupabase } from '@/lib/supabaseCatalog';
+import {
+  signUpCustomer, signInCustomer, restoreCustomerSession, signOutCustomer,
+  updateCustomerProfile, requestCustomerPasswordReset,
+  type CustomerProfile, type SignUpCustomerInput, type UpdateCustomerProfileInput,
+} from '@/lib/supabaseCustomerAuth';
+import { fetchFavoriteIds, addFavorite, removeFavorite, mergeLocalFavoritesIntoAccount } from '@/lib/supabaseFavorites';
+import { fetchCustomerOrders } from '@/lib/supabaseCustomerOrders';
+import { fetchReviewStatsForProducts } from '@/lib/supabaseReviews';
+import { isRealCatalogId } from '@/data/products';
 
 export interface CartItem { productId: string; shopId: string; quantity: number; variants: Record<string, string>; unitPrice?: number; variantId?: string; }
 export interface SavedItem { productId: string; shopId: string; quantity: number; variants: Record<string, string>; unitPrice?: number; variantId?: string; }
@@ -83,6 +92,17 @@ interface AppState {
   orders: Order[]; addOrder: (order: Order) => void;
   addresses: Address[]; addAddress: (addr: Address) => void; updateAddress: (id: string, addr: Address) => void; deleteAddress: (id: string) => void; setDefaultAddress: (id: string) => void;
   customerInfo: CustomerInfo; updateCustomerInfo: (info: CustomerInfo) => void;
+  // Real customer auth (Supabase) — null while signed out or while the
+  // initial session check (authLoading) hasn't resolved yet. A signed-out
+  // visitor can still browse/cart/checkout as a guest; only "Mon compte"
+  // itself gates on this.
+  customerUser: CustomerProfile | null;
+  authLoading: boolean;
+  signUpCustomerAccount: (input: SignUpCustomerInput) => Promise<{ error?: string }>;
+  signInCustomerAccount: (identifier: string, password: string) => Promise<{ error?: string }>;
+  signOutCustomerAccount: () => void;
+  updateCustomerAccount: (input: UpdateCustomerProfileInput) => Promise<{ error?: string }>;
+  requestPasswordReset: (email: string) => Promise<{ error?: string }>;
 }
 
 const AppContext = createContext<AppState | null>(null);
@@ -113,6 +133,32 @@ function persistCart(cart: CartItem[]): void {
   } catch {
     // Ignore — the cart still works for the current session, it just won't
     // survive a refresh.
+  }
+}
+
+// Guest (signed-out) favorites — same survives-refresh treatment as the
+// cart. A signed-in customer's favorites live in Supabase instead (see
+// supabaseFavorites.ts); this local copy is only ever the source of truth
+// while signed out, and is merged into the account (never overwritten) the
+// moment the visitor signs in or signs up.
+const FAVORITES_STORAGE_KEY = 'ezial-favorites-v1';
+
+function loadStoredFavorites(): string[] {
+  try {
+    const raw = localStorage.getItem(FAVORITES_STORAGE_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function persistFavorites(ids: string[]): void {
+  try {
+    localStorage.setItem(FAVORITES_STORAGE_KEY, JSON.stringify(ids));
+  } catch {
+    // Ignore — favorites still work for the current session.
   }
 }
 
@@ -210,6 +256,16 @@ function mergeShops(mock: Shop[], supabase: Shop[]): Shop[] {
   return [...supabase, ...remainingMock];
 }
 
+// Merges a real Supabase order-history fetch into whatever's already in
+// local state (e.g. an order just placed this same session, via addOrder,
+// slightly ahead of the fetch) — the fetched copy always wins for any id
+// both sides share, since it reflects the real, current Supabase state.
+function mergeOrders(prev: Order[], fetched: Order[]): Order[] {
+  const fetchedIds = new Set(fetched.map((o) => o.id));
+  const localOnly = prev.filter((o) => !fetchedIds.has(o.id));
+  return [...localOnly, ...fetched].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+}
+
 export function AppProvider({ children }: { children: ReactNode }) {
   const [route, setRoute] = useState(getInitialRoute());
   // The mock catalog renders immediately; if the Supabase catalog fetch
@@ -218,7 +274,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // as-is — never left empty.
   const [catalogProducts, setCatalogProducts] = useState<Product[]>(allProducts);
   const [catalogShops, setCatalogShops] = useState<Shop[]>(mockShops);
-  const [favorites, setFavorites] = useState<string[]>([]);
+  const [favorites, setFavorites] = useState<string[]>(loadStoredFavorites);
   const [cart, setCart] = useState<CartItem[]>(loadStoredCart);
   const [savedItems, setSavedItems] = useState<SavedItem[]>([]);
   const [cartOpen, setCartOpen] = useState(false);
@@ -228,6 +284,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     { id: 'addr-1', firstName: 'Bineta', lastName: 'Diouf', phone: '+221 77 123 45 67', quartier: 'Yoff', details: 'Près de la route de l\'aéroport, porte bleue', isDefault: true },
   ]);
   const [customerInfo, setCustomerInfo] = useState<CustomerInfo>(defaultCustomerInfo);
+  const [customerUser, setCustomerUser] = useState<CustomerProfile | null>(null);
+  const [authLoading, setAuthLoading] = useState(true);
 
   useEffect(() => {
     const onHash = () => setRoute(window.location.hash.replace(/^#/, '') || '/');
@@ -236,6 +294,32 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => { persistCart(cart); }, [cart]);
+
+  // Guest favorites persist locally; once signed in, Supabase is the source
+  // of truth instead (see the sign-in/sign-up handlers below), so writing
+  // the fetched list back to localStorage here would be redundant, never
+  // harmful — kept simple by just always mirroring current state.
+  useEffect(() => { if (!customerUser) persistFavorites(favorites); }, [favorites, customerUser]);
+
+  // Session restore on load — never trusts anything cached locally alone;
+  // restoreCustomerSession() re-validates the real Supabase session and
+  // re-fetches the profile row every time, exactly like the seller/admin
+  // session restores already do.
+  useEffect(() => {
+    let cancelled = false;
+    restoreCustomerSession().then(async (profile) => {
+      if (cancelled) return;
+      setCustomerUser(profile);
+      setAuthLoading(false);
+      if (profile) {
+        const [favIds, realOrders] = await Promise.all([fetchFavoriteIds(profile.id), fetchCustomerOrders(profile.id)]);
+        if (cancelled) return;
+        setFavorites(favIds);
+        setOrders((prev) => mergeOrders(prev, realOrders));
+      }
+    }).catch(() => { if (!cancelled) setAuthLoading(false); });
+    return () => { cancelled = true; };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -252,8 +336,23 @@ export function AppProvider({ children }: { children: ReactNode }) {
         // shops and products, and their "Produits" listing — over a single
         // unrelated sub-query hiccup.
         registerSupabaseShops(result.shops);
-        setCatalogProducts(mergeCatalogs(allProducts, result.products));
+        const merged = mergeCatalogs(allProducts, result.products);
+        setCatalogProducts(merged);
         setCatalogShops(mergeShops(mockShops, result.shops));
+
+        // Real review stats enrich the (already-rendered) catalog in a
+        // second pass — never blocks the initial catalog paint, and a
+        // mock demo product (non-uuid id) is never queried for reviews.
+        const realIds = merged.map((p) => p.id).filter(isRealCatalogId);
+        if (realIds.length > 0) {
+          fetchReviewStatsForProducts(realIds).then((stats) => {
+            if (cancelled || stats.size === 0) return;
+            setCatalogProducts((prev) => prev.map((p) => {
+              const s = stats.get(p.id);
+              return s ? { ...p, rating: s.average, reviewCount: s.count } : p;
+            }));
+          });
+        }
       })
       .catch(() => {
         // Fetch itself failed unexpectedly — keep the mock catalog as-is.
@@ -268,9 +367,59 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const toggleFavorite = useCallback((productId: string) => {
-    setFavorites((prev) => prev.includes(productId) ? prev.filter((id) => id !== productId) : [...prev, productId]);
-  }, []);
+    setFavorites((prev) => {
+      const isRemoving = prev.includes(productId);
+      const next = isRemoving ? prev.filter((id) => id !== productId) : [...prev, productId];
+      // Optimistic locally; the Supabase write below never blocks the UI
+      // and its own failure is non-fatal (the toggle just won't survive a
+      // refresh for that one product, exactly like a failed cart write).
+      if (customerUser) {
+        if (isRemoving) void removeFavorite(customerUser.id, productId);
+        else void addFavorite(customerUser.id, productId);
+      }
+      return next;
+    });
+  }, [customerUser]);
   const isFavorite = useCallback((productId: string) => favorites.includes(productId), [favorites]);
+
+  const signUpCustomerAccount = useCallback(async (input: SignUpCustomerInput): Promise<{ error?: string }> => {
+    const result = await signUpCustomer(input);
+    if ('error' in result) return { error: result.error };
+    setCustomerUser(result);
+    await mergeLocalFavoritesIntoAccount(result.id, favorites);
+    const [favIds, realOrders] = await Promise.all([fetchFavoriteIds(result.id), fetchCustomerOrders(result.id)]);
+    setFavorites(favIds);
+    setOrders((prev) => mergeOrders(prev, realOrders));
+    return {};
+  }, [favorites]);
+
+  const signInCustomerAccount = useCallback(async (identifier: string, password: string): Promise<{ error?: string }> => {
+    const result = await signInCustomer(identifier, password);
+    if ('error' in result) return { error: result.error };
+    setCustomerUser(result);
+    await mergeLocalFavoritesIntoAccount(result.id, favorites);
+    const [favIds, realOrders] = await Promise.all([fetchFavoriteIds(result.id), fetchCustomerOrders(result.id)]);
+    setFavorites(favIds);
+    setOrders((prev) => mergeOrders(prev, realOrders));
+    return {};
+  }, [favorites]);
+
+  const signOutCustomerAccount = useCallback(() => {
+    setCustomerUser(null);
+    setFavorites(loadStoredFavorites());
+    setOrders([]);
+    void signOutCustomer();
+  }, []);
+
+  const updateCustomerAccount = useCallback(async (input: UpdateCustomerProfileInput): Promise<{ error?: string }> => {
+    if (!customerUser) return { error: 'Non connecté.' };
+    const result = await updateCustomerProfile(customerUser.id, input);
+    if (result.error) return result;
+    setCustomerUser({ ...customerUser, firstName: input.firstName.trim(), lastName: input.lastName.trim(), phone: input.phone.trim() || null, email: input.email.trim() || null, quartier: input.quartier || null, landmark: input.landmark.trim() || null });
+    return {};
+  }, [customerUser]);
+
+  const requestPasswordReset = useCallback(async (email: string) => requestCustomerPasswordReset(email), []);
 
   // Never opens CartDrawer and never navigates — only the cart badge count
   // should visibly react. "Acheter maintenant" calls this then navigates to
@@ -352,6 +501,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     orders, addOrder,
     addresses, addAddress, updateAddress, deleteAddress, setDefaultAddress,
     customerInfo, updateCustomerInfo,
+    customerUser, authLoading,
+    signUpCustomerAccount, signInCustomerAccount, signOutCustomerAccount,
+    updateCustomerAccount, requestPasswordReset,
   };
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
 }

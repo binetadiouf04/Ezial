@@ -21,14 +21,6 @@ const roleConfig: Record<Role, { title: string; subtitle: string; placeholder: s
     hint: 'Saisissez votre email et mot de passe.',
     demoName: 'Admin EZIAL',
   },
-  seller: {
-    title: 'Espace Vendeur',
-    subtitle: 'Connectez-vous avec votre identifiant vendeur et votre mot de passe.',
-    placeholder: 'MAISONFATOU4827',
-    hint: 'Identifiant fourni par EZIAL à la création de votre boutique, et mot de passe choisi avec EZIAL.',
-    demoId: 'MAISONFATOU4827',
-    demoName: 'Maison Fatou',
-  },
   driver: {
     title: 'Espace Livreur',
     subtitle: 'Connectez-vous avec votre identifiant unique.',

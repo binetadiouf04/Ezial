@@ -1,11 +1,11 @@
 import { useState } from 'react';
-import { useApp, type DeliveryStepStatus, type PickupStepStatus, type Order, type CustomerInfo, quartiers } from '@/store/AppContext';
+import { useApp, type DeliveryStepStatus, type PickupStepStatus, type Order, quartiers } from '@/store/AppContext';
 import { deliveryStatusLabels, pickupStepLabels } from '@/data/orderStatusLabels';
-import { getProduct, formatFCFA } from '@/data/products';
+import { formatFCFA } from '@/data/products';
 import ProductGrid from '@/components/ProductGrid';
-import { products } from '@/data/products';
 import SmartImage from '@/components/SmartImage';
-import { User, Heart, ShoppingBag, LogOut, ChevronRight, Briefcase, Truck, Store, Check, AlertCircle } from 'lucide-react';
+import NotificationOptIn from '@/components/NotificationOptIn';
+import { User, Heart, ShoppingBag, LogOut, ChevronRight, Briefcase, Truck, Store, Check, AlertCircle, Loader2 } from 'lucide-react';
 
 const deliveryStatusColors: Record<DeliveryStepStatus, string> = {
   confirmed: 'bg-blue-50 text-blue-700', preparing: 'bg-amber-50 text-amber-700', ready: 'bg-green-50 text-green-700',
@@ -38,15 +38,136 @@ function getOrderStatusColor(order: Order): string {
 }
 
 type Tab = 'orders' | 'favorites' | 'info';
+type AuthView = 'login' | 'signup' | 'forgot';
 
-const requiredFields: (keyof CustomerInfo)[] = ['firstName', 'lastName', 'phone'];
+interface InfoForm { firstName: string; lastName: string; phone: string; email: string; quartier: string; landmark: string }
+
+// === Signed-out: login / signup / forgot password ===
+function AuthPanel() {
+  const { signInCustomerAccount, signUpCustomerAccount, requestPasswordReset } = useApp();
+  const [view, setView] = useState<AuthView>('login');
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
+
+  const [loginId, setLoginId] = useState('');
+  const [loginPassword, setLoginPassword] = useState('');
+
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
+  const [phone, setPhone] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+
+  const [resetEmail, setResetEmail] = useState('');
+
+  const switchView = (v: AuthView) => { setView(v); setError(''); setNotice(''); };
+
+  const handleLogin = async () => {
+    setError(''); setNotice('');
+    if (!loginId.trim() || !loginPassword) { setError('Renseignez votre identifiant et votre mot de passe.'); return; }
+    setSubmitting(true);
+    const result = await signInCustomerAccount(loginId.trim(), loginPassword);
+    setSubmitting(false);
+    if (result.error) setError(result.error);
+  };
+
+  const handleSignup = async () => {
+    setError(''); setNotice('');
+    if (!firstName.trim() || !lastName.trim()) { setError('Prénom et nom sont obligatoires.'); return; }
+    if (!phone.trim() && !email.trim()) { setError('Renseignez un email ou un numéro de téléphone.'); return; }
+    if (password.length < 8) { setError('Le mot de passe doit contenir au moins 8 caractères.'); return; }
+    setSubmitting(true);
+    const result = await signUpCustomerAccount({ firstName, lastName, phone: phone.trim() || undefined, email: email.trim() || undefined, password });
+    setSubmitting(false);
+    if (result.error) setError(result.error);
+  };
+
+  const handleReset = async () => {
+    setError(''); setNotice('');
+    if (!resetEmail.trim()) { setError('Renseignez votre email.'); return; }
+    setSubmitting(true);
+    const result = await requestPasswordReset(resetEmail.trim());
+    setSubmitting(false);
+    if (result.error) setError(result.error);
+    else setNotice('Si un compte existe avec cet email, un lien de réinitialisation vient de lui être envoyé.');
+  };
+
+  return (
+    <div className="mx-auto max-w-sm py-10">
+      <div className="mb-6 text-center">
+        <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-full bg-burgundy/10 text-burgundy"><User size={26} /></div>
+        <h1 className="font-display text-xl font-semibold text-ink">Mon compte</h1>
+        <p className="mt-1 text-sm text-ink/55">Connectez-vous ou créez un compte pour suivre vos commandes.</p>
+      </div>
+
+      {view !== 'forgot' && (
+        <div className="mb-5 flex rounded-full border border-line p-1">
+          <button onClick={() => switchView('login')} className={`flex-1 rounded-full py-2 text-sm font-medium transition-colors ${view === 'login' ? 'bg-burgundy text-white' : 'text-ink/60'}`}>Se connecter</button>
+          <button onClick={() => switchView('signup')} className={`flex-1 rounded-full py-2 text-sm font-medium transition-colors ${view === 'signup' ? 'bg-burgundy text-white' : 'text-ink/60'}`}>S'inscrire</button>
+        </div>
+      )}
+
+      {error && <p className="mb-4 flex items-start gap-1.5 rounded-lg bg-burgundy/5 p-3 text-sm text-burgundy"><AlertCircle size={15} className="mt-0.5 flex-shrink-0" /> {error}</p>}
+      {notice && <p className="mb-4 flex items-start gap-1.5 rounded-lg bg-green-50 p-3 text-sm text-green-700"><Check size={15} className="mt-0.5 flex-shrink-0" /> {notice}</p>}
+
+      {view === 'login' && (
+        <div className="space-y-4">
+          <div>
+            <label className="block text-xs font-medium text-ink/60 mb-1.5">Email ou téléphone</label>
+            <input className="input-field" value={loginId} onChange={(e) => setLoginId(e.target.value)} />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-ink/60 mb-1.5">Mot de passe</label>
+            <input type="password" className="input-field" value={loginPassword} onChange={(e) => setLoginPassword(e.target.value)} />
+          </div>
+          <button onClick={() => void handleLogin()} disabled={submitting} className="btn-primary w-full">
+            {submitting ? <><Loader2 size={16} className="animate-spin" /> Connexion...</> : 'Se connecter'}
+          </button>
+          <button onClick={() => switchView('forgot')} className="w-full text-center text-xs font-medium text-burgundy hover:underline">Mot de passe oublié ?</button>
+        </div>
+      )}
+
+      {view === 'signup' && (
+        <div className="space-y-4">
+          <div className="grid grid-cols-2 gap-3">
+            <div><label className="block text-xs font-medium text-ink/60 mb-1.5">Prénom</label><input className="input-field" value={firstName} onChange={(e) => setFirstName(e.target.value)} /></div>
+            <div><label className="block text-xs font-medium text-ink/60 mb-1.5">Nom</label><input className="input-field" value={lastName} onChange={(e) => setLastName(e.target.value)} /></div>
+          </div>
+          <div><label className="block text-xs font-medium text-ink/60 mb-1.5">Téléphone</label><input className="input-field" placeholder="+221 ..." value={phone} onChange={(e) => setPhone(e.target.value)} /></div>
+          <div><label className="block text-xs font-medium text-ink/60 mb-1.5">Email {phone.trim() ? '(optionnel)' : ''}</label><input type="email" className="input-field" value={email} onChange={(e) => setEmail(e.target.value)} /></div>
+          <p className="text-[11px] text-ink/40">Téléphone ou email obligatoire (au moins l'un des deux). Un email permet de récupérer votre mot de passe en cas d'oubli.</p>
+          <div><label className="block text-xs font-medium text-ink/60 mb-1.5">Mot de passe</label><input type="password" className="input-field" placeholder="8 caractères minimum" value={password} onChange={(e) => setPassword(e.target.value)} /></div>
+          <button onClick={() => void handleSignup()} disabled={submitting} className="btn-primary w-full">
+            {submitting ? <><Loader2 size={16} className="animate-spin" /> Création...</> : 'Créer mon compte'}
+          </button>
+        </div>
+      )}
+
+      {view === 'forgot' && (
+        <div className="space-y-4">
+          <p className="text-xs text-ink/50">Fonctionne uniquement si un email a été renseigné sur le compte.</p>
+          <div><label className="block text-xs font-medium text-ink/60 mb-1.5">Email</label><input type="email" className="input-field" value={resetEmail} onChange={(e) => setResetEmail(e.target.value)} /></div>
+          <button onClick={() => void handleReset()} disabled={submitting} className="btn-primary w-full">
+            {submitting ? <><Loader2 size={16} className="animate-spin" /> Envoi...</> : 'Envoyer le lien de réinitialisation'}
+          </button>
+          <button onClick={() => switchView('login')} className="w-full text-center text-xs font-medium text-ink/50 hover:underline">Retour à la connexion</button>
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function ProfilePage() {
-  const { orders, favorites, navigate, customerInfo, updateCustomerInfo, catalogProducts } = useApp();
+  const { orders, favorites, navigate, catalogProducts, customerUser, authLoading, signOutCustomerAccount, updateCustomerAccount } = useApp();
   const [tab, setTab] = useState<Tab>('orders');
-  const [infoForm, setInfoForm] = useState<CustomerInfo>(customerInfo);
+  const [infoForm, setInfoForm] = useState<InfoForm>(() => ({
+    firstName: customerUser?.firstName ?? '', lastName: customerUser?.lastName ?? '',
+    phone: customerUser?.phone ?? '', email: customerUser?.email ?? '',
+    quartier: customerUser?.quartier ?? 'Plateau', landmark: customerUser?.landmark ?? '',
+  }));
   const [infoSaved, setInfoSaved] = useState(false);
-  const [errors, setErrors] = useState<Partial<Record<keyof CustomerInfo, string>>>({});
+  const [errors, setErrors] = useState<Partial<Record<keyof InfoForm, string>>>({});
 
   const navItems: { id: Tab; label: string; icon: typeof ShoppingBag }[] = [
     { id: 'orders', label: 'Mes commandes', icon: ShoppingBag },
@@ -55,27 +176,39 @@ export default function ProfilePage() {
   ];
 
   const validate = (): boolean => {
-    const newErrors: Partial<Record<keyof CustomerInfo, string>> = {};
-    for (const field of requiredFields) {
-      if (!infoForm[field].trim()) {
-        newErrors[field] = 'Ce champ est obligatoire.';
-      }
-    }
+    const newErrors: Partial<Record<keyof InfoForm, string>> = {};
+    if (!infoForm.firstName.trim()) newErrors.firstName = 'Ce champ est obligatoire.';
+    if (!infoForm.lastName.trim()) newErrors.lastName = 'Ce champ est obligatoire.';
+    if (!infoForm.phone.trim()) newErrors.phone = 'Ce champ est obligatoire.';
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleSaveInfo = () => {
+  const handleSaveInfo = async () => {
     if (!validate()) return;
-    updateCustomerInfo(infoForm);
-    setInfoSaved(true);
-    setTimeout(() => setInfoSaved(false), 2000);
+    const result = await updateCustomerAccount(infoForm);
+    if (!result.error) { setInfoSaved(true); setTimeout(() => setInfoSaved(false), 2000); }
   };
 
-  const updateField = (field: keyof CustomerInfo, value: string) => {
+  const updateField = (field: keyof InfoForm, value: string) => {
     setInfoForm((prev) => ({ ...prev, [field]: value }));
     if (errors[field]) setErrors((prev) => ({ ...prev, [field]: undefined }));
   };
+
+  if (authLoading) {
+    return <div className="container-pro py-20 text-center"><Loader2 size={20} className="mx-auto animate-spin text-ink/30" /></div>;
+  }
+
+  if (!customerUser) {
+    return (
+      <div className="container-pro">
+        <AuthPanel />
+        <div className="mx-auto mb-10 max-w-sm border-t border-line pt-8 text-center">
+          <button onClick={() => navigate('/pro')} className="btn-outline inline-flex"><Briefcase size={16} /> Accéder à Ezial Pro</button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="container-pro py-8">
@@ -84,8 +217,8 @@ export default function ProfilePage() {
         <div className="flex items-center gap-4">
           <div className="flex h-16 w-16 items-center justify-center rounded-full bg-burgundy/10 text-burgundy flex-shrink-0"><User size={28} /></div>
           <div className="flex-1 min-w-0">
-            <h1 className="font-display text-xl font-semibold text-ink">{customerInfo.firstName} {customerInfo.lastName}</h1>
-            <p className="text-sm text-ink/55 truncate">{customerInfo.email || customerInfo.phone}</p>
+            <h1 className="font-display text-xl font-semibold text-ink">{customerUser.firstName} {customerUser.lastName}</h1>
+            <p className="text-sm text-ink/55 truncate">{customerUser.email || customerUser.phone}</p>
           </div>
           <div className="text-right flex-shrink-0">
             <p className="text-2xl font-semibold text-ink">{orders.length}</p>
@@ -166,7 +299,7 @@ export default function ProfilePage() {
           ) : (
             <>
               <p className="text-sm text-ink/55 mb-4">{favorites.length} produit{favorites.length > 1 ? 's' : ''} sauvegardé{favorites.length > 1 ? 's' : ''}</p>
-              <ProductGrid products={favorites.map((id) => getProduct(id)).filter(Boolean) as typeof products} columns={4} />
+              <ProductGrid products={favorites.map((id) => catalogProducts.find((p) => p.id === id)).filter(Boolean) as typeof catalogProducts} columns={4} />
             </>
           )}
         </div>
@@ -175,6 +308,8 @@ export default function ProfilePage() {
       {/* === MES INFORMATIONS === */}
       {tab === 'info' && (
         <div className="space-y-6">
+          <NotificationOptIn userId={customerUser.id} label="Notifications de suivi de commande" />
+
           {/* Informations personnelles */}
           <div className="card p-5 space-y-4">
             <h2 className="text-sm font-semibold text-ink">Informations personnelles</h2>
@@ -214,14 +349,10 @@ export default function ProfilePage() {
               <label className="block text-xs font-medium text-ink/60 mb-1.5">Adresse / point de repère</label>
               <textarea className="input-field" rows={2} placeholder="Ex: près de la pharmacie, portail bleu..." value={infoForm.landmark} onChange={(e) => updateField('landmark', e.target.value)} />
             </div>
-            <div className="flex items-center gap-2 text-sm text-ink/40">
-              <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-cream text-ink/30"><User size={15} /></span>
-              <span className="text-xs">Position sur la carte — disponible prochainement</span>
-            </div>
           </div>
 
           <div className="flex items-center gap-3">
-            <button onClick={handleSaveInfo} className="btn-primary">Enregistrer</button>
+            <button onClick={() => void handleSaveInfo()} className="btn-primary">Enregistrer</button>
             {infoSaved && <span className="flex items-center gap-1 text-sm text-green-600"><Check size={14} /> Enregistré</span>}
           </div>
         </div>
@@ -229,7 +360,7 @@ export default function ProfilePage() {
 
       {/* Déconnexion */}
       <div className="mt-6">
-        <button className="card w-full p-4 text-left flex items-center gap-3 text-sm font-medium text-ink/70 hover:border-ink/20 transition-colors">
+        <button onClick={() => { signOutCustomerAccount(); navigate('/'); }} className="card w-full p-4 text-left flex items-center gap-3 text-sm font-medium text-ink/70 hover:border-ink/20 transition-colors">
           <LogOut size={18} className="text-ink/40" /> Se déconnecter
         </button>
       </div>

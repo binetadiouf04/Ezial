@@ -54,7 +54,7 @@ type LocationStatus = 'idle' | 'requesting' | 'granted' | 'denied' | 'unsupporte
 type LocationMode = 'gps' | 'manual';
 
 export default function CheckoutPage() {
-  const { cart, cartSubtotal, clearCart, navigate, addOrder, catalogProducts } = useApp();
+  const { cart, cartSubtotal, clearCart, navigate, addOrder, catalogProducts, customerUser } = useApp();
   const [step, setStep] = useState(0);
   const [form, setForm] = useState<CheckoutForm>(() => ({ firstName: '', lastName: '', phone: '', email: '', quartier: 'Plateau', address: '', landmark: '', instructions: '', ...loadDraftForm() }));
   const [preference, setPreference] = useState<DeliveryPreference>({ type: 'none' });
@@ -94,6 +94,22 @@ export default function CheckoutPage() {
   const [selectedLabel, setSelectedLabel] = useState<string | null>(null);
 
   useEffect(() => { persistDraftForm(form); }, [form]);
+
+  // Prefill from the connected profile — only fields the customer hasn't
+  // already typed this session (never overwrites an in-progress edit or a
+  // saved draft). The customer can still change any of it before paying.
+  useEffect(() => {
+    if (!customerUser) return;
+    setForm((prev) => ({
+      ...prev,
+      firstName: prev.firstName || customerUser.firstName,
+      lastName: prev.lastName || customerUser.lastName,
+      phone: prev.phone || customerUser.phone || '',
+      email: prev.email || customerUser.email || '',
+      quartier: customerUser.quartier && !prev.address ? customerUser.quartier : prev.quartier,
+      landmark: prev.landmark || customerUser.landmark || '',
+    }));
+  }, [customerUser]);
 
   const hasMockItem = cart.some((item) => !isRealCatalogId(item.productId));
 
@@ -286,6 +302,7 @@ export default function CheckoutPage() {
       // Jamais de prix, sous-total, réduction, frais de livraison ou total
       // dans ce payload — create_order() relit tout depuis Supabase.
       const payload: CreateOrderPayload = {
+        customerId: customerUser?.id ?? null,
         firstName: form.firstName.trim(),
         lastName: form.lastName.trim(),
         phone: form.phone.trim(),

@@ -4,6 +4,7 @@ import { fetchAdminFinanceOverview, type AdminFinanceOverview } from '@/lib/supa
 import { formatFCFA } from '../../data';
 import { TrendingUp, Wallet, ArrowDownCircle, ArrowUpCircle, Loader2, AlertCircle } from 'lucide-react';
 import SmartImage from '@/components/SmartImage';
+import AdminPromoCodes from './AdminPromoCodes';
 
 const statusLabels: Record<AdminFinanceOverview['shops'][number]['status'], string> = {
   no_sales: 'Aucune vente',
@@ -16,8 +17,11 @@ const statusStyles: Record<AdminFinanceOverview['shops'][number]['status'], stri
   owing: 'bg-amber-50 text-amber-700 border-amber-100',
 };
 
+type Tab = 'overview' | 'promo';
+
 export default function AdminFinances() {
   const { navigate } = usePro();
+  const [tab, setTab] = useState<Tab>('overview');
   const [overview, setOverview] = useState<AdminFinanceOverview | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
@@ -47,6 +51,15 @@ export default function AdminFinances() {
     <div className="space-y-6">
       <h1 className="font-display text-2xl font-semibold text-ink">Finances</h1>
 
+      <div className="flex rounded-full border border-line p-1 w-fit">
+        <button onClick={() => setTab('overview')} className={`rounded-full px-4 py-1.5 text-sm font-medium transition-colors ${tab === 'overview' ? 'bg-burgundy text-white' : 'text-ink/60'}`}>Vue d'ensemble</button>
+        <button onClick={() => setTab('promo')} className={`rounded-full px-4 py-1.5 text-sm font-medium transition-colors ${tab === 'promo' ? 'bg-burgundy text-white' : 'text-ink/60'}`}>Codes promo</button>
+      </div>
+
+      {tab === 'promo' && <AdminPromoCodes />}
+
+      {tab === 'overview' && (
+      <>
       {loadError && (
         <p className="flex items-start gap-1.5 rounded-lg bg-burgundy/5 p-3 text-sm text-burgundy">
           <AlertCircle size={15} className="mt-0.5 flex-shrink-0" /> {loadError}
@@ -123,6 +136,8 @@ export default function AdminFinances() {
             </p>
           </div>
         </>
+      )}
+      </>
       )}
     </div>
   );

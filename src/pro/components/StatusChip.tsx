@@ -26,6 +26,7 @@ export function StatusChip({ status, size = 'sm', label: labelOverride }: { stat
     // Shop
     active: 'bg-green-50 text-green-700 border-green-100',
     suspended: 'bg-red-50 text-red-700 border-red-100',
+    rejected: 'bg-red-50 text-red-700 border-red-100',
     // Driver
     available: 'bg-green-50 text-green-700 border-green-100',
     on_delivery: 'bg-violet-50 text-violet-700 border-violet-100',
@@ -63,6 +64,7 @@ export function StatusChip({ status, size = 'sm', label: labelOverride }: { stat
     disabled: 'Désactivé',
     active: 'Actif',
     suspended: 'Suspendu',
+    rejected: 'Refusée',
     available: 'Disponible',
     on_delivery: 'En livraison',
     offline: 'Hors ligne',

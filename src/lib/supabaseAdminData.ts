@@ -232,10 +232,15 @@ export interface AdminShopSummary {
   status: string;
   sellerCode: string | null;
   activeProductCount: number;
+  phone: string | null;
+  neighborhood: string | null;
+  createdAt: string;
 }
 
+// Newest first — surfaces new onboarding requests (status 'pending') at the
+// top by default, matching how the admin Boutiques page uses this list.
 export async function fetchAdminShops(): Promise<AdminShopSummary[]> {
-  const { data: shopRows, error } = await supabase.from('shops').select('*').order('name', { ascending: true });
+  const { data: shopRows, error } = await supabase.from('shops').select('*').order('created_at', { ascending: false });
   if (error || !shopRows) return [];
 
   const shopIds = shopRows.map((s) => s.id as string);
@@ -256,7 +261,19 @@ export async function fetchAdminShops(): Promise<AdminShopSummary[]> {
     status: (s.status as string) ?? 'active',
     sellerCode: (s.seller_code as string | null) ?? null,
     activeProductCount: countByShop.get(s.id as string) ?? 0,
+    phone: (s.phone as string | null) ?? null,
+    neighborhood: (s.neighborhood as string | null) ?? null,
+    createdAt: (s.created_at as string) ?? '',
   }));
+}
+
+// The only client-side way a shop's status ever changes to/from 'active' —
+// sellers can never reach this (see the shops UPDATE policy + safety
+// trigger in the migration this feature ships with, which block a non-admin
+// from changing shops.status at all).
+export async function updateShopStatus(shopId: string, status: 'active' | 'suspended' | 'rejected'): Promise<{ error?: string }> {
+  const { error } = await supabase.from('shops').update({ status }).eq('id', shopId);
+  return error ? { error: error.message } : {};
 }
 
 export interface AdminProductSummary {

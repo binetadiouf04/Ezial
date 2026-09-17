@@ -273,16 +273,18 @@ function mapProduct(row: ProductRow, imageRows: ProductImageRow[], variantRows: 
  * the exact accepted values (draft/active/flagged/disabled) are now known
  * (see SupabaseProductStatus in supabaseSellerProducts.ts), so a draft,
  * flagged or disabled product is never shown publicly even if a given RLS
- * policy turns out to be broader than intended. shops.status is not
- * filtered client-side here — its accepted values haven't been confirmed,
- * and filtering on a wrong guess would hide every shop instead of just the
- * inactive ones; it still relies on RLS alone, as before.
+ * policy turns out to be broader than intended. shops.status is now also
+ * filtered to 'active' here (the shop-onboarding/approval workflow gives
+ * it that exact value once an admin approves a shop) — a shop still in
+ * 'draft'/'pending'/'suspended'/'rejected', and every product that belongs
+ * to it, must never be publicly reachable even if RLS is broader than
+ * intended.
  */
 export async function fetchActiveCatalogFromSupabase(): Promise<SupabaseCatalogResult> {
   const errors: string[] = [];
 
   const [shopsRes, productsRes] = await Promise.all([
-    supabase.from('shops').select('*'),
+    supabase.from('shops').select('*').eq('status', 'active'),
     supabase.from('products').select('*').eq('status', 'active'),
   ]);
 
@@ -290,7 +292,10 @@ export async function fetchActiveCatalogFromSupabase(): Promise<SupabaseCatalogR
   if (productsRes.error) errors.push(`products: ${productsRes.error.message}`);
 
   const shopRows = (shopsRes.data ?? []) as ShopRow[];
-  const productRows = (productsRes.data ?? []) as ProductRow[];
+  const activeShopIds = new Set(shopRows.map((s) => s.id));
+  // A product's own status can be 'active' while its shop isn't (still in
+  // onboarding, suspended...) — never shown publicly either way.
+  const productRows = ((productsRes.data ?? []) as ProductRow[]).filter((p) => activeShopIds.has(p.shop_id));
   const productIds = productRows.map((p) => p.id);
 
   let imageRows: ProductImageRow[] = [];
@@ -359,8 +364,13 @@ export async function fetchProductDetailFromSupabase(productId: string): Promise
   const variantRows = (variantsRes.data ?? []) as ProductVariantRow[];
   const shopRow = (shopRes.data ?? null) as ShopRow | null;
 
+  // A product can be 'active' while its own shop is still in onboarding,
+  // suspended or rejected — never reachable directly by id in that case
+  // either, matching the listing-level filter above.
+  if (!shopRow || shopRow.status !== 'active') return { product: null, shop: null };
+
   return {
     product: mapProduct(row, imageRows, variantRows),
-    shop: shopRow ? mapShop(shopRow) : null,
+    shop: mapShop(shopRow),
   };
 }

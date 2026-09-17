@@ -8,3 +8,13 @@ createRoot(document.getElementById('root')!).render(
     <App />
   </StrictMode>
 );
+
+// PWA install support — registered after load so it never delays first
+// paint. Safe no-op on browsers without support (older iOS Safari, etc).
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register(`${import.meta.env.BASE_URL}sw.js`).catch(() => {
+      // Non-fatal — the app works identically without an installed SW.
+    });
+  });
+}

@@ -2,17 +2,31 @@ import { useState, useEffect, useCallback } from 'react';
 import { usePro } from '../../ProContext';
 import VendorNoticeBanner, { type VendorNotice } from '../../components/VendorNoticeBanner';
 import LocationPickerMap from '@/components/LocationPickerMap';
-import { fetchShopLocation, updateShopLocation } from '@/lib/supabaseSellerShop';
+import { StatusChip } from '../../components/StatusChip';
+import {
+  fetchShopLocation, updateShopLocation, fetchShopOnboarding, updateShopOnboarding,
+  submitShopForReview, uploadShopAsset, type ShopOnboardingData,
+} from '@/lib/supabaseSellerShop';
 import { fetchModerationFlags, latestUnresolvedFlag } from '@/lib/supabaseModeration';
 import { searchAddress, type GeocodeResult } from '@/lib/geocoding';
-import { Check, KeyRound, Image as ImageIcon, Camera, MapPin, Loader2, AlertTriangle, AlertCircle, Navigation, Pencil, Search } from 'lucide-react';
+import { quartiers } from '@/store/AppContext';
+import { categories } from '@/data/categories';
+import { supabase } from '@/lib/supabaseClient';
+import NotificationOptIn from '@/components/NotificationOptIn';
+import { Check, Image as ImageIcon, Camera, MapPin, Loader2, AlertTriangle, AlertCircle, Navigation, Pencil, Search, Send } from 'lucide-react';
 import SmartImage from '@/components/SmartImage';
 
 type LocationStatus = 'idle' | 'requesting' | 'denied' | 'unsupported' | 'error';
 type LocationMode = 'gps' | 'manual';
 
+const emptyForm: ShopOnboardingData = {
+  name: '', description: '', phone: '', addressText: '', neighborhood: '',
+  logoUrl: '', coverUrl: '', categoryFocus: '', pickupEnabled: false,
+  status: 'draft', latitude: null, longitude: null,
+};
+
 export default function SellerShop() {
-  const { sellerShop, updateSellerShop, updateSellerPin, identifier, sellerSupabaseShopId } = usePro();
+  const { identifier, sellerSupabaseShopId } = usePro();
 
   // Real moderation flag on this shop (public.moderation_flags), never the
   // mock moderationHistory — adapted into VendorNoticeBanner's expected
@@ -28,25 +42,36 @@ export default function SellerShop() {
     });
     return () => { cancelled = true; };
   }, [sellerSupabaseShopId]);
-  const [form, setForm] = useState({
-    name: sellerShop?.name ?? '',
-    description: sellerShop?.description ?? '',
-    contact: sellerShop?.contact ?? '',
-    pickupAddress: sellerShop?.pickupAddress ?? '',
-    banner: sellerShop?.banner ?? '',
-    logo: sellerShop?.logo ?? '',
-    pickupEnabled: sellerShop?.pickupEnabled ?? false,
-    deliveryEnabled: sellerShop?.deliveryEnabled ?? true,
-    hours: 'Lun–Sam : 9h–18h',
-  });
-  const [saved, setSaved] = useState(false);
 
-  // PIN change — fields are never pre-filled with the current PIN, and are
-  // cleared right after a successful save, so it's never shown in clear.
-  const [newPin, setNewPin] = useState('');
-  const [confirmPin, setConfirmPin] = useState('');
-  const [pinError, setPinError] = useState('');
-  const [pinSaved, setPinSaved] = useState(false);
+  // Real Supabase-backed onboarding form — replaces the old mock-only
+  // sellerShop/updateSellerShop state, which never actually persisted
+  // anything beyond the current session.
+  const [form, setForm] = useState<ShopOnboardingData>(emptyForm);
+  const [formLoaded, setFormLoaded] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [uploadingLogo, setUploadingLogo] = useState(false);
+  const [uploadingCover, setUploadingCover] = useState(false);
+
+  useEffect(() => {
+    if (!sellerSupabaseShopId) { setFormLoaded(true); return; }
+    let cancelled = false;
+    fetchShopOnboarding(sellerSupabaseShopId).then((data) => {
+      if (cancelled) return;
+      if (data) setForm(data);
+      setFormLoaded(true);
+    });
+    return () => { cancelled = true; };
+  }, [sellerSupabaseShopId]);
+
+  // Push notifications are keyed by auth.uid(), not the shop id — fetched
+  // once here since ProContext doesn't otherwise expose the raw user id.
+  const [authUserId, setAuthUserId] = useState<string | null>(null);
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => setAuthUserId(data.user?.id ?? null));
+  }, []);
 
   // Shop location (shops.latitude/longitude) — read/written directly on the
   // real Supabase shop row via sellerSupabaseShopId, never through the mock
@@ -167,43 +192,42 @@ export default function SellerShop() {
     setTimeout(() => setLocationSaved(false), 2000);
   };
 
-  const handleSave = () => {
-    updateSellerShop(form);
+  const handleSave = async () => {
+    if (!sellerSupabaseShopId) return;
+    setSaveError('');
+    setSaving(true);
+    const result = await updateShopOnboarding(sellerSupabaseShopId, form);
+    setSaving(false);
+    if (result.error) { setSaveError(result.error); return; }
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
   };
 
-  const handleLogoFile = (files: FileList | null) => {
-    const file = files?.[0];
-    if (!file || !file.type.startsWith('image/')) return;
-    setForm((f) => ({ ...f, logo: URL.createObjectURL(file) }));
+  const handleSubmitForReview = async () => {
+    setSaveError('');
+    setSubmitting(true);
+    const result = await submitShopForReview();
+    setSubmitting(false);
+    if (result.error) { setSaveError(result.error); return; }
+    setForm((f) => ({ ...f, status: 'pending' }));
   };
 
-  const handleBannerFile = (files: FileList | null) => {
+  const handleLogoFile = async (files: FileList | null) => {
     const file = files?.[0];
-    if (!file || !file.type.startsWith('image/')) return;
-    setForm((f) => ({ ...f, banner: URL.createObjectURL(file) }));
+    if (!file || !file.type.startsWith('image/') || !sellerSupabaseShopId) return;
+    setUploadingLogo(true);
+    const result = await uploadShopAsset(sellerSupabaseShopId, 'logo', file);
+    setUploadingLogo(false);
+    if (result.url) setForm((f) => ({ ...f, logoUrl: result.url as string }));
   };
 
-  const handleSavePin = () => {
-    setPinError('');
-    if (!/^\d{4}$/.test(newPin)) {
-      setPinError('Le PIN doit contenir exactement 4 chiffres.');
-      return;
-    }
-    if (newPin !== confirmPin) {
-      setPinError('Les deux PIN ne correspondent pas.');
-      return;
-    }
-    const ok = updateSellerPin(newPin);
-    if (!ok) {
-      setPinError('Le PIN doit contenir exactement 4 chiffres.');
-      return;
-    }
-    setNewPin('');
-    setConfirmPin('');
-    setPinSaved(true);
-    setTimeout(() => setPinSaved(false), 2000);
+  const handleBannerFile = async (files: FileList | null) => {
+    const file = files?.[0];
+    if (!file || !file.type.startsWith('image/') || !sellerSupabaseShopId) return;
+    setUploadingCover(true);
+    const result = await uploadShopAsset(sellerSupabaseShopId, 'cover', file);
+    setUploadingCover(false);
+    if (result.url) setForm((f) => ({ ...f, coverUrl: result.url as string }));
   };
 
   return (
@@ -215,6 +239,31 @@ export default function SellerShop() {
 
       {latestModeration && <VendorNoticeBanner entry={latestModeration} />}
 
+      {authUserId && <NotificationOptIn userId={authUserId} label="Notifications de nouvelles commandes" />}
+
+      {/* Onboarding status — the seller can prepare/edit their shop while
+          waiting, but only submitShopForReview() (draft → pending) is
+          reachable from here; 'active' is admin-only. */}
+      {formLoaded && (
+        <div className="card p-4 space-y-3">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="text-xs font-medium text-ink/50">Statut de la boutique</p>
+              <div className="mt-1.5"><StatusChip status={form.status} size="md" /></div>
+            </div>
+            {form.status === 'draft' && (
+              <button onClick={() => void handleSubmitForReview()} disabled={submitting} className="btn-primary flex-shrink-0">
+                {submitting ? <><Loader2 size={15} className="animate-spin" /> Envoi...</> : <><Send size={15} /> Soumettre pour validation</>}
+              </button>
+            )}
+          </div>
+          {form.status === 'draft' && <p className="text-xs text-ink/45">Complétez les informations ci-dessous puis soumettez votre boutique à l'équipe Ezial. Vous pouvez continuer à la préparer (produits inclus) en attendant.</p>}
+          {form.status === 'pending' && <p className="text-xs text-ink/45">Votre demande est en cours d'examen par l'équipe Ezial. Vous pouvez continuer à préparer vos produits.</p>}
+          {form.status === 'rejected' && <p className="text-xs text-burgundy">Votre demande précédente n'a pas été approuvée. Vous pouvez mettre à jour les informations puis soumettre à nouveau.</p>}
+          {form.status === 'suspended' && <p className="text-xs text-burgundy">Votre boutique est actuellement suspendue par Ezial. Contactez l'équipe Ezial pour plus d'informations.</p>}
+        </div>
+      )}
+
       {locationLoaded && !location && (
         <div className="card flex items-start gap-2.5 border-amber-300 bg-amber-50 p-4">
           <AlertTriangle size={18} className="mt-0.5 flex-shrink-0 text-amber-600" />
@@ -225,49 +274,10 @@ export default function SellerShop() {
       {/* Seller identifier — read-only */}
       <div className="card p-4 flex items-center justify-between">
         <div>
-          <p className="text-xs font-medium text-ink/50">Identifiant vendeur</p>
+          <p className="text-xs font-medium text-ink/50">Nom d'utilisateur / identifiant</p>
           <p className="mt-1 font-mono text-sm font-semibold text-ink">{identifier}</p>
         </div>
         <span className="text-xs text-ink/35">Non modifiable</span>
-      </div>
-
-      {/* PIN — security */}
-      <div className="card p-5 space-y-4">
-        <div>
-          <h2 className="text-sm font-semibold text-ink flex items-center gap-1.5"><KeyRound size={15} className="text-ink/40" /> Code PIN</h2>
-          <p className="mt-1 text-xs text-ink/45">Utilisé avec votre identifiant pour vous connecter. Il n'est jamais affiché une fois enregistré.</p>
-        </div>
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label className="block text-xs font-medium text-ink/60 mb-1.5">Nouveau PIN</label>
-            <input
-              type="password"
-              inputMode="numeric"
-              className="input-field font-mono tracking-[0.5em]"
-              placeholder="••••"
-              maxLength={4}
-              value={newPin}
-              onChange={(e) => { setNewPin(e.target.value.replace(/\D/g, '').slice(0, 4)); setPinError(''); }}
-            />
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-ink/60 mb-1.5">Confirmer le PIN</label>
-            <input
-              type="password"
-              inputMode="numeric"
-              className="input-field font-mono tracking-[0.5em]"
-              placeholder="••••"
-              maxLength={4}
-              value={confirmPin}
-              onChange={(e) => { setConfirmPin(e.target.value.replace(/\D/g, '').slice(0, 4)); setPinError(''); }}
-            />
-          </div>
-        </div>
-        {pinError && <p className="text-xs text-burgundy">{pinError}</p>}
-        <div className="flex items-center gap-3">
-          <button onClick={handleSavePin} className="btn-outline">Enregistrer le PIN</button>
-          {pinSaved && <span className="flex items-center gap-1 text-sm text-green-600"><Check size={14} /> PIN mis à jour</span>}
-        </div>
       </div>
 
       {/* Shop info form */}
@@ -277,15 +287,15 @@ export default function SellerShop() {
           <label className="block text-xs font-medium text-ink/60 mb-1.5">Logo de la boutique</label>
           <div className="flex items-center gap-3">
             <div className="h-16 w-16 flex-shrink-0 overflow-hidden rounded-lg border border-line bg-cream">
-              {form.logo ? (
-                <SmartImage src={form.logo} alt="" className="h-full w-full object-cover" />
+              {form.logoUrl ? (
+                <SmartImage src={form.logoUrl} alt="" className="h-full w-full object-cover" />
               ) : (
                 <div className="flex h-full w-full items-center justify-center text-ink/25"><ImageIcon size={20} /></div>
               )}
             </div>
             <label className="btn-outline cursor-pointer text-sm">
-              {form.logo ? 'Changer le logo' : 'Ajouter le logo'}
-              <input type="file" accept="image/*" className="hidden" onChange={(e) => handleLogoFile(e.target.files)} />
+              {uploadingLogo ? <><Loader2 size={14} className="animate-spin" /> Envoi...</> : form.logoUrl ? 'Changer le logo' : 'Ajouter le logo'}
+              <input type="file" accept="image/*" className="hidden" disabled={uploadingLogo} onChange={(e) => void handleLogoFile(e.target.files)} />
             </label>
           </div>
         </div>
@@ -294,17 +304,16 @@ export default function SellerShop() {
         <div>
           <label className="block text-xs font-medium text-ink/60 mb-1.5">Image de couverture</label>
           <div className="h-32 overflow-hidden rounded-lg border border-line bg-cream">
-            {form.banner ? (
-              <SmartImage src={form.banner} alt="" className="h-full w-full object-cover" />
+            {form.coverUrl ? (
+              <SmartImage src={form.coverUrl} alt="" className="h-full w-full object-cover" />
             ) : (
               <div className="flex h-full w-full items-center justify-center text-ink/25"><ImageIcon size={24} /></div>
             )}
           </div>
           <label className="btn-outline mt-2 inline-flex cursor-pointer items-center gap-1.5 text-sm">
-            <Camera size={14} /> {form.banner ? "Changer l'image de couverture" : "Ajouter une image de couverture"}
-            <input type="file" accept="image/*" className="hidden" onChange={(e) => handleBannerFile(e.target.files)} />
+            <Camera size={14} /> {uploadingCover ? 'Envoi...' : form.coverUrl ? "Changer l'image de couverture" : "Ajouter une image de couverture"}
+            <input type="file" accept="image/*" className="hidden" disabled={uploadingCover} onChange={(e) => void handleBannerFile(e.target.files)} />
           </label>
-          <p className="mt-1.5 text-xs text-ink/40">Vos photos sont automatiquement recadrées à l'affichage, sans déformation.</p>
         </div>
 
         <div>
@@ -319,43 +328,50 @@ export default function SellerShop() {
           <p className="mt-1 text-xs text-ink/40">
             Présentez ce que vous vendez, votre spécialité et ce qui distingue votre boutique. Cette description est visible publiquement — mentionnez naturellement vos produits, votre style et votre localisation.
           </p>
-          <p className="mt-1 text-xs text-ink/35 italic">
-            Ex. : « Maison Fatou propose des vêtements féminins modernes et des pièces d'inspiration africaine à Dakar : robes, ensembles et tenues pour toutes les occasions. »
-          </p>
+        </div>
+
+        <div>
+          <label className="block text-xs font-medium text-ink/60 mb-1.5">Catégorie principale</label>
+          <select className="input-field" value={form.categoryFocus} onChange={(e) => setForm({ ...form, categoryFocus: e.target.value })}>
+            <option value="">Sélectionner...</option>
+            {categories.map((c) => <option key={c.id} value={c.id}>{c.label}</option>)}
+          </select>
         </div>
 
         <div>
           <label className="block text-xs font-medium text-ink/60 mb-1.5">Téléphone</label>
-          <input className="input-field" value={form.contact} onChange={(e) => setForm({ ...form, contact: e.target.value })} />
+          <input className="input-field" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
           <p className="mt-1 text-xs text-ink/40">Numéro permettant à Ezial de vous contacter.</p>
         </div>
 
         <div>
-          <label className="block text-xs font-medium text-ink/60 mb-1.5">Adresse / quartier</label>
-          <input className="input-field" value={form.pickupAddress} onChange={(e) => setForm({ ...form, pickupAddress: e.target.value })} />
-          <p className="mt-1 text-xs text-ink/40">Indiquez précisément où se trouve votre boutique ou votre point de retrait.</p>
+          <label className="block text-xs font-medium text-ink/60 mb-1.5">Quartier</label>
+          <select className="input-field" value={form.neighborhood} onChange={(e) => setForm({ ...form, neighborhood: e.target.value })}>
+            <option value="">Sélectionner...</option>
+            {quartiers.map((q) => <option key={q} value={q}>{q}</option>)}
+          </select>
         </div>
 
         <div>
-          <label className="block text-xs font-medium text-ink/60 mb-1.5">Horaires</label>
-          <input className="input-field" value={form.hours} onChange={(e) => setForm({ ...form, hours: e.target.value })} />
-          <p className="mt-1 text-xs text-ink/40">Indiquez les horaires auxquels les commandes peuvent être préparées ou retirées.</p>
+          <label className="block text-xs font-medium text-ink/60 mb-1.5">Adresse</label>
+          <input className="input-field" value={form.addressText} onChange={(e) => setForm({ ...form, addressText: e.target.value })} />
+          <p className="mt-1 text-xs text-ink/40">Indiquez précisément où se trouve votre boutique ou votre point de retrait.</p>
         </div>
 
-        {/* Fulfillment options */}
+        {/* Fulfillment options — delivery via Ezial is always available;
+            pickup is the one real optional toggle (shops.pickup_enabled). */}
         <div className="space-y-2 pt-2">
-          <label className="flex items-center gap-2 text-sm text-ink/70">
-            <input type="checkbox" checked={form.deliveryEnabled} onChange={(e) => setForm({ ...form, deliveryEnabled: e.target.checked })} className="h-4 w-4 rounded border-line text-burgundy focus:ring-burgundy" />
-            Livraison Ezial activée
-          </label>
           <label className="flex items-center gap-2 text-sm text-ink/70">
             <input type="checkbox" checked={form.pickupEnabled} onChange={(e) => setForm({ ...form, pickupEnabled: e.target.checked })} className="h-4 w-4 rounded border-line text-burgundy focus:ring-burgundy" />
             Retrait en boutique activé
           </label>
         </div>
 
+        {saveError && <p className="text-xs text-burgundy">{saveError}</p>}
         <div className="flex items-center gap-3 pt-2">
-          <button onClick={handleSave} className="btn-primary">Enregistrer</button>
+          <button onClick={() => void handleSave()} disabled={saving} className="btn-primary">
+            {saving ? <><Loader2 size={15} className="animate-spin" /> Enregistrement...</> : 'Enregistrer'}
+          </button>
           {saved && <span className="flex items-center gap-1 text-sm text-green-600"><Check size={14} /> Enregistré</span>}
         </div>
       </div>
@@ -418,7 +434,7 @@ export default function SellerShop() {
             {locationMode === 'manual' && (
               <div className="space-y-3 rounded-lg border border-line p-3.5">
                 <p className="text-xs text-ink/50">
-                  Adresse déclarée : {form.pickupAddress ? <span className="font-medium text-ink/70">{form.pickupAddress}</span> : 'non renseignée — voir le champ "Adresse / quartier" ci-dessus'}
+                  Adresse déclarée : {form.addressText ? <span className="font-medium text-ink/70">{form.addressText}</span> : 'non renseignée — voir le champ "Adresse" ci-dessus'}
                 </p>
 
                 <div>
