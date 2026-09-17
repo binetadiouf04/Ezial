@@ -1,7 +1,8 @@
 import { useApp } from '@/store/AppContext';
-import { formatFCFA, isRealCatalogId } from '@/data/products';
+import { formatFCFA, isRealCatalogId, getVariantPrice } from '@/data/products';
 import { getShop } from '@/data/shops';
 import { Plus, Minus, Trash2, ShoppingBag, ChevronRight, ArrowLeftRight, Bookmark, AlertTriangle } from 'lucide-react';
+import PriceDisplay from '@/components/PriceDisplay';
 import SmartImage from '@/components/SmartImage';
 
 export default function CartPage() {
@@ -49,6 +50,9 @@ export default function CartPage() {
                       const product = catalogProducts.find((p) => p.id === item.productId);
                       if (!product) return null;
                       const isMock = !isRealCatalogId(item.productId);
+                      const unitPrice = item.unitPrice ?? product.price;
+                      const { oldPrice: unitOldPrice } = getVariantPrice(product, item.variants);
+                      const lineOldTotal = unitOldPrice ? unitOldPrice * item.quantity : undefined;
                       return (
                         <div key={index} className="flex gap-4">
                           <SmartImage src={product.images[0]} alt="" className="h-24 w-20 flex-shrink-0 rounded-lg object-cover" />
@@ -67,7 +71,7 @@ export default function CartPage() {
                                 <button onClick={() => updateQuantity(index, item.quantity + 1)} className="flex h-8 w-8 items-center justify-center text-ink/60 hover:text-ink"><Plus size={14} /></button>
                               </div>
                               <div className="flex items-center gap-3">
-                                <span className="text-sm font-semibold text-ink">{formatFCFA((item.unitPrice ?? product.price) * item.quantity)}</span>
+                                <PriceDisplay price={unitPrice * item.quantity} oldPrice={lineOldTotal} size="sm" />
                               </div>
                             </div>
                             <div className="mt-2 flex items-center gap-4">
@@ -123,7 +127,13 @@ export default function CartPage() {
                     <button onClick={() => navigate(`/produit/${product.id}`)} className="text-sm font-medium text-ink line-clamp-1 hover:text-burgundy">{product.name}</button>
                     {shop && <p className="text-xs text-ink/50">{shop.name}</p>}
                     {Object.entries(saved.variants).map(([k, v]) => <p key={k} className="text-xs text-ink/40">{k}: {v}</p>)}
-                    <p className="text-sm font-semibold text-ink mt-1">{formatFCFA((saved.unitPrice ?? product.price) * saved.quantity)}</p>
+                    <div className="mt-1">
+                      <PriceDisplay
+                        price={(saved.unitPrice ?? product.price) * saved.quantity}
+                        oldPrice={(() => { const { oldPrice } = getVariantPrice(product, saved.variants); return oldPrice ? oldPrice * saved.quantity : undefined; })()}
+                        size="sm"
+                      />
+                    </div>
                   </div>
                   <div className="flex flex-col gap-2 flex-shrink-0">
                     <button onClick={() => moveToCart(idx)} className="flex items-center gap-1.5 rounded-lg border border-line px-3 py-2 text-xs font-medium text-ink hover:border-ink/30 transition-colors">

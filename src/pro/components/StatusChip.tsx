@@ -40,16 +40,16 @@ export function StatusChip({ status, size = 'sm', label: labelOverride }: { stat
   };
 
   const labels: Record<string, string> = {
-    confirmed: 'Confirmée',
+    confirmed: 'Commande en cours',
     preparing: 'En préparation',
     ready: 'Prête',
-    ready_for_pickup: 'Prête à récupérer',
+    ready_for_pickup: 'Prête',
     waiting_collection: 'En attente de retrait',
     out_for_delivery: 'En livraison',
     delivering: 'En livraison',
     picked_up: 'Récupérée par le livreur',
     delivered: 'Livrée',
-    collected: 'Récupérée par le client',
+    collected: 'Récupérée',
     cancelled: 'Annulée',
     return_requested: 'Retour demandé',
     refunded: 'Remboursée',

@@ -90,6 +90,32 @@ export function useApp(): AppState { const ctx = useContext(AppContext); if (!ct
 
 function getInitialRoute(): string { const hash = window.location.hash.replace(/^#/, ''); return hash || '/'; }
 
+// Anonymous cart persistence — survives refresh/tab close so a visitor
+// never loses their cart just by closing the browser. Never fails loudly:
+// a blocked/unavailable localStorage (private browsing, quota, etc.) just
+// means the cart doesn't survive a refresh, not a crash.
+const CART_STORAGE_KEY = 'ezial-cart-v1';
+
+function loadStoredCart(): CartItem[] {
+  try {
+    const raw = localStorage.getItem(CART_STORAGE_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function persistCart(cart: CartItem[]): void {
+  try {
+    localStorage.setItem(CART_STORAGE_KEY, JSON.stringify(cart));
+  } catch {
+    // Ignore — the cart still works for the current session, it just won't
+    // survive a refresh.
+  }
+}
+
 export const deliveryZones: DeliveryZone[] = [
   // Zone 1 — central Dakar (2 000 FCFA)
   { id: 'plateau', label: 'Plateau', fee: 2000, eta: '4–48 h' },
@@ -193,7 +219,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [catalogProducts, setCatalogProducts] = useState<Product[]>(allProducts);
   const [catalogShops, setCatalogShops] = useState<Shop[]>(mockShops);
   const [favorites, setFavorites] = useState<string[]>([]);
-  const [cart, setCart] = useState<CartItem[]>([]);
+  const [cart, setCart] = useState<CartItem[]>(loadStoredCart);
   const [savedItems, setSavedItems] = useState<SavedItem[]>([]);
   const [cartOpen, setCartOpen] = useState(false);
   const [categoryDrawerOpen, setCategoryDrawerOpen] = useState(false);
@@ -208,6 +234,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     window.addEventListener('hashchange', onHash);
     return () => window.removeEventListener('hashchange', onHash);
   }, []);
+
+  useEffect(() => { persistCart(cart); }, [cart]);
 
   useEffect(() => {
     let cancelled = false;
@@ -244,13 +272,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, []);
   const isFavorite = useCallback((productId: string) => favorites.includes(productId), [favorites]);
 
+  // Never opens CartDrawer and never navigates — only the cart badge count
+  // should visibly react. "Acheter maintenant" calls this then navigates to
+  // checkout itself; a plain "Ajouter au panier" click does nothing more.
   const addToCart = useCallback((item: CartItem) => {
     setCart((prev) => {
       const idx = prev.findIndex((i) => i.productId === item.productId && JSON.stringify(i.variants) === JSON.stringify(item.variants));
       if (idx >= 0) { const next = [...prev]; next[idx] = { ...next[idx], quantity: next[idx].quantity + item.quantity }; return next; }
       return [...prev, item];
     });
-    setCartOpen(true);
   }, []);
 
   const removeFromCart = useCallback((index: number) => setCart((prev) => prev.filter((_, i) => i !== index)), []);

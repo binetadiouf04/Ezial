@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useApp, type Order, type ShopFulfillment, type DeliveryPreference, type DeliveryStepStatus, quartierToZone, deliveryWindows } from '@/store/AppContext';
-import { formatFCFA, isRealCatalogId } from '@/data/products';
+import { formatFCFA, isRealCatalogId, getVariantPrice } from '@/data/products';
+import PriceDisplay from '@/components/PriceDisplay';
 import { getShop } from '@/data/shops';
 import { paymentMethods as paymentMethodsData } from '@/data/payments';
 import { createOrderInSupabase, type CreateOrderPayload, type CreateOrderShopFulfillmentInput, type CreatedOrderResult } from '@/lib/supabaseOrders';
@@ -8,7 +9,7 @@ import { searchAddress, type GeocodeResult } from '@/lib/geocoding';
 import { estimateDeliveryFee, DELIVERY_FEE_FLOOR } from '@/lib/deliveryEstimate';
 import CheckoutSteps from '@/components/CheckoutSteps';
 import LocationPickerMap from '@/components/LocationPickerMap';
-import { Check, Truck, Store, Smartphone, Wallet, Clock, Loader2, AlertCircle, AlertTriangle, MapPin, Navigation, Search } from 'lucide-react';
+import { Check, Truck, Store, Smartphone, Wallet, Clock, Loader2, AlertCircle, AlertTriangle, MapPin, Navigation, Search, ArrowLeft } from 'lucide-react';
 import SmartImage from '@/components/SmartImage';
 
 const paymentIcons: Record<string, typeof Smartphone> = { wave: Smartphone, orange: Smartphone, paypal: Wallet };
@@ -20,13 +21,38 @@ function tomorrowISO(): string {
   return d.toISOString().split('T')[0];
 }
 
+// Reasonable draft of the checkout info form — never the payment method or
+// anything order-specific — so a customer who refreshes or comes back
+// later doesn't have to retype their name/phone/address every time. Kept
+// even after a successful order, on purpose: it's exactly as useful for
+// the next order. Silently no-ops if localStorage is unavailable.
+const CHECKOUT_DRAFT_KEY = 'ezial-checkout-draft-v1';
+type CheckoutForm = { firstName: string; lastName: string; phone: string; email: string; quartier: string; address: string; landmark: string; instructions: string };
+
+function loadDraftForm(): Partial<CheckoutForm> {
+  try {
+    const raw = localStorage.getItem(CHECKOUT_DRAFT_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch {
+    return {};
+  }
+}
+
+function persistDraftForm(form: CheckoutForm): void {
+  try {
+    localStorage.setItem(CHECKOUT_DRAFT_KEY, JSON.stringify(form));
+  } catch {
+    // Ignore — the form still works for the current session.
+  }
+}
+
 type LocationStatus = 'idle' | 'requesting' | 'granted' | 'denied' | 'unsupported';
 type LocationMode = 'gps' | 'manual';
 
 export default function CheckoutPage() {
   const { cart, cartSubtotal, clearCart, navigate, addOrder, catalogProducts } = useApp();
   const [step, setStep] = useState(0);
-  const [form, setForm] = useState({ firstName: '', lastName: '', phone: '', email: '', quartier: 'Plateau', address: '', landmark: '', instructions: '' });
+  const [form, setForm] = useState<CheckoutForm>(() => ({ firstName: '', lastName: '', phone: '', email: '', quartier: 'Plateau', address: '', landmark: '', instructions: '', ...loadDraftForm() }));
   const [preference, setPreference] = useState<DeliveryPreference>({ type: 'none' });
   const [payment, setPayment] = useState('wave');
   const [shopFulfillments, setShopFulfillments] = useState<Record<string, 'delivery' | 'pickup'>>({});
@@ -48,6 +74,8 @@ export default function CheckoutPage() {
   const [searchResults, setSearchResults] = useState<GeocodeResult[] | null>(null);
   const [searchNotice, setSearchNotice] = useState('');
   const [selectedLabel, setSelectedLabel] = useState<string | null>(null);
+
+  useEffect(() => { persistDraftForm(form); }, [form]);
 
   const hasMockItem = cart.some((item) => !isRealCatalogId(item.productId));
 
@@ -104,6 +132,7 @@ export default function CheckoutPage() {
     if (!form.firstName.trim()) e.firstName = 'Ce champ est obligatoire.';
     if (!form.lastName.trim()) e.lastName = 'Ce champ est obligatoire.';
     if (!form.phone.trim()) e.phone = 'Ce champ est obligatoire.';
+    if (hasDeliveryShops && !form.address.trim()) e.address = 'L\'adresse est obligatoire pour une commande avec livraison.';
     setErrors(e);
     return Object.keys(e).length === 0;
   };
@@ -288,6 +317,9 @@ export default function CheckoutPage() {
           {/* Step 0: Customer info */}
           {step === 0 && (
             <div className="space-y-5 fade-in">
+              <button onClick={() => navigate('/panier')} className="flex items-center gap-1.5 text-sm text-ink/50 hover:text-ink transition-colors">
+                <ArrowLeft size={15} /> Retour au panier
+              </button>
               <h2 className="font-display text-xl font-semibold">Vos coordonnées</h2>
               <div className="grid grid-cols-2 gap-4">
                 <div>
@@ -317,8 +349,9 @@ export default function CheckoutPage() {
                 </select>
               </div>
               <div>
-                <label className="block text-xs font-medium text-ink/60 mb-1.5">Adresse de livraison</label>
-                <input className="input-field" placeholder="Ex : Villa 12, Rue 4, Sacré-Cœur 3" value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} />
+                <label className="block text-xs font-medium text-ink/60 mb-1.5">Adresse de livraison{hasDeliveryShops && <span className="text-burgundy"> *</span>}</label>
+                <input className="input-field" placeholder="Ex : Villa 12, Rue 4, Sacré-Cœur 3" value={form.address} onChange={(e) => { setForm({ ...form, address: e.target.value }); setErrors((prev) => { const next = { ...prev }; delete next.address; return next; }); }} />
+                {errors.address && <p className="mt-1 text-xs text-burgundy">{errors.address}</p>}
               </div>
               <div>
                 <label className="block text-xs font-medium text-ink/60 mb-1.5">Point de repère (optionnel)</label>
@@ -542,6 +575,7 @@ export default function CheckoutPage() {
                     if (!p) return null;
                     const price = item.unitPrice ?? p.price;
                     const shop = getShop(item.shopId);
+                    const { oldPrice: unitOldPrice } = getVariantPrice(p, item.variants);
                     return (
                       <div key={i} className="flex gap-3">
                         <SmartImage src={p.images[0]} alt="" className="h-16 w-14 rounded-lg object-cover flex-shrink-0" />
@@ -553,7 +587,7 @@ export default function CheckoutPage() {
                           <p className="text-xs text-ink/50">Quantité : {item.quantity}</p>
                           {shop && <p className="text-[11px] text-ink/35 mt-0.5">Vendu par {shop.name}</p>}
                         </div>
-                        <span className="text-sm font-semibold text-ink flex-shrink-0">{formatFCFA(price * item.quantity)}</span>
+                        <div className="flex-shrink-0"><PriceDisplay price={price * item.quantity} oldPrice={unitOldPrice ? unitOldPrice * item.quantity : undefined} size="sm" /></div>
                       </div>
                     );
                   })}
@@ -606,6 +640,7 @@ export default function CheckoutPage() {
                 if (!p) return null;
                 const price = item.unitPrice ?? p.price;
                 const shop = getShop(item.shopId);
+                const { oldPrice: unitOldPrice } = getVariantPrice(p, item.variants);
                 return (
                   <div key={i} className="flex gap-2.5">
                     <SmartImage src={p.images[0]} alt="" className="h-12 w-10 rounded object-cover flex-shrink-0" />
@@ -616,7 +651,7 @@ export default function CheckoutPage() {
                       )}
                       <p className="text-[11px] text-ink/35">Vendu par {shop?.name}</p>
                     </div>
-                    <span className="text-xs font-medium text-ink flex-shrink-0">{formatFCFA(price * item.quantity)}</span>
+                    <div className="flex-shrink-0"><PriceDisplay price={price * item.quantity} oldPrice={unitOldPrice ? unitOldPrice * item.quantity : undefined} size="sm" /></div>
                   </div>
                 );
               })}

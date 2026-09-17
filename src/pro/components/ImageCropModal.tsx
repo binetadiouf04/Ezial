@@ -8,10 +8,16 @@ import { PRODUCT_MEDIA_ASPECT_RATIO } from '@/lib/supabaseSellerProducts';
 // every screen size this app targets (390px and up).
 const FRAME_W = 320;
 const FRAME_H = FRAME_W / PRODUCT_MEDIA_ASPECT_RATIO;
-// Baked at 4x the display size for print-quality e-commerce photos while
-// keeping the JPEG output small enough to upload quickly.
-const OUTPUT_W = FRAME_W * 4;
-const OUTPUT_H = FRAME_H * 4;
+// Baked at 3x the display frame — plenty sharp on a 2x (retina) screen for
+// every place this photo is shown, including the largest rendering (the
+// product page gallery, capped at 448px wide) — while keeping the file
+// small. Previously 4x + JPEG (1280x1600 @ q0.92, ~doubling the pixel count
+// actually needed) made every product photo, including tiny grid
+// thumbnails reusing the same file, far heavier than necessary. WebP at
+// equivalent visual quality is meaningfully smaller than JPEG for
+// photographic content on top of that.
+const OUTPUT_W = FRAME_W * 3;
+const OUTPUT_H = FRAME_H * 3;
 const MIN_ZOOM = 1;
 const MAX_ZOOM = 3;
 
@@ -211,7 +217,7 @@ export default function ImageCropModal({ file, onCancel, onConfirm }: Props) {
     // pixel-for-pixel what the frame showed, never an approximation.
     const factor = OUTPUT_W / FRAME_W;
     ctx.drawImage(img, offset.x * factor, offset.y * factor, displayW * factor, displayH * factor);
-    canvas.toBlob((blob) => { if (blob) onConfirm(blob); }, 'image/jpeg', 0.92);
+    canvas.toBlob((blob) => { if (blob) onConfirm(blob); }, 'image/webp', 0.82);
   };
 
   return (

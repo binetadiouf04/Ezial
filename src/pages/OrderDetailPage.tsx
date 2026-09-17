@@ -2,20 +2,14 @@ import { useApp, type DeliveryStepStatus, type PickupStepStatus, type Order } fr
 import { formatFCFA } from '@/data/products';
 import { getShop } from '@/data/shops';
 import { DeliveryTimeline, PickupTimeline } from '@/components/OrderTimeline';
+import { deliveryStatusLabels, pickupStepLabels } from '@/data/orderStatusLabels';
 import { paymentLabels } from '@/data/payments';
 import { Package, Truck, Store, MapPin, Smartphone, Clock, Check, KeySquare, ArrowLeft, CheckCircle2 } from 'lucide-react';
 import SmartImage from '@/components/SmartImage';
 
-const deliveryStatusLabels: Record<DeliveryStepStatus, string> = {
-  confirmed: 'Commande confirmée', preparing: 'En préparation', ready: 'Prête',
-  picked_up: 'En livraison', delivering: 'En livraison', delivered: 'Livrée',
-};
 const deliveryStatusColors: Record<DeliveryStepStatus, string> = {
   confirmed: 'bg-blue-50 text-blue-700', preparing: 'bg-amber-50 text-amber-700', ready: 'bg-green-50 text-green-700',
   picked_up: 'bg-violet-50 text-violet-700', delivering: 'bg-violet-50 text-violet-700', delivered: 'bg-ink/5 text-ink/60',
-};
-const pickupStepLabels: Record<PickupStepStatus, string> = {
-  preparing: 'En préparation', ready_for_pickup: 'Prête à récupérer', picked_up: 'Récupérée',
 };
 const pickupStepColors: Record<PickupStepStatus, string> = {
   preparing: 'bg-amber-50 text-amber-700', ready_for_pickup: 'bg-green-50 text-green-700', picked_up: 'bg-ink/5 text-ink/60',
@@ -27,9 +21,9 @@ function getOrderStatusLabel(order: Order): string {
   if (hasPickup && !hasDelivery) {
     const pickupStatuses = order.shopFulfillments.filter((f) => f.type === 'pickup').map((f) => f.pickupStatus ?? 'preparing');
     const worst = pickupStatuses.sort((a, b) => Object.keys(pickupStepLabels).indexOf(a) - Object.keys(pickupStepLabels).indexOf(b))[0];
-    return pickupStepLabels[worst] ?? 'En préparation';
+    return pickupStepLabels[worst] ?? pickupStepLabels.preparing;
   }
-  return deliveryStatusLabels[order.status] ?? 'Commande confirmée';
+  return deliveryStatusLabels[order.status] ?? deliveryStatusLabels.confirmed;
 }
 
 function getOrderStatusColor(order: Order): string {

@@ -1,17 +1,14 @@
-import { useApp, type PickupStepStatus } from '@/store/AppContext';
+import { useApp } from '@/store/AppContext';
 import { formatFCFA } from '@/data/products';
 import { getShop } from '@/data/shops';
 import { DeliveryTimeline, PickupTimeline } from '@/components/OrderTimeline';
+import { pickupStepLabels } from '@/data/orderStatusLabels';
 import { paymentLabels } from '@/data/payments';
 import { Phone, MapPin, Package, Store, Check, Clock, KeySquare, Truck, Smartphone } from 'lucide-react';
 import SmartImage from '@/components/SmartImage';
 
 const shopPrepLabels: Record<string, string> = { preparing: 'En préparation', ready: 'Prête', collected: 'Prête' };
 const shopPrepColors: Record<string, string> = { preparing: 'bg-amber-50 text-amber-700', ready: 'bg-green-50 text-green-700', collected: 'bg-green-50 text-green-700' };
-
-const pickupStepLabels: Record<PickupStepStatus, string> = {
-  preparing: 'En préparation', ready_for_pickup: 'Prête à récupérer', picked_up: 'Récupérée',
-};
 
 export default function OrderTrackingPage({ orderId }: { orderId: string }) {
   const { orders, navigate, catalogProducts } = useApp();

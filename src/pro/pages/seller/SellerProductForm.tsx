@@ -2,6 +2,7 @@ import { useState, useMemo, useEffect } from 'react';
 import { usePro } from '../../ProContext';
 import { categories, categoryMap, type CategoryId } from '@/data/categories';
 import { getFilters, type FilterGroup } from '@/data/filters';
+import { discountPercent } from '@/data/products';
 import { getColor } from '@/data/colors';
 import VendorNoticeBanner, { type VendorNotice } from '../../components/VendorNoticeBanner';
 import { fetchModerationFlags, latestUnresolvedFlag } from '@/lib/supabaseModeration';
@@ -304,6 +305,14 @@ export default function SellerProductForm({ productId }: { productId?: string })
   // Price by option toggle
   const [priceByOption, setPriceByOption] = useState(false);
 
+  // Promotion (products.is_promo/promo_price/promo_start/promo_end) — the
+  // % discount is always derived from price vs promoPrice, never stored or
+  // typed in by hand.
+  const [isPromo, setIsPromo] = useState(false);
+  const [promoPrice, setPromoPrice] = useState('');
+  const [promoStart, setPromoStart] = useState('');
+  const [promoEnd, setPromoEnd] = useState('');
+
   // Stock + price per combination (used when the product has real variants)
   const [comboData, setComboData] = useState<Record<string, { stock: number; price: number }>>({});
   // Plain stock (used when the product has no variant dimension at all)
@@ -337,6 +346,10 @@ export default function SellerProductForm({ productId }: { productId?: string })
       setName(data.name);
       setDescription(data.description);
       setPrice(String(data.basePrice));
+      setIsPromo(data.isPromo);
+      setPromoPrice(data.promoPrice != null ? String(data.promoPrice) : '');
+      setPromoStart(data.promoStart ?? '');
+      setPromoEnd(data.promoEnd ?? '');
       setImages(data.images.map((img) => ({
         key: img.id,
         kind: img.mediaType === 'video' ? 'video' as const : 'image' as const,
@@ -507,7 +520,7 @@ export default function SellerProductForm({ productId }: { productId?: string })
   };
 
   const handleCropConfirm = (blob: Blob) => {
-    const file = new File([blob], `photo-${Date.now()}.jpg`, { type: 'image/jpeg' });
+    const file = new File([blob], `photo-${Date.now()}.webp`, { type: blob.type || 'image/webp' });
     setImages((prev) => [...prev, { key: `local-${Date.now()}-${Math.random().toString(36).slice(2)}`, kind: 'image', previewUrl: URL.createObjectURL(file), file }]);
     setPendingCropFiles((prev) => prev.slice(1));
   };
@@ -692,7 +705,7 @@ export default function SellerProductForm({ productId }: { productId?: string })
   const handleRecropConfirm = async (blob: Blob) => {
     const target = images.find((i) => i.key === recropTargetKey);
     if (!target) { setRecropTargetKey(null); setRecropSourceFile(null); return; }
-    const newFile = new File([blob], `photo-${Date.now()}.jpg`, { type: 'image/jpeg' });
+    const newFile = new File([blob], `photo-${Date.now()}.webp`, { type: blob.type || 'image/webp' });
     if (target.existing) {
       const del = await deleteProductImage(target.existing.id, target.existing.storagePath, [
         target.existing.originalStoragePath,
@@ -802,6 +815,13 @@ export default function SellerProductForm({ productId }: { productId?: string })
     if (!name.trim()) e.name = 'Le nom du produit est obligatoire';
     if (!description.trim()) e.description = 'La description est obligatoire';
     if (!price || parseInt(price) <= 0) e.price = 'Le prix est obligatoire';
+    if (isPromo) {
+      const promo = parseInt(promoPrice) || 0;
+      const base = parseInt(price) || 0;
+      if (!promoPrice || promo <= 0) e.promoPrice = 'Le prix promotionnel est obligatoire.';
+      else if (base > 0 && promo >= base) e.promoPrice = 'Le prix promotionnel doit être inférieur au prix de base.';
+      if (promoStart && promoEnd && promoStart > promoEnd) e.promoEnd = 'La date de fin doit être après la date de début.';
+    }
     if (!images.some((img) => img.kind === 'image')) e.images = 'Ajoutez au moins une photo.';
     setErrors(e);
     return e;
@@ -913,6 +933,13 @@ export default function SellerProductForm({ productId }: { productId?: string })
         .map((img, i) => (img.file ? { media: toNewMedia(img), sortOrder: i, isPrimary: i === 0 } : null))
         .filter((x): x is { media: NewProductMedia; sortOrder: number; isPrimary: boolean } => Boolean(x));
 
+      const promoPayload = {
+        isPromo,
+        promoPrice: isPromo ? (parseInt(promoPrice) || 0) : null,
+        promoStart: isPromo && promoStart ? promoStart : null,
+        promoEnd: isPromo && promoEnd ? promoEnd : null,
+      };
+
       if (existingProductId) {
         // === True edit: UPDATE the same products row — same id, same
         // reference, same shop_id, all three left untouched by the update
@@ -927,6 +954,7 @@ export default function SellerProductForm({ productId }: { productId?: string })
           status: SUPABASE_STATUS_FOR_FORM_STATUS[status],
           descriptiveAttributes: buildDescriptiveAttributes(),
           variants: buildVariantRows(),
+          ...promoPayload,
         });
         if (updateResult.error) {
           setSubmitError(updateResult.error);
@@ -969,6 +997,7 @@ export default function SellerProductForm({ productId }: { productId?: string })
           descriptiveAttributes: buildDescriptiveAttributes(),
           variants: buildVariantRows(),
           images: newMediaWithPosition.map((x) => x.media),
+          ...promoPayload,
         });
         if ('error' in supabaseResult) {
           setSubmitError(supabaseResult.error);
@@ -1394,6 +1423,53 @@ export default function SellerProductForm({ productId }: { productId?: string })
           </button>
           <span className="text-sm text-ink/70">Le prix change selon les options</span>
         </label>
+      </div>
+
+      {/* 6bis. Promotion */}
+      <div className="card p-5 space-y-4">
+        <div className="flex items-center justify-between">
+          <h2 className="text-sm font-semibold text-ink">Promotion</h2>
+          <button
+            type="button"
+            onClick={() => setIsPromo(!isPromo)}
+            className={`relative h-6 w-11 rounded-full transition-colors ${isPromo ? 'bg-burgundy' : 'bg-ink/15'}`}
+          >
+            <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow-sm transition-transform ${isPromo ? 'translate-x-5' : 'translate-x-0.5'}`} />
+          </button>
+        </div>
+        {isPromo && (
+          <div className="space-y-4 fade-in">
+            <div>
+              <label className="block text-xs font-medium text-ink/60 mb-1.5">Prix promotionnel (FCFA)</label>
+              <input className="input-field" type="number" value={promoPrice} onChange={(e) => setPromoPrice(e.target.value)} />
+              {errors.promoPrice && <p className="mt-1 text-xs text-burgundy">{errors.promoPrice}</p>}
+            </div>
+            {(() => {
+              const base = parseInt(price) || 0;
+              const promo = parseInt(promoPrice) || 0;
+              const disc = discountPercent(promo, base);
+              return disc ? (
+                <p className="text-sm text-ink/70">
+                  <span className="text-ink/40 line-through">{base.toLocaleString('fr-FR')} FCFA</span>{' '}
+                  <span className="font-semibold text-ink">{promo.toLocaleString('fr-FR')} FCFA</span>{' '}
+                  <span className="rounded-full bg-burgundy/8 px-2 py-0.5 text-xs font-semibold text-burgundy">-{disc}%</span>
+                </p>
+              ) : null;
+            })()}
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-medium text-ink/60 mb-1.5">Début (optionnel)</label>
+                <input type="date" className="input-field" value={promoStart} onChange={(e) => setPromoStart(e.target.value)} />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-ink/60 mb-1.5">Fin (optionnel)</label>
+                <input type="date" className="input-field" value={promoEnd} onChange={(e) => setPromoEnd(e.target.value)} />
+                {errors.promoEnd && <p className="mt-1 text-xs text-burgundy">{errors.promoEnd}</p>}
+              </div>
+            </div>
+            <p className="text-xs text-ink/40">Sans dates, la promotion reste active tant qu'elle n'est pas désactivée.</p>
+          </div>
+        )}
       </div>
 
       {/* 7. Options du produit */}

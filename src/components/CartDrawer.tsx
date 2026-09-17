@@ -1,7 +1,8 @@
 import { X, ShoppingBag, Plus, Minus, Trash2 } from 'lucide-react';
 import { useApp, type CartItem } from '@/store/AppContext';
-import { formatFCFA } from '@/data/products';
+import { formatFCFA, getVariantPrice } from '@/data/products';
 import { getShop } from '@/data/shops';
+import PriceDisplay from './PriceDisplay';
 import SmartImage from './SmartImage';
 
 interface CartRow extends CartItem { index: number; }
@@ -35,7 +36,11 @@ export default function CartDrawer() {
                   <div key={shopId}>
                     {shop && <button onClick={() => { setCartOpen(false); navigate(`/boutique/${shop.id}`); }} className="mb-3 block text-[11px] font-semibold uppercase tracking-wider text-ink/50 hover:text-burgundy">{shop.name}</button>}
                     <div className="space-y-3">
-                      {items.map((item) => { const product = catalogProducts.find((p) => p.id === item.productId); if (!product) return null; return (
+                      {items.map((item) => { const product = catalogProducts.find((p) => p.id === item.productId); if (!product) return null;
+                        const unitPrice = item.unitPrice ?? product.price;
+                        const { oldPrice: unitOldPrice } = getVariantPrice(product, item.variants);
+                        const lineOldTotal = unitOldPrice ? unitOldPrice * item.quantity : undefined;
+                        return (
                         <div key={item.index} className="flex gap-3">
                           <SmartImage src={product.images[0]} alt="" className="h-20 w-16 flex-shrink-0 rounded-lg object-cover" />
                           <div className="flex-1 min-w-0">
@@ -48,7 +53,7 @@ export default function CartDrawer() {
                                 <button onClick={() => updateQuantity(item.index, item.quantity + 1)} className="flex h-7 w-7 items-center justify-center text-ink/60 hover:text-ink"><Plus size={13} /></button>
                               </div>
                               <div className="flex items-center gap-3">
-                                <span className="text-sm font-semibold text-ink">{formatFCFA((item.unitPrice ?? product.price) * item.quantity)}</span>
+                                <PriceDisplay price={unitPrice * item.quantity} oldPrice={lineOldTotal} size="sm" />
                                 <button onClick={() => removeFromCart(item.index)} className="text-ink/30 hover:text-burgundy"><Trash2 size={16} /></button>
                               </div>
                             </div>

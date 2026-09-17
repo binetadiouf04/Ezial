@@ -1,18 +1,19 @@
 import { Check, Circle } from 'lucide-react';
 import type { DeliveryStepStatus, PickupStepStatus } from '@/store/AppContext';
+import { deliveryStatusLabels, pickupStepLabels } from '@/data/orderStatusLabels';
 
 const deliverySteps: { id: DeliveryStepStatus; label: string }[] = [
-  { id: 'confirmed', label: 'Commande confirmée' },
-  { id: 'preparing', label: 'En préparation' },
-  { id: 'ready', label: 'Prête' },
-  { id: 'delivering', label: 'En livraison' },
-  { id: 'delivered', label: 'Livrée' },
+  { id: 'confirmed', label: deliveryStatusLabels.confirmed },
+  { id: 'preparing', label: deliveryStatusLabels.preparing },
+  { id: 'ready', label: deliveryStatusLabels.ready },
+  { id: 'delivering', label: deliveryStatusLabels.delivering },
+  { id: 'delivered', label: deliveryStatusLabels.delivered },
 ];
 
 const pickupSteps: { id: PickupStepStatus; label: string }[] = [
-  { id: 'preparing', label: 'En préparation' },
-  { id: 'ready_for_pickup', label: 'Prête à récupérer' },
-  { id: 'picked_up', label: 'Récupérée' },
+  { id: 'preparing', label: pickupStepLabels.preparing },
+  { id: 'ready_for_pickup', label: pickupStepLabels.ready_for_pickup },
+  { id: 'picked_up', label: pickupStepLabels.picked_up },
 ];
 
 interface Step { id: string; label: string; }

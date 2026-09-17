@@ -78,6 +78,10 @@ export interface CreateProductInput {
   descriptiveAttributes: Record<string, string[]>;
   variants: VariantRowInput[];
   images: NewProductMedia[];
+  isPromo: boolean;
+  promoPrice: number | null;
+  promoStart: string | null;
+  promoEnd: string | null;
 }
 
 export interface CreateProductResult {
@@ -241,6 +245,10 @@ export async function createProductInSupabase(
           base_price: input.basePrice,
           status: input.status,
           descriptive_attributes: input.descriptiveAttributes,
+          is_promo: input.isPromo,
+          promo_price: input.isPromo ? input.promoPrice : null,
+          promo_start: input.isPromo ? input.promoStart : null,
+          promo_end: input.isPromo ? input.promoEnd : null,
         })
         .select('id')
         .single();
@@ -494,6 +502,8 @@ export interface EditableProduct {
   images: ExistingProductImage[];
   isPromo: boolean;
   promoPrice: number | null;
+  promoStart: string | null;
+  promoEnd: string | null;
 }
 
 // Scoped to the seller's own shop (like fetchSellerProducts) so editing
@@ -502,7 +512,7 @@ export interface EditableProduct {
 export async function fetchProductForEdit(productId: string, shopId: string): Promise<EditableProduct | null> {
   const { data: row, error } = await supabase
     .from('products')
-    .select('id, shop_id, reference, name, description, category, subcategory, base_price, status, descriptive_attributes, is_promo, promo_price')
+    .select('id, shop_id, reference, name, description, category, subcategory, base_price, status, descriptive_attributes, is_promo, promo_price, promo_start, promo_end')
     .eq('id', productId)
     .eq('shop_id', shopId)
     .maybeSingle();
@@ -533,6 +543,8 @@ export async function fetchProductForEdit(productId: string, shopId: string): Pr
     images,
     isPromo: Boolean(row.is_promo),
     promoPrice: (row.promo_price as number) ?? null,
+    promoStart: (row.promo_start as string | null) ?? null,
+    promoEnd: (row.promo_end as string | null) ?? null,
   };
 }
 
@@ -545,6 +557,10 @@ export interface UpdateProductInput {
   status: SupabaseProductStatus;
   descriptiveAttributes: Record<string, string[]>;
   variants: VariantRowInput[];
+  isPromo: boolean;
+  promoPrice: number | null;
+  promoStart: string | null;
+  promoEnd: string | null;
 }
 
 // Updates the existing products row in place (same id, same reference,
@@ -563,6 +579,10 @@ export async function updateProductInSupabase(productId: string, input: UpdatePr
       base_price: input.basePrice,
       status: input.status,
       descriptive_attributes: input.descriptiveAttributes,
+      is_promo: input.isPromo,
+      promo_price: input.isPromo ? input.promoPrice : null,
+      promo_start: input.isPromo ? input.promoStart : null,
+      promo_end: input.isPromo ? input.promoEnd : null,
     })
     .eq('id', productId);
   if (productError) return { error: `Impossible de mettre à jour le produit : ${productError.message}` };
