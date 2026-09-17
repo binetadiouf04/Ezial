@@ -4,8 +4,8 @@ import { fileURLToPath, URL } from 'node:url';
 
 // https://vitejs.dev/config/
 export default defineConfig({
-  // Served from https://binetadiouf04.github.io/Ezial/ (GitHub Pages project site)
-  base: '/Ezial/',
+  // Served from https://www.ezial.net (GitHub Pages custom domain, at root)
+  base: '/',
   plugins: [react()],
   resolve: {
     alias: {
