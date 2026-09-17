@@ -81,8 +81,10 @@ export interface CreatedOrderRow {
   gift_message?: string | null;
   gift_wrap?: boolean;
   gift_wrap_fee?: number;
+  // The promo-code discount is folded into discount_amount (same column
+  // product promotions already used) — no separate column, reusing the
+  // real existing schema rather than inventing a new one.
   promo_code?: string | null;
-  promo_discount_amount?: number;
   [key: string]: unknown;
 }
 export interface CreatedOrderShopRow {

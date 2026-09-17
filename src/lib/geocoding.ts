@@ -22,6 +22,27 @@ export interface GeocodeSearchResult {
 }
 
 const NOMINATIM_SEARCH_URL = 'https://nominatim.openstreetmap.org/search';
+const NOMINATIM_REVERSE_URL = 'https://nominatim.openstreetmap.org/reverse';
+
+// Best-effort label for a raw GPS point (map click/drag, "use my current
+// position") — the GPS coordinate itself always stays the source of truth
+// for delivery (see create_order()); this is only ever used to show the
+// customer something readable instead of raw numbers. Returns null on any
+// failure or when Nominatim has nothing for that exact point, so the
+// caller can fall back to its own generic wording rather than showing
+// nothing at all.
+export async function reverseGeocode(lat: number, lng: number): Promise<string | null> {
+  try {
+    const url = `${NOMINATIM_REVERSE_URL}?format=jsonv2&lat=${lat}&lon=${lng}`;
+    const response = await fetch(url, { headers: { Accept: 'application/json' } });
+    if (!response.ok) return null;
+    const data: unknown = await response.json();
+    const displayName = (data as Record<string, unknown> | null)?.display_name;
+    return typeof displayName === 'string' && displayName.trim() ? displayName : null;
+  } catch {
+    return null;
+  }
+}
 
 // Generic category words that describe a *type* of place rather than its
 // name — Nominatim often has no result for "Mosquée Cité des Magistrats"

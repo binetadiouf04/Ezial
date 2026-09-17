@@ -1,4 +1,5 @@
 import { supabase } from './supabaseClient';
+import { mapAuthErrorMessage, isValidEmail } from './authErrors';
 
 // Sellers log in with `seller_code` + a real password — never an email
 // address. Supabase Auth itself only knows email + password, so each shop
@@ -94,44 +95,74 @@ export interface SignUpSellerInput {
   password: string;
 }
 
+export type SignUpSellerResult =
+  | { status: 'confirmed'; shop: SellerAuthShop }
+  | { status: 'pending_confirmation' }
+  | { error: string };
+
 const USERNAME_TAKEN_ERROR = 'Ce nom d\'utilisateur est déjà utilisé.';
-const GENERIC_SIGNUP_ERROR = "Impossible de créer le compte. Vérifiez vos informations et réessayez.";
+const USERNAME_FORMAT_ERROR = "Le nom d'utilisateur doit contenir 4 à 32 lettres/chiffres, sans espace.";
 
 // Self-service shop signup — creates the real Supabase Auth user (real
-// email, so "mot de passe oublié" works natively) and the shop row in one
-// step, with status 'draft' (see the onboarding feature: the seller then
-// fills in the rest and submits it for admin review — nothing here makes
-// the shop public). shops.owner_id is unique (see migration), so this can
-// never silently attach a second shop to an account that already has one.
-export async function signUpSeller(input: SignUpSellerInput): Promise<SellerAuthShop | { error: string }> {
+// email, so "mot de passe oublié" works natively) and its shop row in one
+// step, status 'draft' (see the onboarding feature: the seller then fills
+// in the rest and submits it for admin review — nothing here makes the
+// shop public).
+//
+// Root cause fixed here: the shops row used to be inserted by the CLIENT
+// right after signUp() — but with "Confirm email" enabled on the Supabase
+// project, signUp() returns no active session until confirmed, so that
+// insert ran as an anonymous request and was always rejected by RLS
+// ("owner_id = auth.uid()" with auth.uid() = null). That's exactly what
+// surfaced as the generic "Impossible de créer le compte" error. The shop
+// row is now created server-side by a database trigger on auth.users (see
+// the migration this fix ships with), which runs regardless of
+// confirmation status.
+export async function signUpSeller(input: SignUpSellerInput): Promise<SignUpSellerResult> {
+  const email = input.email.trim();
+  if (!isValidEmail(email)) return { error: 'Adresse email invalide.' };
+  if (input.password.length < 8) return { error: 'Le mot de passe doit contenir au moins 8 caractères.' };
+
   const username = normalizeSellerCode(input.username);
-  if (!/^[a-z0-9]{4,32}$/.test(username)) return { error: "Le nom d'utilisateur doit contenir 4 à 32 lettres/chiffres." };
+  if (!/^[a-z0-9]{4,32}$/.test(username)) return { error: USERNAME_FORMAT_ERROR };
 
-  const { data, error } = await supabase.auth.signUp({ email: input.email.trim(), password: input.password });
-  if (error || !data.user) return { error: error?.message ?? GENERIC_SIGNUP_ERROR };
+  // Pre-check before spending a Supabase Auth call — shops is already
+  // publicly readable (the catalog fetch relies on it), so this is a plain
+  // read, not a new access path.
+  const { data: existing } = await supabase.from('shops').select('id').eq('seller_code', username).maybeSingle();
+  if (existing) return { error: USERNAME_TAKEN_ERROR };
 
-  const { data: shopRow, error: shopError } = await supabase
-    .from('shops')
-    .insert({ owner_id: data.user.id, name: input.shopName.trim(), seller_code: username, status: 'draft' })
-    .select('id, name, is_official')
-    .single();
-
-  if (shopError || !shopRow) {
-    await supabase.auth.signOut();
-    if (shopError?.message.includes('seller_code')) return { error: USERNAME_TAKEN_ERROR };
-    return { error: GENERIC_SIGNUP_ERROR };
+  const redirectTo = `${window.location.origin}${import.meta.env.BASE_URL}`;
+  const { data, error } = await supabase.auth.signUp({
+    email,
+    password: input.password,
+    options: {
+      emailRedirectTo: redirectTo,
+      data: { role: 'seller', shop_name: input.shopName.trim(), username },
+    },
+  });
+  if (error) {
+    const msg = error.message.toLowerCase();
+    if (msg.includes('seller_code') || msg.includes('duplicate')) return { error: USERNAME_TAKEN_ERROR };
+    return { error: mapAuthErrorMessage(error.message) };
   }
+  if (!data.user) return { error: mapAuthErrorMessage(undefined) };
 
-  return { shopId: shopRow.id as string, shopName: shopRow.name as string, isOfficial: Boolean(shopRow.is_official) };
+  if (!data.session) return { status: 'pending_confirmation' };
+
+  const shop = await shopForCurrentUser();
+  if (!shop) return { error: mapAuthErrorMessage(undefined) };
+  return { status: 'confirmed', shop };
 }
 
 // Only works for an account registered with a real, reachable email — an
 // old pilot account (synthetic @sellers.ezial.internal address) has no
 // reset path in this MVP, same limitation as a phone-only customer account.
 export async function requestSellerPasswordReset(email: string): Promise<{ error?: string }> {
+  if (!isValidEmail(email)) return { error: 'Adresse email invalide.' };
   const redirectTo = `${window.location.origin}${import.meta.env.BASE_URL}`;
   const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), { redirectTo });
-  return error ? { error: error.message } : {};
+  return error ? { error: mapAuthErrorMessage(error.message) } : {};
 }
 
 // Re-validates an existing Supabase session (e.g. on page reload). The

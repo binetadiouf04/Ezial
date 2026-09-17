@@ -5,7 +5,7 @@ import { fetchActiveCatalogFromSupabase } from '@/lib/supabaseCatalog';
 import {
   signUpCustomer, signInCustomer, restoreCustomerSession, signOutCustomer,
   updateCustomerProfile, requestCustomerPasswordReset,
-  type CustomerProfile, type SignUpCustomerInput, type UpdateCustomerProfileInput,
+  type CustomerProfile, type SignUpCustomerInput, type SignUpCustomerResult, type UpdateCustomerProfileInput,
 } from '@/lib/supabaseCustomerAuth';
 import { fetchFavoriteIds, addFavorite, removeFavorite, mergeLocalFavoritesIntoAccount } from '@/lib/supabaseFavorites';
 import { fetchCustomerOrders } from '@/lib/supabaseCustomerOrders';
@@ -98,8 +98,8 @@ interface AppState {
   // itself gates on this.
   customerUser: CustomerProfile | null;
   authLoading: boolean;
-  signUpCustomerAccount: (input: SignUpCustomerInput) => Promise<{ error?: string }>;
-  signInCustomerAccount: (identifier: string, password: string) => Promise<{ error?: string }>;
+  signUpCustomerAccount: (input: SignUpCustomerInput) => Promise<{ status: 'confirmed' | 'pending_confirmation' } | { error: string }>;
+  signInCustomerAccount: (email: string, password: string) => Promise<{ error?: string }>;
   signOutCustomerAccount: () => void;
   updateCustomerAccount: (input: UpdateCustomerProfileInput) => Promise<{ error?: string }>;
   requestPasswordReset: (email: string) => Promise<{ error?: string }>;
@@ -382,19 +382,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [customerUser]);
   const isFavorite = useCallback((productId: string) => favorites.includes(productId), [favorites]);
 
-  const signUpCustomerAccount = useCallback(async (input: SignUpCustomerInput): Promise<{ error?: string }> => {
-    const result = await signUpCustomer(input);
+  const signUpCustomerAccount = useCallback(async (input: SignUpCustomerInput): Promise<{ status: 'confirmed' | 'pending_confirmation' } | { error: string }> => {
+    const result: SignUpCustomerResult = await signUpCustomer(input);
     if ('error' in result) return { error: result.error };
-    setCustomerUser(result);
-    await mergeLocalFavoritesIntoAccount(result.id, favorites);
-    const [favIds, realOrders] = await Promise.all([fetchFavoriteIds(result.id), fetchCustomerOrders(result.id)]);
+    if (result.status === 'pending_confirmation') return { status: 'pending_confirmation' };
+    setCustomerUser(result.profile);
+    await mergeLocalFavoritesIntoAccount(result.profile.id, favorites);
+    const [favIds, realOrders] = await Promise.all([fetchFavoriteIds(result.profile.id), fetchCustomerOrders(result.profile.id)]);
     setFavorites(favIds);
     setOrders((prev) => mergeOrders(prev, realOrders));
-    return {};
+    return { status: 'confirmed' };
   }, [favorites]);
 
-  const signInCustomerAccount = useCallback(async (identifier: string, password: string): Promise<{ error?: string }> => {
-    const result = await signInCustomer(identifier, password);
+  const signInCustomerAccount = useCallback(async (email: string, password: string): Promise<{ error?: string }> => {
+    const result = await signInCustomer(email, password);
     if ('error' in result) return { error: result.error };
     setCustomerUser(result);
     await mergeLocalFavoritesIntoAccount(result.id, favorites);

@@ -3,7 +3,7 @@ import type { Role, DeliveryStep, ShopStatus, ProductStatus, ModerationEntry, Mo
 import { missions as initialMissions, type Mission, type Product, type Shop, type Driver, type DriverTransaction, type Order, type Transaction } from './data';
 import { shops as initialShops, products as initialProducts, transactions as initialTransactions, driverTransactions as initialDriverTransactions, orders as initialOrders, drivers as initialDrivers, moderationHistory as initialModerationHistory, blogPosts as initialBlogPosts } from './data';
 import { assignShopPrefixes, nextReferenceForShop } from '@/utils/reference';
-import { signInSeller, restoreSellerSession, signOutSeller, signUpSeller, requestSellerPasswordReset, type SignUpSellerInput } from '@/lib/supabaseSellerAuth';
+import { signInSeller, restoreSellerSession, signOutSeller, signUpSeller, requestSellerPasswordReset, type SignUpSellerInput, type SignUpSellerResult } from '@/lib/supabaseSellerAuth';
 import { signInAdmin, restoreAdminSession } from '@/lib/supabaseAdminAuth';
 
 type Route = string;
@@ -111,7 +111,7 @@ interface ProState extends AuthState {
   verifySellerLogin: (identifier: string, password: string) => Promise<{ shop: { sellerId: string; name: string; supabaseShopId: string; isOfficial: boolean } } | { error: string }>;
   // Self-service shop signup (new sellers only) — creates the real
   // Supabase Auth user + a 'draft' shop row in one step.
-  signUpSellerAccount: (input: SignUpSellerInput) => Promise<{ shop: { sellerId: string; name: string; supabaseShopId: string; isOfficial: boolean } } | { error: string }>;
+  signUpSellerAccount: (input: SignUpSellerInput) => Promise<{ status: 'confirmed'; shop: { sellerId: string; name: string; supabaseShopId: string; isOfficial: boolean } } | { status: 'pending_confirmation' } | { error: string }>;
   requestSellerPasswordReset: (email: string) => Promise<{ error?: string }>;
   // Admin login — authenticates a real email + password against Supabase
   // Auth, then verifies the account is listed in public.admins before
@@ -393,10 +393,11 @@ export function ProProvider({ children }: { children: ReactNode }) {
     return { shop: { sellerId: id.toUpperCase(), name: result.shopName, supabaseShopId: result.shopId, isOfficial: result.isOfficial } };
   }, []);
 
-  const signUpSellerAccount = useCallback(async (input: SignUpSellerInput): Promise<{ shop: { sellerId: string; name: string; supabaseShopId: string; isOfficial: boolean } } | { error: string }> => {
-    const result = await signUpSeller(input);
+  const signUpSellerAccount = useCallback(async (input: SignUpSellerInput): Promise<{ status: 'confirmed'; shop: { sellerId: string; name: string; supabaseShopId: string; isOfficial: boolean } } | { status: 'pending_confirmation' } | { error: string }> => {
+    const result: SignUpSellerResult = await signUpSeller(input);
     if ('error' in result) return { error: result.error };
-    return { shop: { sellerId: result.shopId, name: result.shopName, supabaseShopId: result.shopId, isOfficial: result.isOfficial } };
+    if (result.status === 'pending_confirmation') return { status: 'pending_confirmation' };
+    return { status: 'confirmed', shop: { sellerId: input.username.trim().toLowerCase(), name: result.shop.shopName, supabaseShopId: result.shop.shopId, isOfficial: result.shop.isOfficial } };
   }, []);
 
   const requestSellerPasswordResetAction = useCallback(async (email: string) => requestSellerPasswordReset(email), []);

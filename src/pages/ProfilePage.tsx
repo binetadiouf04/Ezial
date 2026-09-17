@@ -5,7 +5,8 @@ import { formatFCFA } from '@/data/products';
 import ProductGrid from '@/components/ProductGrid';
 import SmartImage from '@/components/SmartImage';
 import NotificationOptIn from '@/components/NotificationOptIn';
-import { User, Heart, ShoppingBag, LogOut, ChevronRight, Briefcase, Truck, Store, Check, AlertCircle, Loader2 } from 'lucide-react';
+import { isValidEmail } from '@/lib/authErrors';
+import { User, Heart, ShoppingBag, LogOut, ChevronRight, Briefcase, Truck, Store, Check, AlertCircle, Loader2, MailCheck } from 'lucide-react';
 
 const deliveryStatusColors: Record<DeliveryStepStatus, string> = {
   confirmed: 'bg-blue-50 text-blue-700', preparing: 'bg-amber-50 text-amber-700', ready: 'bg-green-50 text-green-700',
@@ -38,7 +39,7 @@ function getOrderStatusColor(order: Order): string {
 }
 
 type Tab = 'orders' | 'favorites' | 'info';
-type AuthView = 'login' | 'signup' | 'forgot';
+type AuthView = 'login' | 'signup' | 'forgot' | 'pending_confirmation';
 
 interface InfoForm { firstName: string; lastName: string; phone: string; email: string; quartier: string; landmark: string }
 
@@ -65,7 +66,8 @@ function AuthPanel() {
 
   const handleLogin = async () => {
     setError(''); setNotice('');
-    if (!loginId.trim() || !loginPassword) { setError('Renseignez votre identifiant et votre mot de passe.'); return; }
+    if (!loginId.trim() || !loginPassword) { setError('Renseignez votre email et votre mot de passe.'); return; }
+    if (!isValidEmail(loginId)) { setError('Adresse email invalide.'); return; }
     setSubmitting(true);
     const result = await signInCustomerAccount(loginId.trim(), loginPassword);
     setSubmitting(false);
@@ -75,12 +77,14 @@ function AuthPanel() {
   const handleSignup = async () => {
     setError(''); setNotice('');
     if (!firstName.trim() || !lastName.trim()) { setError('Prénom et nom sont obligatoires.'); return; }
-    if (!phone.trim() && !email.trim()) { setError('Renseignez un email ou un numéro de téléphone.'); return; }
+    if (!email.trim()) { setError('L\'adresse email est obligatoire.'); return; }
+    if (!isValidEmail(email)) { setError('Adresse email invalide.'); return; }
     if (password.length < 8) { setError('Le mot de passe doit contenir au moins 8 caractères.'); return; }
     setSubmitting(true);
-    const result = await signUpCustomerAccount({ firstName, lastName, phone: phone.trim() || undefined, email: email.trim() || undefined, password });
+    const result = await signUpCustomerAccount({ firstName, lastName, phone: phone.trim() || undefined, email: email.trim(), password });
     setSubmitting(false);
-    if (result.error) setError(result.error);
+    if ('error' in result) { setError(result.error); return; }
+    if (result.status === 'pending_confirmation') setView('pending_confirmation');
   };
 
   const handleReset = async () => {
@@ -101,7 +105,7 @@ function AuthPanel() {
         <p className="mt-1 text-sm text-ink/55">Connectez-vous ou créez un compte pour suivre vos commandes.</p>
       </div>
 
-      {view !== 'forgot' && (
+      {(view === 'login' || view === 'signup') && (
         <div className="mb-5 flex rounded-full border border-line p-1">
           <button onClick={() => switchView('login')} className={`flex-1 rounded-full py-2 text-sm font-medium transition-colors ${view === 'login' ? 'bg-burgundy text-white' : 'text-ink/60'}`}>Se connecter</button>
           <button onClick={() => switchView('signup')} className={`flex-1 rounded-full py-2 text-sm font-medium transition-colors ${view === 'signup' ? 'bg-burgundy text-white' : 'text-ink/60'}`}>S'inscrire</button>
@@ -114,8 +118,8 @@ function AuthPanel() {
       {view === 'login' && (
         <div className="space-y-4">
           <div>
-            <label className="block text-xs font-medium text-ink/60 mb-1.5">Email ou téléphone</label>
-            <input className="input-field" value={loginId} onChange={(e) => setLoginId(e.target.value)} />
+            <label className="block text-xs font-medium text-ink/60 mb-1.5">Email</label>
+            <input type="email" className="input-field" value={loginId} onChange={(e) => setLoginId(e.target.value)} />
           </div>
           <div>
             <label className="block text-xs font-medium text-ink/60 mb-1.5">Mot de passe</label>
@@ -134,13 +138,20 @@ function AuthPanel() {
             <div><label className="block text-xs font-medium text-ink/60 mb-1.5">Prénom</label><input className="input-field" value={firstName} onChange={(e) => setFirstName(e.target.value)} /></div>
             <div><label className="block text-xs font-medium text-ink/60 mb-1.5">Nom</label><input className="input-field" value={lastName} onChange={(e) => setLastName(e.target.value)} /></div>
           </div>
-          <div><label className="block text-xs font-medium text-ink/60 mb-1.5">Téléphone</label><input className="input-field" placeholder="+221 ..." value={phone} onChange={(e) => setPhone(e.target.value)} /></div>
-          <div><label className="block text-xs font-medium text-ink/60 mb-1.5">Email {phone.trim() ? '(optionnel)' : ''}</label><input type="email" className="input-field" value={email} onChange={(e) => setEmail(e.target.value)} /></div>
-          <p className="text-[11px] text-ink/40">Téléphone ou email obligatoire (au moins l'un des deux). Un email permet de récupérer votre mot de passe en cas d'oubli.</p>
+          <div><label className="block text-xs font-medium text-ink/60 mb-1.5">Email</label><input type="email" className="input-field" value={email} onChange={(e) => setEmail(e.target.value)} /></div>
+          <div><label className="block text-xs font-medium text-ink/60 mb-1.5">Téléphone (optionnel)</label><input className="input-field" placeholder="+221 ..." value={phone} onChange={(e) => setPhone(e.target.value)} /></div>
           <div><label className="block text-xs font-medium text-ink/60 mb-1.5">Mot de passe</label><input type="password" className="input-field" placeholder="8 caractères minimum" value={password} onChange={(e) => setPassword(e.target.value)} /></div>
           <button onClick={() => void handleSignup()} disabled={submitting} className="btn-primary w-full">
             {submitting ? <><Loader2 size={16} className="animate-spin" /> Création...</> : 'Créer mon compte'}
           </button>
+        </div>
+      )}
+
+      {view === 'pending_confirmation' && (
+        <div className="space-y-4 text-center">
+          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-green-50 text-green-700"><MailCheck size={22} /></div>
+          <p className="text-sm text-ink/70">Un lien de confirmation vous a été envoyé par email. Cliquez dessus pour activer votre compte, puis revenez vous connecter ici.</p>
+          <button onClick={() => switchView('login')} className="btn-outline w-full">Retour à la connexion</button>
         </div>
       )}
 

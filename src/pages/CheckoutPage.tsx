@@ -6,7 +6,7 @@ import { getShop } from '@/data/shops';
 import { paymentMethods as paymentMethodsData } from '@/data/payments';
 import { createOrderInSupabase, type CreateOrderPayload, type CreateOrderShopFulfillmentInput, type CreatedOrderResult } from '@/lib/supabaseOrders';
 import { validatePromoCode } from '@/lib/supabasePromoCode';
-import { searchAddress, type GeocodeResult } from '@/lib/geocoding';
+import { searchAddress, reverseGeocode, type GeocodeResult } from '@/lib/geocoding';
 import { estimateDeliveryFee, DELIVERY_FEE_FLOOR } from '@/lib/deliveryEstimate';
 import CheckoutSteps from '@/components/CheckoutSteps';
 import LocationPickerMap from '@/components/LocationPickerMap';
@@ -102,6 +102,7 @@ export default function CheckoutPage() {
   const [searchResults, setSearchResults] = useState<GeocodeResult[] | null>(null);
   const [searchNotice, setSearchNotice] = useState('');
   const [selectedLabel, setSelectedLabel] = useState<string | null>(null);
+  const [resolvingAddress, setResolvingAddress] = useState(false);
 
   useEffect(() => { persistDraftForm(form); }, [form]);
 
@@ -267,9 +268,18 @@ export default function CheckoutPage() {
   };
 
   const handleMapPick = (lat: number, lng: number) => {
+    // The clicked/dragged point is always the real source of truth for
+    // delivery, immediately — reverse geocoding below only fills in a
+    // human-readable label for it, never changes the coordinates.
     setLocation({ lat, lng });
     setManualAdjusted(true);
     setSearchError('');
+    setSelectedLabel(null);
+    setResolvingAddress(true);
+    reverseGeocode(lat, lng).then((label) => {
+      setResolvingAddress(false);
+      setSelectedLabel(label);
+    });
   };
 
   const mapToLocalOrder = (result: CreatedOrderResult): Order => {
@@ -622,11 +632,20 @@ export default function CheckoutPage() {
                         </div>
                       )}
 
-                      {(selectedLabel || manualAdjusted) && (
-                        <div className="rounded-lg bg-cream/50 p-2.5 space-y-0.5">
-                          {searchNotice && !manualAdjusted && <p className="text-xs text-ink/50">{searchNotice}</p>}
-                          {selectedLabel && <p className="flex items-start gap-1.5 text-sm text-ink/75"><MapPin size={14} className="mt-0.5 flex-shrink-0 text-burgundy" /> {selectedLabel}</p>}
-                          {manualAdjusted && <p className="text-xs text-ink/45">Position ajustée manuellement sur la carte.</p>}
+                      {(selectedLabel || manualAdjusted || resolvingAddress) && (
+                        <div className="flex items-start gap-2 rounded-lg border border-green-300 bg-green-50 p-3 space-y-0.5">
+                          <Check size={16} className="mt-0.5 flex-shrink-0 text-green-600" />
+                          <div className="min-w-0 flex-1">
+                            <p className="text-sm font-medium text-green-800">Adresse sélectionnée</p>
+                            {searchNotice && !manualAdjusted && <p className="text-xs text-ink/50">{searchNotice}</p>}
+                            {resolvingAddress ? (
+                              <p className="mt-0.5 text-xs text-ink/50">Récupération de l'adresse...</p>
+                            ) : selectedLabel ? (
+                              <p className="mt-0.5 flex items-start gap-1.5 text-sm text-ink/75"><MapPin size={14} className="mt-0.5 flex-shrink-0 text-burgundy" /> {selectedLabel}</p>
+                            ) : manualAdjusted ? (
+                              <p className="mt-0.5 text-xs text-ink/60">Adresse précise non trouvée pour ce point — la position exacte reste enregistrée. Ajoutez un point de repère si besoin (étape précédente).</p>
+                            ) : null}
+                          </div>
                         </div>
                       )}
 

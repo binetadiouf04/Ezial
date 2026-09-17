@@ -1,34 +1,20 @@
 import { supabase } from './supabaseClient';
+import { mapAuthErrorMessage, isValidEmail } from './authErrors';
 
-// Real customer accounts, mirroring the seller/admin Supabase Auth pattern
-// already used in this app (supabaseSellerAuth.ts / supabaseAdminAuth.ts).
+// Real customer accounts — email + mot de passe (Supabase Auth). Téléphone
+// reste une information de profil, jamais un identifiant de connexion (ça
+// évite un système à deux entrées qui ne marchait pas correctement).
 //
-// A customer signs up with prénom + nom + mot de passe, and EITHER a phone
-// OR an email (at least one). Supabase Auth itself only understands
-// email + password, so a phone-only signup gets a deterministic, internal
-// technical email exactly like sellers already get from their seller_code
-// (`<phone>@customers.ezial.internal` — `.internal` is an IANA-reserved
-// special-use TLD, RFC 6761, never a real deliverable domain). A customer
-// who gives a real email uses that real address as their Supabase Auth
-// email instead, so "mot de passe oublié" works for them out of the box.
-//
-// Login accepts either identifier (email or phone) — resolved to the
-// account's real Supabase Auth email via the resolve_customer_login_email()
-// RPC (security definer) before calling signInWithPassword, so a phone
-// works as a login identifier even for an email-primary account and vice
-// versa. See the migration this feature ships with.
-const CUSTOMER_EMAIL_DOMAIN = 'customers.ezial.internal';
-
-export function normalizePhone(phone: string): string {
-  return phone.trim().replace(/[^\d+]/g, '');
-}
-
-function syntheticEmailForPhone(phone: string): string {
-  return `${normalizePhone(phone).replace(/^\+/, '')}@${CUSTOMER_EMAIL_DOMAIN}`;
-}
-
-const GENERIC_LOGIN_ERROR = 'Identifiant ou mot de passe incorrect.';
-const GENERIC_SIGNUP_ERROR = "Impossible de créer le compte. Vérifiez vos informations et réessayez.";
+// Root cause fixed here: the customer_profiles row used to be inserted by
+// the CLIENT right after signUp() — but when "Confirm email" is enabled on
+// the Supabase project (it is), signUp() returns no active session until
+// the email is confirmed, so that insert ran as an anonymous request and
+// was always rejected by RLS ("id = auth.uid()" with auth.uid() = null).
+// That's exactly what surfaced as the generic "Impossible de créer le
+// compte" error. The profile row is now created server-side by a database
+// trigger on auth.users (see the migration this fix ships with), which
+// runs regardless of confirmation status — so it exists by the time the
+// customer actually logs in, confirmed or not.
 
 export interface CustomerProfile {
   id: string;
@@ -66,39 +52,45 @@ export interface SignUpCustomerInput {
   firstName: string;
   lastName: string;
   phone?: string;
-  email?: string;
+  email: string;
   password: string;
 }
 
-export async function signUpCustomer(input: SignUpCustomerInput): Promise<CustomerProfile | { error: string }> {
-  const email = input.email?.trim();
-  const phone = input.phone ? normalizePhone(input.phone) : undefined;
-  const authEmail = email || (phone ? syntheticEmailForPhone(phone) : undefined);
-  if (!authEmail) return { error: 'Renseignez un email ou un numéro de téléphone.' };
+export type SignUpCustomerResult =
+  | { status: 'confirmed'; profile: CustomerProfile }
+  | { status: 'pending_confirmation' }
+  | { error: string };
 
-  const { data, error } = await supabase.auth.signUp({ email: authEmail, password: input.password });
-  if (error || !data.user) return { error: error?.message ?? GENERIC_SIGNUP_ERROR };
+export async function signUpCustomer(input: SignUpCustomerInput): Promise<SignUpCustomerResult> {
+  const email = input.email.trim();
+  if (!isValidEmail(email)) return { error: 'Adresse email invalide.' };
+  if (input.password.length < 8) return { error: 'Le mot de passe doit contenir au moins 8 caractères.' };
 
-  const { data: profileRow, error: profileError } = await supabase
-    .from('customer_profiles')
-    .insert({
-      id: data.user.id,
-      first_name: input.firstName.trim(),
-      last_name: input.lastName.trim(),
-      phone: phone ?? null,
-      email: email ?? null,
-    })
-    .select('*')
-    .single();
+  const redirectTo = `${window.location.origin}${import.meta.env.BASE_URL}`;
+  const { data, error } = await supabase.auth.signUp({
+    email,
+    password: input.password,
+    options: {
+      emailRedirectTo: redirectTo,
+      data: {
+        role: 'customer',
+        first_name: input.firstName.trim(),
+        last_name: input.lastName.trim(),
+        phone: input.phone?.trim() || null,
+      },
+    },
+  });
+  if (error) return { error: mapAuthErrorMessage(error.message) };
+  if (!data.user) return { error: mapAuthErrorMessage(undefined) };
 
-  if (profileError || !profileRow) {
-    // The auth user exists but its profile row failed — never leave the app
-    // thinking this account is usable.
-    await supabase.auth.signOut();
-    return { error: GENERIC_SIGNUP_ERROR };
-  }
+  // No session yet — email confirmation is pending. The profile row was
+  // already created server-side (see migration), so nothing else to do
+  // here; the customer will be able to log in once confirmed.
+  if (!data.session) return { status: 'pending_confirmation' };
 
-  return mapProfile(profileRow as CustomerProfileRow);
+  const profile = await fetchOwnProfile();
+  if (!profile) return { error: mapAuthErrorMessage(undefined) };
+  return { status: 'confirmed', profile };
 }
 
 async function fetchOwnProfile(): Promise<CustomerProfile | null> {
@@ -115,17 +107,15 @@ async function fetchOwnProfile(): Promise<CustomerProfile | null> {
   return mapProfile(profileRow as CustomerProfileRow);
 }
 
-export async function signInCustomer(identifier: string, password: string): Promise<CustomerProfile | { error: string }> {
-  const trimmed = identifier.trim();
-  let email = trimmed;
-  if (!trimmed.includes('@')) {
-    const { data: resolved } = await supabase.rpc('resolve_customer_login_email', { p_identifier: normalizePhone(trimmed) });
-    if (!resolved) return { error: GENERIC_LOGIN_ERROR };
-    email = resolved as string;
-  }
+const GENERIC_LOGIN_ERROR = 'Adresse email ou mot de passe incorrect.';
+const UNCONFIRMED_LOGIN_ERROR = 'Confirmez votre adresse email avant de vous connecter (lien envoyé à l\'inscription).';
 
-  const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
-  if (signInError) return { error: GENERIC_LOGIN_ERROR };
+export async function signInCustomer(email: string, password: string): Promise<CustomerProfile | { error: string }> {
+  const { error: signInError } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
+  if (signInError) {
+    if (signInError.message.toLowerCase().includes('confirm')) return { error: UNCONFIRMED_LOGIN_ERROR };
+    return { error: GENERIC_LOGIN_ERROR };
+  }
 
   const profile = await fetchOwnProfile();
   if (!profile) {
@@ -172,14 +162,9 @@ export async function updateCustomerProfile(userId: string, input: UpdateCustome
   return error ? { error: error.message } : {};
 }
 
-// Only works for an account whose registered Supabase Auth email is a real,
-// reachable address — i.e. one given at signup. A phone-only account (whose
-// technical email is the synthetic customers.ezial.internal address) has no
-// reset path in this MVP: there is no SMS-based recovery, by design (see
-// the push-notification feature's own "no SMS for MVP" rule). The UI must
-// only offer this for a real email, never a phone number.
 export async function requestCustomerPasswordReset(email: string): Promise<{ error?: string }> {
+  if (!isValidEmail(email)) return { error: 'Adresse email invalide.' };
   const redirectTo = `${window.location.origin}${import.meta.env.BASE_URL}`;
   const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), { redirectTo });
-  return error ? { error: error.message } : {};
+  return error ? { error: mapAuthErrorMessage(error.message) } : {};
 }

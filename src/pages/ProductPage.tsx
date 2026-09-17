@@ -66,6 +66,7 @@ export default function ProductPage({ productId }: { productId: string }) {
   // below unchanged).
   const [reviews, setReviews] = useState<Review[]>([]);
   const [reviewStats, setReviewStats] = useState<{ average: number; count: number }>({ average: 0, count: 0 });
+  const [canReview, setCanReview] = useState(false);
   const [myRating, setMyRating] = useState(0);
   const [myComment, setMyComment] = useState('');
   const [myPhotos, setMyPhotos] = useState<File[]>([]);
@@ -75,9 +76,10 @@ export default function ProductPage({ productId }: { productId: string }) {
 
   const loadReviews = () => {
     if (!product || !isRealCatalogId(product.id)) return;
-    fetchProductReviews(product.id).then(({ reviews: fetched, stats }) => {
+    fetchProductReviews(product.id).then(({ reviews: fetched, stats, canReview: eligible }) => {
       setReviews(fetched);
       setReviewStats(stats);
+      setCanReview(eligible);
       const mine = fetched.find((r) => r.userId === customerUser?.id);
       if (mine) { setMyRating(mine.rating); setMyComment(mine.comment); }
     });
@@ -203,9 +205,9 @@ export default function ProductPage({ productId }: { productId: string }) {
               {tab === 'Avis' && (
                 isRealCatalogId(product.id) ? (
                   <div className="space-y-6">
-                    {customerUser ? (
+                    {customerUser && canReview ? (
                       <div className="rounded-xl border border-line p-4 space-y-3">
-                        <h3 className="text-sm font-semibold text-ink">{myRating > 0 ? 'Modifier mon avis' : 'Laisser un avis'}</h3>
+                        <h3 className="text-sm font-semibold text-ink">{myRating > 0 ? 'Modifier mon avis' : 'Donner mon avis'}</h3>
                         <div className="flex items-center gap-1">
                           {[1, 2, 3, 4, 5].map((n) => (
                             <button key={n} onClick={() => setMyRating(n)} type="button">
@@ -237,10 +239,12 @@ export default function ProductPage({ productId }: { productId: string }) {
                           {reviewSaved && <span className="flex items-center gap-1 text-sm text-green-600"><Check size={14} /> Avis enregistré</span>}
                         </div>
                       </div>
-                    ) : (
+                    ) : !customerUser ? (
                       <p className="text-sm text-ink/50">
                         <button onClick={() => navigate('/profil')} className="font-medium text-burgundy hover:underline">Connectez-vous</button> pour laisser un avis.
                       </p>
+                    ) : (
+                      <p className="text-sm text-ink/50">Les avis sont réservés aux clients ayant acheté et reçu ce produit.</p>
                     )}
 
                     {reviews.length === 0 ? <p className="text-ink/50">Aucun avis pour l'instant.</p> : reviews.map((rev) => (

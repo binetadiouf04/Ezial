@@ -1,15 +1,16 @@
 import { useState } from 'react';
 import type { SellerShopInfo } from '../ProContext';
 import type { SignUpSellerInput } from '@/lib/supabaseSellerAuth';
-import { ArrowLeft, Lock, KeyRound, Loader2, AlertCircle, Check } from 'lucide-react';
+import { isValidEmail } from '@/lib/authErrors';
+import { ArrowLeft, Lock, KeyRound, Loader2, AlertCircle, Check, MailCheck } from 'lucide-react';
 
-type View = 'login' | 'signup' | 'forgot';
+type View = 'login' | 'signup' | 'forgot' | 'pending_confirmation';
 
 interface SellerAuthPanelProps {
   onBack: () => void;
   onLogin: (identifier: string, name: string, shopInfo: SellerShopInfo) => void;
   verifySeller: (identifier: string, password: string) => Promise<{ shop: { sellerId: string; name: string; supabaseShopId: string; isOfficial: boolean } } | { error: string }>;
-  signUpSeller: (input: SignUpSellerInput) => Promise<{ shop: { sellerId: string; name: string; supabaseShopId: string; isOfficial: boolean } } | { error: string }>;
+  signUpSeller: (input: SignUpSellerInput) => Promise<{ status: 'confirmed'; shop: { sellerId: string; name: string; supabaseShopId: string; isOfficial: boolean } } | { status: 'pending_confirmation' } | { error: string }>;
   requestPasswordReset: (email: string) => Promise<{ error?: string }>;
 }
 
@@ -42,11 +43,14 @@ export default function SellerAuthPanel({ onBack, onLogin, verifySeller, signUpS
 
   const handleSignup = async () => {
     if (!shopName.trim() || !email.trim() || !username.trim()) { setError('Tous les champs sont obligatoires.'); return; }
+    if (!isValidEmail(email)) { setError('Adresse email invalide.'); return; }
+    if (!/^[a-zA-Z0-9]{4,32}$/.test(username.trim())) { setError("Le nom d'utilisateur doit contenir 4 à 32 lettres/chiffres, sans espace."); return; }
     if (signupPassword.length < 8) { setError('Le mot de passe doit contenir au moins 8 caractères.'); return; }
     setError(''); setSubmitting(true);
     const result = await signUpSeller({ shopName, email, username, password: signupPassword });
     setSubmitting(false);
     if ('error' in result) { setError(result.error); return; }
+    if (result.status === 'pending_confirmation') { setView('pending_confirmation'); return; }
     onLogin(result.shop.sellerId, result.shop.name, { supabaseShopId: result.shop.supabaseShopId, isOfficial: result.shop.isOfficial });
   };
 
@@ -70,10 +74,11 @@ export default function SellerAuthPanel({ onBack, onLogin, verifySeller, signUpS
         <p className="mt-1.5 text-sm text-ink/55">
           {view === 'login' && 'Connectez-vous avec votre identifiant et votre mot de passe.'}
           {view === 'signup' && 'Créez le compte de votre boutique Ezial.'}
+          {view === 'pending_confirmation' && 'Vérifiez votre boîte mail.'}
           {view === 'forgot' && 'Réinitialisez votre mot de passe.'}
         </p>
 
-        {view !== 'forgot' && (
+        {(view === 'login' || view === 'signup') && (
           <div className="mt-5 flex rounded-full border border-line p-1">
             <button onClick={() => switchView('login')} className={`flex-1 rounded-full py-2 text-sm font-medium transition-colors ${view === 'login' ? 'bg-burgundy text-white' : 'text-ink/60'}`}>Se connecter</button>
             <button onClick={() => switchView('signup')} className={`flex-1 rounded-full py-2 text-sm font-medium transition-colors ${view === 'signup' ? 'bg-burgundy text-white' : 'text-ink/60'}`}>Inscrire ma boutique</button>
@@ -119,6 +124,14 @@ export default function SellerAuthPanel({ onBack, onLogin, verifySeller, signUpS
             <button onClick={() => void handleSignup()} disabled={submitting} className="btn-primary w-full">
               {submitting ? <><Loader2 size={16} className="animate-spin" /> Création...</> : 'Créer le compte'}
             </button>
+          </div>
+        )}
+
+        {view === 'pending_confirmation' && (
+          <div className="mt-5 space-y-4 text-center">
+            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-green-50 text-green-700"><MailCheck size={22} /></div>
+            <p className="text-sm text-ink/70">Un lien de confirmation vous a été envoyé par email. Cliquez dessus pour activer votre compte, puis revenez vous connecter ici.</p>
+            <button onClick={() => switchView('login')} className="btn-outline w-full">Retour à la connexion</button>
           </div>
         )}
 

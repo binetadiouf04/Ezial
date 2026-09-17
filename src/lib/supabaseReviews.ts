@@ -65,10 +65,26 @@ export async function fetchReviewStatsForProducts(productIds: string[]): Promise
   return stats;
 }
 
-export async function fetchProductReviews(productId: string): Promise<{ reviews: Review[]; stats: ReviewStats }> {
+export interface FetchProductReviewsResult {
+  reviews: Review[];
+  stats: ReviewStats;
+  // Whether the CURRENT signed-in user has a delivered/collected purchase
+  // of this exact product — the one condition that unlocks the review
+  // form. false (never true) when signed out.
+  canReview: boolean;
+}
+
+export async function fetchProductReviews(productId: string): Promise<FetchProductReviewsResult> {
+  // Computed first, before any early return — the very first reviewer of a
+  // product would otherwise never have their purchase checked (the old bug
+  // here: this ran only when reviews already existed).
+  const { data: userData } = await supabase.auth.getUser();
+  const currentUserId = userData.user?.id;
+  const canReview = currentUserId ? await hasVerifiedPurchase(productId, currentUserId) : false;
+
   const { data: reviewRows } = await supabase.from('reviews').select('*').eq('product_id', productId).order('created_at', { ascending: false });
   const rows = (reviewRows ?? []) as ReviewRow[];
-  if (rows.length === 0) return { reviews: [], stats: { average: 0, count: 0 } };
+  if (rows.length === 0) return { reviews: [], stats: { average: 0, count: 0 }, canReview };
 
   const reviewIds = rows.map((r) => r.id);
   const { data: imageRows } = await supabase.from('review_images').select('*').in('review_id', reviewIds);
@@ -79,14 +95,6 @@ export async function fetchProductReviews(productId: string): Promise<{ reviews:
     imagesByReview.set(img.review_id, list);
   }
 
-  // Verified purchase — only ever checked for the CURRENT user's own
-  // review(s); other reviewers' purchase status is never exposed (it isn't
-  // needed and isn't readable under RLS anyway).
-  const { data: userData } = await supabase.auth.getUser();
-  const currentUserId = userData.user?.id;
-  let verifiedForCurrentUser = false;
-  if (currentUserId) verifiedForCurrentUser = await hasVerifiedPurchase(productId, currentUserId);
-
   const reviews: Review[] = rows.map((r) => ({
     id: r.id,
     productId: r.product_id,
@@ -95,11 +103,11 @@ export async function fetchProductReviews(productId: string): Promise<{ reviews:
     comment: r.comment ?? '',
     createdAt: r.created_at,
     images: imagesByReview.get(r.id) ?? [],
-    verifiedPurchase: r.user_id === currentUserId && verifiedForCurrentUser,
+    verifiedPurchase: r.user_id === currentUserId && canReview,
   }));
 
   const average = rows.reduce((s, r) => s + r.rating, 0) / rows.length;
-  return { reviews, stats: { average, count: rows.length } };
+  return { reviews, stats: { average, count: rows.length }, canReview };
 }
 
 async function hasVerifiedPurchase(productId: string, customerId: string): Promise<boolean> {
