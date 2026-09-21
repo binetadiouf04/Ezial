@@ -10,6 +10,7 @@ import { searchAddress, reverseGeocode, type GeocodeResult } from '@/lib/geocodi
 import { estimateDeliveryFee, DELIVERY_FEE_FLOOR } from '@/lib/deliveryEstimate';
 import CheckoutSteps from '@/components/CheckoutSteps';
 import LocationPickerMap from '@/components/LocationPickerMap';
+import PhoneField from '@/components/PhoneField';
 import { Check, Truck, Store, Smartphone, Wallet, Clock, Loader2, AlertCircle, AlertTriangle, MapPin, Navigation, Search, ArrowLeft, Gift } from 'lucide-react';
 import SmartImage from '@/components/SmartImage';
 
@@ -434,7 +435,7 @@ export default function CheckoutPage() {
               </div>
               <div>
                 <label className="block text-xs font-medium text-ink/60 mb-1.5">Téléphone</label>
-                <input className="input-field" placeholder="+221 ..." value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
+                <PhoneField value={form.phone} onChange={(v) => setForm({ ...form, phone: v })} />
                 {errors.phone && <p className="mt-1 text-xs text-burgundy">{errors.phone}</p>}
               </div>
               <div>
@@ -487,7 +488,7 @@ export default function CheckoutPage() {
                     </div>
                     <div>
                       <label className="block text-xs font-medium text-ink/60 mb-1.5">Téléphone du destinataire</label>
-                      <input className="input-field" placeholder="+221 ..." value={giftRecipientPhone} onChange={(e) => { setGiftRecipientPhone(e.target.value); setErrors((prev) => { const next = { ...prev }; delete next.giftRecipientPhone; return next; }); }} />
+                      <PhoneField value={giftRecipientPhone} onChange={(v) => { setGiftRecipientPhone(v); setErrors((prev) => { const next = { ...prev }; delete next.giftRecipientPhone; return next; }); }} />
                       {errors.giftRecipientPhone && <p className="mt-1 text-xs text-burgundy">{errors.giftRecipientPhone}</p>}
                     </div>
                     <div>
