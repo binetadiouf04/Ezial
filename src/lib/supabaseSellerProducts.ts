@@ -563,11 +563,25 @@ export interface UpdateProductInput {
   promoEnd: string | null;
 }
 
+// A variant's attributes, as a stable key for matching "the same variant"
+// across an edit — order-independent, so {Taille:"M",Couleur:"Noir"} and
+// {Couleur:"Noir",Taille:"M"} are recognized as the same combination.
+function variantAttributesKey(attributes: Record<string, string>): string {
+  return JSON.stringify(Object.entries(attributes).sort(([a], [b]) => a.localeCompare(b)));
+}
+
 // Updates the existing products row in place (same id, same reference,
-// same shop_id — none of those columns are ever touched here) and
-// replaces its product_variants wholesale with the current desired set.
-// Never touches product_images — photo add/remove already happens
-// immediately elsewhere (addProductImages / deleteProductImage).
+// same shop_id — none of those columns are ever touched here).
+//
+// product_variants is reconciled, never wholesale-replaced: a desired row
+// whose attributes match an existing variant re-uses that variant's id and
+// gets UPDATEd (so its stock is only ever the seller's actual current
+// input, never zeroed just because the row was rewritten); a desired row
+// with no existing match is INSERTed as a genuinely new variant; an
+// existing variant with no matching desired row (an option the seller
+// explicitly removed) is DELETEd. This is what stops an edit from
+// resetting untouched variants' stock to 0 — the previous delete-all/
+// insert-all approach lost every variant's identity on every save.
 export async function updateProductInSupabase(productId: string, input: UpdateProductInput): Promise<{ error?: string }> {
   const { error: productError } = await supabase
     .from('products')
@@ -587,14 +601,47 @@ export async function updateProductInSupabase(productId: string, input: UpdatePr
     .eq('id', productId);
   if (productError) return { error: `Impossible de mettre à jour le produit : ${productError.message}` };
 
-  const { error: deleteError } = await supabase.from('product_variants').delete().eq('product_id', productId);
-  if (deleteError) return { error: `Impossible de mettre à jour les variantes : ${deleteError.message}` };
+  const { data: existingVariants, error: fetchError } = await supabase
+    .from('product_variants')
+    .select('id, attributes')
+    .eq('product_id', productId);
+  if (fetchError) return { error: `Impossible de lire les variantes existantes : ${fetchError.message}` };
 
-  if (input.variants.length > 0) {
+  const existingByKey = new Map<string, string>();
+  for (const row of existingVariants ?? []) {
+    existingByKey.set(variantAttributesKey((row.attributes as Record<string, string>) ?? {}), row.id as string);
+  }
+
+  const matchedIds = new Set<string>();
+  const updates: { id: string; attributes: Record<string, string>; price: number; stock: number }[] = [];
+  const inserts: VariantRowInput[] = [];
+  for (const v of input.variants) {
+    const existingId = existingByKey.get(variantAttributesKey(v.attributes));
+    if (existingId && !matchedIds.has(existingId)) {
+      matchedIds.add(existingId);
+      updates.push({ id: existingId, attributes: v.attributes, price: v.price, stock: v.stock });
+    } else {
+      inserts.push(v);
+    }
+  }
+  const idsToDelete = (existingVariants ?? []).map((row) => row.id as string).filter((id) => !matchedIds.has(id));
+
+  const updateResults = await Promise.all(
+    updates.map((u) => supabase.from('product_variants').update({ price: u.price, stock: u.stock }).eq('id', u.id)),
+  );
+  const failedUpdate = updateResults.find((r) => r.error);
+  if (failedUpdate?.error) return { error: `Impossible de mettre à jour les variantes : ${failedUpdate.error.message}` };
+
+  if (inserts.length > 0) {
     const { error: insertError } = await supabase.from('product_variants').insert(
-      input.variants.map((v) => ({ product_id: productId, attributes: v.attributes, price: v.price, stock: v.stock })),
+      inserts.map((v) => ({ product_id: productId, attributes: v.attributes, price: v.price, stock: v.stock })),
     );
-    if (insertError) return { error: `Impossible d'enregistrer les variantes : ${insertError.message}` };
+    if (insertError) return { error: `Impossible d'enregistrer les nouvelles variantes : ${insertError.message}` };
+  }
+
+  if (idsToDelete.length > 0) {
+    const { error: deleteError } = await supabase.from('product_variants').delete().in('id', idsToDelete);
+    if (deleteError) return { error: `Impossible de supprimer les anciennes variantes : ${deleteError.message}` };
   }
 
   return {};

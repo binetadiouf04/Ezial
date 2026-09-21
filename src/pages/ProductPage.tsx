@@ -92,6 +92,20 @@ export default function ProductPage({ productId }: { productId: string }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [product?.id, customerUser?.id]);
 
+  // A variant dimension with only one real option (e.g. a single available
+  // color) is auto-selected — the customer is never forced to click it
+  // before "Ajouter au panier"/"Acheter maintenant". A dimension with 2+
+  // options still requires an explicit choice.
+  useEffect(() => {
+    if (!product) return;
+    const autoSelected: Record<string, string> = {};
+    for (const v of product.variants) {
+      if (v.values.length === 1) autoSelected[v.name] = v.values[0];
+    }
+    setVariants(autoSelected);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [product?.id]);
+
   // Purchase eligibility needs its own (3-query) check — only worth paying
   // for once the customer actually opens the Avis tab, not on every single
   // product-page visit (see checkCanReview's comment in supabaseReviews.ts).

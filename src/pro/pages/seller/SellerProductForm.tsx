@@ -38,18 +38,22 @@ const SUPABASE_STATUS_FOR_FORM_STATUS: Record<'draft' | 'published', SupabasePro
 // (checkbox-like, but never split stock) vs true variant dimensions (checkbox-like
 // AND generate one stock/price line per selected value).
 const SINGLE_CHOICE_IDS = new Set(['type', 'style', 'texture', 'matiere', 'peau', 'typeproduit', 'longueurongles']);
-// The one exception to 'type' being single-choice: for Vêtements > Femme,
-// several clothing types can describe the same product (e.g. "Robes" and
-// "Tenues de plage"). Still purely descriptive — 'type' was never a variant
-// dimension, so this never generates stock/price combinations.
-const isVetementsFemmeTypeGroup = (categoryId: string, subId: string, groupId: string): boolean =>
-  categoryId === 'vetements' && subId === 'femme' && groupId === 'type';
+// The one exception to 'type' being single-choice: for Vêtements (Femme and
+// Homme), several clothing types can describe the same product (e.g. "Robes"
+// and "Grande taille", or "T-shirts" and "Tenues de sport") — a product must
+// be able to carry a cross-cutting discovery tag (Grande taille, Mode
+// modeste, Tenues de sport) without losing its own logical type. Still purely
+// descriptive — 'type' was never a variant dimension, so this never
+// generates stock/price combinations.
+const isVetementsTypeGroup = (categoryId: string, subId: string, groupId: string): boolean =>
+  categoryId === 'vetements' && (subId === 'femme' || subId === 'homme') && groupId === 'type';
 // Only these represent a genuinely different version of the product being sold —
 // the ones allowed to generate stock/price combinations. Descriptive multi-choice
 // attributes like "besoin" or "famille" (notes olfactives) are intentionally left
 // out: several can apply at once, but they only describe the product and must
-// never split it into separate stock lines.
-const VARIANT_DIMENSION_IDS = new Set(['taille', 'couleur', 'longueur', 'densite', 'volume']);
+// never split it into separate stock lines. "motif" (Léopard, Floral...) is
+// included here too — a printed variant is as real a stock line as a color.
+const VARIANT_DIMENSION_IDS = new Set(['taille', 'couleur', 'motif', 'longueur', 'densite', 'volume']);
 const COLOR_GROUP_IDS = new Set(['couleur']);
 
 // Number of colors to show before "Voir plus"
@@ -404,11 +408,21 @@ export default function SellerProductForm({ productId }: { productId?: string })
         setNotesInput((data.descriptiveAttributes['Notes'] ?? []).join(', '));
       }
 
+      // BUG FIX: a product only ever uses SOME of the variant dimensions a
+      // category makes available (e.g. only "Couleur", never "Taille", for a
+      // one-size bag) — requiring every variantDimGroups entry to be present
+      // on each variant silently dropped that variant's stock into nowhere
+      // (it never matched any key `combinations` could look up), which is
+      // exactly what made an edited product's stock read back as 0. Only the
+      // dimensions this product actually selected (newSelections) are used
+      // to build each variant's key, matching how buildVariantRows/
+      // `combinations` filter multiChoiceGroups down to non-empty selections.
+      const activeVariantDimGroups = variantDimGroups.filter((g) => (newSelections[g.id]?.length ?? 0) > 0);
       const newComboData: Record<string, { stock: number; price: number }> = {};
       let anyPriceDiffers = false;
       for (const v of data.variants) {
-        const parts = variantDimGroups.map((g) => v.attributes[g.label]).filter(Boolean);
-        if (parts.length === 0 || parts.length !== variantDimGroups.length) continue;
+        const parts = activeVariantDimGroups.map((g) => v.attributes[g.label]).filter(Boolean);
+        if (parts.length === 0 || parts.length !== activeVariantDimGroups.length) continue;
         newComboData[parts.join('|')] = { stock: v.stock, price: v.price };
         if (v.price !== data.basePrice) anyPriceDiffers = true;
       }
@@ -1482,7 +1496,7 @@ export default function SellerProductForm({ productId }: { productId?: string })
 
           {optionGroups.map((group) => {
             const isColor = COLOR_GROUP_IDS.has(group.id);
-            const isSingle = SINGLE_CHOICE_IDS.has(group.id) && !isVetementsFemmeTypeGroup(categoryId, subId, group.id);
+            const isSingle = SINGLE_CHOICE_IDS.has(group.id) && !isVetementsTypeGroup(categoryId, subId, group.id);
             const choiceLabel = isSingle ? 'Choix unique' : 'Choix multiple';
             const showsCustomVolume = group.id === 'volume' && (selections.volume ?? []).includes('Autre');
 

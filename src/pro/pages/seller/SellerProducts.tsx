@@ -3,12 +3,11 @@ import { usePro } from '../../ProContext';
 import { formatFCFA } from '../../data';
 import { categoryMap, type CategoryId } from '@/data/categories';
 import { StatusChip } from '../../components/StatusChip';
-import { Plus, Package, Pencil, AlertTriangle, Power, Flag } from 'lucide-react';
+import { Plus, Package, Pencil, Power, Flag } from 'lucide-react';
 import SmartImage from '@/components/SmartImage';
 import {
   fetchSellerProducts,
   setSellerProductStatus,
-  setSellerProductVariantStock,
   type SellerProductSummary,
 } from '@/lib/supabaseSellerProducts';
 import { fetchModerationFlagsForTargets, latestUnresolvedFlag, type ModerationFlagRow } from '@/lib/supabaseModeration';
@@ -56,22 +55,6 @@ export default function SellerProducts() {
       return;
     }
     setProducts((prev) => prev.map((p) => (p.id === product.id ? { ...p, status: nextStatus } : p)));
-  };
-
-  // Only meaningful when the product has exactly one product_variants row
-  // (no real size/color dimensions, or a single selected combination) — a
-  // product split across several variant rows has no single row this flat
-  // +/- control could unambiguously adjust.
-  const handleStockChange = async (product: SellerProductSummary, newStock: number) => {
-    if (product.variants.length !== 1) return;
-    setActionError('');
-    const stock = Math.max(0, newStock);
-    const result = await setSellerProductVariantStock(product.variants[0].id, stock);
-    if (result.error) {
-      setActionError(result.error);
-      return;
-    }
-    setProducts((prev) => prev.map((p) => (p.id === product.id ? { ...p, stock } : p)));
   };
 
   const categoryLabel = (category: string) => categoryMap[category as CategoryId]?.label ?? category;
@@ -159,33 +142,6 @@ export default function SellerProducts() {
           })
         )}
       </div>
-
-      {/* Stock management section */}
-      {products.length > 0 && (
-        <div>
-          <h2 className="text-sm font-semibold text-ink mb-3">Gestion du stock</h2>
-          <div className="card divide-y divide-line">
-            {products.map((product) => (
-              <div key={product.id} className="flex items-center gap-3 p-4">
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-ink line-clamp-1">{product.name}</p>
-                  {product.stock === 0 && <span className="text-xs text-red-600 font-medium">En rupture</span>}
-                  {product.stock > 0 && product.stock < 5 && <span className="text-xs text-amber-600 font-medium flex items-center gap-1"><AlertTriangle size={11} /> Stock faible — {product.stock} restants</span>}
-                </div>
-                {product.variants.length === 1 ? (
-                  <div className="flex items-center gap-2 flex-shrink-0">
-                    <button onClick={() => handleStockChange(product, product.stock - 1)} className="h-8 w-8 rounded-lg border border-line text-ink/60 hover:bg-cream transition-colors">−</button>
-                    <span className="w-10 text-center text-sm font-medium text-ink">{product.stock}</span>
-                    <button onClick={() => handleStockChange(product, product.stock + 1)} className="h-8 w-8 rounded-lg border border-line text-ink/60 hover:bg-cream transition-colors">+</button>
-                  </div>
-                ) : (
-                  <span className="text-sm text-ink/50 flex-shrink-0">{product.stock} au total ({product.variants.length} variantes)</span>
-                )}
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
     </div>
   );
 }

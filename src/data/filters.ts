@@ -9,8 +9,20 @@ export const globalPriceFilter: FilterGroup = {
 };
 
 export const commonColors: string[] = [
-  'Noir', 'Blanc', 'Ivoire', 'Crème', 'Beige', 'Marron', 'Camel', 'Gris',
-  'Rouge', 'Bordeaux', 'Rose', 'Bleu', 'Bleu marine', 'Vert', 'Kaki', 'Jaune', 'Orange', 'Violet', 'Mauve', 'Turquoise',
+  'Noir', 'Blanc', 'Ivoire', 'Crème', 'Écru', 'Beige', 'Taupe', 'Camel', 'Marron', 'Chocolat', 'Terracotta', 'Champagne',
+  'Gris', 'Anthracite', 'Or', 'Argent', 'Bronze',
+  'Rouge', 'Bordeaux', 'Rose', 'Rose poudré', 'Rose bonbon', 'Rose fuchsia', 'Corail', 'Saumon',
+  'Orange', 'Jaune', 'Moutarde',
+  'Vert', 'Vert menthe', 'Vert olive', 'Vert kaki', 'Kaki',
+  'Turquoise', 'Bleu ciel', 'Bleu', 'Bleu roi', 'Bleu marine',
+  'Mauve', 'Lilas', 'Violet', 'Aubergine',
+];
+
+// Motifs/imprimés — a distinct dimension from COULEUR: never rendered as a
+// solid-color swatch (Léopard, Floral, etc. have no single hex value).
+export const commonPrints: string[] = [
+  'Léopard', 'Tigre', 'Zèbre', 'Serpent', 'Crocodile', 'Floral / fleurs', 'Pois',
+  'Rayures', 'Carreaux', 'Géométrique', 'Abstrait', 'Tie-dye', 'Wax / imprimé africain', 'Multicolore',
 ];
 
 export const clothingSizes: string[] = ['XXS', 'XS', 'S', 'M', 'L', 'XL', 'XXL', '3XL', '4XL', 'Taille standard'];
@@ -37,13 +49,22 @@ const jewelryColors = [
 
 const bagTypes = ['Sac à main', 'Sac bandoulière', 'Pochette', 'Portefeuille', 'Sac à dos'];
 
-const shoeTypesFemme = ['Ballerines', 'Sandales', 'Talons', 'Escarpins', 'Mocassins', 'Baskets'];
-const shoeTypesHomme = ['Baskets', 'Mocassins', 'Sandales', 'Derbies', 'Chaussures habillées'];
+const shoeTypesFemme = ['Baskets', 'Sandales', 'Talons', 'Mules', 'Claquettes', 'Ballerines', 'Mocassins', 'Chaussures plateformes', 'Bottes & bottines'];
+const shoeTypesHomme = ['Baskets', 'Sandales', 'Claquettes', 'Mocassins', 'Chaussures habillées', 'Bottes & bottines'];
 const shoeSizes = ['36', '37', '38', '39', '40', '41', '42', '43', '44', '45'];
 
 const clothingStyles = ['Mode africaine', 'Mode moderne', 'Mode modeste'];
-const clothingTypesFemme = ['Traditionnel', 'Corporate', 'Robes', 'Ensembles', 'Jupes', 'Pantalons', 'Tops & Chemises', 'T-shirts', 'Vestes & Blazers', 'Pulls & Gilets', 'Jeans', 'Shorts', 'Combinaisons', 'Tenues de plage', 'Tenues de sport', 'Abayas & Kimonos', 'Boubous', 'Caftans', 'Mode modeste'];
-const clothingTypesHomme = ['Traditionnel', 'Corporate', 'Chemises', 'T-shirts & Polos', 'Tenues de sport', 'Ensembles', 'Pantalons', 'Jeans', 'Shorts', 'Modeste'];
+const clothingTypesFemme = [
+  'Robes', 'Tops, blouses & chemises', 'T-shirts', 'Ensembles', 'Jupes', 'Pantalons', 'Jeans', 'Shorts',
+  'Pantalons larges', 'Jogging & sweatpants', 'Tenues de sport', 'Combinaisons & combishorts', 'Abayas',
+  'Caftans & tenues traditionnelles', 'Mode modeste', 'Vestes & blazers', 'Gilets', 'Pulls & sweats',
+  'Grande taille', 'Maillots & tenues de bain',
+];
+const clothingTypesHomme = [
+  'T-shirts', 'Polos', 'Chemises', 'Ensembles', 'Pantalons', 'Pantalons larges', 'Jeans', 'Shorts',
+  'Jogging & sweatpants', 'Tenues de sport', 'Sweats & hoodies', 'Vestes & blazers', 'Boubous & tenues traditionnelles',
+  'Grande taille',
+];
 
 const lingerieTypes = ['Pyjama', 'Nuisette', 'Soutien-gorge', 'Culotte', 'Sous-vêtement', 'Caleçon'];
 
@@ -87,6 +108,7 @@ const vetementsFemmeFilters: FilterGroup[] = [
   { id: 'type', label: 'Type de vêtement', options: clothingTypesFemme },
   { id: 'taille', label: 'Taille', options: clothingSizes },
   { id: 'couleur', label: 'Couleur', options: commonColors, collapsible: true },
+  { id: 'motif', label: 'Motif / Imprimé', options: commonPrints, collapsible: true },
   globalPriceFilter,
 ];
 
@@ -95,6 +117,7 @@ const vetementsHommeFilters: FilterGroup[] = [
   { id: 'type', label: 'Type de vêtement', options: clothingTypesHomme },
   { id: 'taille', label: 'Taille', options: clothingSizes },
   { id: 'couleur', label: 'Couleur', options: commonColors, collapsible: true },
+  { id: 'motif', label: 'Motif / Imprimé', options: commonPrints, collapsible: true },
   globalPriceFilter,
 ];
 
@@ -102,6 +125,7 @@ const chaussuresFemmeFilters: FilterGroup[] = [
   { id: 'type', label: 'Type de chaussure', options: shoeTypesFemme },
   { id: 'taille', label: 'Pointure', options: shoeSizes },
   { id: 'couleur', label: 'Couleur', options: commonColors, collapsible: true },
+  { id: 'motif', label: 'Motif / Imprimé', options: commonPrints, collapsible: true },
   globalPriceFilter,
 ];
 
@@ -109,6 +133,7 @@ const chaussuresHommeFilters: FilterGroup[] = [
   { id: 'type', label: 'Type de chaussure', options: shoeTypesHomme },
   { id: 'taille', label: 'Pointure', options: shoeSizes },
   { id: 'couleur', label: 'Couleur', options: commonColors, collapsible: true },
+  { id: 'motif', label: 'Motif / Imprimé', options: commonPrints, collapsible: true },
   globalPriceFilter,
 ];
 
@@ -153,12 +178,14 @@ export const filterConfig: Record<CategoryId, FilterGroup[]> = {
     { id: 'type', label: 'Type de vêtement', options: clothingTypesFemme },
     { id: 'taille', label: 'Taille', options: clothingSizes },
     { id: 'couleur', label: 'Couleur', options: commonColors, collapsible: true },
+    { id: 'motif', label: 'Motif / Imprimé', options: commonPrints, collapsible: true },
     globalPriceFilter,
   ],
   chaussures: [
     { id: 'type', label: 'Type de chaussure', options: shoeTypesFemme },
     { id: 'taille', label: 'Pointure', options: shoeSizes },
     { id: 'couleur', label: 'Couleur', options: commonColors, collapsible: true },
+    { id: 'motif', label: 'Motif / Imprimé', options: commonPrints, collapsible: true },
     globalPriceFilter,
   ],
   sacs: [

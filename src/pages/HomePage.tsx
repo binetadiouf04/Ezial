@@ -34,7 +34,7 @@ function shuffleOnce<T>(items: T[]): T[] {
 
 // Each automatic section shows at most this many products on the Home —
 // "Voir tout" links to the full, uncapped list on its own page.
-const HOME_SECTION_LIMIT = 9;
+const HOME_SECTION_LIMIT = 12;
 const HOME_SHOPS_LIMIT = 6;
 
 // Homepage-only preview row for a product section: a capped selection with
@@ -63,12 +63,8 @@ function HomeProductPreview({
       {preview.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-20 text-center"><p className="text-sm text-ink/50">Aucun produit trouvé.</p></div>
       ) : (
-        <div className="flex gap-4 overflow-x-auto no-scrollbar pb-1 sm:grid sm:grid-cols-3 sm:gap-5 sm:overflow-visible sm:pb-0 lg:grid-cols-6">
-          {preview.map((p) => (
-            <div key={p.id} className="w-[44%] flex-shrink-0 sm:w-auto sm:flex-shrink-0">
-              <ProductCard product={p} />
-            </div>
-          ))}
+        <div className="grid grid-cols-3 gap-3 sm:gap-5 lg:grid-cols-6">
+          {preview.map((p) => <ProductCard key={p.id} product={p} />)}
         </div>
       )}
     </>
