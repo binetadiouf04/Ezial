@@ -25,6 +25,7 @@ export default function SmartImage({
       src={errored ? fallbackSrc : src}
       alt={alt}
       loading={loading}
+      decoding="async"
       fetchPriority={fetchPriority}
       onError={() => setErrored(true)}
       className={className}

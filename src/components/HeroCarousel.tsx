@@ -23,6 +23,18 @@ export default function HeroCarousel({ slides }: { slides: HeroSlide[] }) {
   const touchStartX = useRef<number | null>(null);
   const count = slides.length;
 
+  // Which slides have ever actually needed to be shown — starts at just the
+  // first one. `loading="lazy"` alone doesn't help here: every slide sits
+  // side-by-side in the same flex row (just shifted out of view via
+  // transform), well within the browser's own lazy-load distance margin, so
+  // it was fetching all of them immediately regardless of the `loading`
+  // attribute. Not mounting a slide's <img> at all until the carousel
+  // actually reaches it is what really defers the request.
+  const [revealedIndices, setRevealedIndices] = useState<Set<number>>(() => new Set([0]));
+  useEffect(() => {
+    setRevealedIndices((prev) => (prev.has(index) ? prev : new Set(prev).add(index)));
+  }, [index]);
+
   const goTo = useCallback((i: number) => setIndex(((i % count) + count) % count), [count]);
 
   useEffect(() => {
@@ -56,14 +68,25 @@ export default function HeroCarousel({ slides }: { slides: HeroSlide[] }) {
         className="flex h-full transition-transform duration-700 ease-out"
         style={{ transform: `translateX(-${index * 100}%)` }}
       >
-        {slides.map((slide) => (
+        {slides.map((slide, i) => (
           <div key={slide.id} className="relative h-full w-full flex-shrink-0">
-            <SmartImage
-              src={slide.image}
-              alt={slide.title}
-              loading="eager"
-              className={`h-full w-full object-cover ${slide.imagePosition ?? 'object-center'}`}
-            />
+            {/* Only the first slide is the page's actual LCP candidate on
+               load, and every slide beyond the one the visitor has actually
+               reached stays unmounted — `loading="lazy"` alone doesn't defer
+               these, since they all sit side-by-side well within the
+               browser's own lazy-load distance margin, just shifted out of
+               view by the row's transform. */}
+            {revealedIndices.has(i) ? (
+              <SmartImage
+                src={slide.image}
+                alt={slide.title}
+                loading={i === 0 ? 'eager' : 'lazy'}
+                fetchPriority={i === 0 ? 'high' : undefined}
+                className={`h-full w-full object-cover ${slide.imagePosition ?? 'object-center'}`}
+              />
+            ) : (
+              <div className="h-full w-full bg-cream" aria-hidden="true" />
+            )}
             <div className="absolute inset-0 bg-gradient-to-t from-ink/70 via-ink/10 to-transparent" />
             <div className="absolute inset-x-0 bottom-0 p-5 sm:p-8 lg:p-10">
               {slide.eyebrow && <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.18em] text-white/85">{slide.eyebrow}</p>}

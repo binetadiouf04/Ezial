@@ -7,7 +7,7 @@ import { categories, categoryMap } from '@/data/categories';
 import SmartImage from './SmartImage';
 
 export default function Header() {
-  const { navigate, cartCount, setCategoryDrawerOpen } = useApp();
+  const { navigate, cartCount, setCategoryDrawerOpen, catalogProducts } = useApp();
   const [query, setQuery] = useState('');
   const [focused, setFocused] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -15,7 +15,12 @@ export default function Header() {
 
   useEffect(() => () => { if (blurTimer.current) window.clearTimeout(blurTimer.current); }, []);
 
-  const { products: matches, shops: shopMatches } = query.trim().length >= 2 ? searchProducts(query) : { products: [], shops: [] };
+  const { exact, similar, shops: shopMatches } = query.trim().length >= 2 ? searchProducts(query, catalogProducts) : { exact: [], similar: [], shops: [] };
+  // A quick preview only has room for one product list — real matches when
+  // there are any, otherwise a few close alternatives (still visually
+  // distinct via the "Suggestions" label below, never called "Produits").
+  const matches = exact.length > 0 ? exact : similar;
+  const isSuggestion = exact.length === 0 && similar.length > 0;
   const hasResults = matches.length > 0 || shopMatches.length > 0;
   const showDropdown = focused && query.trim().length >= 2;
 
@@ -46,7 +51,7 @@ export default function Header() {
                     {shopMatches.slice(0, 2).map((s) => (
                       <button key={s.id} onMouseDown={() => navigate(`/boutique/${s.id}`)} className="flex w-full items-center gap-3 px-4 py-2 text-left hover:bg-cream"><SmartImage src={s.logo} alt="" className="h-8 w-8 rounded-full object-cover" /><span className="text-sm font-medium text-ink">{s.name}</span></button>
                     ))}
-                    {matches.length > 0 && <div className="px-4 py-1.5 mt-1"><p className="text-[10px] font-semibold uppercase tracking-wider text-ink/40">Produits</p></div>}
+                    {matches.length > 0 && <div className="px-4 py-1.5 mt-1"><p className="text-[10px] font-semibold uppercase tracking-wider text-ink/40">{isSuggestion ? 'Suggestions' : 'Produits'}</p></div>}
                     {matches.slice(0, 5).map((p) => (
                       <button key={p.id} onMouseDown={() => navigate(`/produit/${p.id}`)} className="flex w-full items-center gap-3 px-4 py-2 text-left hover:bg-cream"><SmartImage src={p.images[0]} alt="" className="h-10 w-10 rounded-lg object-cover" /><div className="min-w-0 flex-1"><p className="truncate text-sm font-medium text-ink">{p.name}</p><p className="text-xs text-ink/45">{categoryMap[p.category]?.label}</p></div><span className="text-sm font-semibold text-ink">{p.price.toLocaleString('fr-FR')} F</span></button>
                     ))}

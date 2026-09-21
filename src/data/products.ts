@@ -1,4 +1,4 @@
-import type { CategoryId } from './categories';
+import { categoryMap, type CategoryId } from './categories';
 import { shops as allShops, type Shop } from './shops';
 
 export interface Review { id: string; author: string; rating: number; date: string; text: string; hasPhotos: boolean; verified: boolean; }
@@ -293,16 +293,102 @@ export const productsByCategory = (categoryId: string): Product[] => products.fi
 export const productsBySubcategory = (categoryId: string, subId: string): Product[] => products.filter((p) => p.category === categoryId && p.subcategory === subId);
 export const productsByShop = (shopId: string): Product[] => products.filter((p) => p.shopId === shopId);
 
-export function searchProducts(query: string): { products: Product[]; shops: Shop[] } {
-  const q = query.toLowerCase().trim();
-  if (!q) return { products: [], shops: [] };
-  const terms = q.split(/\s+/).filter(Boolean);
-  const matchedProducts = products.filter((p) => {
-    const haystack = [p.name, p.description, p.subcategory, p.category, ...p.variants.flatMap((v) => v.values), ...p.details.map((d) => `${d.label} ${d.value}`)].join(' ').toLowerCase();
-    return terms.every((term) => haystack.includes(term));
+// === Search ===
+// Tolerant, ranked, multi-field search over the catalog's own real data
+// (name, category/subcategory, descriptive "type" attributes, color/motif,
+// description) — no external search service, no behavioral/click data.
+
+function stripAccents(s: string): string {
+  return s.normalize('NFD').replace(/[̀-ͯ]/g, '');
+}
+function normalizeText(s: string): string {
+  return stripAccents(s).toLowerCase();
+}
+// Best-effort French plural/gender tolerance — not a real lemmatizer, just
+// enough to make "abaya" find "Abayas", "pantalon" find "Pantalons", and
+// "noire" find "Noir" without a hardcoded list of every word form.
+function wordForms(word: string): string[] {
+  const forms = new Set([word]);
+  if (word.length > 4 && word.endsWith('es')) forms.add(word.slice(0, -2));
+  if (word.length > 3 && word.endsWith('s')) forms.add(word.slice(0, -1));
+  if (word.length > 3 && word.endsWith('e')) forms.add(word.slice(0, -1));
+  return [...forms];
+}
+function termMatches(term: string, haystack: string): boolean {
+  if (!haystack) return false;
+  return wordForms(term).some((form) => form.length > 0 && haystack.includes(form));
+}
+function tokenize(query: string): string[] {
+  return normalizeText(query).split(/[^a-z0-9]+/).filter(Boolean);
+}
+
+const COLOR_MOTIF_VARIANT_NAMES = new Set(['couleur', 'motif / imprimé', 'motif/imprimé', 'motif']);
+
+interface ProductSearchFields { name: string; typeAndCategory: string; colorMotif: string; description: string }
+
+function buildSearchFields(p: Product): ProductSearchFields {
+  const cat = categoryMap[p.category]?.label ?? p.category;
+  const sub = categoryMap[p.category]?.subcategories.find((s) => s.id === p.subcategory)?.label ?? p.subcategory;
+  const typeAndCategory = normalizeText(
+    [cat, sub, ...p.details.map((d) => `${d.label} ${d.value}`), ...p.variants.filter((v) => !COLOR_MOTIF_VARIANT_NAMES.has(v.name.toLowerCase())).flatMap((v) => v.values)].join(' '),
+  );
+  const colorMotif = normalizeText(p.variants.filter((v) => COLOR_MOTIF_VARIANT_NAMES.has(v.name.toLowerCase())).flatMap((v) => v.values).join(' '));
+  return { name: normalizeText(p.name), typeAndCategory, colorMotif, description: normalizeText(p.description) };
+}
+
+export interface SearchProductsResult {
+  /** Every search term found across the product's own fields (name, category/type, color/motif or description). */
+  exact: Product[];
+  /** Shown only when `exact` is thin — clearly a fallback, never presented as a real match. */
+  similar: Product[];
+  shops: Shop[];
+}
+
+export function searchProducts(query: string, pool: Product[] = products): SearchProductsResult {
+  const terms = tokenize(query);
+  if (terms.length === 0) return { exact: [], similar: [], shops: [] };
+  const q = normalizeText(query.trim());
+
+  const matchedShops = allShops.filter((s) => normalizeText(s.name).includes(q) || normalizeText(s.description).includes(q));
+
+  const scored = pool.map((p) => {
+    const fields = buildSearchFields(p);
+    const nameHits = terms.filter((t) => termMatches(t, fields.name)).length;
+    const typeHits = terms.filter((t) => termMatches(t, fields.typeAndCategory)).length;
+    const colorHits = terms.filter((t) => termMatches(t, fields.colorMotif)).length;
+    const descHits = terms.filter((t) => termMatches(t, fields.description)).length;
+
+    let score = 0;
+    if (fields.name.includes(q)) score += 100; // 1. exact phrase match on the name
+    score += nameHits * 20; // remaining name-term hits
+    score += typeHits * 12; // 2. category/subcategory/type
+    score += colorHits * 10; // 3. color/motif
+    score += descHits * 4; // 4. description — lowest of the "real" tiers
+
+    const allTermsCovered = terms.every((t) => termMatches(t, fields.name) || termMatches(t, fields.typeAndCategory) || termMatches(t, fields.colorMotif) || termMatches(t, fields.description));
+    const anyHit = nameHits + typeHits + colorHits + descHits > 0;
+    return { p, score, allTermsCovered, anyHit };
   });
-  const matchedShops = allShops.filter((s) => s.name.toLowerCase().includes(q) || s.description.toLowerCase().includes(q));
-  return { products: matchedProducts, shops: matchedShops };
+
+  const exact = scored
+    .filter((s) => s.allTermsCovered && s.score > 0)
+    .sort((a, b) => b.score - a.score)
+    .map((s) => s.p);
+
+  // 5. Broader fallback — only surfaced when real matches are thin, and
+  // always kept in its own bucket so the caller can label it distinctly
+  // ("Produits similaires"), never blended into the real results.
+  let similar: Product[] = [];
+  if (exact.length < 6) {
+    const exactIds = new Set(exact.map((p) => p.id));
+    similar = scored
+      .filter((s) => !exactIds.has(s.p.id) && s.anyHit)
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 12)
+      .map((s) => s.p);
+  }
+
+  return { exact, similar, shops: matchedShops };
 }
 
 export function formatFCFA(n: number): string { return `${n.toLocaleString('fr-FR')} FCFA`; }
@@ -340,14 +426,36 @@ export function getProductsFromSameShop(product: Product, pool: Product[] = prod
   return pool.filter((p) => p.shopId === product.shopId && p.id !== product.id);
 }
 
+function productColorsMotifs(p: Product): Set<string> {
+  return new Set(p.variants.filter((v) => COLOR_MOTIF_VARIANT_NAMES.has(v.name.toLowerCase())).flatMap((v) => v.values.map((val) => normalizeText(val))));
+}
+
 export function getSimilarProducts(product: Product, pool: Product[] = products, excludeIds: string[] = [], limit = 8): Product[] {
   const exclude = new Set([product.id, ...excludeIds]);
-  const sameSub = pool.filter((p) => !exclude.has(p.id) && p.category === product.category && p.subcategory === product.subcategory);
-  const sameCat = pool.filter((p) => !exclude.has(p.id) && p.category === product.category && p.subcategory !== product.subcategory);
+  const targetColors = productColorsMotifs(product);
   const priceMin = product.price * 0.5;
   const priceMax = product.price * 2;
-  const similarPrice = pool.filter((p) => !exclude.has(p.id) && p.category !== product.category && p.price >= priceMin && p.price <= priceMax);
-  const scored = [...sameSub.map((p) => ({ p, score: 5 })), ...sameCat.map((p) => ({ p, score: 3 })), ...similarPrice.map((p) => ({ p, score: 1 }))];
+
+  const scored = pool
+    .filter((p) => !exclude.has(p.id))
+    .map((p) => {
+      // Same subcategory/type is the strongest signal, then same broader
+      // category, then just a comparable price range in a different
+      // category — sharing at least one color/motif nudges the ranking
+      // within whichever of those tiers a product already falls into,
+      // rather than overriding it.
+      let score = 0;
+      if (p.category === product.category && p.subcategory === product.subcategory) score = 5;
+      else if (p.category === product.category) score = 3;
+      else if (p.price >= priceMin && p.price <= priceMax) score = 1;
+      else return null;
+
+      const sharesColorOrMotif = [...productColorsMotifs(p)].some((c) => targetColors.has(c));
+      if (sharesColorOrMotif) score += 0.5;
+      return { p, score };
+    })
+    .filter((s): s is { p: Product; score: number } => s !== null);
+
   scored.sort((a, b) => b.score - a.score || (b.p.isTrending ? 1 : 0) - (a.p.isTrending ? 1 : 0));
   return scored.slice(0, limit).map((s) => s.p);
 }
