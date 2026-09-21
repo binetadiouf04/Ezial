@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import { useApp } from '@/store/AppContext';
 import { categoryMap, type CategoryId } from '@/data/categories';
-import { productsByCategory, productsBySubcategory, type Product } from '@/data/products';
+import type { Product } from '@/data/products';
 import { getFilters, type FilterGroup } from '@/data/filters';
 import ProductGrid from '@/components/ProductGrid';
 import CategorySidebar from '@/components/CategorySidebar';
@@ -11,7 +11,7 @@ import { SlidersHorizontal, ChevronRight } from 'lucide-react';
 const sortOptions = [{ id: 'populaire', label: 'Popularité' }, { id: 'prix-asc', label: 'Prix croissant' }, { id: 'prix-desc', label: 'Prix décroissant' }, { id: 'nouveau', label: 'Nouveautés' }];
 
 export default function CategoryPage({ categoryId, subId }: { categoryId: string; subId?: string }) {
-  const { navigate } = useApp();
+  const { navigate, catalogProducts } = useApp();
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [selectedFilters, setSelectedFilters] = useState<SelectedFilters>({});
   const [sort, setSort] = useState('populaire');
@@ -32,7 +32,14 @@ export default function CategoryPage({ categoryId, subId }: { categoryId: string
     setSelectedFilters({ ...selectedFilters, type: next });
   };
 
-  const baseProducts: Product[] = useMemo(() => subId ? productsBySubcategory(categoryId, subId) : productsByCategory(categoryId), [categoryId, subId]);
+  // catalogProducts (real Supabase catalog, official-shop-only for now —
+  // see AppContext) — this used to filter the static demo array directly,
+  // which meant a real vendor's products never showed up when browsing by
+  // category at all, only when linked to directly or found via search.
+  const baseProducts: Product[] = useMemo(
+    () => catalogProducts.filter((p) => p.category === categoryId && (!subId || p.subcategory === subId)),
+    [catalogProducts, categoryId, subId],
+  );
 
   const filtered = useMemo(() => {
     let result = [...baseProducts];

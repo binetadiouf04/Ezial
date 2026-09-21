@@ -237,26 +237,30 @@ const defaultCustomerInfo: CustomerInfo = {
   landmark: "Près de la route de l'aéroport, porte bleue",
 };
 
-// TRANSITIONAL — merges the Supabase catalog into the mock one instead of
-// replacing it outright, so the app stays populated while the real catalog
-// is still thin. A Supabase product wins over a mock product that shares
-// its reference; mock products with no matching reference are kept as-is.
-// Remove this merge (and the mock products) once the Supabase catalog is
-// filled enough to stand on its own — see fetchActiveCatalogFromSupabase().
-function mergeCatalogs(mock: Product[], supabase: Product[]): Product[] {
-  const supabaseRefs = new Set(supabase.map((p) => p.reference).filter(Boolean));
-  const remainingMock = mock.filter((p) => !supabaseRefs.has(p.reference));
-  return [...supabase, ...remainingMock];
+// TEMPORARY LAUNCH GATE — before real sellers are onboarded, the public
+// marketplace (Home, Catégories, Recherche, Boutiques) shows only the
+// official Ezial shop and its own real products, never the old static
+// demo catalog (src/data/products.ts / src/data/shops.ts) that used to be
+// merged in permanently to keep the app looking populated. This sits on
+// top of the existing approval workflow (products.status/shops.status,
+// already filtered to 'active' by fetchActiveCatalogFromSupabase) without
+// changing it — lifting this gate once real approved sellers should start
+// appearing publicly is exactly flipping this one constant.
+const PUBLIC_CATALOG_OFFICIAL_SHOP_ONLY = true;
+
+function publicShopsFrom(supabaseShops: Shop[]): Shop[] {
+  const filtered = PUBLIC_CATALOG_OFFICIAL_SHOP_ONLY ? supabaseShops.filter((s) => s.isOfficial) : supabaseShops;
+  // Never leave the marketplace looking empty if the real fetch came back
+  // thin (e.g. right after a fresh Supabase project, before is_official is
+  // even set on any shop) — falls back to the old demo catalog exactly
+  // like a total fetch failure already does.
+  return filtered.length > 0 ? filtered : mockShops;
 }
 
-// Same transitional merge as mergeCatalogs, but for shops — deduped by id
-// (shops have no shared "reference" field to match mock vs. Supabase rows
-// on, but a real Supabase shop's id is a UUID that will never collide with
-// a mock shop's slug-style id).
-function mergeShops(mock: Shop[], supabase: Shop[]): Shop[] {
-  const supabaseIds = new Set(supabase.map((s) => s.id));
-  const remainingMock = mock.filter((s) => !supabaseIds.has(s.id));
-  return [...supabase, ...remainingMock];
+function publicProductsFrom(supabaseProducts: Product[], publicShops: Shop[]): Product[] {
+  const publicShopIds = new Set(publicShops.map((s) => s.id));
+  const filtered = supabaseProducts.filter((p) => publicShopIds.has(p.shopId));
+  return filtered.length > 0 ? filtered : allProducts;
 }
 
 // Merges a real Supabase order-history fetch into whatever's already in
@@ -271,10 +275,10 @@ function mergeOrders(prev: Order[], fetched: Order[]): Order[] {
 
 export function AppProvider({ children }: { children: ReactNode }) {
   const [route, setRoute] = useState(getInitialRoute());
-  // The mock catalog renders immediately; if the Supabase catalog fetch
-  // succeeds, its products/shops are merged in (see mergeCatalogs/mergeShops
-  // above). On failure (or while still loading), the mock catalog stays
-  // as-is — never left empty.
+  // The demo catalog renders immediately; once the Supabase catalog fetch
+  // succeeds, it replaces this with the real, official-shop-only public
+  // catalog (see publicShopsFrom/publicProductsFrom above). On failure (or
+  // while still loading), the demo catalog stays as-is — never left empty.
   const [catalogProducts, setCatalogProducts] = useState<Product[]>(allProducts);
   const [catalogShops, setCatalogShops] = useState<Shop[]>(mockShops);
   const [favorites, setFavorites] = useState<string[]>(loadStoredFavorites);
@@ -329,24 +333,28 @@ export function AppProvider({ children }: { children: ReactNode }) {
     fetchActiveCatalogFromSupabase()
       .then((result) => {
         if (cancelled) return;
-        // Merge whatever came back even if `errors` isn't empty —
+        // Use whatever came back even if `errors` isn't empty —
         // fetchActiveCatalogFromSupabase already documents its errors as
         // non-fatal (e.g. only the product_images or product_variants
-        // query failed) and mergeCatalogs/mergeShops are safe with a
-        // partial or empty Supabase array (they just fall back to the mock
-        // catalog for anything missing). Gating the whole merge behind
-        // zero errors discarded good shop/product data — real Supabase
-        // shops and products, and their "Produits" listing — over a single
-        // unrelated sub-query hiccup.
+        // query failed), and publicShopsFrom/publicProductsFrom are safe
+        // with a partial or empty Supabase array (they fall back to the
+        // demo catalog only when the real one is genuinely empty). Gating
+        // this behind zero errors would discard good shop/product data over
+        // a single unrelated sub-query hiccup.
+        //
+        // registerSupabaseShops keeps every real shop resolvable by id
+        // (a seller viewing their own shop, an admin, a direct link) — the
+        // official-only gate below only decides what's publicly *listed*.
         registerSupabaseShops(result.shops);
-        const merged = mergeCatalogs(allProducts, result.products);
-        setCatalogProducts(merged);
-        setCatalogShops(mergeShops(mockShops, result.shops));
+        const publicShops = publicShopsFrom(result.shops);
+        const publicProducts = publicProductsFrom(result.products, publicShops);
+        setCatalogProducts(publicProducts);
+        setCatalogShops(publicShops);
 
         // Real review stats enrich the (already-rendered) catalog in a
         // second pass — never blocks the initial catalog paint, and a
         // mock demo product (non-uuid id) is never queried for reviews.
-        const realIds = merged.map((p) => p.id).filter(isRealCatalogId);
+        const realIds = publicProducts.map((p) => p.id).filter(isRealCatalogId);
         if (realIds.length > 0) {
           fetchReviewStatsForProducts(realIds).then((stats) => {
             if (cancelled || stats.size === 0) return;
