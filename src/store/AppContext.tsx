@@ -4,7 +4,7 @@ import { shops as mockShops, registerSupabaseShops, type Shop } from '@/data/sho
 import { fetchActiveCatalogFromSupabase } from '@/lib/supabaseCatalog';
 import {
   signUpCustomer, signInCustomer, restoreCustomerSession, signOutCustomer,
-  updateCustomerProfile, requestCustomerPasswordReset,
+  updateCustomerProfile, requestCustomerPasswordReset, resendCustomerConfirmation, requestCustomerAccountDeletion,
   type CustomerProfile, type SignUpCustomerInput, type SignUpCustomerResult, type UpdateCustomerProfileInput,
 } from '@/lib/supabaseCustomerAuth';
 import { fetchFavoriteIds, addFavorite, removeFavorite, mergeLocalFavoritesIntoAccount } from '@/lib/supabaseFavorites';
@@ -103,6 +103,8 @@ interface AppState {
   signOutCustomerAccount: () => void;
   updateCustomerAccount: (input: UpdateCustomerProfileInput) => Promise<{ error?: string }>;
   requestPasswordReset: (email: string) => Promise<{ error?: string }>;
+  resendConfirmationEmail: (email: string) => Promise<{ error?: string }>;
+  deleteCustomerAccount: () => Promise<{ error?: string }>;
 }
 
 const AppContext = createContext<AppState | null>(null);
@@ -421,6 +423,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [customerUser]);
 
   const requestPasswordReset = useCallback(async (email: string) => requestCustomerPasswordReset(email), []);
+  const resendConfirmationEmail = useCallback(async (email: string) => resendCustomerConfirmation(email), []);
+
+  const deleteCustomerAccount = useCallback(async (): Promise<{ error?: string }> => {
+    if (!customerUser) return { error: 'Non connecté.' };
+    const result = await requestCustomerAccountDeletion(customerUser.id, customerUser.email);
+    if (result.error) return result;
+    setCustomerUser(null);
+    setFavorites(loadStoredFavorites());
+    setOrders([]);
+    return {};
+  }, [customerUser]);
 
   // Never opens CartDrawer and never navigates — only the cart badge count
   // should visibly react. "Acheter maintenant" calls this then navigates to
@@ -503,7 +516,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     addresses, addAddress, updateAddress, deleteAddress, setDefaultAddress,
     customerInfo, updateCustomerInfo,
     customerUser, authLoading,
-    signUpCustomerAccount, signInCustomerAccount, signOutCustomerAccount,
+    signUpCustomerAccount, signInCustomerAccount, signOutCustomerAccount, resendConfirmationEmail, deleteCustomerAccount,
     updateCustomerAccount, requestPasswordReset,
   };
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;

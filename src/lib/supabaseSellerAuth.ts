@@ -238,3 +238,34 @@ export async function restoreSellerSession(): Promise<SellerAuthShop | null> {
 export async function signOutSeller(): Promise<void> {
   await supabase.auth.signOut();
 }
+
+export async function resendSellerConfirmation(email: string): Promise<{ error?: string }> {
+  const redirectTo = `${window.location.origin}${import.meta.env.BASE_URL}`;
+  const { error } = await supabase.auth.resend({ type: 'signup', email: email.trim(), options: { emailRedirectTo: redirectTo } });
+  return error ? { error: mapAuthErrorMessage(error.message) } : {};
+}
+
+// Same self-service pattern as the customer side: anonymize what the client
+// is allowed to touch under RLS (its own shop row) and log a deletion
+// request for an admin to finish (actually removing the auth.users account
+// needs the service role). 'deleted' status already falls outside "Anyone
+// can view active shops", so the shop disappears from the catalog
+// immediately. Historical orders keep referencing this shop id untouched.
+export async function requestSellerAccountDeletion(shopId: string): Promise<{ error?: string }> {
+  const { data: userData, error: userError } = await supabase.auth.getUser();
+  if (userError || !userData.user) return { error: 'Non connecté.' };
+
+  const { error: requestError } = await supabase
+    .from('account_deletion_requests')
+    .insert({ user_id: userData.user.id, role: 'seller', email_at_request: userData.user.email ?? null });
+  if (requestError) return { error: requestError.message };
+
+  const { error: anonymizeError } = await supabase
+    .from('shops')
+    .update({ name: 'Boutique supprimée', description: null, phone: null, address_text: null, logo_url: null, cover_url: null, neighborhood: null, latitude: null, longitude: null, status: 'deleted' })
+    .eq('id', shopId);
+  if (anonymizeError) return { error: anonymizeError.message };
+
+  await supabase.auth.signOut();
+  return {};
+}

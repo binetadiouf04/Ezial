@@ -30,3 +30,10 @@ export function mapAuthErrorMessage(raw: string | undefined | null): string {
 export function isValidEmail(email: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
 }
+
+// Capitalizes only the first character, leaving the rest untouched — safe
+// to run on every keystroke (doesn't fight the user's own casing further
+// into the name, e.g. "Al-Amin" or "McKenzie").
+export function capitalizeFirst(text: string): string {
+  return text.length ? text.charAt(0).toUpperCase() + text.slice(1) : text;
+}

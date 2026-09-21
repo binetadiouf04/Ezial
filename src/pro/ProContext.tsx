@@ -3,7 +3,7 @@ import type { Role, DeliveryStep, ShopStatus, ProductStatus, ModerationEntry, Mo
 import { missions as initialMissions, type Mission, type Product, type Shop, type Driver, type DriverTransaction, type Order, type Transaction } from './data';
 import { shops as initialShops, products as initialProducts, transactions as initialTransactions, driverTransactions as initialDriverTransactions, orders as initialOrders, drivers as initialDrivers, moderationHistory as initialModerationHistory, blogPosts as initialBlogPosts } from './data';
 import { assignShopPrefixes, nextReferenceForShop } from '@/utils/reference';
-import { signInSeller, restoreSellerSession, signOutSeller, signUpSeller, requestSellerPasswordReset, type SignUpSellerInput, type SignUpSellerResult } from '@/lib/supabaseSellerAuth';
+import { signInSeller, restoreSellerSession, signOutSeller, signUpSeller, requestSellerPasswordReset, resendSellerConfirmation, requestSellerAccountDeletion, type SignUpSellerInput, type SignUpSellerResult } from '@/lib/supabaseSellerAuth';
 import { signInAdmin, restoreAdminSession } from '@/lib/supabaseAdminAuth';
 
 type Route = string;
@@ -113,6 +113,8 @@ interface ProState extends AuthState {
   // Supabase Auth user + a 'draft' shop row in one step.
   signUpSellerAccount: (input: SignUpSellerInput) => Promise<{ status: 'confirmed'; shop: { sellerId: string; name: string; supabaseShopId: string; isOfficial: boolean } } | { status: 'pending_confirmation' } | { error: string }>;
   requestSellerPasswordReset: (email: string) => Promise<{ error?: string }>;
+  resendSellerConfirmationEmail: (email: string) => Promise<{ error?: string }>;
+  deleteSellerAccount: () => Promise<{ error?: string }>;
   // Admin login — authenticates a real email + password against Supabase
   // Auth, then verifies the account is listed in public.admins before
   // granting access. Needed so RLS on manually-managed content (Hero,
@@ -401,6 +403,15 @@ export function ProProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const requestSellerPasswordResetAction = useCallback(async (email: string) => requestSellerPasswordReset(email), []);
+  const resendSellerConfirmationEmail = useCallback(async (email: string) => resendSellerConfirmation(email), []);
+
+  const deleteSellerAccount = useCallback(async (): Promise<{ error?: string }> => {
+    if (!sellerSupabaseShopId) return { error: 'Aucune boutique associée à ce compte.' };
+    const result = await requestSellerAccountDeletion(sellerSupabaseShopId);
+    if (result.error) return result;
+    logout();
+    return {};
+  }, [sellerSupabaseShopId, logout]);
 
   const verifyAdminLogin = useCallback(async (email: string, password: string): Promise<{ name: string } | { error: string }> => {
     const result = await signInAdmin(email.trim(), password);
@@ -698,6 +709,8 @@ export function ProProvider({ children }: { children: ReactNode }) {
     verifySellerLogin,
     signUpSellerAccount,
     requestSellerPasswordReset: requestSellerPasswordResetAction,
+    resendSellerConfirmationEmail,
+    deleteSellerAccount,
     verifyAdminLogin,
     sellerTransactions,
     driverAvailable,

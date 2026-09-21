@@ -80,7 +80,13 @@ export async function signUpCustomer(input: SignUpCustomerInput): Promise<SignUp
       },
     },
   });
-  if (error) return { error: mapAuthErrorMessage(error.message) };
+  if (error) {
+    const msg = error.message.toLowerCase();
+    if (msg.includes('already registered') || msg.includes('already exists') || msg.includes('user already')) {
+      return { error: 'Un compte existe déjà avec cette adresse email. Connectez-vous ou réinitialisez votre mot de passe.' };
+    }
+    return { error: mapAuthErrorMessage(error.message) };
+  }
   if (!data.user) return { error: mapAuthErrorMessage(undefined) };
 
   // No session yet — email confirmation is pending. The profile row was
@@ -167,4 +173,33 @@ export async function requestCustomerPasswordReset(email: string): Promise<{ err
   const redirectTo = `${window.location.origin}${import.meta.env.BASE_URL}`;
   const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), { redirectTo });
   return error ? { error: mapAuthErrorMessage(error.message) } : {};
+}
+
+export async function resendCustomerConfirmation(email: string): Promise<{ error?: string }> {
+  const redirectTo = `${window.location.origin}${import.meta.env.BASE_URL}`;
+  const { error } = await supabase.auth.resend({ type: 'signup', email: email.trim(), options: { emailRedirectTo: redirectTo } });
+  return error ? { error: mapAuthErrorMessage(error.message) } : {};
+}
+
+// Self-service deletion: the account can't be removed from the client (that
+// needs the service role, never exposed to the frontend — see
+// account_deletion_requests, which an admin processes from the Supabase
+// dashboard). What the client CAN safely do under RLS is anonymize the
+// customer's own profile immediately and sign them out — their order
+// history stays intact for accounting, just no longer attached to a real
+// name/contact.
+export async function requestCustomerAccountDeletion(userId: string, email: string | null): Promise<{ error?: string }> {
+  const { error: requestError } = await supabase
+    .from('account_deletion_requests')
+    .insert({ user_id: userId, role: 'customer', email_at_request: email });
+  if (requestError) return { error: requestError.message };
+
+  const { error: anonymizeError } = await supabase
+    .from('customer_profiles')
+    .update({ first_name: 'Client', last_name: 'supprimé', phone: null, email: null, quartier: null, landmark: null })
+    .eq('id', userId);
+  if (anonymizeError) return { error: anonymizeError.message };
+
+  await supabase.auth.signOut();
+  return {};
 }

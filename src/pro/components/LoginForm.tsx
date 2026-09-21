@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { Role } from '../data';
 import type { SellerShopInfo } from '../ProContext';
+import PasswordField from '@/components/PasswordField';
 import { ArrowLeft, Lock, KeyRound } from 'lucide-react';
 
 interface LoginFormProps {
@@ -106,16 +107,12 @@ export default function LoginForm({ role, onBack, onLogin, verifySeller, verifyA
               </div>
               <div>
                 <label className="block text-xs font-medium text-ink/60 mb-1.5">Mot de passe</label>
-                <div className="relative">
-                  <Lock size={16} className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-ink/35" />
-                  <input
-                    type="password"
-                    value={password}
-                    onChange={(e) => { setPassword(e.target.value); setError(''); }}
-                    className="input-field pl-11"
-                    placeholder="••••••••"
-                  />
-                </div>
+                <PasswordField
+                  value={password}
+                  onChange={(v) => { setPassword(v); setError(''); }}
+                  placeholder="••••••••"
+                  leftIcon={<Lock size={16} className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-ink/35" />}
+                />
               </div>
             </>
           ) : (

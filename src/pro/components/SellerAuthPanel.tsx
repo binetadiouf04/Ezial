@@ -2,6 +2,7 @@ import { useState } from 'react';
 import type { SellerShopInfo } from '../ProContext';
 import type { SignUpSellerInput } from '@/lib/supabaseSellerAuth';
 import { isValidEmail } from '@/lib/authErrors';
+import PasswordField from '@/components/PasswordField';
 import { ArrowLeft, Lock, KeyRound, Loader2, AlertCircle, Check, MailCheck } from 'lucide-react';
 
 type View = 'login' | 'signup' | 'forgot' | 'pending_confirmation';
@@ -12,13 +13,15 @@ interface SellerAuthPanelProps {
   verifySeller: (identifier: string, password: string) => Promise<{ shop: { sellerId: string; name: string; supabaseShopId: string; isOfficial: boolean } } | { error: string }>;
   signUpSeller: (input: SignUpSellerInput) => Promise<{ status: 'confirmed'; shop: { sellerId: string; name: string; supabaseShopId: string; isOfficial: boolean } } | { status: 'pending_confirmation' } | { error: string }>;
   requestPasswordReset: (email: string) => Promise<{ error?: string }>;
+  resendConfirmationEmail: (email: string) => Promise<{ error?: string }>;
 }
 
-export default function SellerAuthPanel({ onBack, onLogin, verifySeller, signUpSeller, requestPasswordReset }: SellerAuthPanelProps) {
+export default function SellerAuthPanel({ onBack, onLogin, verifySeller, signUpSeller, requestPasswordReset, resendConfirmationEmail }: SellerAuthPanelProps) {
   const [view, setView] = useState<View>('login');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
+  const [resending, setResending] = useState(false);
 
   const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
@@ -63,6 +66,13 @@ export default function SellerAuthPanel({ onBack, onLogin, verifySeller, signUpS
     else setNotice('Si un compte existe avec cet email, un lien de réinitialisation vient de lui être envoyé.');
   };
 
+  const handleResendConfirmation = async () => {
+    setResending(true);
+    await resendConfirmationEmail(email.trim());
+    setResending(false);
+    setNotice('Un nouveau lien vient de vous être envoyé par email.');
+  };
+
   return (
     <div className="mx-auto max-w-md slide-up">
       <button onClick={onBack} className="mb-6 flex items-center gap-1.5 text-sm text-ink/60 hover:text-ink">
@@ -99,10 +109,7 @@ export default function SellerAuthPanel({ onBack, onLogin, verifySeller, signUpS
             </div>
             <div>
               <label className="block text-xs font-medium text-ink/60 mb-1.5">Mot de passe</label>
-              <div className="relative">
-                <Lock size={16} className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-ink/35" />
-                <input type="password" value={password} onChange={(e) => { setPassword(e.target.value); setError(''); }} className="input-field pl-11" placeholder="••••••••" />
-              </div>
+              <PasswordField value={password} onChange={(v) => { setPassword(v); setError(''); }} placeholder="••••••••" leftIcon={<Lock size={16} className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-ink/35" />} />
             </div>
             <button onClick={() => void handleLogin()} disabled={submitting} className="btn-primary w-full">
               {submitting ? <><Loader2 size={16} className="animate-spin" /> Connexion...</> : 'Se connecter'}
@@ -120,7 +127,7 @@ export default function SellerAuthPanel({ onBack, onLogin, verifySeller, signUpS
               <input className="input-field font-mono" placeholder="ex: maisonfatou" value={username} onChange={(e) => setUsername(e.target.value)} />
               <p className="mt-1 text-[11px] text-ink/40">4 à 32 lettres/chiffres, sans espace. Utilisé pour vous connecter.</p>
             </div>
-            <div><label className="block text-xs font-medium text-ink/60 mb-1.5">Mot de passe</label><input type="password" className="input-field" placeholder="8 caractères minimum" value={signupPassword} onChange={(e) => setSignupPassword(e.target.value)} /></div>
+            <div><label className="block text-xs font-medium text-ink/60 mb-1.5">Mot de passe</label><PasswordField value={signupPassword} onChange={setSignupPassword} placeholder="8 caractères minimum" /></div>
             <button onClick={() => void handleSignup()} disabled={submitting} className="btn-primary w-full">
               {submitting ? <><Loader2 size={16} className="animate-spin" /> Création...</> : 'Créer le compte'}
             </button>
@@ -130,7 +137,11 @@ export default function SellerAuthPanel({ onBack, onLogin, verifySeller, signUpS
         {view === 'pending_confirmation' && (
           <div className="mt-5 space-y-4 text-center">
             <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-green-50 text-green-700"><MailCheck size={22} /></div>
-            <p className="text-sm text-ink/70">Un lien de confirmation vous a été envoyé par email. Cliquez dessus pour activer votre compte, puis revenez vous connecter ici.</p>
+            <p className="text-sm text-ink/70">Un lien de confirmation vous a été envoyé par email.</p>
+            <p className="text-xs text-ink/45">Vous ne voyez rien ? Vérifiez vos spams.</p>
+            <button onClick={() => void handleResendConfirmation()} disabled={resending} className="text-xs font-medium text-burgundy hover:underline">
+              {resending ? 'Envoi...' : 'Renvoyer le lien'}
+            </button>
             <button onClick={() => switchView('login')} className="btn-outline w-full">Retour à la connexion</button>
           </div>
         )}
@@ -142,6 +153,9 @@ export default function SellerAuthPanel({ onBack, onLogin, verifySeller, signUpS
             <button onClick={() => void handleReset()} disabled={submitting} className="btn-primary w-full">
               {submitting ? <><Loader2 size={16} className="animate-spin" /> Envoi...</> : 'Envoyer le lien de réinitialisation'}
             </button>
+            {notice && (
+              <button onClick={() => void handleReset()} disabled={submitting} className="w-full text-center text-xs font-medium text-burgundy hover:underline">Renvoyer le lien</button>
+            )}
             <button onClick={() => switchView('login')} className="w-full text-center text-xs font-medium text-ink/50 hover:underline">Retour à la connexion</button>
           </div>
         )}

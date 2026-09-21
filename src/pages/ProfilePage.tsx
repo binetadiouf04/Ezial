@@ -5,8 +5,10 @@ import { formatFCFA } from '@/data/products';
 import ProductGrid from '@/components/ProductGrid';
 import SmartImage from '@/components/SmartImage';
 import NotificationOptIn from '@/components/NotificationOptIn';
-import { isValidEmail } from '@/lib/authErrors';
-import { User, Heart, ShoppingBag, LogOut, ChevronRight, Briefcase, Truck, Store, Check, AlertCircle, Loader2, MailCheck } from 'lucide-react';
+import PasswordField from '@/components/PasswordField';
+import PhoneField from '@/components/PhoneField';
+import { isValidEmail, capitalizeFirst } from '@/lib/authErrors';
+import { User, Heart, ShoppingBag, LogOut, ChevronRight, Briefcase, Truck, Store, Check, AlertCircle, Loader2, MailCheck, Trash2 } from 'lucide-react';
 
 const deliveryStatusColors: Record<DeliveryStepStatus, string> = {
   confirmed: 'bg-blue-50 text-blue-700', preparing: 'bg-amber-50 text-amber-700', ready: 'bg-green-50 text-green-700',
@@ -45,11 +47,12 @@ interface InfoForm { firstName: string; lastName: string; phone: string; email: 
 
 // === Signed-out: login / signup / forgot password ===
 function AuthPanel() {
-  const { signInCustomerAccount, signUpCustomerAccount, requestPasswordReset } = useApp();
+  const { signInCustomerAccount, signUpCustomerAccount, requestPasswordReset, resendConfirmationEmail } = useApp();
   const [view, setView] = useState<AuthView>('login');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
+  const [resending, setResending] = useState(false);
 
   const [loginId, setLoginId] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
@@ -97,6 +100,13 @@ function AuthPanel() {
     else setNotice('Si un compte existe avec cet email, un lien de réinitialisation vient de lui être envoyé.');
   };
 
+  const handleResendConfirmation = async () => {
+    setResending(true);
+    await resendConfirmationEmail(email.trim());
+    setResending(false);
+    setNotice('Un nouveau lien vient de vous être envoyé par email.');
+  };
+
   return (
     <div className="mx-auto max-w-sm py-10">
       <div className="mb-6 text-center">
@@ -123,7 +133,7 @@ function AuthPanel() {
           </div>
           <div>
             <label className="block text-xs font-medium text-ink/60 mb-1.5">Mot de passe</label>
-            <input type="password" className="input-field" value={loginPassword} onChange={(e) => setLoginPassword(e.target.value)} />
+            <PasswordField value={loginPassword} onChange={setLoginPassword} />
           </div>
           <button onClick={() => void handleLogin()} disabled={submitting} className="btn-primary w-full">
             {submitting ? <><Loader2 size={16} className="animate-spin" /> Connexion...</> : 'Se connecter'}
@@ -135,12 +145,12 @@ function AuthPanel() {
       {view === 'signup' && (
         <div className="space-y-4">
           <div className="grid grid-cols-2 gap-3">
-            <div><label className="block text-xs font-medium text-ink/60 mb-1.5">Prénom</label><input className="input-field" value={firstName} onChange={(e) => setFirstName(e.target.value)} /></div>
-            <div><label className="block text-xs font-medium text-ink/60 mb-1.5">Nom</label><input className="input-field" value={lastName} onChange={(e) => setLastName(e.target.value)} /></div>
+            <div><label className="block text-xs font-medium text-ink/60 mb-1.5">Prénom</label><input className="input-field" value={firstName} onChange={(e) => setFirstName(capitalizeFirst(e.target.value))} /></div>
+            <div><label className="block text-xs font-medium text-ink/60 mb-1.5">Nom</label><input className="input-field" value={lastName} onChange={(e) => setLastName(capitalizeFirst(e.target.value))} /></div>
           </div>
           <div><label className="block text-xs font-medium text-ink/60 mb-1.5">Email</label><input type="email" className="input-field" value={email} onChange={(e) => setEmail(e.target.value)} /></div>
-          <div><label className="block text-xs font-medium text-ink/60 mb-1.5">Téléphone (optionnel)</label><input className="input-field" placeholder="+221 ..." value={phone} onChange={(e) => setPhone(e.target.value)} /></div>
-          <div><label className="block text-xs font-medium text-ink/60 mb-1.5">Mot de passe</label><input type="password" className="input-field" placeholder="8 caractères minimum" value={password} onChange={(e) => setPassword(e.target.value)} /></div>
+          <div><label className="block text-xs font-medium text-ink/60 mb-1.5">Téléphone (optionnel)</label><PhoneField value={phone} onChange={setPhone} /></div>
+          <div><label className="block text-xs font-medium text-ink/60 mb-1.5">Mot de passe</label><PasswordField value={password} onChange={setPassword} placeholder="8 caractères minimum" /></div>
           <button onClick={() => void handleSignup()} disabled={submitting} className="btn-primary w-full">
             {submitting ? <><Loader2 size={16} className="animate-spin" /> Création...</> : 'Créer mon compte'}
           </button>
@@ -150,7 +160,11 @@ function AuthPanel() {
       {view === 'pending_confirmation' && (
         <div className="space-y-4 text-center">
           <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-green-50 text-green-700"><MailCheck size={22} /></div>
-          <p className="text-sm text-ink/70">Un lien de confirmation vous a été envoyé par email. Cliquez dessus pour activer votre compte, puis revenez vous connecter ici.</p>
+          <p className="text-sm text-ink/70">Un lien de confirmation vous a été envoyé par email.</p>
+          <p className="text-xs text-ink/45">Vous ne voyez rien ? Vérifiez vos spams.</p>
+          <button onClick={() => void handleResendConfirmation()} disabled={resending} className="text-xs font-medium text-burgundy hover:underline">
+            {resending ? 'Envoi...' : 'Renvoyer le lien'}
+          </button>
           <button onClick={() => switchView('login')} className="btn-outline w-full">Retour à la connexion</button>
         </div>
       )}
@@ -162,6 +176,9 @@ function AuthPanel() {
           <button onClick={() => void handleReset()} disabled={submitting} className="btn-primary w-full">
             {submitting ? <><Loader2 size={16} className="animate-spin" /> Envoi...</> : 'Envoyer le lien de réinitialisation'}
           </button>
+          {notice && (
+            <button onClick={() => void handleReset()} disabled={submitting} className="w-full text-center text-xs font-medium text-burgundy hover:underline">Renvoyer le lien</button>
+          )}
           <button onClick={() => switchView('login')} className="w-full text-center text-xs font-medium text-ink/50 hover:underline">Retour à la connexion</button>
         </div>
       )}
@@ -170,7 +187,7 @@ function AuthPanel() {
 }
 
 export default function ProfilePage() {
-  const { orders, favorites, navigate, catalogProducts, customerUser, authLoading, signOutCustomerAccount, updateCustomerAccount } = useApp();
+  const { orders, favorites, navigate, catalogProducts, customerUser, authLoading, signOutCustomerAccount, updateCustomerAccount, deleteCustomerAccount } = useApp();
   const [tab, setTab] = useState<Tab>('orders');
   const [infoForm, setInfoForm] = useState<InfoForm>(() => ({
     firstName: customerUser?.firstName ?? '', lastName: customerUser?.lastName ?? '',
@@ -179,6 +196,17 @@ export default function ProfilePage() {
   }));
   const [infoSaved, setInfoSaved] = useState(false);
   const [errors, setErrors] = useState<Partial<Record<keyof InfoForm, string>>>({});
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState('');
+
+  const handleDeleteAccount = async () => {
+    setDeleting(true);
+    const result = await deleteCustomerAccount();
+    setDeleting(false);
+    if (result.error) { setDeleteError(result.error); return; }
+    navigate('/');
+  };
 
   const navItems: { id: Tab; label: string; icon: typeof ShoppingBag }[] = [
     { id: 'orders', label: 'Mes commandes', icon: ShoppingBag },
@@ -202,7 +230,8 @@ export default function ProfilePage() {
   };
 
   const updateField = (field: keyof InfoForm, value: string) => {
-    setInfoForm((prev) => ({ ...prev, [field]: value }));
+    const next = field === 'firstName' || field === 'lastName' ? capitalizeFirst(value) : value;
+    setInfoForm((prev) => ({ ...prev, [field]: next }));
     if (errors[field]) setErrors((prev) => ({ ...prev, [field]: undefined }));
   };
 
@@ -338,7 +367,7 @@ export default function ProfilePage() {
             </div>
             <div>
               <label className="block text-xs font-medium text-ink/60 mb-1.5">Téléphone</label>
-              <input className={`input-field ${errors.phone ? 'border-burgundy/40' : ''}`} placeholder="+221 ..." value={infoForm.phone} onChange={(e) => updateField('phone', e.target.value)} />
+              <PhoneField value={infoForm.phone} onChange={(v) => updateField('phone', v)} className={`input-field ${errors.phone ? 'border-burgundy/40' : ''}`} />
               {errors.phone && <p className="mt-1 flex items-center gap-1 text-xs text-burgundy"><AlertCircle size={11} /> {errors.phone}</p>}
             </div>
             <div>
@@ -370,11 +399,34 @@ export default function ProfilePage() {
       )}
 
       {/* Déconnexion */}
-      <div className="mt-6">
+      <div className="mt-6 space-y-3">
         <button onClick={() => { signOutCustomerAccount(); navigate('/'); }} className="card w-full p-4 text-left flex items-center gap-3 text-sm font-medium text-ink/70 hover:border-ink/20 transition-colors">
           <LogOut size={18} className="text-ink/40" /> Se déconnecter
         </button>
+        <button onClick={() => { setDeleteError(''); setDeleteConfirmOpen(true); }} className="card w-full p-4 text-left flex items-center gap-3 text-sm font-medium text-burgundy hover:border-burgundy/30 transition-colors">
+          <Trash2 size={18} /> Supprimer mon compte
+        </button>
       </div>
+
+      {deleteConfirmOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="card w-full max-w-sm p-6">
+            <h3 className="font-display text-lg font-semibold text-ink">Supprimer votre compte ?</h3>
+            <p className="mt-2 text-sm text-ink/60">
+              Vos informations personnelles (nom, téléphone, adresse) seront définitivement anonymisées et vous serez déconnecté.
+              Vos commandes passées restent conservées pour la comptabilité, sans y être associées nominativement.
+              Cette action est irréversible.
+            </p>
+            {deleteError && <p className="mt-3 flex items-start gap-1.5 text-sm text-burgundy"><AlertCircle size={14} className="mt-0.5 flex-shrink-0" /> {deleteError}</p>}
+            <div className="mt-5 flex gap-3">
+              <button onClick={() => setDeleteConfirmOpen(false)} className="btn-outline flex-1">Annuler</button>
+              <button onClick={() => void handleDeleteAccount()} disabled={deleting} className="flex-1 rounded-lg bg-burgundy px-4 py-2.5 text-sm font-medium text-white hover:bg-burgundy/90 disabled:opacity-60">
+                {deleting ? 'Suppression...' : 'Supprimer définitivement'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* EZIAL PRO access section */}
       <div className="mt-10 border-t border-line pt-8">

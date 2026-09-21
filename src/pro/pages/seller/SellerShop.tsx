@@ -13,7 +13,7 @@ import { quartiers } from '@/store/AppContext';
 import { categories } from '@/data/categories';
 import { supabase } from '@/lib/supabaseClient';
 import NotificationOptIn from '@/components/NotificationOptIn';
-import { Check, Image as ImageIcon, Camera, MapPin, Loader2, AlertTriangle, AlertCircle, Navigation, Pencil, Search, Send } from 'lucide-react';
+import { Check, Image as ImageIcon, Camera, MapPin, Loader2, AlertTriangle, AlertCircle, Navigation, Pencil, Search, Send, Trash2 } from 'lucide-react';
 import SmartImage from '@/components/SmartImage';
 
 type LocationStatus = 'idle' | 'requesting' | 'denied' | 'unsupported' | 'error';
@@ -26,7 +26,18 @@ const emptyForm: ShopOnboardingData = {
 };
 
 export default function SellerShop() {
-  const { identifier, sellerSupabaseShopId } = usePro();
+  const { identifier, sellerSupabaseShopId, deleteSellerAccount } = usePro();
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState('');
+
+  const handleDeleteAccount = async () => {
+    setDeleting(true);
+    const result = await deleteSellerAccount();
+    setDeleting(false);
+    if (result.error) { setDeleteError(result.error); return; }
+    window.location.hash = '/';
+  };
 
   // Real moderation flag on this shop (public.moderation_flags), never the
   // mock moderationHistory — adapted into VendorNoticeBanner's expected
@@ -493,6 +504,37 @@ export default function SellerShop() {
           </>
         )}
       </div>
+
+      {/* Zone dangereuse */}
+      <div className="card border-burgundy/20 p-5 space-y-3">
+        <h2 className="text-sm font-semibold text-burgundy">Zone dangereuse</h2>
+        <p className="text-xs text-ink/50">
+          La suppression anonymise votre boutique et votre compte, et masque immédiatement la boutique du catalogue.
+          Vos commandes passées restent conservées pour la comptabilité.
+        </p>
+        <button onClick={() => { setDeleteError(''); setDeleteConfirmOpen(true); }} className="inline-flex items-center gap-2 rounded-lg border border-burgundy/30 px-4 py-2.5 text-sm font-medium text-burgundy hover:bg-burgundy/5">
+          <Trash2 size={16} /> Supprimer mon compte vendeur
+        </button>
+      </div>
+
+      {deleteConfirmOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="card w-full max-w-sm p-6">
+            <h3 className="font-display text-lg font-semibold text-ink">Supprimer votre boutique ?</h3>
+            <p className="mt-2 text-sm text-ink/60">
+              Votre boutique sera immédiatement retirée du catalogue et ses informations anonymisées ; votre compte sera déconnecté.
+              Les commandes déjà passées restent conservées pour la comptabilité. Cette action est irréversible.
+            </p>
+            {deleteError && <p className="mt-3 flex items-start gap-1.5 text-sm text-burgundy"><AlertCircle size={14} className="mt-0.5 flex-shrink-0" /> {deleteError}</p>}
+            <div className="mt-5 flex gap-3">
+              <button onClick={() => setDeleteConfirmOpen(false)} className="btn-outline flex-1">Annuler</button>
+              <button onClick={() => void handleDeleteAccount()} disabled={deleting} className="flex-1 rounded-lg bg-burgundy px-4 py-2.5 text-sm font-medium text-white hover:bg-burgundy/90 disabled:opacity-60">
+                {deleting ? 'Suppression...' : 'Supprimer définitivement'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
