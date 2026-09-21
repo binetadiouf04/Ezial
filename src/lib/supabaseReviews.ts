@@ -20,9 +20,6 @@ export interface Review {
   comment: string;
   createdAt: string;
   images: ReviewImage[];
-  // Best-effort — computed client-side from the reviewer's own order
-  // history at fetch time, not stored on the row itself.
-  verifiedPurchase: boolean;
 }
 
 export interface ReviewStats {
@@ -68,23 +65,21 @@ export async function fetchReviewStatsForProducts(productIds: string[]): Promise
 export interface FetchProductReviewsResult {
   reviews: Review[];
   stats: ReviewStats;
-  // Whether the CURRENT signed-in user has a delivered/collected purchase
-  // of this exact product — the one condition that unlocks the review
-  // form. false (never true) when signed out.
-  canReview: boolean;
 }
 
+// Deliberately does NOT compute purchase eligibility (used to, via
+// getUser() + a 3-query purchase check, always run up-front — turning
+// every single product-page visit into up to 6 sequential round trips
+// before the page had anything to show, the actual cause of "les fiches
+// produits sont trop lentes"). Reviews/stats are needed immediately (the
+// star rating and the "Avis (n)" tab count show right away); whether the
+// current user is allowed to write one is only needed once they open the
+// Avis tab, so that check now lives in checkCanReview() below, called
+// lazily from there.
 export async function fetchProductReviews(productId: string): Promise<FetchProductReviewsResult> {
-  // Computed first, before any early return — the very first reviewer of a
-  // product would otherwise never have their purchase checked (the old bug
-  // here: this ran only when reviews already existed).
-  const { data: userData } = await supabase.auth.getUser();
-  const currentUserId = userData.user?.id;
-  const canReview = currentUserId ? await hasVerifiedPurchase(productId, currentUserId) : false;
-
   const { data: reviewRows } = await supabase.from('reviews').select('*').eq('product_id', productId).order('created_at', { ascending: false });
   const rows = (reviewRows ?? []) as ReviewRow[];
-  if (rows.length === 0) return { reviews: [], stats: { average: 0, count: 0 }, canReview };
+  if (rows.length === 0) return { reviews: [], stats: { average: 0, count: 0 } };
 
   const reviewIds = rows.map((r) => r.id);
   const { data: imageRows } = await supabase.from('review_images').select('*').in('review_id', reviewIds);
@@ -103,11 +98,17 @@ export async function fetchProductReviews(productId: string): Promise<FetchProdu
     comment: r.comment ?? '',
     createdAt: r.created_at,
     images: imagesByReview.get(r.id) ?? [],
-    verifiedPurchase: r.user_id === currentUserId && canReview,
   }));
 
   const average = rows.reduce((s, r) => s + r.rating, 0) / rows.length;
-  return { reviews, stats: { average, count: rows.length }, canReview };
+  return { reviews, stats: { average, count: rows.length } };
+}
+
+// Whether the given signed-in user has a delivered/collected purchase of
+// this exact product — the one condition that unlocks the review form.
+// Called only once the customer opens the Avis tab (see ProductPage).
+export async function checkCanReview(productId: string, userId: string): Promise<boolean> {
+  return hasVerifiedPurchase(productId, userId);
 }
 
 async function hasVerifiedPurchase(productId: string, customerId: string): Promise<boolean> {

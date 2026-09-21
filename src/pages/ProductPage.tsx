@@ -3,7 +3,7 @@ import { useApp } from '@/store/AppContext';
 import { getProduct, getVariantPrice, getProductsFromSameShop, getSimilarProducts, isRealCatalogId } from '@/data/products';
 import { getShop, registerSupabaseShops } from '@/data/shops';
 import { fetchProductDetailFromSupabase } from '@/lib/supabaseCatalog';
-import { fetchProductReviews, submitReview, deleteReview, type Review } from '@/lib/supabaseReviews';
+import { fetchProductReviews, checkCanReview, submitReview, deleteReview, type Review } from '@/lib/supabaseReviews';
 import { categoryMap } from '@/data/categories';
 import ProductGallery from '@/components/ProductGallery';
 import VariantSelector from '@/components/VariantSelector';
@@ -67,6 +67,7 @@ export default function ProductPage({ productId }: { productId: string }) {
   const [reviews, setReviews] = useState<Review[]>([]);
   const [reviewStats, setReviewStats] = useState<{ average: number; count: number }>({ average: 0, count: 0 });
   const [canReview, setCanReview] = useState(false);
+  const [canReviewChecked, setCanReviewChecked] = useState(false);
   const [myRating, setMyRating] = useState(0);
   const [myComment, setMyComment] = useState('');
   const [myPhotos, setMyPhotos] = useState<File[]>([]);
@@ -76,10 +77,9 @@ export default function ProductPage({ productId }: { productId: string }) {
 
   const loadReviews = () => {
     if (!product || !isRealCatalogId(product.id)) return;
-    fetchProductReviews(product.id).then(({ reviews: fetched, stats, canReview: eligible }) => {
+    fetchProductReviews(product.id).then(({ reviews: fetched, stats }) => {
       setReviews(fetched);
       setReviewStats(stats);
-      setCanReview(eligible);
       const mine = fetched.find((r) => r.userId === customerUser?.id);
       if (mine) { setMyRating(mine.rating); setMyComment(mine.comment); }
     });
@@ -87,8 +87,21 @@ export default function ProductPage({ productId }: { productId: string }) {
 
   useEffect(() => {
     loadReviews();
+    setCanReview(false);
+    setCanReviewChecked(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [product?.id, customerUser?.id]);
+
+  // Purchase eligibility needs its own (3-query) check — only worth paying
+  // for once the customer actually opens the Avis tab, not on every single
+  // product-page visit (see checkCanReview's comment in supabaseReviews.ts).
+  const openTab = (t: Tab) => {
+    setTab(t);
+    if (t === 'Avis' && product && customerUser && isRealCatalogId(product.id) && !canReviewChecked) {
+      setCanReviewChecked(true);
+      checkCanReview(product.id, customerUser.id).then(setCanReview);
+    }
+  };
 
   const handleSubmitReview = async () => {
     if (!product || !customerUser) return;
@@ -187,7 +200,7 @@ export default function ProductPage({ productId }: { productId: string }) {
             <div className="flex gap-5 border-b border-line">
               {tabs.map((t) => {
                 const count = isRealCatalogId(product.id) ? reviewStats.count : product.reviewCount;
-                return <button key={t} onClick={() => setTab(t)} className={`whitespace-nowrap border-b-2 pb-2.5 text-sm font-medium transition-colors ${tab === t ? 'border-burgundy text-burgundy' : 'border-transparent text-ink/50 hover:text-ink'}`}>{t}{t === 'Avis' && count ? ` (${count})` : ''}</button>;
+                return <button key={t} onClick={() => openTab(t)} className={`whitespace-nowrap border-b-2 pb-2.5 text-sm font-medium transition-colors ${tab === t ? 'border-burgundy text-burgundy' : 'border-transparent text-ink/50 hover:text-ink'}`}>{t}{t === 'Avis' && count ? ` (${count})` : ''}</button>;
               })}
             </div>
             <div className="py-5 text-sm text-ink/70">
@@ -252,7 +265,7 @@ export default function ProductPage({ productId }: { productId: string }) {
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-2">
                             <span className="text-sm font-medium text-ink">Client Ezial</span>
-                            {rev.verifiedPurchase && <span className="flex items-center gap-1 rounded-full bg-cream px-2 py-0.5 text-[10px] font-semibold text-ink/60"><ShieldCheck size={11} /> Achat vérifié</span>}
+                            {rev.userId === customerUser?.id && canReview && <span className="flex items-center gap-1 rounded-full bg-cream px-2 py-0.5 text-[10px] font-semibold text-ink/60"><ShieldCheck size={11} /> Achat vérifié</span>}
                           </div>
                           <span className="text-xs text-ink/40">{new Date(rev.createdAt).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
                         </div>
