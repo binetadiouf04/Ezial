@@ -58,7 +58,7 @@ export default function ProductGallery({ media, alt }: { media: GalleryMediaItem
             preload="metadata"
           />
         ) : (
-          <SmartImage key={active} src={current.url} alt={alt} className="h-full w-full object-cover fade-in" />
+          <SmartImage key={active} src={current.url} alt={alt} className="h-full w-full object-cover fade-in" loading="eager" fetchPriority="high" />
         )}
 
         {count > 1 && (

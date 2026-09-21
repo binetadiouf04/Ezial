@@ -193,11 +193,17 @@ export default function CheckoutPage() {
     setPromoError('');
   };
 
-  const validateInfo = () => {
+  const validateContactInfo = () => {
     const e: Record<string, string> = {};
     if (!form.firstName.trim()) e.firstName = 'Ce champ est obligatoire.';
     if (!form.lastName.trim()) e.lastName = 'Ce champ est obligatoire.';
     if (!form.phone.trim()) e.phone = 'Ce champ est obligatoire.';
+    setErrors(e);
+    return Object.keys(e).length === 0;
+  };
+
+  const validateDeliveryInfo = () => {
+    const e: Record<string, string> = {};
     if (isGift) {
       if (!giftRecipientName.trim()) e.giftRecipientName = 'Ce champ est obligatoire.';
       if (!giftRecipientPhone.trim()) e.giftRecipientPhone = 'Ce champ est obligatoire.';
@@ -395,9 +401,8 @@ export default function CheckoutPage() {
 
   const steps = [
     { id: 'info', label: 'Coordonnées' },
-    { id: 'fulfillment', label: 'Réception' },
+    { id: 'delivery', label: 'Livraison' },
     { id: 'payment', label: 'Paiement' },
-    { id: 'confirm', label: 'Confirmation' },
   ];
 
   // Pickup-only shops (to show pickup cards)
@@ -442,6 +447,16 @@ export default function CheckoutPage() {
                   {Object.keys(quartierToZone).map((q) => <option key={q} value={q}>{q}</option>)}
                 </select>
               </div>
+
+              <button onClick={() => { if (validateContactInfo()) setStep(1); }} className="btn-primary w-full">Continuer</button>
+            </div>
+          )}
+
+          {/* Step 1: Delivery — fulfillment choice, address/map, gift details */}
+          {step === 1 && (
+            <div className="space-y-5 fade-in">
+              <h2 className="font-display text-xl font-semibold">Livraison</h2>
+
               <div>
                 <label className="block text-xs font-medium text-ink/60 mb-1.5">Adresse de livraison{hasDeliveryShops && !isGift && <span className="text-burgundy"> *</span>}</label>
                 <input className="input-field" placeholder="Ex : Villa 12, Rue 4, Sacré-Cœur 3" value={form.address} onChange={(e) => { setForm({ ...form, address: e.target.value }); setErrors((prev) => { const next = { ...prev }; delete next.address; return next; }); }} />
@@ -500,14 +515,9 @@ export default function CheckoutPage() {
                 )}
               </div>
 
-              <button onClick={() => { if (validateInfo()) setStep(1); }} className="btn-primary w-full">Continuer</button>
-            </div>
-          )}
-
-          {/* Step 1: Fulfillment */}
-          {step === 1 && (
-            <div className="space-y-5 fade-in">
-              <h2 className="font-display text-xl font-semibold">Mode de réception</h2>
+              <div className="border-t border-line pt-5">
+                <h3 className="text-sm font-semibold text-ink mb-3">Mode de réception</h3>
+              </div>
 
               {/* Per-shop delivery/pickup choice */}
               {shopsInCart.map((shop) => {
@@ -704,7 +714,7 @@ export default function CheckoutPage() {
 
               <div className="flex gap-3">
                 <button onClick={() => setStep(0)} className="btn-outline flex-1">Retour</button>
-                <button onClick={() => setStep(2)} disabled={hasDeliveryShops && !location} className="btn-primary flex-1 disabled:opacity-50 disabled:cursor-not-allowed">Continuer</button>
+                <button onClick={() => { if (validateDeliveryInfo()) setStep(2); }} disabled={hasDeliveryShops && !location} className="btn-primary flex-1 disabled:opacity-50 disabled:cursor-not-allowed">Continuer</button>
               </div>
             </div>
           )}

@@ -25,7 +25,20 @@ function parseValue(value: string): { country: CountryDialCode; local: string } 
 // zero) — used everywhere a phone number is collected. Sénégal (+221) is
 // the default for an empty value, per the app's primary market.
 export default function PhoneField({ value, onChange, className = 'input-field' }: PhoneFieldProps) {
-  const { country, local } = useMemo(() => parseValue(value), [value]);
+  const parsed = useMemo(() => parseValue(value), [value]);
+  const local = parsed.local;
+  // The selected country is its own piece of state, not purely derived from
+  // `value` — an empty phone number carries no country information at all
+  // (onChange('') is indistinguishable from "still no digits"), so deriving
+  // it straight from `value` snapped back to Sénégal the instant a country
+  // was picked before typing any digit. Only re-sync from `value` when it
+  // actually carries a number to read a country from (e.g. an account's
+  // saved phone loading in after this field already mounted).
+  const [country, setCountry] = useState<CountryDialCode>(parsed.country);
+  useEffect(() => {
+    if (parsed.local) setCountry(parsed.country);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [value]);
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -46,6 +59,7 @@ export default function PhoneField({ value, onChange, className = 'input-field' 
   }, [query]);
 
   const emit = (nextCountry: CountryDialCode, nextLocal: string) => {
+    setCountry(nextCountry);
     const digits = nextLocal.replace(/\D/g, '').replace(/^0+/, '');
     onChange(digits ? `+${nextCountry.dialCode}${digits}` : '');
   };
