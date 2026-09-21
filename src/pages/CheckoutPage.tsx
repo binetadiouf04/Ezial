@@ -33,7 +33,7 @@ function tomorrowISO(): string {
 // even after a successful order, on purpose: it's exactly as useful for
 // the next order. Silently no-ops if localStorage is unavailable.
 const CHECKOUT_DRAFT_KEY = 'ezial-checkout-draft-v1';
-type CheckoutForm = { firstName: string; lastName: string; phone: string; email: string; quartier: string; address: string; landmark: string; instructions: string };
+type CheckoutForm = { firstName: string; lastName: string; phone: string; email: string; quartier: string; landmark: string; instructions: string };
 
 function loadDraftForm(): Partial<CheckoutForm> {
   try {
@@ -58,7 +58,7 @@ type LocationMode = 'gps' | 'manual';
 export default function CheckoutPage() {
   const { cart, cartSubtotal, clearCart, navigate, addOrder, catalogProducts, customerUser } = useApp();
   const [step, setStep] = useState(0);
-  const [form, setForm] = useState<CheckoutForm>(() => ({ firstName: '', lastName: '', phone: '', email: '', quartier: 'Plateau', address: '', landmark: '', instructions: '', ...loadDraftForm() }));
+  const [form, setForm] = useState<CheckoutForm>(() => ({ firstName: '', lastName: '', phone: '', email: '', quartier: 'Plateau', landmark: '', instructions: '', ...loadDraftForm() }));
   const [preference, setPreference] = useState<DeliveryPreference>({ type: 'none' });
   const [payment, setPayment] = useState('wave');
   const [shopFulfillments, setShopFulfillments] = useState<Record<string, 'delivery' | 'pickup'>>({});
@@ -77,7 +77,6 @@ export default function CheckoutPage() {
   const [isGift, setIsGift] = useState(false);
   const [giftRecipientName, setGiftRecipientName] = useState('');
   const [giftRecipientPhone, setGiftRecipientPhone] = useState('');
-  const [giftRecipientAddress, setGiftRecipientAddress] = useState('');
   const [giftRecipientLandmark, setGiftRecipientLandmark] = useState('');
   const [giftShowBuyerName, setGiftShowBuyerName] = useState(false);
   const [giftMessage, setGiftMessage] = useState('');
@@ -92,10 +91,10 @@ export default function CheckoutPage() {
   const [promoChecking, setPromoChecking] = useState(false);
   const [promoError, setPromoError] = useState('');
 
-  // Manual address search — the delivery position is independent from the
-  // typed deliveryAddress text (form.address): picking a search result or
-  // dragging the map marker here never writes into form.address, and no
-  // raw coordinate is ever shown to the customer.
+  // Manual address search — no raw coordinate is ever shown to the
+  // customer; selectedLabel is the reverse-geocoded human-readable form of
+  // wherever the map/search lands on, and the only address text sent with
+  // the order (there's no separate manually-typed address field anymore).
   const [manualAdjusted, setManualAdjusted] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [searching, setSearching] = useState(false);
@@ -208,9 +207,6 @@ export default function CheckoutPage() {
     if (isGift) {
       if (!giftRecipientName.trim()) e.giftRecipientName = 'Ce champ est obligatoire.';
       if (!giftRecipientPhone.trim()) e.giftRecipientPhone = 'Ce champ est obligatoire.';
-      if (hasDeliveryShops && !giftRecipientAddress.trim()) e.giftRecipientAddress = 'L\'adresse du destinataire est obligatoire pour une commande avec livraison.';
-    } else if (hasDeliveryShops && !form.address.trim()) {
-      e.address = 'L\'adresse est obligatoire pour une commande avec livraison.';
     }
     setErrors(e);
     return Object.keys(e).length === 0;
@@ -358,7 +354,10 @@ export default function CheckoutPage() {
         // Cadeau : la destination réelle du colis est celle du destinataire,
         // jamais celle de l'acheteur — firstName/lastName/phone/email
         // au-dessus restent toujours ceux de l'acheteur.
-        deliveryAddress: (isGift ? giftRecipientAddress.trim() : form.address.trim()) || undefined,
+        // No manual address field anymore — the map (search or pin drop) is
+        // the single source of truth for where to deliver; selectedLabel is
+        // its reverse-geocoded human-readable form, when one was resolved.
+        deliveryAddress: selectedLabel?.trim() || undefined,
         deliveryNotes: isGift
           ? (giftRecipientLandmark.trim() ? `Point de repère : ${giftRecipientLandmark.trim()}` : undefined)
           : [form.landmark.trim() && `Point de repère : ${form.landmark.trim()}`, form.instructions.trim()].filter(Boolean).join('. ') || undefined,
@@ -458,20 +457,6 @@ export default function CheckoutPage() {
             <div className="space-y-5 fade-in">
               <h2 className="font-display text-xl font-semibold">Livraison</h2>
 
-              <div>
-                <label className="block text-xs font-medium text-ink/60 mb-1.5">Adresse de livraison{hasDeliveryShops && !isGift && <span className="text-burgundy"> *</span>}</label>
-                <input className="input-field" placeholder="Ex : Villa 12, Rue 4, Sacré-Cœur 3" value={form.address} onChange={(e) => { setForm({ ...form, address: e.target.value }); setErrors((prev) => { const next = { ...prev }; delete next.address; return next; }); }} />
-                {errors.address && <p className="mt-1 text-xs text-burgundy">{errors.address}</p>}
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-ink/60 mb-1.5">Point de repère (optionnel)</label>
-                <input className="input-field" placeholder="Ex: près de la pharmacie, en face de..." value={form.landmark} onChange={(e) => setForm({ ...form, landmark: e.target.value })} />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-ink/60 mb-1.5">Instructions pour la livraison (facultatif)</label>
-                <textarea className="input-field" rows={2} placeholder="Ex. Appelez-moi en arrivant, portail noir..." value={form.instructions} onChange={(e) => setForm({ ...form, instructions: e.target.value })} />
-              </div>
-
               <div className="border-t border-line pt-4 space-y-3">
                 <label className="flex cursor-pointer items-center gap-2.5">
                   <input type="checkbox" className="h-4 w-4 rounded border-line text-burgundy focus:ring-burgundy" checked={isGift} onChange={(e) => setIsGift(e.target.checked)} />
@@ -490,11 +475,6 @@ export default function CheckoutPage() {
                       <label className="block text-xs font-medium text-ink/60 mb-1.5">Téléphone du destinataire</label>
                       <PhoneField value={giftRecipientPhone} onChange={(v) => { setGiftRecipientPhone(v); setErrors((prev) => { const next = { ...prev }; delete next.giftRecipientPhone; return next; }); }} />
                       {errors.giftRecipientPhone && <p className="mt-1 text-xs text-burgundy">{errors.giftRecipientPhone}</p>}
-                    </div>
-                    <div>
-                      <label className="block text-xs font-medium text-ink/60 mb-1.5">Adresse du destinataire{hasDeliveryShops && <span className="text-burgundy"> *</span>}</label>
-                      <input className="input-field" placeholder="Ex : Villa 12, Rue 4, Sacré-Cœur 3" value={giftRecipientAddress} onChange={(e) => { setGiftRecipientAddress(e.target.value); setErrors((prev) => { const next = { ...prev }; delete next.giftRecipientAddress; return next; }); }} />
-                      {errors.giftRecipientAddress && <p className="mt-1 text-xs text-burgundy">{errors.giftRecipientAddress}</p>}
                     </div>
                     <div>
                       <label className="block text-xs font-medium text-ink/60 mb-1.5">Point de repère (optionnel)</label>
@@ -657,7 +637,7 @@ export default function CheckoutPage() {
                             ) : selectedLabel ? (
                               <p className="mt-0.5 flex items-start gap-1.5 text-sm text-ink/75"><MapPin size={14} className="mt-0.5 flex-shrink-0 text-burgundy" /> {selectedLabel}</p>
                             ) : manualAdjusted ? (
-                              <p className="mt-0.5 text-xs text-ink/60">Adresse précise non trouvée pour ce point — la position exacte reste enregistrée. Ajoutez un point de repère si besoin (étape précédente).</p>
+                              <p className="mt-0.5 text-xs text-ink/60">Adresse précise non trouvée pour ce point — la position exacte reste enregistrée. Ajoutez un point de repère si besoin, juste en dessous.</p>
                             ) : null}
                           </div>
                         </div>
@@ -669,6 +649,15 @@ export default function CheckoutPage() {
                   )}
                 </div>
               )}
+
+              <div>
+                <label className="block text-xs font-medium text-ink/60 mb-1.5">Point de repère (optionnel)</label>
+                <input className="input-field" placeholder="Ex: près de la pharmacie, en face de..." value={form.landmark} onChange={(e) => setForm({ ...form, landmark: e.target.value })} />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-ink/60 mb-1.5">Instructions pour la livraison (facultatif)</label>
+                <textarea className="input-field" rows={2} placeholder="Ex. Appelez-moi en arrivant, portail noir..." value={form.instructions} onChange={(e) => setForm({ ...form, instructions: e.target.value })} />
+              </div>
 
               {/* Pickup shop info */}
               {pickupShops.map((shop) => (

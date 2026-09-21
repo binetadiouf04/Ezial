@@ -29,11 +29,23 @@ const ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY') ?? '';
 
 const admin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
 
+// Called directly from the browser (supabase.functions.invoke), unlike
+// send-push (server-to-server via a trigger) — without these headers the
+// browser blocks the response entirely before our code's own error
+// handling ever gets a chance to run, which is exactly what surfaced as
+// the generic "Impossible de supprimer le compte" message.
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+};
+
 function json(body: unknown, status = 200) {
-  return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
+  return new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
 }
 
 Deno.serve(async (req) => {
+  if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
+
   const authHeader = req.headers.get('Authorization') ?? '';
   if (!authHeader) return json({ error: 'Non authentifié.' }, 401);
 
