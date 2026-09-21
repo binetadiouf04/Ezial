@@ -1,6 +1,7 @@
 import { supabase } from './supabaseClient';
 import type { HeroSlide } from '@/components/HeroCarousel';
 import type { HomeCircleTile } from '@/data/categories';
+import { optimizeImageFile } from '@/utils/imageOptimize';
 
 // Manually-managed Home content (Hero carousel + "À découvrir" shortcuts) —
 // see the SQL migration for hero_slides / home_discover_tiles. Both fetch
@@ -17,10 +18,16 @@ export function resolveSiteContentUrl(path: string): string {
   return supabase.storage.from(SITE_CONTENT_BUCKET).getPublicUrl(path).data.publicUrl;
 }
 
+// A hero banner spans the full page width; a discover tile is a small
+// circle — both resized and re-encoded as WebP before upload (see
+// optimizeImageFile), same as every other image upload in the app.
+const SITE_CONTENT_MAX_DIMENSION: Record<'hero' | 'discover', number> = { hero: 1600, discover: 400 };
+
 /** Uploads an admin-picked image to the site-content bucket and returns its public URL. */
 export async function uploadSiteContentImage(file: File, folder: 'hero' | 'discover'): Promise<{ url: string } | { error: string }> {
-  const path = `${folder}/${Date.now()}-${file.name.replace(/[^a-zA-Z0-9_.-]/g, '_')}`;
-  const { error } = await supabase.storage.from(SITE_CONTENT_BUCKET).upload(path, file);
+  const optimized = await optimizeImageFile(file, SITE_CONTENT_MAX_DIMENSION[folder]);
+  const path = `${folder}/${Date.now()}-${optimized.name.replace(/[^a-zA-Z0-9_.-]/g, '_')}`;
+  const { error } = await supabase.storage.from(SITE_CONTENT_BUCKET).upload(path, optimized);
   if (error) return { error: `L'envoi de l'image a échoué : ${error.message}.` };
   return { url: resolveSiteContentUrl(path) };
 }
