@@ -12,7 +12,7 @@ import Rating from '@/components/Rating';
 import FavoriteButton from '@/components/FavoriteButton';
 import ProductCarousel from '@/components/ProductCarousel';
 import SmartImage from '@/components/SmartImage';
-import { ChevronRight, Truck, Store, Plus, Minus, Check, Star, Camera, X, ShieldCheck, Loader2 } from 'lucide-react';
+import { ChevronRight, Store, Plus, Minus, Check, Star, Camera, X, ShieldCheck, Loader2 } from 'lucide-react';
 
 const tabs = ['Description', 'Avis'] as const;
 type Tab = (typeof tabs)[number];
@@ -206,10 +206,11 @@ export default function ProductPage({ productId }: { productId: string }) {
               <button onClick={() => handleAdd(true)} disabled={outOfStock} className="btn-primary flex-1">Acheter maintenant</button>
             </div>
           </div>
-          <div className="space-y-2.5 rounded-xl border border-line p-4">
-            <div className="flex items-center gap-2.5 text-sm text-ink/75"><Truck size={17} className="text-ink/50" /><span>{product.delivery}</span></div>
-            {product.pickup && <div className="flex items-center gap-2.5 text-sm text-ink/75"><Store size={17} className="text-ink/50" /><span>{product.pickup}</span></div>}
-          </div>
+          {product.pickup && (
+            <div className="space-y-2.5 rounded-xl border border-line p-4">
+              <div className="flex items-center gap-2.5 text-sm text-ink/75"><Store size={17} className="text-ink/50" /><span>{product.pickup}</span></div>
+            </div>
+          )}
           <div className="border-t border-line pt-5">
             <div className="flex gap-5 border-b border-line">
               {tabs.map((t) => {
@@ -232,7 +233,7 @@ export default function ProductPage({ productId }: { productId: string }) {
               {tab === 'Avis' && (
                 isRealCatalogId(product.id) ? (
                   <div className="space-y-6">
-                    {customerUser && canReview ? (
+                    {customerUser ? (
                       <div className="rounded-xl border border-line p-4 space-y-3">
                         <h3 className="text-sm font-semibold text-ink">{myRating > 0 ? 'Modifier mon avis' : 'Donner mon avis'}</h3>
                         <div className="flex items-center gap-1">
@@ -266,12 +267,10 @@ export default function ProductPage({ productId }: { productId: string }) {
                           {reviewSaved && <span className="flex items-center gap-1 text-sm text-green-600"><Check size={14} /> Avis enregistré</span>}
                         </div>
                       </div>
-                    ) : !customerUser ? (
+                    ) : (
                       <p className="text-sm text-ink/50">
                         <button onClick={() => navigate('/profil')} className="font-medium text-burgundy hover:underline">Connectez-vous</button> pour laisser un avis.
                       </p>
-                    ) : (
-                      <p className="text-sm text-ink/50">Les avis sont réservés aux clients ayant acheté et reçu ce produit.</p>
                     )}
 
                     {reviews.length === 0 ? <p className="text-ink/50">Aucun avis pour l'instant.</p> : reviews.map((rev) => (

@@ -1,4 +1,5 @@
 import { supabase } from './supabaseClient';
+import { optimizeImageFile } from '@/utils/imageOptimize';
 
 // Location read/write for the seller's own real Supabase shop row. Kept
 // separate from the mock `sellerShop` state in ProContext (which never
@@ -110,10 +111,17 @@ export async function submitShopForReview(): Promise<{ error?: string }> {
 
 const SHOP_ASSETS_BUCKET = 'product-images';
 
+// A logo is only ever shown small (avatar-sized); a cover spans the shop
+// header, wider but still nowhere near a phone camera's native resolution —
+// both are resized and re-encoded as WebP before upload (see
+// optimizeImageFile), instead of storing the picked file as-is.
+const ASSET_MAX_DIMENSION: Record<'logo' | 'cover', number> = { logo: 512, cover: 1600 };
+
 export async function uploadShopAsset(shopId: string, kind: 'logo' | 'cover', file: File): Promise<{ url?: string; error?: string }> {
-  const ext = file.type === 'image/webp' ? 'webp' : file.type === 'image/png' ? 'png' : 'jpg';
+  const optimized = await optimizeImageFile(file, ASSET_MAX_DIMENSION[kind]);
+  const ext = optimized.type === 'image/webp' ? 'webp' : optimized.type === 'image/png' ? 'png' : 'jpg';
   const path = `shops/${shopId}/${kind}-${Date.now()}.${ext}`;
-  const { error } = await supabase.storage.from(SHOP_ASSETS_BUCKET).upload(path, file);
+  const { error } = await supabase.storage.from(SHOP_ASSETS_BUCKET).upload(path, optimized);
   if (error) return { error: `Envoi impossible : ${error.message}` };
   const { data } = supabase.storage.from(SHOP_ASSETS_BUCKET).getPublicUrl(path);
   return { url: data.publicUrl };

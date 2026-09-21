@@ -1,5 +1,11 @@
 import { supabase } from './supabaseClient';
 import { PRODUCT_IMAGES_BUCKET, resolveImageUrl } from './supabaseCatalog';
+import { optimizeImageFile } from '@/utils/imageOptimize';
+
+// Review photos are illustrative, never zoomed into full-screen — 1280px on
+// the long side is plenty, resized and re-encoded as WebP before upload
+// instead of storing a phone camera's original file.
+const REVIEW_PHOTO_MAX_DIMENSION = 1280;
 
 // Real Supabase-backed product reviews — public.reviews / review_images
 // (see the migration this feature ships with). RLS: published reviews
@@ -148,7 +154,7 @@ export async function submitReview(userId: string, input: SubmitReviewInput): Pr
   }
 
   for (let i = 0; i < input.photos.slice(0, 3).length; i++) {
-    const file = input.photos[i];
+    const file = await optimizeImageFile(input.photos[i], REVIEW_PHOTO_MAX_DIMENSION);
     const ext = file.type === 'image/webp' ? 'webp' : file.type === 'image/png' ? 'png' : 'jpg';
     const path = `reviews/${userId}/${reviewId}-${i}-${Date.now()}.${ext}`;
     const { error: uploadError } = await supabase.storage.from(PRODUCT_IMAGES_BUCKET).upload(path, file);

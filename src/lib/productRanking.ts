@@ -43,6 +43,40 @@ export function rankProducts(products: Product[], ctx: RankingContext): Product[
 // relative order (their own curated isTrending flag as a last tie-break)
 // rather than disappearing outright. Phase 2 (real activity data) replaces
 // the comparator's body the same way scoreProduct is meant to evolve.
+// Homepage section preview only (never the full "Voir tout" list): picks
+// products round-robin across category/subcategory groups so a section
+// never reads as "just one type of product" — one item per subcategory
+// first, then a second pass for a 2nd item per subcategory if the limit
+// isn't reached yet, and so on. Each group keeps its own relative order
+// (so the official-shop boost from rankProducts still applies within a
+// subcategory), and groups are visited in the order their first product
+// appeared in the ranked input — so a higher-ranked subcategory still gets
+// picked first.
+export function diversifyBySubcategory(products: Product[], limit: number): Product[] {
+  const groups = new Map<string, Product[]>();
+  const groupOrder: string[] = [];
+  for (const p of products) {
+    const key = `${p.category}/${p.subcategory}`;
+    if (!groups.has(key)) { groups.set(key, []); groupOrder.push(key); }
+    groups.get(key)!.push(p);
+  }
+
+  const result: Product[] = [];
+  for (let round = 0; result.length < limit; round++) {
+    let addedInThisRound = false;
+    for (const key of groupOrder) {
+      if (result.length >= limit) break;
+      const group = groups.get(key)!;
+      if (round < group.length) {
+        result.push(group[round]);
+        addedInThisRound = true;
+      }
+    }
+    if (!addedInThisRound) break;
+  }
+  return result;
+}
+
 export function rankForTrending(products: Product[], ctx: RankingContext): Product[] {
   const byRecency = [...products].sort((a, b) => {
     if (a.createdAt && b.createdAt) return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();

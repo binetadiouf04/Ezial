@@ -7,7 +7,7 @@ import ProductCard from '@/components/ProductCard';
 import ShopCard from '@/components/ShopCard';
 import HeroCarousel, { type HeroSlide } from '@/components/HeroCarousel';
 import DiscoverMarquee from '@/components/DiscoverMarquee';
-import { rankProducts, rankForTrending } from '@/lib/productRanking';
+import { rankProducts, rankForTrending, diversifyBySubcategory } from '@/lib/productRanking';
 import { fetchHeroSlides, fetchDiscoverTiles } from '@/lib/supabaseHomeContent';
 import { ChevronRight } from 'lucide-react';
 
@@ -53,7 +53,7 @@ function HomeProductPreview({
   seeAllRoute: string;
   onNavigate: (route: string) => void;
 }) {
-  const preview = products.slice(0, HOME_SECTION_LIMIT);
+  const preview = diversifyBySubcategory(products, HOME_SECTION_LIMIT);
   return (
     <>
       <div className="mb-6 flex items-end justify-between">
