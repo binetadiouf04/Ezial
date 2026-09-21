@@ -88,6 +88,59 @@ export async function signInSeller(identifier: string, password: string): Promis
   return shop;
 }
 
+// Same normalization ProContext.tsx already uses for mock shop ids — kept
+// identical so real and mock slugs never diverge in style.
+function slugifyShopName(name: string): string {
+  return name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+}
+
+async function uniqueShopSlug(shopName: string, userId: string): Promise<string> {
+  const base = slugifyShopName(shopName) || 'boutique';
+  const { data: clash } = await supabase.from('shops').select('id').eq('slug', base).maybeSingle();
+  return clash ? `${base}-${userId.slice(0, 8)}` : base;
+}
+
+// One email can legitimately be both a customer and a seller (shops.owner_id
+// and customer_profiles.id both just point at the same auth.users row) —
+// small businesses routinely want exactly this. signUp() can't do it though:
+// it always tries to create a brand new auth user, so it fails whenever the
+// email is already registered (e.g. as a customer). The fix is to sign in
+// to that existing account with the password just entered (proving it's
+// really theirs — never skips authentication) and attach the shop there
+// directly. RLS already allows this (`shops_insert_self`: owner_id =
+// auth.uid()), so no new policy is needed.
+async function linkShopToExistingAccount(input: { email: string; password: string; shopName: string; username: string }): Promise<SignUpSellerResult> {
+  const { error: signInError } = await supabase.auth.signInWithPassword({ email: input.email, password: input.password });
+  if (signInError) {
+    return { error: "Un compte existe déjà avec cet email. Connectez-vous avec son mot de passe pour y associer votre boutique, ou utilisez « Mot de passe oublié » pour le réinitialiser." };
+  }
+
+  const existingShop = await shopForCurrentUser();
+  if (existingShop) return { error: 'Ce compte possède déjà une boutique.' };
+
+  const { data: userData } = await supabase.auth.getUser();
+  const userId = userData.user?.id;
+  if (!userId) return { error: mapAuthErrorMessage(undefined) };
+
+  const slug = await uniqueShopSlug(input.shopName, userId);
+  const { error: insertError } = await supabase.from('shops').insert({
+    owner_id: userId,
+    name: input.shopName.trim(),
+    slug,
+    seller_code: input.username,
+    status: 'draft',
+  });
+  if (insertError) {
+    const msg = insertError.message.toLowerCase();
+    if (msg.includes('seller_code') || msg.includes('duplicate')) return { error: USERNAME_TAKEN_ERROR };
+    return { error: mapAuthErrorMessage(undefined) };
+  }
+
+  const shop = await shopForCurrentUser();
+  if (!shop) return { error: mapAuthErrorMessage(undefined) };
+  return { status: 'confirmed', shop };
+}
+
 export interface SignUpSellerInput {
   shopName: string;
   email: string;
@@ -144,6 +197,9 @@ export async function signUpSeller(input: SignUpSellerInput): Promise<SignUpSell
   if (error) {
     const msg = error.message.toLowerCase();
     if (msg.includes('seller_code') || msg.includes('duplicate')) return { error: USERNAME_TAKEN_ERROR };
+    if (msg.includes('already registered') || msg.includes('already exists') || msg.includes('user already')) {
+      return linkShopToExistingAccount({ email, password: input.password, shopName: input.shopName, username });
+    }
     return { error: mapAuthErrorMessage(error.message) };
   }
   if (!data.user) return { error: mapAuthErrorMessage(undefined) };
