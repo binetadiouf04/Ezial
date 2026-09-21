@@ -103,6 +103,10 @@ interface ProductImageRow {
   media_type?: string | null;
   original_storage_path?: string | null;
   branding_overlay?: Record<string, unknown> | null;
+  // Added by the thumbnail migration — absent/null on any row inserted
+  // before it (and on any photo uploaded before the thumbnail generation
+  // itself shipped, even after the column exists).
+  thumbnail_storage_path?: string | null;
 }
 
 interface ProductVariantRow {
@@ -156,6 +160,15 @@ function sortedRowsForProduct(productId: string, imageRows: ProductImageRow[]): 
 // Excludes video rows on purpose — `images: string[]` is consumed broadly
 // (ProductCard, category thumbnails...) by code that only ever renders an
 // <img>, so a video URL must never end up in it.
+// The primary photo's dedicated small crop, if one was generated for it —
+// undefined for any product whose primary photo predates this feature, so
+// callers fall back to the full-size image (`images[0]`) exactly as before.
+function thumbnailUrlForProduct(productId: string, imageRows: ProductImageRow[]): string | undefined {
+  const primary = sortedRowsForProduct(productId, imageRows).find((img) => img.media_type !== 'video');
+  if (!primary?.thumbnail_storage_path) return undefined;
+  return resolveImageUrl(primary.thumbnail_storage_path) || undefined;
+}
+
 function imagesForProduct(productId: string, imageRows: ProductImageRow[]): string[] {
   return sortedRowsForProduct(productId, imageRows)
     .filter((img) => img.media_type !== 'video')
@@ -236,6 +249,7 @@ function mapProduct(row: ProductRow, imageRows: ProductImageRow[], variantRows: 
     oldPrice: promoActive ? row.base_price : undefined,
     images: images.length > 0 ? images : [FALLBACK_PRODUCT_IMAGE],
     media: media.length > 0 ? media : [{ url: FALLBACK_PRODUCT_IMAGE, type: 'image' as const }],
+    thumbnailUrl: thumbnailUrlForProduct(row.id, imageRows),
     // No Supabase equivalent — neutral defaults, not invented columns.
     rating: undefined,
     reviewCount: undefined,

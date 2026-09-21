@@ -1,6 +1,7 @@
 import { supabase } from './supabaseClient';
 import { PRODUCT_IMAGES_BUCKET, resolveImageUrl } from './supabaseCatalog';
 import { assignShopPrefixes, formatReference } from '@/utils/reference';
+import { generateThumbnail } from '@/utils/imageOptimize';
 
 // Writes a seller-created product to Supabase: products, then
 // product_variants, then the image uploads + product_images. Each step
@@ -141,6 +142,11 @@ export interface UploadedMediaRow {
   mediaType: MediaType;
   originalStoragePath?: string;
   brandingOverlay?: BrandingOverlay;
+  // A 240x300 WebP crop of `storagePath`, generated from the same already-
+  // cropped (4:5) file — undefined whenever generation or its own upload
+  // fails, which is never treated as a reason to fail the whole product
+  // save: the reader side already falls back to the full-size image.
+  thumbnailStoragePath?: string;
 }
 
 // Uploads every file a media item needs (main file, plus the original and
@@ -175,7 +181,25 @@ async function uploadMedia(
         const logoStoragePath = await upload(item.logoFile, '-logo');
         brandingOverlay = { ...item.brandingOverlay, logoStoragePath };
       }
-      rows.push({ storagePath, mediaType: item.mediaType, originalStoragePath, brandingOverlay });
+
+      // Best-effort only, deliberately outside the try/catch that fails the
+      // whole item: a thumbnail that can't be generated or uploaded just
+      // means this product falls back to its full-size image, exactly like
+      // any product that predates this feature — never a reason to fail an
+      // otherwise-successful photo upload.
+      let thumbnailStoragePath: string | undefined;
+      if (item.mediaType === 'image') {
+        const thumbFile = await generateThumbnail(item.file);
+        if (thumbFile) {
+          try {
+            thumbnailStoragePath = await upload(thumbFile, '-thumb');
+          } catch {
+            thumbnailStoragePath = undefined;
+          }
+        }
+      }
+
+      rows.push({ storagePath, mediaType: item.mediaType, originalStoragePath, brandingOverlay, thumbnailStoragePath });
     } catch (err) {
       return { error: err instanceof Error ? err.message : String(err), uploadedSoFar };
     }
@@ -291,7 +315,7 @@ export async function createProductInSupabase(
         const { cleanedUp } = await cleanupFailedProduct(productId, uploadedPaths);
         return { error: failureMessage(uploadResult.error, productId, cleanedUp) };
       }
-      uploadedPaths = uploadResult.rows.flatMap((r) => [r.storagePath, r.originalStoragePath, r.brandingOverlay?.logoStoragePath].filter((p): p is string => Boolean(p)));
+      uploadedPaths = uploadResult.rows.flatMap((r) => [r.storagePath, r.originalStoragePath, r.brandingOverlay?.logoStoragePath, r.thumbnailStoragePath].filter((p): p is string => Boolean(p)));
 
       const imageRows = uploadResult.rows.map((r, i) => ({
         product_id: productId,
@@ -301,6 +325,7 @@ export async function createProductInSupabase(
         media_type: r.mediaType,
         original_storage_path: r.originalStoragePath ?? null,
         branding_overlay: r.brandingOverlay ?? null,
+        thumbnail_storage_path: r.thumbnailStoragePath ?? null,
       }));
       const { error: imagesError } = await supabase.from('product_images').insert(imageRows);
       if (imagesError) {
@@ -416,6 +441,7 @@ export interface ExistingProductImage {
   mediaType: MediaType;
   originalStoragePath: string | null;
   brandingOverlay: BrandingOverlay | null;
+  thumbnailStoragePath: string | null;
 }
 
 // select('*') on purpose, not an explicit column list: media_type,
@@ -442,6 +468,7 @@ export async function fetchProductImages(productId: string): Promise<ExistingPro
     mediaType: (row.media_type as MediaType) ?? 'image',
     originalStoragePath: (row.original_storage_path as string | null) ?? null,
     brandingOverlay: (row.branding_overlay as BrandingOverlay | null) ?? null,
+    thumbnailStoragePath: (row.thumbnail_storage_path as string | null) ?? null,
   }));
 }
 
@@ -675,10 +702,11 @@ export async function addProductMedia(
     media_type: r.mediaType,
     original_storage_path: r.originalStoragePath ?? null,
     branding_overlay: r.brandingOverlay ?? null,
+    thumbnail_storage_path: r.thumbnailStoragePath ?? null,
   }));
   const { error: imagesError } = await supabase.from('product_images').insert(imageRows);
   if (imagesError) {
-    const allPaths = uploadResult.rows.flatMap((r) => [r.storagePath, r.originalStoragePath, r.brandingOverlay?.logoStoragePath].filter((p): p is string => Boolean(p)));
+    const allPaths = uploadResult.rows.flatMap((r) => [r.storagePath, r.originalStoragePath, r.brandingOverlay?.logoStoragePath, r.thumbnailStoragePath].filter((p): p is string => Boolean(p)));
     await supabase.storage.from(PRODUCT_IMAGES_BUCKET).remove(allPaths);
     return { error: `Impossible d'enregistrer les nouvelles images : ${imagesError.message}` };
   }

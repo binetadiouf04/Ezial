@@ -34,3 +34,33 @@ export async function optimizeImageFile(file: File, maxDimension: number, qualit
     return file;
   }
 }
+
+// A small, fixed-size product thumbnail for ProductCard/Home/Catégories/
+// Recherche — every one of those already renders the exact same 4:5 crop
+// the seller confirmed (ImageCropModal's own output), so a plain resize to
+// 240x300 never distorts or re-frames anything. Returns null (never the
+// original file) on any failure — callers treat that as "no thumbnail this
+// time", which is exactly what the existing "fall back to the main image"
+// behavior already handles for products that predate this feature.
+export async function generateThumbnail(file: File, width = 240, height = 300, quality = 0.82): Promise<File | null> {
+  if (!file.type.startsWith('image/') || file.type === 'image/svg+xml') return null;
+
+  try {
+    const bitmap = await createImageBitmap(file);
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return null;
+    ctx.drawImage(bitmap, 0, 0, width, height);
+    bitmap.close?.();
+
+    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/webp', quality));
+    if (!blob) return null;
+
+    const thumbName = file.name.replace(/\.[^.]+$/, '') + '-thumb.webp';
+    return new File([blob], thumbName, { type: 'image/webp' });
+  } catch {
+    return null;
+  }
+}

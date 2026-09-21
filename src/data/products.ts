@@ -34,6 +34,12 @@ export interface Product {
   // mock catalog (which only ever has photos) — ProductGallery falls back
   // to `images` mapped to type 'image' when this is undefined.
   media?: { url: string; type: 'image' | 'video' }[];
+  // A small dedicated 240x300 WebP crop of the primary photo, generated at
+  // upload time — used by ProductCard/Home/Catégories/Recherche instead of
+  // downloading the full-size gallery image for a small card. Absent on the
+  // static mock catalog and on any real product whose primary photo predates
+  // this feature; every caller falls back to `images[0]` in that case.
+  thumbnailUrl?: string;
 }
 
 const I = {

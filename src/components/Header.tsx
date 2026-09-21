@@ -53,7 +53,7 @@ export default function Header() {
                     ))}
                     {matches.length > 0 && <div className="px-4 py-1.5 mt-1"><p className="text-[10px] font-semibold uppercase tracking-wider text-ink/40">{isSuggestion ? 'Suggestions' : 'Produits'}</p></div>}
                     {matches.slice(0, 5).map((p) => (
-                      <button key={p.id} onMouseDown={() => navigate(`/produit/${p.id}`)} className="flex w-full items-center gap-3 px-4 py-2 text-left hover:bg-cream"><SmartImage src={p.images[0]} alt="" className="h-10 w-10 rounded-lg object-cover" /><div className="min-w-0 flex-1"><p className="truncate text-sm font-medium text-ink">{p.name}</p><p className="text-xs text-ink/45">{categoryMap[p.category]?.label}</p></div><span className="text-sm font-semibold text-ink">{p.price.toLocaleString('fr-FR')} F</span></button>
+                      <button key={p.id} onMouseDown={() => navigate(`/produit/${p.id}`)} className="flex w-full items-center gap-3 px-4 py-2 text-left hover:bg-cream"><SmartImage src={p.thumbnailUrl || p.images[0]} alt="" className="h-10 w-10 rounded-lg object-cover" /><div className="min-w-0 flex-1"><p className="truncate text-sm font-medium text-ink">{p.name}</p><p className="text-xs text-ink/45">{categoryMap[p.category]?.label}</p></div><span className="text-sm font-semibold text-ink">{p.price.toLocaleString('fr-FR')} F</span></button>
                     ))}
                     <button onMouseDown={() => submit({ preventDefault: () => {} } as React.FormEvent)} className="mt-1 block w-full border-t border-line px-4 py-3 text-left text-sm font-medium text-burgundy hover:bg-cream">Voir tous les résultats pour « {query.trim()} »</button>
                   </>

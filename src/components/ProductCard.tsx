@@ -15,7 +15,12 @@ export default function ProductCard({ product }: { product: Product }) {
   return (
     <div onClick={() => navigate(`/produit/${product.id}`)} className="group cursor-pointer">
       <div className="relative aspect-[4/5] overflow-hidden rounded-xl bg-cream">
-        <SmartImage src={product.images[0]} alt={product.name} className={`h-full w-full object-cover transition-transform duration-700 group-hover:scale-105 ${outOfStock ? 'opacity-60 grayscale' : ''}`} />
+        {/* The dedicated small crop when one exists (every photo uploaded
+           since the thumbnail feature shipped) — never the full-size
+           gallery image just to shrink it down in a small card. Falls back
+           to the full-size image for any product whose primary photo
+           predates this feature. */}
+        <SmartImage src={product.thumbnailUrl || product.images[0]} alt={product.name} className={`h-full w-full object-cover transition-transform duration-700 group-hover:scale-105 ${outOfStock ? 'opacity-60 grayscale' : ''}`} />
         <div className="absolute right-2.5 top-2.5"><FavoriteButton productId={product.id} /></div>
         {product.isNew && !product.isPromo && <span className="absolute left-2.5 top-2.5 rounded-full bg-white/95 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-ink">Nouveau</span>}
         {outOfStock && <div className="absolute inset-0 flex items-center justify-center"><span className="rounded-full bg-ink/80 px-4 py-2 text-xs font-semibold uppercase tracking-wider text-white">Rupture de stock</span></div>}

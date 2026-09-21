@@ -246,6 +246,7 @@ interface MediaItem {
     storagePath: string;
     originalStoragePath: string | null;
     brandingOverlayLogoPath: string | null;
+    thumbnailStoragePath: string | null;
   };
 }
 
@@ -363,6 +364,7 @@ export default function SellerProductForm({ productId }: { productId?: string })
           storagePath: img.storagePath,
           originalStoragePath: img.originalStoragePath,
           brandingOverlayLogoPath: img.brandingOverlay?.logoStoragePath ?? null,
+          thumbnailStoragePath: img.thumbnailStoragePath,
         },
       })));
 
@@ -587,6 +589,7 @@ export default function SellerProductForm({ productId }: { productId?: string })
       const result = await deleteProductImage(target.existing.id, target.existing.storagePath, [
         target.existing.originalStoragePath,
         target.existing.brandingOverlayLogoPath,
+        target.existing.thumbnailStoragePath,
       ]);
       if (result.error) {
         setImageActionError(result.error);
@@ -647,6 +650,7 @@ export default function SellerProductForm({ productId }: { productId?: string })
       const del = await deleteProductImage(target.existing.id, target.existing.storagePath, [
         target.existing.originalStoragePath,
         target.existing.brandingOverlayLogoPath,
+        target.existing.thumbnailStoragePath,
       ]);
       if (del.error) {
         setImageActionError(del.error);
@@ -724,6 +728,7 @@ export default function SellerProductForm({ productId }: { productId?: string })
       const del = await deleteProductImage(target.existing.id, target.existing.storagePath, [
         target.existing.originalStoragePath,
         target.existing.brandingOverlayLogoPath,
+        target.existing.thumbnailStoragePath,
       ]);
       if (del.error) {
         setImageActionError(del.error);
