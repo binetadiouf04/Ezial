@@ -109,11 +109,13 @@ function AuthPanel() {
 
   return (
     <div className="mx-auto max-w-sm py-10">
-      <div className="mb-6 text-center">
-        <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-full bg-burgundy/10 text-burgundy"><User size={26} /></div>
-        <h1 className="font-display text-xl font-semibold text-ink">Mon compte</h1>
-        <p className="mt-1 text-sm text-ink/55">Connectez-vous ou créez un compte pour suivre vos commandes.</p>
-      </div>
+      {view !== 'pending_confirmation' && (
+        <div className="mb-6 text-center">
+          <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-full bg-burgundy/10 text-burgundy"><User size={26} /></div>
+          <h1 className="font-display text-xl font-semibold text-ink">Mon compte</h1>
+          <p className="mt-1 text-sm text-ink/55">Connectez-vous ou créez un compte pour suivre vos commandes.</p>
+        </div>
+      )}
 
       {(view === 'login' || view === 'signup') && (
         <div className="mb-5 flex rounded-full border border-line p-1">

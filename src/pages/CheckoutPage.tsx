@@ -106,19 +106,22 @@ export default function CheckoutPage() {
 
   useEffect(() => { persistDraftForm(form); }, [form]);
 
-  // Prefill from the connected profile — only fields the customer hasn't
-  // already typed this session (never overwrites an in-progress edit or a
-  // saved draft). The customer can still change any of it before paying.
+  // Prefill from the connected profile — these fields were already given at
+  // signup, so the account's own values take priority over a stale draft
+  // (e.g. leftover test input from a previous, unfinished checkout) and only
+  // fall back to the draft/blank when the account itself has nothing on
+  // file. Runs once when the profile loads; the customer can still edit any
+  // of it before paying.
   useEffect(() => {
     if (!customerUser) return;
     setForm((prev) => ({
       ...prev,
-      firstName: prev.firstName || customerUser.firstName,
-      lastName: prev.lastName || customerUser.lastName,
-      phone: prev.phone || customerUser.phone || '',
-      email: prev.email || customerUser.email || '',
-      quartier: customerUser.quartier && !prev.address ? customerUser.quartier : prev.quartier,
-      landmark: prev.landmark || customerUser.landmark || '',
+      firstName: customerUser.firstName || prev.firstName,
+      lastName: customerUser.lastName || prev.lastName,
+      phone: customerUser.phone || prev.phone,
+      email: customerUser.email || prev.email,
+      quartier: customerUser.quartier || prev.quartier,
+      landmark: customerUser.landmark || prev.landmark,
     }));
   }, [customerUser]);
 
