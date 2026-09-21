@@ -3,7 +3,8 @@ import type { Role, DeliveryStep, ShopStatus, ProductStatus, ModerationEntry, Mo
 import { missions as initialMissions, type Mission, type Product, type Shop, type Driver, type DriverTransaction, type Order, type Transaction } from './data';
 import { shops as initialShops, products as initialProducts, transactions as initialTransactions, driverTransactions as initialDriverTransactions, orders as initialOrders, drivers as initialDrivers, moderationHistory as initialModerationHistory, blogPosts as initialBlogPosts } from './data';
 import { assignShopPrefixes, nextReferenceForShop } from '@/utils/reference';
-import { signInSeller, restoreSellerSession, signOutSeller, signUpSeller, requestSellerPasswordReset, resendSellerConfirmation, requestSellerAccountDeletion, type SignUpSellerInput, type SignUpSellerResult } from '@/lib/supabaseSellerAuth';
+import { signInSeller, restoreSellerSession, signOutSeller, signUpSeller, requestSellerPasswordReset, resendSellerConfirmation, type SignUpSellerInput, type SignUpSellerResult } from '@/lib/supabaseSellerAuth';
+import { deleteMyAccount } from '@/lib/supabaseAccountDeletion';
 import { signInAdmin, restoreAdminSession } from '@/lib/supabaseAdminAuth';
 
 type Route = string;
@@ -407,7 +408,7 @@ export function ProProvider({ children }: { children: ReactNode }) {
 
   const deleteSellerAccount = useCallback(async (): Promise<{ error?: string }> => {
     if (!sellerSupabaseShopId) return { error: 'Aucune boutique associée à ce compte.' };
-    const result = await requestSellerAccountDeletion(sellerSupabaseShopId);
+    const result = await deleteMyAccount();
     if (result.error) return result;
     logout();
     return {};

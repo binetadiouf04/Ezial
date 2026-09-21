@@ -4,9 +4,10 @@ import { shops as mockShops, registerSupabaseShops, type Shop } from '@/data/sho
 import { fetchActiveCatalogFromSupabase } from '@/lib/supabaseCatalog';
 import {
   signUpCustomer, signInCustomer, restoreCustomerSession, signOutCustomer,
-  updateCustomerProfile, requestCustomerPasswordReset, resendCustomerConfirmation, requestCustomerAccountDeletion,
+  updateCustomerProfile, requestCustomerPasswordReset, resendCustomerConfirmation,
   type CustomerProfile, type SignUpCustomerInput, type SignUpCustomerResult, type UpdateCustomerProfileInput,
 } from '@/lib/supabaseCustomerAuth';
+import { deleteMyAccount } from '@/lib/supabaseAccountDeletion';
 import { fetchFavoriteIds, addFavorite, removeFavorite, mergeLocalFavoritesIntoAccount } from '@/lib/supabaseFavorites';
 import { fetchCustomerOrders } from '@/lib/supabaseCustomerOrders';
 import { fetchReviewStatsForProducts } from '@/lib/supabaseReviews';
@@ -427,7 +428,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const deleteCustomerAccount = useCallback(async (): Promise<{ error?: string }> => {
     if (!customerUser) return { error: 'Non connecté.' };
-    const result = await requestCustomerAccountDeletion(customerUser.id, customerUser.email);
+    const result = await deleteMyAccount();
     if (result.error) return result;
     setCustomerUser(null);
     setFavorites(loadStoredFavorites());
