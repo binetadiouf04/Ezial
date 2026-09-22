@@ -9,7 +9,7 @@ export type CategoryId =
   | 'lingerie';
 
 export interface SubCategory { id: string; label: string; }
-export interface Category { id: CategoryId; label: string; subcategories: SubCategory[]; }
+export interface Category { id: CategoryId; label: string; subcategories: SubCategory[]; hiddenFromPublicNav?: boolean; }
 
 export const categories: Category[] = [
   { id: 'vetements', label: 'Vêtements', subcategories: [
@@ -27,7 +27,12 @@ export const categories: Category[] = [
     { id: 'soins-capillaires', label: 'Soins capillaires' }, { id: 'hygiene', label: 'Hygiène & soins corporels' },
     { id: 'mains-et-pieds', label: 'Manucure & Pédicure' },
   ]},
-  { id: 'cheveux', label: 'Cheveux', subcategories: [
+  // Retirée de la navigation publique (voir hiddenFromPublicNav) mais gardée
+  // ici : des produits réels existent encore sous cette catégorie et leurs
+  // pages/fiches vendeur en dépendent (categoryMap, formulaire produit,
+  // liens directs /categorie/cheveux/...). À supprimer pour de bon une fois
+  // ces produits reclassés.
+  { id: 'cheveux', label: 'Cheveux', hiddenFromPublicNav: true, subcategories: [
     { id: 'perruques', label: 'Perruques' }, { id: 'meches', label: 'Mèches' },
     { id: 'cheveux-naturels', label: 'Cheveux naturels' }, { id: 'blend-hair', label: 'Blend Hair' },
   ]},
@@ -49,6 +54,12 @@ export const categories: Category[] = [
 export const categoryMap: Record<CategoryId, Category> = categories.reduce(
   (acc, c) => ({ ...acc, [c.id]: c }), {} as Record<CategoryId, Category>,
 );
+
+// What the public navigation (header, mobile drawer, sidebar, search
+// suggestions) browses and lists. `categories`/`categoryMap` stay complete
+// so existing product pages, seller listings and the seller product form
+// keep resolving hidden categories correctly.
+export const publicCategories: Category[] = categories.filter((c) => !c.hiddenFromPublicNav);
 
 export const categoryTiles: { id: CategoryId; label: string; image: string }[] = [
   { id: 'vetements', label: 'Vêtements', image: 'https://images.pexels.com/photos/19816456/pexels-photo-19816456.jpeg?auto=compress&cs=tinysrgb&h=650&w=940' },
@@ -76,9 +87,9 @@ export interface HomeCircleTile { id: string; label: string; image: string; rout
 // DiscoverMarquee) so each circle can render large and legible instead of
 // shrinking to fit everything in; trimming this list is what keeps the
 // circles big, not the other way around. Categories left out of this
-// shortcut row (Chemises, Kimono, Voiles, Sandales, Baskets, Gommage,
-// Colliers, Nuisettes) are untouched everywhere else — full taxonomy,
-// category pages and search all still have them.
+// shortcut row (Chemises, Kimono, Sandales, Baskets, Gommage, Colliers,
+// Nuisettes) are untouched everywhere else — full taxonomy, category pages
+// and search all still have them.
 export const homeCircleTiles: HomeCircleTile[] = [
   { id: 'promos', label: 'Promos', image: 'https://images.pexels.com/photos/8165653/pexels-photo-8165653.jpeg?auto=compress&cs=tinysrgb&h=400&w=400', route: '/promos', highlight: true },
   { id: 'mode-femme', label: 'Femme', image: 'https://images.pexels.com/photos/19816456/pexels-photo-19816456.jpeg?auto=compress&cs=tinysrgb&h=400&w=400', route: '/categorie/vetements/femme' },
@@ -93,9 +104,14 @@ export const homeCircleTiles: HomeCircleTile[] = [
   { id: 'faux-cils', label: 'Faux cils', image: 'https://images.pexels.com/photos/3373736/pexels-photo-3373736.jpeg?auto=compress&cs=tinysrgb&h=400&w=400', route: '/recherche?q=faux cils' },
   { id: 'skincare', label: 'Skincare', image: 'https://images.pexels.com/photos/12352170/pexels-photo-12352170.jpeg?auto=compress&cs=tinysrgb&h=400&w=400', route: '/categorie/beaute/skincare' },
   { id: 'press-on-nails', label: 'Press-on nails', image: 'https://images.pexels.com/photos/4938515/pexels-photo-4938515.jpeg?auto=compress&cs=tinysrgb&h=400&w=400', route: '/categorie/beaute/mains-et-pieds' },
-  { id: 'perruques', label: 'Perruques', image: 'https://images.pexels.com/photos/6923241/pexels-photo-6923241.jpeg?auto=compress&cs=tinysrgb&h=400&w=400', route: '/categorie/cheveux/perruques' },
-  { id: 'raw-hair', label: 'Raw Hair', image: 'https://images.pexels.com/photos/15868319/pexels-photo-15868319.jpeg?auto=compress&cs=tinysrgb&h=400&w=400', route: '/categorie/cheveux/cheveux-naturels' },
-  { id: 'blend-hair', label: 'Blend Hair', image: 'https://images.pexels.com/photos/3993462/pexels-photo-3993462.jpeg?auto=compress&cs=tinysrgb&h=400&w=400', route: '/categorie/cheveux/blend-hair' },
+  // Streetwear/Voile/Abaya n'ont pas encore de sous-catégorie dédiée dans la
+  // taxonomie (comme Robes ou Or plus haut) : ils routent vers une recherche
+  // sur leur propre libellé, qui remontera les produits dès qu'un vendeur
+  // les tague avec ce type/style. Images temporaires réutilisées du dépôt en
+  // attendant les nouvelles photos.
+  { id: 'streetwear', label: 'Streetwear', image: 'https://images.pexels.com/photos/34695268/pexels-photo-34695268.jpeg?auto=compress&cs=tinysrgb&h=400&w=400', route: '/recherche?q=streetwear' },
+  { id: 'voile', label: 'Voile', image: 'https://images.pexels.com/photos/38277759/pexels-photo-38277759.jpeg?auto=compress&cs=tinysrgb&h=400&w=400', route: '/recherche?q=voile' },
+  { id: 'abaya', label: 'Abaya', image: 'https://images.pexels.com/photos/1755428/pexels-photo-1755428.jpeg?auto=compress&cs=tinysrgb&h=400&w=400', route: '/recherche?q=abaya' },
   { id: 'soins-capillaires', label: 'Soins capillaires', image: 'https://images.pexels.com/photos/13734819/pexels-photo-13734819.jpeg?auto=compress&cs=tinysrgb&h=400&w=400', route: '/categorie/beaute/soins-capillaires' },
   { id: 'parfums-femme', label: 'Parfums Femme', image: 'https://images.pexels.com/photos/7364096/pexels-photo-7364096.jpeg?auto=compress&cs=tinysrgb&h=400&w=400', route: '/categorie/parfums/parfums-femme' },
   { id: 'parfums-homme', label: 'Parfums Homme', image: 'https://images.pexels.com/photos/965880/pexels-photo-965880.jpeg?auto=compress&cs=tinysrgb&h=400&w=400', route: '/categorie/parfums/parfums-homme' },

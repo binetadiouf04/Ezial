@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { ChevronDown } from 'lucide-react';
-import { categories, type CategoryId } from '@/data/categories';
+import { publicCategories, type CategoryId } from '@/data/categories';
 import { useApp } from '@/store/AppContext';
 
 export default function CategorySidebar() {
@@ -14,7 +14,7 @@ export default function CategorySidebar() {
       <div className="py-6 pr-4">
         <h2 className="mb-4 text-[11px] font-semibold uppercase tracking-[0.18em] text-ink/40">Catégories</h2>
         <nav className="space-y-0.5">
-          {categories.map((cat) => {
+          {publicCategories.map((cat) => {
             const isActive = activeCat === cat.id;
             const isOpen = expanded === cat.id || isActive;
             return (

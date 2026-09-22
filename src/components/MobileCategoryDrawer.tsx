@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { X, ChevronRight, ChevronLeft, User, Home, LayoutGrid, Store, Percent } from 'lucide-react';
-import { categories, type CategoryId } from '@/data/categories';
+import { categories, publicCategories, type CategoryId } from '@/data/categories';
 import { useApp } from '@/store/AppContext';
 
 type View = 'main' | 'categories';
@@ -69,7 +69,7 @@ export default function MobileCategoryDrawer() {
 
           {view === 'categories' && !selectedCategory && (
             <nav className="divide-y divide-line py-1">
-              {categories.map((cat) => (
+              {publicCategories.map((cat) => (
                 <button key={cat.id} onClick={() => setSelectedCat(cat.id)} className="flex w-full items-center justify-between px-4 py-4 text-left hover:bg-cream">
                   <span className="text-[15px] font-medium text-ink">{cat.label}</span>
                   <ChevronRight size={18} className="text-ink/30" />

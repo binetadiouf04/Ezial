@@ -3,7 +3,7 @@ import { Search, Heart, ShoppingBag, User, Menu } from 'lucide-react';
 import { useApp } from '@/store/AppContext';
 import Logo from './Logo';
 import { searchProducts } from '@/data/products';
-import { categories, categoryMap } from '@/data/categories';
+import { publicCategories, categoryMap } from '@/data/categories';
 import SmartImage from './SmartImage';
 
 export default function Header() {
@@ -80,7 +80,7 @@ export default function Header() {
       <div className="hidden lg:block border-t border-line bg-white">
         <div className="container-pro">
           <nav className="flex items-center gap-6 h-11 overflow-x-auto no-scrollbar">
-            {categories.map((c) => <button key={c.id} onClick={() => navigate(`/categorie/${c.id}`)} className="whitespace-nowrap text-sm font-medium text-ink/70 hover:text-burgundy transition-colors">{c.label}</button>)}
+            {publicCategories.map((c) => <button key={c.id} onClick={() => navigate(`/categorie/${c.id}`)} className="whitespace-nowrap text-sm font-medium text-ink/70 hover:text-burgundy transition-colors">{c.label}</button>)}
           </nav>
         </div>
       </div>
