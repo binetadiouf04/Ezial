@@ -21,6 +21,7 @@ export default function SellerProducts() {
   const [flagsByProduct, setFlagsByProduct] = useState<Map<string, ModerationFlagRow[]>>(new Map());
   const [isLoading, setIsLoading] = useState(true);
   const [actionError, setActionError] = useState('');
+  const [actionNotice, setActionNotice] = useState('');
   const [productPendingDelete, setProductPendingDelete] = useState<SellerProductSummary | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
@@ -66,6 +67,7 @@ export default function SellerProducts() {
     if (!productPendingDelete) return;
     setIsDeleting(true);
     setActionError('');
+    setActionNotice('');
     const result = await deleteSellerProduct(productPendingDelete.id);
     setIsDeleting(false);
     if (result.error) {
@@ -76,6 +78,7 @@ export default function SellerProducts() {
       // Has real order/review history — archived (status disabled) instead
       // of removed, exactly like "Désactiver" already does.
       setProducts((prev) => prev.map((p) => (p.id === productPendingDelete.id ? { ...p, status: 'disabled' } : p)));
+      setActionNotice('Ce produit possède un historique de commandes. Il a été retiré de la vente mais son historique est conservé.');
     } else {
       setProducts((prev) => prev.filter((p) => p.id !== productPendingDelete.id));
     }
@@ -112,6 +115,7 @@ export default function SellerProducts() {
       </div>
 
       {actionError && <p className="rounded-lg bg-burgundy/5 px-4 py-3 text-sm text-burgundy">{actionError}</p>}
+      {actionNotice && <p className="rounded-lg bg-cream px-4 py-3 text-sm text-ink/70">{actionNotice}</p>}
 
       {/* Product list */}
       <div className="card divide-y divide-line">

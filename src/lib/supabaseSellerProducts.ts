@@ -439,30 +439,30 @@ export interface DeleteProductResult {
 // Deleting a product is only ever safe when nothing else references it.
 // order_items snapshots the product's name/price/selected options at the
 // time of purchase (it never re-reads the live product row), so a past
-// order's own display would keep working even after this row is gone —
-// but order_items.product_id and reviews.product_id still point at it, and
-// this project's actual ON DELETE behavior for those foreign keys
-// (cascade / restrict / set null) has never been verified. Rather than
-// risk silently corrupting order history or reviews, a product that has
-// ever been ordered or reviewed is archived instead — status = 'disabled',
-// the exact same status "Désactiver" already uses, the one the schema
-// already supports for "hide without erasing". Only a product with zero
-// order/review history is ever physically removed, Storage files included.
+// order's own display keeps working even after this row is gone — but
+// order_items.product_id and reviews.product_id still point at it.
+//
+// The history check itself (does this product have any order_items or
+// reviews row) used to run as two plain client-side count queries. That's
+// what produced "Impossible de vérifier l'historique du produit :" with
+// nothing after the colon: order_items has no SELECT policy that lets a
+// seller freely count rows by product_id (only via a join through their
+// own shop's order_shops), so the query could come back with an error
+// whose `.message` is an empty string — and `?? 'erreur inconnue'` only
+// replaces null/undefined, never ''. The fix is not to loosen order_items'
+// RLS (never make it publicly readable) but to move the whole check + the
+// resulting archive/delete into one security-definer RPC (same trusted
+// pattern as submit_shop_for_review), which authorizes the caller itself
+// (must own the product's shop) instead of depending on ordinary table
+// grants/policies. See the migration this function ships with.
+//
+// A product that has ever been ordered or reviewed is archived instead —
+// status = 'disabled', the exact same status "Désactiver" already uses.
+// Only a product with zero order/review history is ever physically
+// removed, Storage files included.
 export async function deleteSellerProduct(productId: string): Promise<DeleteProductResult> {
-  const [{ count: orderCount, error: orderError }, { count: reviewCount, error: reviewError }] = await Promise.all([
-    supabase.from('order_items').select('id', { count: 'exact', head: true }).eq('product_id', productId),
-    supabase.from('reviews').select('id', { count: 'exact', head: true }).eq('product_id', productId),
-  ]);
-  if (orderError || reviewError) {
-    return { error: `Impossible de vérifier l'historique du produit : ${(orderError ?? reviewError)?.message ?? 'erreur inconnue'}` };
-  }
-
-  if ((orderCount ?? 0) > 0 || (reviewCount ?? 0) > 0) {
-    const { error } = await supabase.from('products').update({ status: 'disabled' }).eq('id', productId);
-    if (error) return { error: `Impossible d'archiver le produit : ${error.message}` };
-    return { softDeleted: true };
-  }
-
+  // Storage paths must be gathered before the RPC runs — if it hard-deletes,
+  // the product_images rows (and this info) are gone immediately after.
   const { data: imageRows } = await supabase.from('product_images').select('*').eq('product_id', productId);
   const paths = (imageRows ?? [])
     .flatMap((row) => [
@@ -472,19 +472,21 @@ export async function deleteSellerProduct(productId: string): Promise<DeleteProd
       (row.branding_overlay as { logoStoragePath?: string } | null)?.logoStoragePath ?? null,
     ])
     .filter((p): p is string => Boolean(p));
+
+  const { data, error } = await supabase.rpc('seller_delete_or_archive_product', { p_product_id: productId });
+  if (error) {
+    // The real Postgres/PostgREST error goes to the console for debugging —
+    // the seller only ever sees a clear, never-empty message.
+    console.error('[deleteSellerProduct] seller_delete_or_archive_product failed:', error);
+    return { error: "Impossible de supprimer ce produit pour le moment. Réessayez dans quelques instants." };
+  }
+
+  const archived = Boolean((data as { archived?: boolean } | null)?.archived);
+  if (archived) return { softDeleted: true };
+
   if (paths.length > 0) {
     await supabase.storage.from(PRODUCT_IMAGES_BUCKET).remove(paths);
   }
-
-  // Defensive cleanup ahead of the products delete — never assumes a
-  // particular ON DELETE behavior for favorites.product_id either.
-  await supabase.from('favorites').delete().eq('product_id', productId);
-  await supabase.from('product_variants').delete().eq('product_id', productId);
-  await supabase.from('product_images').delete().eq('product_id', productId);
-
-  const { error: productError } = await supabase.from('products').delete().eq('id', productId);
-  if (productError) return { error: `Impossible de supprimer le produit : ${productError.message}` };
-
   return { softDeleted: false };
 }
 

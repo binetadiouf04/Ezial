@@ -23,7 +23,7 @@ import {
 import { resolveImageUrl } from '@/lib/supabaseCatalog';
 import ImageCropModal from '../../components/ImageCropModal';
 import LogoOverlayModal, { type OverlayResult } from '../../components/LogoOverlayModal';
-import { ArrowLeft, X, Package, ChevronDown, Check, Camera, Star, Video, ArrowUp, ArrowDown, Sparkles, Crop, RefreshCw } from 'lucide-react';
+import { X, Package, ChevronDown, Check, Camera, Star, Video, ArrowUp, ArrowDown, Sparkles, Crop, RefreshCw } from 'lucide-react';
 
 // products.status in Supabase only accepts draft/active/flagged/disabled —
 // there is no 'published' value there. The form's own draft/published
@@ -1215,16 +1215,9 @@ export default function SellerProductForm({ productId }: { productId?: string })
   const nameExample = (subId && examplesBySubcategory[`${categoryId}/${subId}`]?.name) || (categoryId && examplesByCategory[categoryId]?.name) || 'Ex. Nom du produit';
   const descriptionExample = (subId && examplesBySubcategory[`${categoryId}/${subId}`]?.description) || (categoryId && examplesByCategory[categoryId]?.description) || 'Ex. Décrivez le produit : matière, usage, points forts…';
 
-  const backButton = (
-    <button onClick={() => navigate('/seller/produits')} className="flex items-center gap-1.5 text-sm text-ink/50 hover:text-ink transition-colors">
-      <ArrowLeft size={16} /> Produits
-    </button>
-  );
-
   if (isEditing && loadingExisting) {
     return (
       <div className="space-y-5">
-        {backButton}
         <div className="card p-10 text-center text-sm text-ink/50">Chargement du produit…</div>
       </div>
     );
@@ -1233,7 +1226,6 @@ export default function SellerProductForm({ productId }: { productId?: string })
   if (isEditing && loadError) {
     return (
       <div className="space-y-5">
-        {backButton}
         <div className="card p-10 text-center text-sm text-burgundy">{loadError}</div>
       </div>
     );
@@ -1246,8 +1238,6 @@ export default function SellerProductForm({ productId }: { productId?: string })
 
   return (
     <div className="space-y-5">
-      {backButton}
-
       <div className="flex items-center gap-3 flex-wrap">
         <h1 className="font-display text-2xl font-semibold text-ink">{isEditing ? 'Modifier le produit' : 'Ajouter un produit'}</h1>
         {isEditing && existingReference && <span className="rounded-full bg-cream px-2.5 py-1 text-xs font-mono font-medium text-ink/60">Réf. {existingReference}</span>}
