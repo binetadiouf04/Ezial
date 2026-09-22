@@ -16,11 +16,9 @@
 //   to auth.users at all, so they are never auto-removed. Explicitly
 //   deleted below to avoid leaving personal data (name/phone/address on
 //   customer_profiles) orphaned forever.
-// - reviews are deliberately left alone: they already display as "Client
-//   Ezial" (never tied to a visible name), and deleting them would also
-//   remove public product feedback other shoppers rely on. Keeping an
-//   anonymized review vs. deleting it entirely is a product decision, not
-//   a privacy requirement here.
+// - reviews are kept, not deleted (product feedback other shoppers rely
+//   on), but anonymized below by nulling user_id — the frontend then
+//   shows "Utilisateur introuvable" instead of "Client Ezial" for those.
 // - orders has NO foreign key to auth.users either — it can never be
 //   cascade-deleted, which is exactly why checkout snapshots the buyer's
 //   name/phone/address onto the order itself instead of only ever joining
@@ -90,6 +88,8 @@ Deno.serve(async (req) => {
   await admin.from('customer_profiles').delete().eq('id', userId);
   await admin.from('favorites').delete().eq('user_id', userId);
   await admin.from('push_subscriptions').delete().eq('user_id', userId);
+  // Reviews are kept for other shoppers, only their authorship is erased.
+  await admin.from('reviews').update({ user_id: null }).eq('user_id', userId);
 
   const { error: deleteError } = await admin.auth.admin.deleteUser(userId);
   if (deleteError) return json({ error: deleteError.message }, 500);

@@ -21,7 +21,9 @@ export interface ReviewImage {
 export interface Review {
   id: string;
   productId: string;
-  userId: string;
+  // null once the author's account has been deleted — the review itself
+  // is kept (see delete-account), only its authorship is anonymized.
+  userId: string | null;
   rating: number;
   comment: string;
   createdAt: string;
@@ -36,7 +38,7 @@ export interface ReviewStats {
 interface ReviewRow {
   id: string;
   product_id: string;
-  user_id: string;
+  user_id: string | null;
   rating: number;
   comment: string | null;
   created_at: string;

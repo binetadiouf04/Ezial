@@ -277,7 +277,7 @@ export default function ProductPage({ productId }: { productId: string }) {
                       <div key={rev.id} className="border-b border-line pb-4 last:border-0">
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-2">
-                            <span className="text-sm font-medium text-ink">Client Ezial</span>
+                            <span className="text-sm font-medium text-ink">{rev.userId ? 'Client Ezial' : 'Utilisateur introuvable'}</span>
                             {rev.userId === customerUser?.id && canReview && <span className="flex items-center gap-1 rounded-full bg-cream px-2 py-0.5 text-[10px] font-semibold text-ink/60"><ShieldCheck size={11} /> Achat vérifié</span>}
                           </div>
                           <span className="text-xs text-ink/40">{new Date(rev.createdAt).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
