@@ -469,6 +469,11 @@ export default function SellerProductForm({ productId }: { productId?: string })
   // densité) generate stock/price combinations — everything else (style, type,
   // besoin, notes olfactives...) is purely descriptive.
   const multiChoiceGroups = optionGroups.filter((g) => VARIANT_DIMENSION_IDS.has(g.id));
+  // Same split, named for where each renders in the form: descriptive
+  // classification groups surface right under Catégorie/Sous-catégorie,
+  // true variant dimensions surface near Photos/Stock (see the render below).
+  const classificationGroups = optionGroups.filter((g) => !VARIANT_DIMENSION_IDS.has(g.id));
+  const variantGroups = multiChoiceGroups;
 
   // "Autre" in Volume is replaced by the seller's manual value before it
   // ever reaches the combination logic or the saved product.
@@ -1277,6 +1282,52 @@ export default function SellerProductForm({ productId }: { productId?: string })
         )}
       </div>
 
+      {/* 2. Type / caractéristiques — purely descriptive groups (style,
+          type de vêtement, matière...), grouped with category/subcategory
+          since they all together determine the product's classification.
+          True variant dimensions (taille, couleur, motif, volume...) that
+          generate stock combinations render later, next to Photos/Stock —
+          see classificationGroups/variantGroups below. */}
+      {(classificationGroups.length > 0 || showsNotes) && (
+        <div className="card p-5 space-y-5">
+          <div>
+            <h2 className="text-sm font-semibold text-ink">Type et caractéristiques</h2>
+            <p className="mt-1 text-xs text-ink/45">Précisez le type de produit et ses caractéristiques descriptives.</p>
+          </div>
+
+          {classificationGroups.map((group) => {
+            const isSingle = SINGLE_CHOICE_IDS.has(group.id) && !isVetementsTypeGroup(categoryId, subId, group.id);
+            const choiceLabel = isSingle ? 'Choix unique' : 'Choix multiple';
+
+            return (
+              <div key={group.id} className="space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <label className="text-sm font-medium text-ink">{group.label}</label>
+                  <span className={`text-[11px] font-medium px-2 py-0.5 rounded-full ${isSingle ? 'bg-blue-50 text-blue-600' : 'bg-burgundy/10 text-burgundy'}`}>
+                    {choiceLabel}
+                  </span>
+                </div>
+                {renderChips(group, isSingle)}
+              </div>
+            );
+          })}
+
+          {showsNotes && (
+            <div className="space-y-2.5">
+              <label className="text-sm font-medium text-ink">Notes</label>
+              <input
+                type="text"
+                className="input-field"
+                placeholder="Ex. caramel, vanille fouettée, cassonade"
+                value={notesInput}
+                onChange={(e) => setNotesInput(e.target.value)}
+              />
+              <p className="text-xs text-ink/45">Séparez les notes principales par des virgules. Purement descriptif — ne crée aucune variante.</p>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* 3. Nom + 4. Description */}
       <div className="card p-5 space-y-4">
         <h2 className="text-sm font-semibold text-ink">Informations du produit</h2>
@@ -1424,7 +1475,55 @@ export default function SellerProductForm({ productId }: { productId?: string })
         <ImageCropModal file={recropSourceFile} onCancel={handleRecropCancel} onConfirm={handleRecropConfirm} />
       )}
 
-      {/* 6. Prix de base */}
+      {/* 6. Variantes/options — true variant dimensions only (taille,
+          couleur, motif, volume...), the ones that generate stock
+          combinations, positioned right before Prix/Stock which they
+          directly drive. Purely descriptive groups (style, type...) render
+          earlier, right under Catégorie — see classificationGroups above. */}
+      {variantGroups.length > 0 && (
+        <div className="card p-5 space-y-5">
+          <div>
+            <h2 className="text-sm font-semibold text-ink">Options du produit</h2>
+            <p className="mt-1 text-xs text-ink/45">Sélectionnez les options disponibles pour ce produit. Ezial génère automatiquement les combinaisons de stock pour les options qui créent une vraie variante (taille, couleur, volume...).</p>
+          </div>
+
+          {variantGroups.map((group) => {
+            const isColor = COLOR_GROUP_IDS.has(group.id);
+            const isSingle = SINGLE_CHOICE_IDS.has(group.id) && !isVetementsTypeGroup(categoryId, subId, group.id);
+            const choiceLabel = isSingle ? 'Choix unique' : 'Choix multiple';
+            const showsCustomVolume = group.id === 'volume' && (selections.volume ?? []).includes('Autre');
+
+            return (
+              <div key={group.id} className="space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <label className="text-sm font-medium text-ink">{group.label}</label>
+                  <span className={`text-[11px] font-medium px-2 py-0.5 rounded-full ${isSingle ? 'bg-blue-50 text-blue-600' : 'bg-burgundy/10 text-burgundy'}`}>
+                    {choiceLabel}
+                  </span>
+                </div>
+                {isColor
+                  ? renderColorSwatches(group)
+                  : renderChips(group, isSingle)}
+                {showsCustomVolume && (
+                  <div className="flex items-center gap-2 pt-1">
+                    <input
+                      type="number"
+                      min="1"
+                      className="input-field w-28"
+                      placeholder="Volume"
+                      value={customVolumeMl}
+                      onChange={(e) => setCustomVolumeMl(e.target.value)}
+                    />
+                    <span className="text-xs text-ink/50">ml</span>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* 7. Prix de base */}
       <div className="card p-5 space-y-4">
         <h2 className="text-sm font-semibold text-ink">Prix de base</h2>
         <div>
@@ -1490,64 +1589,6 @@ export default function SellerProductForm({ productId }: { productId?: string })
           </div>
         )}
       </div>
-
-      {/* 7. Options du produit */}
-      {optionGroups.length > 0 && (
-        <div className="card p-5 space-y-5">
-          <div>
-            <h2 className="text-sm font-semibold text-ink">Options du produit</h2>
-            <p className="mt-1 text-xs text-ink/45">Sélectionnez les options disponibles pour ce produit. Ezial génère automatiquement les combinaisons de stock pour les options qui créent une vraie variante (taille, couleur, volume...).</p>
-          </div>
-
-          {optionGroups.map((group) => {
-            const isColor = COLOR_GROUP_IDS.has(group.id);
-            const isSingle = SINGLE_CHOICE_IDS.has(group.id) && !isVetementsTypeGroup(categoryId, subId, group.id);
-            const choiceLabel = isSingle ? 'Choix unique' : 'Choix multiple';
-            const showsCustomVolume = group.id === 'volume' && (selections.volume ?? []).includes('Autre');
-
-            return (
-              <div key={group.id} className="space-y-2.5">
-                <div className="flex items-center justify-between">
-                  <label className="text-sm font-medium text-ink">{group.label}</label>
-                  <span className={`text-[11px] font-medium px-2 py-0.5 rounded-full ${isSingle ? 'bg-blue-50 text-blue-600' : 'bg-burgundy/10 text-burgundy'}`}>
-                    {choiceLabel}
-                  </span>
-                </div>
-                {isColor
-                  ? renderColorSwatches(group)
-                  : renderChips(group, isSingle)}
-                {showsCustomVolume && (
-                  <div className="flex items-center gap-2 pt-1">
-                    <input
-                      type="number"
-                      min="1"
-                      className="input-field w-28"
-                      placeholder="Volume"
-                      value={customVolumeMl}
-                      onChange={(e) => setCustomVolumeMl(e.target.value)}
-                    />
-                    <span className="text-xs text-ink/50">ml</span>
-                  </div>
-                )}
-              </div>
-            );
-          })}
-
-          {showsNotes && (
-            <div className="space-y-2.5">
-              <label className="text-sm font-medium text-ink">Notes</label>
-              <input
-                type="text"
-                className="input-field"
-                placeholder="Ex. caramel, vanille fouettée, cassonade"
-                value={notesInput}
-                onChange={(e) => setNotesInput(e.target.value)}
-              />
-              <p className="text-xs text-ink/45">Séparez les notes principales par des virgules. Purement descriptif — ne crée aucune variante.</p>
-            </div>
-          )}
-        </div>
-      )}
 
       {/* 8. Stock */}
       <div className="card p-5 space-y-4">

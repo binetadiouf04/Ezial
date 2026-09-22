@@ -179,6 +179,10 @@ export default function HomePage() {
       </div>
 
       <div className="mt-10 space-y-16 lg:mt-14 lg:space-y-24">
+        <section>
+          <HomeProductPreview eyebrow="Pour vous" title="Sélection personnalisée" products={pourVous} seeAllRoute="/pour-vous" onNavigate={navigate} />
+        </section>
+
         {promos.length > 0 && (
           <section className="rounded-2xl bg-burgundy/5 p-6 sm:p-10">
             <HomeProductPreview eyebrow="Promotions" title="Offres à ne pas manquer" products={promos} seeAllRoute="/promos" onNavigate={navigate} />
@@ -187,10 +191,6 @@ export default function HomePage() {
 
         <section>
           <HomeProductPreview eyebrow="Tendances du moment" title="Le plus aimé maintenant" products={trending} seeAllRoute="/tendances" onNavigate={navigate} />
-        </section>
-
-        <section>
-          <HomeProductPreview eyebrow="Pour vous" title="Sélection personnalisée" products={pourVous} seeAllRoute="/pour-vous" onNavigate={navigate} />
         </section>
 
         <section>

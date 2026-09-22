@@ -430,6 +430,64 @@ export async function setSellerProductVariantStock(variantId: string, stock: num
   return error ? { error: error.message } : {};
 }
 
+export interface DeleteProductResult {
+  error?: string;
+  /** true when the product was archived (status set to 'disabled') instead of physically removed, because deleting it would risk breaking real order/review history. */
+  softDeleted?: boolean;
+}
+
+// Deleting a product is only ever safe when nothing else references it.
+// order_items snapshots the product's name/price/selected options at the
+// time of purchase (it never re-reads the live product row), so a past
+// order's own display would keep working even after this row is gone —
+// but order_items.product_id and reviews.product_id still point at it, and
+// this project's actual ON DELETE behavior for those foreign keys
+// (cascade / restrict / set null) has never been verified. Rather than
+// risk silently corrupting order history or reviews, a product that has
+// ever been ordered or reviewed is archived instead — status = 'disabled',
+// the exact same status "Désactiver" already uses, the one the schema
+// already supports for "hide without erasing". Only a product with zero
+// order/review history is ever physically removed, Storage files included.
+export async function deleteSellerProduct(productId: string): Promise<DeleteProductResult> {
+  const [{ count: orderCount, error: orderError }, { count: reviewCount, error: reviewError }] = await Promise.all([
+    supabase.from('order_items').select('id', { count: 'exact', head: true }).eq('product_id', productId),
+    supabase.from('reviews').select('id', { count: 'exact', head: true }).eq('product_id', productId),
+  ]);
+  if (orderError || reviewError) {
+    return { error: `Impossible de vérifier l'historique du produit : ${(orderError ?? reviewError)?.message ?? 'erreur inconnue'}` };
+  }
+
+  if ((orderCount ?? 0) > 0 || (reviewCount ?? 0) > 0) {
+    const { error } = await supabase.from('products').update({ status: 'disabled' }).eq('id', productId);
+    if (error) return { error: `Impossible d'archiver le produit : ${error.message}` };
+    return { softDeleted: true };
+  }
+
+  const { data: imageRows } = await supabase.from('product_images').select('*').eq('product_id', productId);
+  const paths = (imageRows ?? [])
+    .flatMap((row) => [
+      row.storage_path as string | null,
+      row.original_storage_path as string | null,
+      row.thumbnail_storage_path as string | null,
+      (row.branding_overlay as { logoStoragePath?: string } | null)?.logoStoragePath ?? null,
+    ])
+    .filter((p): p is string => Boolean(p));
+  if (paths.length > 0) {
+    await supabase.storage.from(PRODUCT_IMAGES_BUCKET).remove(paths);
+  }
+
+  // Defensive cleanup ahead of the products delete — never assumes a
+  // particular ON DELETE behavior for favorites.product_id either.
+  await supabase.from('favorites').delete().eq('product_id', productId);
+  await supabase.from('product_variants').delete().eq('product_id', productId);
+  await supabase.from('product_images').delete().eq('product_id', productId);
+
+  const { error: productError } = await supabase.from('products').delete().eq('id', productId);
+  if (productError) return { error: `Impossible de supprimer le produit : ${productError.message}` };
+
+  return { softDeleted: false };
+}
+
 // === Edit-mode image sync (existing Supabase-synced product only) ===
 
 export interface ExistingProductImage {

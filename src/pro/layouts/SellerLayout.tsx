@@ -31,6 +31,14 @@ export default function SellerLayout() {
   const productEditMatch = clean.match(/^\/seller\/produits\/modifier\/(.+)$/);
   // Product add: /seller/produits/ajouter
   const isProductAdd = clean === '/seller/produits/ajouter';
+  // Add/Modifier un produit already has its own contextual "Produits" back
+  // action — "Retourner sur Ezial Marketplace" here made no sense mid-edit
+  // (it left Ezial Pro entirely) and contradicted that in-page control. On
+  // this page only, this control becomes a plain "Retour" to the product
+  // list instead — same destination as the in-page one, never the public
+  // marketplace, and routed through navigate() (SPA, no reload) like every
+  // other nav item here, instead of a raw hash assignment.
+  const isOnProductForm = isProductAdd || Boolean(productEditMatch);
 
   const renderPage = () => {
     if (clean === '/seller') return <SellerDashboard />;
@@ -77,8 +85,8 @@ export default function SellerLayout() {
           })}
         </nav>
         <div className="p-3 border-t border-line space-y-1">
-          <button onClick={() => { window.location.hash = '/'; }} className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-ink/50 hover:bg-cream hover:text-ink transition-colors">
-            <ArrowLeft size={18} /> Retourner sur Ezial Marketplace
+          <button onClick={() => (isOnProductForm ? navigate('/seller/produits') : navigate('/'))} className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-ink/50 hover:bg-cream hover:text-ink transition-colors">
+            <ArrowLeft size={18} /> {isOnProductForm ? 'Retour' : 'Retourner sur Ezial Marketplace'}
           </button>
           <button onClick={logout} className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-ink/50 hover:bg-burgundy/5 hover:text-burgundy transition-colors">
             <LogOut size={18} /> Déconnexion
@@ -99,12 +107,18 @@ export default function SellerLayout() {
           <span className="truncate text-sm font-semibold text-ink">{sellerShop?.name ?? name}</span>
         </div>
         <button
-          onClick={() => { window.location.hash = '/'; }}
+          onClick={() => (isOnProductForm ? navigate('/seller/produits') : navigate('/'))}
           className="flex flex-shrink-0 items-center gap-1.5 rounded-lg border border-line px-2.5 py-1.5 text-xs font-medium text-ink/60 hover:border-burgundy/30 hover:text-burgundy transition-colors"
         >
           <ArrowLeft size={14} />
-          <span className="hidden sm:inline">Retourner sur Ezial Marketplace</span>
-          <span className="sm:hidden">Marketplace</span>
+          {isOnProductForm ? (
+            <span>Retour</span>
+          ) : (
+            <>
+              <span className="hidden sm:inline">Retourner sur Ezial Marketplace</span>
+              <span className="sm:hidden">Marketplace</span>
+            </>
+          )}
         </button>
       </div>
 
@@ -147,10 +161,10 @@ export default function SellerLayout() {
                 both actions are always reachable from the mobile menu. */}
             <div className="border-t border-line p-3 space-y-1">
               <button
-                onClick={() => { setMenuOpen(false); window.location.hash = '/'; }}
+                onClick={() => { setMenuOpen(false); navigate(isOnProductForm ? '/seller/produits' : '/'); }}
                 className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-ink/60 hover:bg-cream hover:text-ink transition-colors"
               >
-                <ArrowLeft size={18} /> Retourner sur Ezial Marketplace
+                <ArrowLeft size={18} /> {isOnProductForm ? 'Retour' : 'Retourner sur Ezial Marketplace'}
               </button>
               <button
                 onClick={() => { setMenuOpen(false); logout(); }}

@@ -89,7 +89,7 @@ export default function CategoryPage({ categoryId, subId }: { categoryId: string
         </div>
         {!sub && <div className="mb-6 flex flex-wrap gap-2">{cat.subcategories.map((s) => <button key={s.id} onClick={() => navigate(`/categorie/${cat.id}/${s.id}`)} className="chip">{s.label}</button>)}</div>}
         {typeFilterGroup && typeFilterGroup.options.length > 0 && (
-          <div className="mb-6 -mx-1 flex gap-2 overflow-x-auto px-1 pb-1 no-scrollbar sm:flex-wrap sm:overflow-visible">
+          <div className="mb-6 flex flex-wrap gap-2">
             {typeFilterGroup.options.map((opt) => (
               <button key={opt} onClick={() => toggleTypeFilter(opt)} className={`chip flex-shrink-0 ${selectedFilters.type?.includes(opt) ? 'chip-active' : ''}`}>{opt}</button>
             ))}
