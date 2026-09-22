@@ -10,17 +10,29 @@
 // getUser() check below is a second, defense-in-depth confirmation, and
 // is what the userId actually comes from — never trust a client-supplied id.)
 //
-// Schema audit behind this (checked via pg_constraint against auth.users,
-// 2026-09-21): customer_profiles.id → CASCADE (auto-removed when the user
-// is deleted, nothing to do here), favorites/reviews/push_subscriptions →
-// CASCADE (removed too — reviews already display as "Client Ezial", never
-// tied to a visible name, so losing them isn't a privacy fix, just a side
-// effect worth knowing about). orders has NO foreign key to auth.users at
-// all — it can never be cascade-deleted by this, which is exactly why
-// checkout snapshots the buyer's name/phone/address onto the order itself
-// instead of only ever joining to the live profile. shops.owner_id also
-// has no FK, so a seller's shop would otherwise survive untouched with a
-// dangling owner_id — anonymized explicitly below before the user goes.
+// Schema re-audited 2026-09-22 via pg_constraint/information_schema — the
+// prior comment here was wrong on several points:
+// - customer_profiles, favorites and push_subscriptions have NO foreign key
+//   to auth.users at all, so they are never auto-removed. Explicitly
+//   deleted below to avoid leaving personal data (name/phone/address on
+//   customer_profiles) orphaned forever.
+// - reviews are deliberately left alone: they already display as "Client
+//   Ezial" (never tied to a visible name), and deleting them would also
+//   remove public product feedback other shoppers rely on. Keeping an
+//   anonymized review vs. deleting it entirely is a product decision, not
+//   a privacy requirement here.
+// - orders has NO foreign key to auth.users either — it can never be
+//   cascade-deleted, which is exactly why checkout snapshots the buyer's
+//   name/phone/address onto the order itself instead of only ever joining
+//   to the live profile.
+// - shops.owner_id -> profiles.id is CASCADE, and profiles.id itself
+//   cascades from auth.users on the standard Supabase signup trigger —
+//   deleting the auth user would therefore cascade-delete the shop (and
+//   with it every product/variant/image/seller_transaction) right after
+//   the anonymization below, or fail outright if the shop still has
+//   orders (order_shops.shop_id -> shops.id is NO ACTION). Fixed at the
+//   schema level (see the accompanying migration that changes this FK to
+//   ON DELETE SET NULL) so the anonymized shop survives instead.
 import { createClient } from 'npm:@supabase/supabase-js@2';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? '';
@@ -71,6 +83,13 @@ Deno.serve(async (req) => {
       status: 'deleted',
     }).eq('id', shop.id);
   }
+
+  // Best-effort personal-data cleanup for tables with no FK to auth.users
+  // (see the audit note above) — none of these block account deletion if
+  // one fails, since the account removal itself is what matters most.
+  await admin.from('customer_profiles').delete().eq('id', userId);
+  await admin.from('favorites').delete().eq('user_id', userId);
+  await admin.from('push_subscriptions').delete().eq('user_id', userId);
 
   const { error: deleteError } = await admin.auth.admin.deleteUser(userId);
   if (deleteError) return json({ error: deleteError.message }, 500);
