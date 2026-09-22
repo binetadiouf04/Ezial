@@ -281,7 +281,14 @@ function tokenize(query: string): string[] {
 
 const COLOR_MOTIF_VARIANT_NAMES = new Set(['couleur', 'motif / imprimé', 'motif/imprimé', 'motif']);
 
-interface ProductSearchFields { name: string; typeAndCategory: string; colorMotif: string; description: string }
+// Reference matching ignores case and separators entirely, so "EZ-EZI-0022",
+// "ez-ezi-0022" and the shortened "EZI-0022" (missing the shared "EZ-"
+// prefix) all resolve to the same product.
+function normalizeRef(s: string): string {
+  return s.toUpperCase().replace(/[^A-Z0-9]/g, '');
+}
+
+interface ProductSearchFields { name: string; typeAndCategory: string; colorMotif: string; description: string; reference: string }
 
 function buildSearchFields(p: Product): ProductSearchFields {
   const cat = categoryMap[p.category]?.label ?? p.category;
@@ -290,7 +297,7 @@ function buildSearchFields(p: Product): ProductSearchFields {
     [cat, sub, ...p.details.map((d) => `${d.label} ${d.value}`), ...p.variants.filter((v) => !COLOR_MOTIF_VARIANT_NAMES.has(v.name.toLowerCase())).flatMap((v) => v.values)].join(' '),
   );
   const colorMotif = normalizeText(p.variants.filter((v) => COLOR_MOTIF_VARIANT_NAMES.has(v.name.toLowerCase())).flatMap((v) => v.values).join(' '));
-  return { name: normalizeText(p.name), typeAndCategory, colorMotif, description: normalizeText(p.description) };
+  return { name: normalizeText(p.name), typeAndCategory, colorMotif, description: normalizeText(p.description), reference: normalizeRef(p.reference) };
 }
 
 export interface SearchProductsResult {
@@ -305,6 +312,11 @@ export function searchProducts(query: string, pool: Product[] = products): Searc
   const terms = tokenize(query);
   if (terms.length === 0) return { exact: [], similar: [], shops: [] };
   const q = normalizeText(query.trim());
+  // Reference matching only kicks in above a minimum length so a bare "EZ"
+  // (the shared prefix of every reference) doesn't score as a match against
+  // the whole catalog.
+  const qRef = normalizeRef(query);
+  const refQueryIsMeaningful = qRef.length >= 4;
 
   const matchedShops = allShops.filter((s) => normalizeText(s.name).includes(q) || normalizeText(s.description).includes(q));
 
@@ -315,15 +327,20 @@ export function searchProducts(query: string, pool: Product[] = products): Searc
     const colorHits = terms.filter((t) => termMatches(t, fields.colorMotif)).length;
     const descHits = terms.filter((t) => termMatches(t, fields.description)).length;
 
+    const refExact = refQueryIsMeaningful && fields.reference === qRef;
+    const refPartial = !refExact && refQueryIsMeaningful && (fields.reference.includes(qRef) || qRef.includes(fields.reference));
+
     let score = 0;
+    if (refExact) score += 1000; // 0. exact reference — always wins
+    else if (refPartial) score += 300; // 0bis. partial/shortened reference
     if (fields.name.includes(q)) score += 100; // 1. exact phrase match on the name
     score += nameHits * 20; // remaining name-term hits
     score += typeHits * 12; // 2. category/subcategory/type
     score += colorHits * 10; // 3. color/motif
     score += descHits * 4; // 4. description — lowest of the "real" tiers
 
-    const allTermsCovered = terms.every((t) => termMatches(t, fields.name) || termMatches(t, fields.typeAndCategory) || termMatches(t, fields.colorMotif) || termMatches(t, fields.description));
-    const anyHit = nameHits + typeHits + colorHits + descHits > 0;
+    const allTermsCovered = refExact || refPartial || terms.every((t) => termMatches(t, fields.name) || termMatches(t, fields.typeAndCategory) || termMatches(t, fields.colorMotif) || termMatches(t, fields.description));
+    const anyHit = refExact || refPartial || nameHits + typeHits + colorHits + descHits > 0;
     return { p, score, allTermsCovered, anyHit };
   });
 
