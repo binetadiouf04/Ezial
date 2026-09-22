@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useApp } from '@/store/AppContext';
 import { searchProducts } from '@/data/products';
-import { publicCategories } from '@/data/categories';
+import { categories } from '@/data/categories';
 import ProductGrid from '@/components/ProductGrid';
 import ShopCard from '@/components/ShopCard';
 import { Search as SearchIcon, X } from 'lucide-react';
@@ -10,7 +10,7 @@ export default function SearchPage({ query }: { query: string }) {
   const { navigate, catalogProducts } = useApp();
   const [input, setInput] = useState(query);
   const { exact, similar, shops } = searchProducts(query, catalogProducts);
-  const suggestions = query.trim().length >= 2 ? publicCategories.filter((c) => c.label.toLowerCase().includes(query.toLowerCase())).slice(0, 3) : [];
+  const suggestions = query.trim().length >= 2 ? categories.filter((c) => c.label.toLowerCase().includes(query.toLowerCase())).slice(0, 3) : [];
   const totalCount = exact.length + shops.length;
 
   const submit = (e: React.FormEvent) => { e.preventDefault(); if (input.trim()) navigate(`/recherche?q=${encodeURIComponent(input.trim())}`); };
@@ -30,7 +30,7 @@ export default function SearchPage({ query }: { query: string }) {
         <div className="flex flex-col items-center justify-center py-16 text-center">
           <SearchIcon size={40} className="text-ink/20" /><p className="mt-4 text-sm text-ink/60">Aucun résultat exact pour « {query} ».</p>
           {similar.length === 0 && <p className="mt-1 text-xs text-ink/40">Essayez : perruque, parfum, robe, bracelet, skincare...</p>}
-          {similar.length === 0 && <div className="mt-6 flex flex-wrap justify-center gap-2">{publicCategories.slice(0, 5).map((c) => <button key={c.id} onClick={() => navigate(`/categorie/${c.id}`)} className="chip">{c.label}</button>)}</div>}
+          {similar.length === 0 && <div className="mt-6 flex flex-wrap justify-center gap-2">{categories.slice(0, 5).map((c) => <button key={c.id} onClick={() => navigate(`/categorie/${c.id}`)} className="chip">{c.label}</button>)}</div>}
         </div>
       )}
       {/* Kept clearly separate from real matches — never presented as if it

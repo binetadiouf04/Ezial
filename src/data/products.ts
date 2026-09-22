@@ -180,55 +180,6 @@ export const products: Product[] = [
   // === BEAUTÉ — Hygiène ===
     { id: 'deodorant-naturel', reference: 'EZ-DAK-0006', name: 'Déodorant naturel', shopId: 'dakar-beauty', category: 'beaute', subcategory: 'hygiene', price: 6500, images: [I.skincare6, I.skincare1], rating: 4.3, reviewCount: 12, stock: 10, variants: [{ name: 'Parfum', values: ['Citron', 'Lavande', 'Sans parfum'] }], description: 'Déodorant sans aluminium, 24h d\'efficacité.', details: [{ label: 'Besoin', value: 'Déodorant' }], delivery: D, isNew: true, reviews: [r('r47', 'Ndèye F.', 4, '2026-08-07', 'Déodorant efficace, naturel.')] },
 
-  // === CHEVEUX — Perruques ===
-  { id: 'perruque-body-wave-22', reference: 'EZ-HAI-0001', name: 'Perruque Body Wave 22"', shopId: 'hair-studio-dakar', category: 'cheveux', subcategory: 'perruques', texture: 'Body Wave', hairMaterial: 'Romance', price: 85000, oldPrice: 95000, images: [I.hair1, I.hair3, I.hair7, I.hair8], rating: 4.8, reviewCount: 36, stock: 4, variants: [{ name: 'Longueur', values: ['16"', '18"', '20"', '22"'] }, { name: 'Densité', values: ['150%', '180%', '200%'] }, { name: 'Couleur', values: ['Noir naturel', 'Brun', 'Chocolat'] }], variantPrices: [
-    { conditions: { Longueur: '16"', Densité: '150%' }, price: 55000 },
-    { conditions: { Longueur: '16"', Densité: '180%' }, price: 60000 },
-    { conditions: { Longueur: '16"', Densité: '200%' }, price: 65000 },
-    { conditions: { Longueur: '18"', Densité: '150%' }, price: 65000 },
-    { conditions: { Longueur: '18"', Densité: '180%' }, price: 70000 },
-    { conditions: { Longueur: '18"', Densité: '200%' }, price: 78000 },
-    { conditions: { Longueur: '20"', Densité: '150%' }, price: 75000 },
-    { conditions: { Longueur: '20"', Densité: '180%' }, price: 80000 },
-    { conditions: { Longueur: '20"', Densité: '200%' }, price: 88000 },
-    { conditions: { Longueur: '22"', Densité: '150%' }, price: 78000, oldPrice: 88000 },
-    { conditions: { Longueur: '22"', Densité: '180%' }, price: 85000, oldPrice: 95000 },
-    { conditions: { Longueur: '22"', Densité: '200%' }, price: 95000 },
-  ], description: 'Perruque lace frontale, cheveux 100% naturels.', details: [{ label: 'Type', value: 'Lace frontal' }, { label: 'Cheveux', value: 'Romance' }, { label: 'Texture', value: 'Body Wave' }, { label: 'Matière', value: 'Romance' }], delivery: D, pickup: 'Retrait en studio · À partir de 24 h', isTrending: true, isPromo: true, reviews: [r('r15', 'Adja M.', 5, '2026-07-25', 'Rendu ultra naturel.', true), r('r16', 'Fama D.', 5, '2026-07-12', 'Qualité au top.')] },
-    { id: 'perruque-curly-18', reference: 'EZ-HAI-0002', name: 'Perruque Curly 18"', shopId: 'hair-studio-dakar', category: 'cheveux', subcategory: 'perruques', texture: 'Curly', hairMaterial: 'Human Hair', price: 72000, oldPrice: 80000, images: [I.hair4, I.hair2, I.hair8, I.hair9], rating: 4.6, reviewCount: 15, stock: 2, variants: [{ name: 'Longueur', values: ['14"', '16"', '18"'] }, { name: 'Densité', values: ['180%', '200%'] }, { name: 'Couleur', values: ['Noir naturel', 'Chocolat'] }], variantPrices: [
-    { conditions: { Longueur: '14"', Densité: '180%' }, price: 52000 },
-    { conditions: { Longueur: '14"', Densité: '200%' }, price: 58000 },
-    { conditions: { Longueur: '16"', Densité: '180%' }, price: 62000 },
-    { conditions: { Longueur: '16"', Densité: '200%' }, price: 68000 },
-    { conditions: { Longueur: '18"', Densité: '180%' }, price: 72000, oldPrice: 80000 },
-    { conditions: { Longueur: '18"', Densité: '200%' }, price: 78000 },
-  ], description: 'Perruque bouclée naturelle, lace frontale.', details: [{ label: 'Type', value: 'Lace frontal' }, { label: 'Cheveux', value: 'Human Hair' }, { label: 'Texture', value: 'Curly' }, { label: 'Matière', value: 'Human Hair' }], delivery: D, isPromo: true, reviews: [r('r49', 'Mariama D.', 5, '2026-07-28', 'Boucles superbes, look naturel.')] },
-  { id: 'perruque-deep-wave-24', reference: 'EZ-HAI-0003', name: 'Perruque Deep Wave 24"', shopId: 'hair-studio-dakar', category: 'cheveux', subcategory: 'perruques', texture: 'Deep Wave', hairMaterial: 'Raw Hair', price: 95000, images: [I.hair2, I.hair4], rating: 4.9, reviewCount: 18, stock: 3, variants: [{ name: 'Longueur', values: ['18"', '20"', '22"', '24"'] }, { name: 'Densité', values: ['180%', '200%'] }, { name: 'Couleur', values: ['Noir naturel', 'Brun', 'Auburn'] }], variantPrices: [
-    { conditions: { Longueur: '18"', Densité: '180%' }, price: 72000 },
-    { conditions: { Longueur: '18"', Densité: '200%' }, price: 78000 },
-    { conditions: { Longueur: '20"', Densité: '180%' }, price: 82000 },
-    { conditions: { Longueur: '20"', Densité: '200%' }, price: 88000 },
-    { conditions: { Longueur: '22"', Densité: '180%' }, price: 90000 },
-    { conditions: { Longueur: '22"', Densité: '200%' }, price: 95000 },
-    { conditions: { Longueur: '24"', Densité: '180%' }, price: 98000 },
-    { conditions: { Longueur: '24"', Densité: '200%' }, price: 105000 },
-  ], description: 'Perruque deep wave, raw hair premium.', details: [{ label: 'Type', value: 'Lace frontal' }, { label: 'Cheveux', value: 'Raw Hair' }, { label: 'Texture', value: 'Deep Wave' }, { label: 'Matière', value: 'Raw Hair' }], delivery: D, pickup: 'Retrait en studio · À partir de 24 h', isNew: true, reviews: [r('r50', 'Fama K.', 5, '2026-08-10', 'Qualité exceptionnelle.')] },
-
-  // === CHEVEUX — Mèches ===
-  { id: 'meches-naturelles-pre-tressees', reference: 'EZ-HAI-0004', name: 'Mèches naturelles pré-tressées', shopId: 'hair-studio-dakar', category: 'cheveux', subcategory: 'meches', texture: 'Straight', hairMaterial: 'Human Hair', price: 32000, images: [I.hair2, I.hair4], rating: 4.6, reviewCount: 19, stock: 15, variants: [{ name: 'Longueur', values: ['24"', '28"', '32"'] }, { name: 'Couleur', values: ['Noir naturel', 'Brun', 'Châtain'] }], description: 'Mèches pré-tressées prêtes à poser.', details: [{ label: 'Quantité', value: '6 packs / tête' }, { label: 'Texture', value: 'Straight' }, { label: 'Matière', value: 'Human Hair' }], delivery: D, reviews: [r('r17', 'Mame D.', 4, '2026-06-20', 'Bonne qualité, pose facile.')] },
-  
-  // === CHEVEUX — Blend Hair ===
-  { id: 'blend-hair-kinky-curly', reference: 'EZ-HAI-0005', name: 'Blend Hair Kinky Curly 16"', shopId: 'hair-studio-dakar', category: 'cheveux', subcategory: 'blend-hair', texture: 'Kinky Curly', hairMaterial: 'Blend Hair', price: 25000, images: [I.hair5, I.hair6], rating: 4.4, reviewCount: 8, stock: 7, variants: [{ name: 'Longueur', values: ['12"', '14"', '16"'] }, { name: 'Couleur', values: ['Noir naturel', 'Chocolat'] }], description: 'Blend hair kinky curly, texture afro naturelle.', details: [{ label: 'Texture', value: 'Kinky Curly' }, { label: 'Matière', value: 'Blend Hair' }], delivery: D, isNew: true, reviews: [r('r52', 'Ndèye A.', 4, '2026-08-05', 'Texture afro top.')] },
-
-  // === CHEVEUX — Cheveux naturels ===
-  { id: 'cheveux-naturels-bundle-raw', reference: 'EZ-HAI-0006', name: 'Bundle Raw Hair 3 pièces', shopId: 'hair-studio-dakar', category: 'cheveux', subcategory: 'cheveux-naturels', texture: 'Straight', hairMaterial: 'Raw Hair', price: 65000, images: [I.hair6, I.hair5], rating: 4.8, reviewCount: 22, stock: 5, variants: [{ name: 'Longueur', values: ['16"', '18"', '20"', '22"', '24"'] }, { name: 'Couleur', values: ['Noir naturel', 'Brun'] }], variantPrices: [
-    { conditions: { Longueur: '16"' }, price: 55000 },
-    { conditions: { Longueur: '18"' }, price: 60000 },
-    { conditions: { Longueur: '20"' }, price: 65000 },
-    { conditions: { Longueur: '22"' }, price: 72000 },
-    { conditions: { Longueur: '24"' }, price: 80000 },
-  ], description: '3 bundles raw hair naturel, non traité.', details: [{ label: 'Texture', value: 'Straight' }, { label: 'Matière', value: 'Raw Hair' }, { label: 'Quantité', value: '3 bundles' }], delivery: D, isTrending: true, reviews: [r('r53', 'Oulèye M.', 5, '2026-07-22', 'Raw hair de très bonne qualité.')] },
-
   // === PARFUMS — Femme ===
   { id: 'parfum-femme-100ml', reference: 'EZ-AIS-0001', name: 'Parfum femme Élégance', shopId: 'maison-senteur', category: 'parfums', subcategory: 'parfums-femme', price: 32000, images: [I.perfume1, I.perfume3, I.perfume7, I.perfume8], rating: 4.8, reviewCount: 47, stock: 11, variants: [{ name: 'Volume', values: ['30 ml', '50 ml', '100 ml'] }], variantPrices: [
     { conditions: { Volume: '30 ml' }, price: 18000 },

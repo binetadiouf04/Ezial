@@ -3,13 +3,12 @@ export type CategoryId =
   | 'chaussures'
   | 'sacs'
   | 'beaute'
-  | 'cheveux'
   | 'parfums'
   | 'bijoux'
   | 'lingerie';
 
 export interface SubCategory { id: string; label: string; }
-export interface Category { id: CategoryId; label: string; subcategories: SubCategory[]; hiddenFromPublicNav?: boolean; }
+export interface Category { id: CategoryId; label: string; subcategories: SubCategory[]; }
 
 export const categories: Category[] = [
   { id: 'vetements', label: 'Vêtements', subcategories: [
@@ -26,15 +25,6 @@ export const categories: Category[] = [
     { id: 'maquillage', label: 'Maquillage' }, { id: 'skincare', label: 'Skincare' },
     { id: 'soins-capillaires', label: 'Soins capillaires' }, { id: 'hygiene', label: 'Hygiène & soins corporels' },
     { id: 'mains-et-pieds', label: 'Manucure & Pédicure' },
-  ]},
-  // Retirée de la navigation publique (voir hiddenFromPublicNav) mais gardée
-  // ici : des produits réels existent encore sous cette catégorie et leurs
-  // pages/fiches vendeur en dépendent (categoryMap, formulaire produit,
-  // liens directs /categorie/cheveux/...). À supprimer pour de bon une fois
-  // ces produits reclassés.
-  { id: 'cheveux', label: 'Cheveux', hiddenFromPublicNav: true, subcategories: [
-    { id: 'perruques', label: 'Perruques' }, { id: 'meches', label: 'Mèches' },
-    { id: 'cheveux-naturels', label: 'Cheveux naturels' }, { id: 'blend-hair', label: 'Blend Hair' },
   ]},
   { id: 'parfums', label: 'Parfums & Senteurs', subcategories: [
     { id: 'parfums-femme', label: 'Parfums Femme' }, { id: 'parfums-homme', label: 'Parfums Homme' },
@@ -55,16 +45,9 @@ export const categoryMap: Record<CategoryId, Category> = categories.reduce(
   (acc, c) => ({ ...acc, [c.id]: c }), {} as Record<CategoryId, Category>,
 );
 
-// What the public navigation (header, mobile drawer, sidebar, search
-// suggestions) browses and lists. `categories`/`categoryMap` stay complete
-// so existing product pages, seller listings and the seller product form
-// keep resolving hidden categories correctly.
-export const publicCategories: Category[] = categories.filter((c) => !c.hiddenFromPublicNav);
-
 export const categoryTiles: { id: CategoryId; label: string; image: string }[] = [
   { id: 'vetements', label: 'Vêtements', image: 'https://images.pexels.com/photos/19816456/pexels-photo-19816456.jpeg?auto=compress&cs=tinysrgb&h=650&w=940' },
   { id: 'beaute', label: 'Beauté', image: 'https://images.pexels.com/photos/8101511/pexels-photo-8101511.jpeg?auto=compress&cs=tinysrgb&h=650&w=940' },
-  { id: 'cheveux', label: 'Cheveux', image: 'https://images.pexels.com/photos/6923241/pexels-photo-6923241.jpeg?auto=compress&cs=tinysrgb&h=650&w=940' },
   { id: 'parfums', label: 'Parfums', image: 'https://images.pexels.com/photos/7364096/pexels-photo-7364096.jpeg?auto=compress&cs=tinysrgb&h=650&w=940' },
   { id: 'chaussures', label: 'Chaussures', image: 'https://images.pexels.com/photos/31450733/pexels-photo-31450733.jpeg?auto=compress&cs=tinysrgb&h=650&w=940' },
   { id: 'sacs', label: 'Sacs', image: 'https://images.pexels.com/photos/7953286/pexels-photo-7953286.jpeg?auto=compress&cs=tinysrgb&h=650&w=940' },

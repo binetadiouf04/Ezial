@@ -27,12 +27,6 @@ export const commonPrints: string[] = [
 
 export const clothingSizes: string[] = ['XXS', 'XS', 'S', 'M', 'L', 'XL', 'XXL', '3XL', '4XL', 'Taille standard'];
 
-const hairTextures = ['Straight', 'Body Wave', 'Deep Wave', 'Loose Wave', 'Water Wave', 'Curly', 'Kinky Curly', 'Kinky Straight', 'Afro', 'Yaki Straight'];
-const hairLengths = ['10"', '12"', '14"', '16"', '18"', '20"', '22"', '24"', '26"', '28"', '30"', '32"', '32"+'];
-const hairDensities = ['150%', '180%', '200%'];
-const hairColors = ['Noir naturel', 'Noir', 'Brun foncé', 'Brun', 'Châtain', 'Chocolat', 'Caramel', 'Miel', 'Auburn', 'Bordeaux', 'Blond', 'Blond miel', 'Blond platine', 'Gris', 'Rouge', 'Cuivré'];
-const hairMaterials = ['Synthetic Hair', 'Blend Hair', 'Human Hair', 'Raw Hair', 'Romance', 'Vietnamese Hair', 'Indian Hair'];
-
 const parfumsFemmeNotes = ['Floral', 'Fruité', 'Vanillé', 'Gourmand', 'Musqué', 'Ambré', 'Poudré', 'Frais', 'Agrumes', 'Oriental'];
 const parfumsHommeNotes = ['Boisé', 'Aromatique', 'Épicé', 'Ambré', 'Musqué', 'Cuir', 'Frais', 'Agrumes', 'Aquatique', 'Fougère', 'Oriental'];
 const allFragranceNotes = [...new Set([...parfumsFemmeNotes, ...parfumsHommeNotes])];
@@ -197,14 +191,6 @@ export const filterConfig: Record<CategoryId, FilterGroup[]> = {
     { id: 'peau', label: 'Type de peau', options: ['Sèche', 'Mixte', 'Grasse', 'Sensible', 'Normale'] },
     { id: 'besoin', label: 'Besoin', options: ['Hydratation', 'Imperfections', 'Éclat', 'Anti-âge'] },
     { id: 'typeproduit', label: 'Type de produit', options: ['Sérum', 'Crème', 'Palette', 'Rouge à lèvres', 'Nettoyant', 'Masque'] },
-    globalPriceFilter,
-  ],
-  cheveux: [
-    { id: 'texture', label: 'Texture', options: hairTextures },
-    { id: 'longueur', label: 'Longueur', options: hairLengths },
-    { id: 'densite', label: 'Densité', options: hairDensities },
-    { id: 'couleur', label: 'Couleur', options: hairColors, collapsible: true },
-    { id: 'matiere', label: 'Matière / Type de cheveu', options: hairMaterials },
     globalPriceFilter,
   ],
   parfums: [

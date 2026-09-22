@@ -129,7 +129,7 @@ function RouteView() {
 }
 
 const SITE_TITLE = 'Ezial';
-const DEFAULT_DESCRIPTION = "Ezial est une marketplace qui réunit des boutiques de mode, beauté, cheveux, bijoux et parfums à Dakar, avec livraison ou retrait en boutique.";
+const DEFAULT_DESCRIPTION = "Ezial est une marketplace qui réunit des boutiques de mode, beauté, bijoux et parfums à Dakar, avec livraison ou retrait en boutique.";
 
 function setMetaDescription(content: string) {
   let tag = document.querySelector('meta[name="description"]');
