@@ -1,3 +1,32 @@
+// "À découvrir" photos — 24 images provided by the user, bundled locally
+// (not Supabase Storage: this section's admin UI was removed earlier in
+// this engagement and its source of truth is this file) and pre-optimized
+// to 400×400 WebP. Import order below matches the exact 01→24 order given.
+import discover01 from '@/assets/discover/01.webp';
+import discover02 from '@/assets/discover/02.webp';
+import discover03 from '@/assets/discover/03.webp';
+import discover04 from '@/assets/discover/04.webp';
+import discover05 from '@/assets/discover/05.webp';
+import discover06 from '@/assets/discover/06.webp';
+import discover07 from '@/assets/discover/07.webp';
+import discover08 from '@/assets/discover/08.webp';
+import discover09 from '@/assets/discover/09.webp';
+import discover10 from '@/assets/discover/10.webp';
+import discover11 from '@/assets/discover/11.webp';
+import discover12 from '@/assets/discover/12.webp';
+import discover13 from '@/assets/discover/13.webp';
+import discover14 from '@/assets/discover/14.webp';
+import discover15 from '@/assets/discover/15.webp';
+import discover16 from '@/assets/discover/16.webp';
+import discover17 from '@/assets/discover/17.webp';
+import discover18 from '@/assets/discover/18.webp';
+import discover19 from '@/assets/discover/19.webp';
+import discover20 from '@/assets/discover/20.webp';
+import discover21 from '@/assets/discover/21.webp';
+import discover22 from '@/assets/discover/22.webp';
+import discover23 from '@/assets/discover/23.webp';
+import discover24 from '@/assets/discover/24.webp';
+
 export type CategoryId =
   | 'vetements'
   | 'chaussures'
@@ -74,33 +103,32 @@ export interface HomeCircleTile { id: string; label: string; image: string; rout
 // Nuisettes) are untouched everywhere else — full taxonomy, category pages
 // and search all still have them.
 export const homeCircleTiles: HomeCircleTile[] = [
-  { id: 'promos', label: 'Promos', image: 'https://images.pexels.com/photos/8165653/pexels-photo-8165653.jpeg?auto=compress&cs=tinysrgb&h=400&w=400', route: '/promos', highlight: true },
-  { id: 'mode-femme', label: 'Femme', image: 'https://images.pexels.com/photos/19816456/pexels-photo-19816456.jpeg?auto=compress&cs=tinysrgb&h=400&w=400', route: '/categorie/vetements/femme' },
-  { id: 'mode-homme', label: 'Homme', image: 'https://images.pexels.com/photos/34695268/pexels-photo-34695268.jpeg?auto=compress&cs=tinysrgb&h=400&w=400', route: '/categorie/vetements/homme' },
-  { id: 'robes', label: 'Robes', image: 'https://images.pexels.com/photos/1755428/pexels-photo-1755428.jpeg?auto=compress&cs=tinysrgb&h=400&w=400', route: '/recherche?q=robes' },
-  { id: 'traditionnel-femme', label: 'Traditionnel Femme', image: 'https://images.pexels.com/photos/38277759/pexels-photo-38277759.jpeg?auto=compress&cs=tinysrgb&h=400&w=400', route: '/recherche?q=traditionnel femme' },
-  { id: 'traditionnel-homme', label: 'Traditionnel Homme', image: 'https://images.pexels.com/photos/19320006/pexels-photo-19320006.jpeg?auto=compress&cs=tinysrgb&h=400&w=400', route: '/recherche?q=traditionnel homme' },
-  { id: 'made-in-senegal', label: 'Made in Senegal', image: 'https://images.pexels.com/photos/34991789/pexels-photo-34991789.jpeg?auto=compress&cs=tinysrgb&h=400&w=400', route: '/recherche?q=made in senegal' },
-  { id: 'chaussures', label: 'Chaussures', image: 'https://images.pexels.com/photos/29393718/pexels-photo-29393718.jpeg?auto=compress&cs=tinysrgb&h=400&w=400', route: '/categorie/chaussures/femme' },
-  { id: 'sacs-a-main', label: 'Sacs', image: 'https://images.pexels.com/photos/7953286/pexels-photo-7953286.jpeg?auto=compress&cs=tinysrgb&h=400&w=400', route: '/categorie/sacs/sacs-a-main' },
-  { id: 'maquillage', label: 'Maquillage', image: 'https://images.pexels.com/photos/10338698/pexels-photo-10338698.jpeg?auto=compress&cs=tinysrgb&h=400&w=400', route: '/categorie/beaute/maquillage' },
-  { id: 'faux-cils', label: 'Faux cils', image: 'https://images.pexels.com/photos/3373736/pexels-photo-3373736.jpeg?auto=compress&cs=tinysrgb&h=400&w=400', route: '/recherche?q=faux cils' },
-  { id: 'skincare', label: 'Skincare', image: 'https://images.pexels.com/photos/12352170/pexels-photo-12352170.jpeg?auto=compress&cs=tinysrgb&h=400&w=400', route: '/categorie/beaute/skincare' },
-  { id: 'press-on-nails', label: 'Press-on nails', image: 'https://images.pexels.com/photos/4938515/pexels-photo-4938515.jpeg?auto=compress&cs=tinysrgb&h=400&w=400', route: '/categorie/beaute/mains-et-pieds' },
+  { id: 'promos', label: 'Promos', image: discover01, route: '/promos', highlight: true },
+  { id: 'mode-femme', label: 'Femme', image: discover02, route: '/categorie/vetements/femme' },
+  { id: 'mode-homme', label: 'Homme', image: discover03, route: '/categorie/vetements/homme' },
+  { id: 'robes', label: 'Robes', image: discover04, route: '/recherche?q=robes' },
+  { id: 'traditionnel-femme', label: 'Traditionnel Femme', image: discover05, route: '/recherche?q=traditionnel femme' },
+  { id: 'traditionnel-homme', label: 'Traditionnel Homme', image: discover06, route: '/recherche?q=traditionnel homme' },
+  { id: 'made-in-senegal', label: 'Made in Senegal', image: discover07, route: '/recherche?q=made in senegal' },
+  { id: 'chaussures', label: 'Chaussures', image: discover08, route: '/categorie/chaussures/femme' },
+  { id: 'sacs-a-main', label: 'Sacs', image: discover09, route: '/categorie/sacs/sacs-a-main' },
+  { id: 'maquillage', label: 'Maquillage', image: discover10, route: '/categorie/beaute/maquillage' },
+  { id: 'faux-cils', label: 'Faux cils', image: discover11, route: '/recherche?q=faux cils' },
+  { id: 'skincare', label: 'Skincare', image: discover12, route: '/categorie/beaute/skincare' },
+  { id: 'press-on-nails', label: 'Press-on nails', image: discover13, route: '/categorie/beaute/mains-et-pieds' },
   // Streetwear/Voile/Abaya n'ont pas encore de sous-catégorie dédiée dans la
   // taxonomie (comme Robes ou Or plus haut) : ils routent vers une recherche
   // sur leur propre libellé, qui remontera les produits dès qu'un vendeur
-  // les tague avec ce type/style. Images temporaires réutilisées du dépôt en
-  // attendant les nouvelles photos.
-  { id: 'streetwear', label: 'Streetwear', image: 'https://images.pexels.com/photos/34695268/pexels-photo-34695268.jpeg?auto=compress&cs=tinysrgb&h=400&w=400', route: '/recherche?q=streetwear' },
-  { id: 'voile', label: 'Voile', image: 'https://images.pexels.com/photos/38277759/pexels-photo-38277759.jpeg?auto=compress&cs=tinysrgb&h=400&w=400', route: '/recherche?q=voile' },
-  { id: 'abaya', label: 'Abaya', image: 'https://images.pexels.com/photos/1755428/pexels-photo-1755428.jpeg?auto=compress&cs=tinysrgb&h=400&w=400', route: '/recherche?q=abaya' },
-  { id: 'soins-capillaires', label: 'Soins capillaires', image: 'https://images.pexels.com/photos/13734819/pexels-photo-13734819.jpeg?auto=compress&cs=tinysrgb&h=400&w=400', route: '/categorie/beaute/soins-capillaires' },
-  { id: 'parfums-femme', label: 'Parfums Femme', image: 'https://images.pexels.com/photos/7364096/pexels-photo-7364096.jpeg?auto=compress&cs=tinysrgb&h=400&w=400', route: '/categorie/parfums/parfums-femme' },
-  { id: 'parfums-homme', label: 'Parfums Homme', image: 'https://images.pexels.com/photos/965880/pexels-photo-965880.jpeg?auto=compress&cs=tinysrgb&h=400&w=400', route: '/categorie/parfums/parfums-homme' },
-  { id: 'encens', label: 'Encens', image: 'https://images.pexels.com/photos/30746012/pexels-photo-30746012.jpeg?auto=compress&cs=tinysrgb&h=400&w=400', route: '/categorie/parfums/encens-parfums-maison' },
-  { id: 'bijoux', label: 'Bijoux', image: 'https://images.pexels.com/photos/8165653/pexels-photo-8165653.jpeg?auto=compress&cs=tinysrgb&h=400&w=400', route: '/categorie/bijoux' },
-  { id: 'or', label: 'Or', image: 'https://images.pexels.com/photos/8165653/pexels-photo-8165653.jpeg?auto=compress&cs=tinysrgb&h=400&w=400', route: '/recherche?q=or' },
-  { id: 'pyjamas', label: 'Pyjamas', image: 'https://images.pexels.com/photos/6311392/pexels-photo-6311392.jpeg?auto=compress&cs=tinysrgb&h=400&w=400', route: '/categorie/lingerie/pyjamas' },
-  { id: 'sous-vetements', label: 'Sous-vêtements', image: 'https://images.pexels.com/photos/6568208/pexels-photo-6568208.jpeg?auto=compress&cs=tinysrgb&h=400&w=400', route: '/categorie/lingerie/sous-vetements' },
+  // les tague avec ce type/style.
+  { id: 'streetwear', label: 'Streetwear', image: discover14, route: '/recherche?q=streetwear' },
+  { id: 'voile', label: 'Voile', image: discover15, route: '/recherche?q=voile' },
+  { id: 'abaya', label: 'Abaya', image: discover16, route: '/recherche?q=abaya' },
+  { id: 'soins-capillaires', label: 'Soins capillaires', image: discover17, route: '/categorie/beaute/soins-capillaires' },
+  { id: 'parfums-femme', label: 'Parfums Femme', image: discover18, route: '/categorie/parfums/parfums-femme' },
+  { id: 'parfums-homme', label: 'Parfums Homme', image: discover19, route: '/categorie/parfums/parfums-homme' },
+  { id: 'encens', label: 'Encens', image: discover20, route: '/categorie/parfums/encens-parfums-maison' },
+  { id: 'bijoux', label: 'Bijoux', image: discover21, route: '/categorie/bijoux' },
+  { id: 'or', label: 'Or', image: discover22, route: '/recherche?q=or' },
+  { id: 'pyjamas', label: 'Pyjamas', image: discover23, route: '/categorie/lingerie/pyjamas' },
+  { id: 'sous-vetements', label: 'Sous-vêtements', image: discover24, route: '/categorie/lingerie/sous-vetements' },
 ];
