@@ -51,6 +51,7 @@ function AuthPanel() {
   const [view, setView] = useState<AuthView>('login');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
+  const [emailTaken, setEmailTaken] = useState(false);
   const [notice, setNotice] = useState('');
   const [resending, setResending] = useState(false);
 
@@ -65,7 +66,7 @@ function AuthPanel() {
 
   const [resetEmail, setResetEmail] = useState('');
 
-  const switchView = (v: AuthView) => { setView(v); setError(''); setNotice(''); };
+  const switchView = (v: AuthView) => { setView(v); setError(''); setEmailTaken(false); setNotice(''); };
 
   const handleLogin = async () => {
     setError(''); setNotice('');
@@ -78,7 +79,7 @@ function AuthPanel() {
   };
 
   const handleSignup = async () => {
-    setError(''); setNotice('');
+    setError(''); setEmailTaken(false); setNotice('');
     if (!firstName.trim() || !lastName.trim()) { setError('Prénom et nom sont obligatoires.'); return; }
     if (!email.trim()) { setError('L\'adresse email est obligatoire.'); return; }
     if (!isValidEmail(email)) { setError('Adresse email invalide.'); return; }
@@ -86,7 +87,11 @@ function AuthPanel() {
     setSubmitting(true);
     const result = await signUpCustomerAccount({ firstName, lastName, phone: phone.trim() || undefined, email: email.trim(), password });
     setSubmitting(false);
-    if ('error' in result) { setError(result.error); return; }
+    if ('error' in result) {
+      setError(result.error);
+      if (result.code === 'email_taken') setEmailTaken(true);
+      return;
+    }
     if (result.status === 'pending_confirmation') setView('pending_confirmation');
   };
 
@@ -97,7 +102,7 @@ function AuthPanel() {
     const result = await requestPasswordReset(resetEmail.trim());
     setSubmitting(false);
     if (result.error) setError(result.error);
-    else setNotice('Si un compte existe avec cet email, un lien de réinitialisation vient de lui être envoyé.');
+    else setNotice('Lien envoyé. Vérifiez votre boîte mail et vos spams si vous ne le trouvez pas.');
   };
 
   const handleResendConfirmation = async () => {
@@ -124,7 +129,17 @@ function AuthPanel() {
         </div>
       )}
 
-      {error && <p className="mb-4 flex items-start gap-1.5 rounded-lg bg-burgundy/5 p-3 text-sm text-burgundy"><AlertCircle size={15} className="mt-0.5 flex-shrink-0" /> {error}</p>}
+      {error && (
+        <div className="mb-4 rounded-lg bg-burgundy/5 p-3">
+          <p className="flex items-start gap-1.5 text-sm text-burgundy"><AlertCircle size={15} className="mt-0.5 flex-shrink-0" /> {error}</p>
+          {emailTaken && (
+            <div className="mt-2.5 flex gap-2 pl-[22px]">
+              <button onClick={() => { setLoginId(email); switchView('login'); }} className="rounded-full bg-white px-3 py-1.5 text-xs font-medium text-burgundy border border-burgundy/30 hover:bg-burgundy/5">Se connecter</button>
+              <button onClick={() => { setResetEmail(email); switchView('forgot'); }} className="rounded-full bg-white px-3 py-1.5 text-xs font-medium text-ink/60 border border-line hover:bg-cream">Mot de passe oublié</button>
+            </div>
+          )}
+        </div>
+      )}
       {notice && <p className="mb-4 flex items-start gap-1.5 rounded-lg bg-green-50 p-3 text-sm text-green-700"><Check size={15} className="mt-0.5 flex-shrink-0" /> {notice}</p>}
 
       {view === 'login' && (
@@ -189,14 +204,35 @@ function AuthPanel() {
 }
 
 export default function ProfilePage() {
-  const { orders, favorites, navigate, catalogProducts, customerUser, authLoading, signOutCustomerAccount, updateCustomerAccount, deleteCustomerAccount } = useApp();
+  const { orders, favorites, navigate, catalogProducts, customerUser, authLoading, signOutCustomerAccount, updateCustomerAccount, deleteCustomerAccount, changePassword } = useApp();
   const [tab, setTab] = useState<Tab>('orders');
   const [infoForm, setInfoForm] = useState<InfoForm>(() => ({
     firstName: customerUser?.firstName ?? '', lastName: customerUser?.lastName ?? '',
     phone: customerUser?.phone ?? '', email: customerUser?.email ?? '',
     quartier: customerUser?.quartier ?? 'Plateau', landmark: customerUser?.landmark ?? '',
   }));
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmNewPassword, setConfirmNewPassword] = useState('');
+  const [passwordError, setPasswordError] = useState('');
+  const [passwordSaved, setPasswordSaved] = useState(false);
+  const [changingPassword, setChangingPassword] = useState(false);
+
+  const handleChangePassword = async () => {
+    setPasswordError(''); setPasswordSaved(false);
+    if (!currentPassword) { setPasswordError('Renseignez votre mot de passe actuel.'); return; }
+    if (newPassword.length < 8) { setPasswordError('Le nouveau mot de passe doit contenir au moins 8 caractères.'); return; }
+    if (newPassword !== confirmNewPassword) { setPasswordError('Les mots de passe ne correspondent pas.'); return; }
+    setChangingPassword(true);
+    const result = await changePassword(currentPassword, newPassword);
+    setChangingPassword(false);
+    if (result.error) { setPasswordError(result.error); return; }
+    setCurrentPassword(''); setNewPassword(''); setConfirmNewPassword('');
+    setPasswordSaved(true);
+    setTimeout(() => setPasswordSaved(false), 2500);
+  };
   const [infoSaved, setInfoSaved] = useState(false);
+  const [emailConfirmationNotice, setEmailConfirmationNotice] = useState(false);
   const [errors, setErrors] = useState<Partial<Record<keyof InfoForm, string>>>({});
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -228,7 +264,11 @@ export default function ProfilePage() {
   const handleSaveInfo = async () => {
     if (!validate()) return;
     const result = await updateCustomerAccount(infoForm);
-    if (!result.error) { setInfoSaved(true); setTimeout(() => setInfoSaved(false), 2000); }
+    if (!result.error) {
+      setInfoSaved(true);
+      setEmailConfirmationNotice(Boolean(result.emailConfirmationSent));
+      setTimeout(() => setInfoSaved(false), 2000);
+    }
   };
 
   const updateField = (field: keyof InfoForm, value: string) => {
@@ -376,6 +416,31 @@ export default function ProfilePage() {
             <div>
               <label className="block text-xs font-medium text-ink/60 mb-1.5">Email (facultatif)</label>
               <input className="input-field" type="email" value={infoForm.email} onChange={(e) => updateField('email', e.target.value)} />
+              <p className="mt-1 text-xs text-ink/40">Changer l'email envoie un lien de confirmation à la nouvelle adresse ; l'ancienne reste active jusqu'à confirmation.</p>
+            </div>
+          </div>
+
+          {/* Mot de passe */}
+          <div className="card p-5 space-y-4">
+            <h2 className="text-sm font-semibold text-ink">Mot de passe</h2>
+            <div>
+              <label className="block text-xs font-medium text-ink/60 mb-1.5">Mot de passe actuel</label>
+              <PasswordField value={currentPassword} onChange={setCurrentPassword} autoComplete="current-password" />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-ink/60 mb-1.5">Nouveau mot de passe</label>
+              <PasswordField value={newPassword} onChange={setNewPassword} placeholder="8 caractères minimum" autoComplete="new-password" />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-ink/60 mb-1.5">Confirmer le nouveau mot de passe</label>
+              <PasswordField value={confirmNewPassword} onChange={setConfirmNewPassword} autoComplete="new-password" />
+            </div>
+            {passwordError && <p className="flex items-start gap-1.5 text-xs text-burgundy"><AlertCircle size={13} className="mt-0.5 flex-shrink-0" /> {passwordError}</p>}
+            <div className="flex items-center gap-3">
+              <button onClick={() => void handleChangePassword()} disabled={changingPassword} className="btn-outline">
+                {changingPassword ? 'Modification...' : 'Modifier le mot de passe'}
+              </button>
+              {passwordSaved && <span className="flex items-center gap-1 text-sm text-green-600"><Check size={14} /> Mot de passe modifié</span>}
             </div>
           </div>
 
@@ -396,8 +461,11 @@ export default function ProfilePage() {
 
           <div className="flex items-center gap-3">
             <button onClick={() => void handleSaveInfo()} className="btn-primary">Enregistrer</button>
-            {infoSaved && <span className="flex items-center gap-1 text-sm text-green-600"><Check size={14} /> Enregistré</span>}
+            {infoSaved && !emailConfirmationNotice && <span className="flex items-center gap-1 text-sm text-green-600"><Check size={14} /> Enregistré</span>}
           </div>
+          {infoSaved && emailConfirmationNotice && (
+            <p className="flex items-start gap-1.5 text-sm text-green-700"><Check size={15} className="mt-0.5 flex-shrink-0" /> Enregistré. Un email de confirmation a été envoyé à votre nouvelle adresse.</p>
+          )}
         </div>
       )}
 

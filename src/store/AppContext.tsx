@@ -4,7 +4,7 @@ import { shops as mockShops, registerSupabaseShops, type Shop } from '@/data/sho
 import { fetchActiveCatalogFromSupabase } from '@/lib/supabaseCatalog';
 import {
   signUpCustomer, signInCustomer, restoreCustomerSession, signOutCustomer,
-  updateCustomerProfile, requestCustomerPasswordReset, resendCustomerConfirmation,
+  updateCustomerProfile, requestCustomerPasswordReset, resendCustomerConfirmation, changeCustomerPassword,
   type CustomerProfile, type SignUpCustomerInput, type SignUpCustomerResult, type UpdateCustomerProfileInput,
 } from '@/lib/supabaseCustomerAuth';
 import { deleteMyAccount } from '@/lib/supabaseAccountDeletion';
@@ -112,11 +112,12 @@ interface AppState {
   // itself gates on this.
   customerUser: CustomerProfile | null;
   authLoading: boolean;
-  signUpCustomerAccount: (input: SignUpCustomerInput) => Promise<{ status: 'confirmed' | 'pending_confirmation' } | { error: string }>;
+  signUpCustomerAccount: (input: SignUpCustomerInput) => Promise<{ status: 'confirmed' | 'pending_confirmation' } | { error: string; code?: 'email_taken' }>;
   signInCustomerAccount: (email: string, password: string) => Promise<{ error?: string }>;
   signOutCustomerAccount: () => void;
-  updateCustomerAccount: (input: UpdateCustomerProfileInput) => Promise<{ error?: string }>;
+  updateCustomerAccount: (input: UpdateCustomerProfileInput) => Promise<{ error?: string; emailConfirmationSent?: boolean }>;
   requestPasswordReset: (email: string) => Promise<{ error?: string }>;
+  changePassword: (currentPassword: string, newPassword: string) => Promise<{ error?: string }>;
   resendConfirmationEmail: (email: string) => Promise<{ error?: string }>;
   deleteCustomerAccount: () => Promise<{ error?: string }>;
 }
@@ -417,9 +418,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [customerUser]);
   const isFavorite = useCallback((productId: string) => favorites.includes(productId), [favorites]);
 
-  const signUpCustomerAccount = useCallback(async (input: SignUpCustomerInput): Promise<{ status: 'confirmed' | 'pending_confirmation' } | { error: string }> => {
+  const signUpCustomerAccount = useCallback(async (input: SignUpCustomerInput): Promise<{ status: 'confirmed' | 'pending_confirmation' } | { error: string; code?: 'email_taken' }> => {
     const result: SignUpCustomerResult = await signUpCustomer(input);
-    if ('error' in result) return { error: result.error };
+    if ('error' in result) return { error: result.error, code: result.code };
     if (result.status === 'pending_confirmation') return { status: 'pending_confirmation' };
     setCustomerUser(result.profile);
     await mergeLocalFavoritesIntoAccount(result.profile.id, favorites);
@@ -447,15 +448,23 @@ export function AppProvider({ children }: { children: ReactNode }) {
     void signOutCustomer();
   }, []);
 
-  const updateCustomerAccount = useCallback(async (input: UpdateCustomerProfileInput): Promise<{ error?: string }> => {
+  const updateCustomerAccount = useCallback(async (input: UpdateCustomerProfileInput): Promise<{ error?: string; emailConfirmationSent?: boolean }> => {
     if (!customerUser) return { error: 'Non connecté.' };
-    const result = await updateCustomerProfile(customerUser.id, input);
+    const result = await updateCustomerProfile(customerUser.id, input, customerUser.email);
     if (result.error) return result;
-    setCustomerUser({ ...customerUser, firstName: input.firstName.trim(), lastName: input.lastName.trim(), phone: input.phone.trim() || null, email: input.email.trim() || null, quartier: input.quartier || null, landmark: input.landmark.trim() || null });
-    return {};
+    // The email shown here stays the CONFIRMED one when a change is still
+    // pending confirmation — updateCustomerProfile already wrote that same
+    // (unchanged) value back to customer_profiles for exactly this reason.
+    const nextEmail = result.emailConfirmationSent ? customerUser.email : (input.email.trim() || null);
+    setCustomerUser({ ...customerUser, firstName: input.firstName.trim(), lastName: input.lastName.trim(), phone: input.phone.trim() || null, email: nextEmail, quartier: input.quartier || null, landmark: input.landmark.trim() || null });
+    return { emailConfirmationSent: result.emailConfirmationSent };
   }, [customerUser]);
 
   const requestPasswordReset = useCallback(async (email: string) => requestCustomerPasswordReset(email), []);
+  const changePassword = useCallback(async (currentPassword: string, newPassword: string) => {
+    if (!customerUser?.email) return { error: 'Aucune adresse email associée à ce compte.' };
+    return changeCustomerPassword(customerUser.email, currentPassword, newPassword);
+  }, [customerUser]);
   const resendConfirmationEmail = useCallback(async (email: string) => resendCustomerConfirmation(email), []);
 
   const deleteCustomerAccount = useCallback(async (): Promise<{ error?: string }> => {
@@ -550,7 +559,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     customerInfo, updateCustomerInfo,
     customerUser, authLoading,
     signUpCustomerAccount, signInCustomerAccount, signOutCustomerAccount, resendConfirmationEmail, deleteCustomerAccount,
-    updateCustomerAccount, requestPasswordReset,
+    updateCustomerAccount, requestPasswordReset, changePassword,
   };
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
 }

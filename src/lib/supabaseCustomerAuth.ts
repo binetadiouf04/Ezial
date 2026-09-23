@@ -59,7 +59,7 @@ export interface SignUpCustomerInput {
 export type SignUpCustomerResult =
   | { status: 'confirmed'; profile: CustomerProfile }
   | { status: 'pending_confirmation' }
-  | { error: string };
+  | { error: string; code?: 'email_taken' };
 
 export async function signUpCustomer(input: SignUpCustomerInput): Promise<SignUpCustomerResult> {
   const email = input.email.trim();
@@ -83,7 +83,7 @@ export async function signUpCustomer(input: SignUpCustomerInput): Promise<SignUp
   if (error) {
     const msg = error.message.toLowerCase();
     if (msg.includes('already registered') || msg.includes('already exists') || msg.includes('user already')) {
-      return { error: 'Un compte existe déjà avec cette adresse email. Connectez-vous ou réinitialisez votre mot de passe.' };
+      return { error: 'Un compte existe déjà avec cette adresse e-mail.', code: 'email_taken' };
     }
     return { error: mapAuthErrorMessage(error.message) };
   }
@@ -153,19 +153,56 @@ export interface UpdateCustomerProfileInput {
   landmark: string;
 }
 
-export async function updateCustomerProfile(userId: string, input: UpdateCustomerProfileInput): Promise<{ error?: string }> {
+// previousEmail lets this tell "the customer actually typed a new email"
+// apart from "resaved the form with the same one" — needed because
+// changing the real login credential (auth.users.email, via
+// supabase.auth.updateUser) is a meaningfully different, slower operation
+// (Supabase emails a confirmation to the new address before it takes
+// effect) than saving the rest of the profile, and must never fire just
+// because the customer updated their phone number on the same form.
+export async function updateCustomerProfile(userId: string, input: UpdateCustomerProfileInput, previousEmail: string | null): Promise<{ error?: string; emailConfirmationSent?: boolean }> {
+  const trimmedEmail = input.email.trim();
+  let emailConfirmationSent = false;
+  if (trimmedEmail && trimmedEmail !== (previousEmail ?? '')) {
+    const { error: emailError } = await supabase.auth.updateUser({ email: trimmedEmail });
+    if (emailError) return { error: mapAuthErrorMessage(emailError.message) };
+    emailConfirmationSent = true;
+  }
+
   const { error } = await supabase
     .from('customer_profiles')
     .update({
       first_name: input.firstName.trim(),
       last_name: input.lastName.trim(),
       phone: input.phone.trim() || null,
-      email: input.email.trim() || null,
+      // The profile's own email column only ever mirrors the CONFIRMED
+      // auth email — never the one just submitted to updateUser above,
+      // which isn't real until the customer clicks the confirmation link.
+      email: emailConfirmationSent ? previousEmail : (trimmedEmail || null),
       quartier: input.quartier || null,
       landmark: input.landmark.trim() || null,
     })
     .eq('id', userId);
-  return error ? { error: error.message } : {};
+  if (error) return { error: error.message };
+  return emailConfirmationSent ? { emailConfirmationSent: true } : {};
+}
+
+// Change password from within "Mon compte" (signed in) — distinct from the
+// forgot-password email-link flow (ResetPasswordPage.tsx), which is the
+// only other place a customer's password is ever set. Re-verifies the
+// current password via signInWithPassword before allowing the change
+// (Supabase's updateUser() alone doesn't ask for it, since the session is
+// already authenticated) — a sensitive change like this shouldn't succeed
+// just because a device was left logged in.
+export async function changeCustomerPassword(email: string, currentPassword: string, newPassword: string): Promise<{ error?: string }> {
+  if (newPassword.length < 8) return { error: 'Le mot de passe doit contenir au moins 8 caractères.' };
+
+  const { error: verifyError } = await supabase.auth.signInWithPassword({ email: email.trim(), password: currentPassword });
+  if (verifyError) return { error: 'Mot de passe actuel incorrect.' };
+
+  const { error: updateError } = await supabase.auth.updateUser({ password: newPassword });
+  if (updateError) return { error: mapAuthErrorMessage(updateError.message) };
+  return {};
 }
 
 export async function requestCustomerPasswordReset(email: string): Promise<{ error?: string }> {
