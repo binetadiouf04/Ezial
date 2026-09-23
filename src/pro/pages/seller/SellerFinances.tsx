@@ -1,29 +1,62 @@
+import { useEffect, useState } from 'react';
 import { usePro } from '../../ProContext';
 import { formatFCFA, formatDate } from '../../data';
+import { fetchSellerFinances, type SellerTransactionRow } from '@/lib/supabaseSellerFinances';
 import FinanceSummary from '../../components/FinanceSummary';
 import { StatusChip } from '../../components/StatusChip';
 import { Wallet, TrendingUp, Calendar } from 'lucide-react';
 
 export default function SellerFinances() {
-  const { sellerTransactions } = usePro();
-  const shopName = 'Maison Fatou';
+  const { sellerSupabaseShopId } = usePro();
+  const [transactions, setTransactions] = useState<SellerTransactionRow[]>([]);
+  const [grossTotal, setGrossTotal] = useState(0);
+  const [commissionTotal, setCommissionTotal] = useState(0);
+  const [netTotal, setNetTotal] = useState(0);
+  const [availableBalance, setAvailableBalance] = useState(0);
+  const [isLoading, setIsLoading] = useState(true);
 
-  // Filter transactions for this shop
-  const myTransactions = sellerTransactions.filter((t) => t.shopName === shopName);
+  // Real financial history for the signed-in seller's real Supabase shop —
+  // never the mock sellerTransactions array, which only ever matched one
+  // hardcoded demo shop name and left every real seller's page empty.
+  useEffect(() => {
+    if (!sellerSupabaseShopId) {
+      setIsLoading(false);
+      return;
+    }
+    let cancelled = false;
+    setIsLoading(true);
+    fetchSellerFinances(sellerSupabaseShopId).then((summary) => {
+      if (cancelled) return;
+      setTransactions(summary.transactions);
+      setGrossTotal(summary.grossTotal);
+      setCommissionTotal(summary.commissionTotal);
+      setNetTotal(summary.netTotal);
+      setAvailableBalance(summary.availableBalance);
+      setIsLoading(false);
+    });
+    return () => { cancelled = true; };
+  }, [sellerSupabaseShopId]);
 
-  // Calculate totals
-  const grossTotal = myTransactions.reduce((sum, t) => sum + t.gross, 0);
-  const commissionTotal = myTransactions.reduce((sum, t) => sum + t.commission, 0);
-  const netTotal = myTransactions.reduce((sum, t) => sum + t.net, 0);
-
-  // Available balance = transactions with 'available' payout
-  const availableBalance = myTransactions.filter((t) => t.payout === 'available').reduce((sum, t) => sum + t.net, 0);
-
-  // Weekly and yearly
-  const weeklyNet = myTransactions
-    .filter((t) => new Date(t.date) > new Date('2026-08-20'))
+  const now = Date.now();
+  const weeklyNet = transactions
+    .filter((t) => now - new Date(t.date).getTime() < 7 * 24 * 60 * 60 * 1000)
     .reduce((sum, t) => sum + t.net, 0);
-  const yearlyNet = myTransactions.reduce((sum, t) => sum + t.net, 0);
+  const yearlyNet = transactions
+    .filter((t) => new Date(t.date).getFullYear() === new Date().getFullYear())
+    .reduce((sum, t) => sum + t.net, 0);
+
+  if (!sellerSupabaseShopId) {
+    return (
+      <div className="card p-10 text-center">
+        <Wallet size={36} className="mx-auto text-ink/20" />
+        <p className="mt-3 text-sm text-ink/55">Votre compte vendeur n'est relié à aucune boutique Supabase réelle. Contactez EZIAL.</p>
+      </div>
+    );
+  }
+
+  if (isLoading) {
+    return <div className="p-10 text-center"><p className="text-sm text-ink/50">Chargement…</p></div>;
+  }
 
   return (
     <div className="space-y-6">
@@ -35,8 +68,8 @@ export default function SellerFinances() {
       {/* Summary */}
       <FinanceSummary
         rows={[
-          { label: 'Ventes brutes', value: grossTotal, hint: `${myTransactions.length} transactions` },
-          { label: 'Commission Ezial (8%)', value: -commissionTotal, hint: 'Déduite automatiquement' },
+          { label: 'Ventes brutes', value: grossTotal, hint: `${transactions.length} transaction${transactions.length > 1 ? 's' : ''}` },
+          { label: 'Commission Ezial', value: -commissionTotal, hint: '8% (ou 5% en promotion ≥ 10%) — déduite automatiquement' },
           { label: 'Montant net', value: netTotal, accent: true },
         ]}
       />
@@ -66,14 +99,14 @@ export default function SellerFinances() {
       <div>
         <h2 className="text-sm font-semibold text-ink mb-3">Historique des transactions</h2>
         <div className="card divide-y divide-line">
-          {myTransactions.length === 0 ? (
+          {transactions.length === 0 ? (
             <p className="p-6 text-center text-sm text-ink/45">Aucune transaction</p>
           ) : (
-            myTransactions.map((t) => (
+            transactions.map((t) => (
               <div key={t.id} className="p-4">
                 <div className="flex items-start justify-between gap-3 mb-2">
                   <div className="min-w-0">
-                    <span className="font-mono text-sm font-semibold text-ink">{t.orderId}</span>
+                    <span className="font-mono text-sm font-semibold text-ink">{t.orderNumber ?? t.id}</span>
                     <p className="text-xs text-ink/45 mt-0.5">{formatDate(t.date)}</p>
                   </div>
                   <StatusChip status={t.payout} />

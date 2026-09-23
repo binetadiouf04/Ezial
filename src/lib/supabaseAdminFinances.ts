@@ -7,20 +7,18 @@ import { supabase } from './supabaseClient';
 // ('sale','commission','payout','refund','adjustment'), status in
 // ('pending','available','paid','cancelled')).
 //
-// Sales/commission/net figures are computed live from the real
-// order_shops.subtotal (never from delivery_fee — commission is 8% on
-// product sales only) rather than from seller_transactions, since nothing
-// currently writes 'sale' rows into that table. Payouts are the one thing
-// actually stored there, and only ever written through the
-// record_seller_payout() RPC (security definer) — never inserted directly
-// from the client, so the "amount can't exceed what's owed" rule is
-// enforced in the database, not trusted from the frontend.
-
-const COMMISSION_RATE = 0.08;
-
-function commissionOf(gross: number): number {
-  return Math.round(gross * COMMISSION_RATE);
-}
+// Sales/commission/net figures are read from order_shops.subtotal /
+// commission_amount / net_amount — computed and stored once, server-side,
+// by create_order() itself (product by product: 8% normally, 5% on any
+// item promoted at 10% off or more, on the amount actually paid after
+// discount, delivery fees never included — see the migration this file
+// ships with). Never recomputed here with a flat rate: a flat client-side
+// 8% on the whole subtotal was exactly wrong the moment an order contained
+// even one promoted item, and trusting a rate computed in the browser at
+// all is not something a real payout amount can be built on. Payouts are
+// only ever written through the record_seller_payout() RPC (security
+// definer) — never inserted directly from the client, so the "amount
+// can't exceed what's owed" rule is enforced in the database.
 
 export interface AdminShopFinanceSummary {
   shopId: string;
@@ -50,14 +48,18 @@ function statusFor(netToSeller: number, remaining: number): AdminShopFinanceSumm
 export async function fetchAdminFinanceOverview(): Promise<AdminFinanceOverview> {
   const [{ data: shopRows }, { data: orderShopRows }, { data: payoutRows }] = await Promise.all([
     supabase.from('shops').select('id, name, logo_url').order('name', { ascending: true }),
-    supabase.from('order_shops').select('shop_id, subtotal'),
+    supabase.from('order_shops').select('shop_id, subtotal, commission_amount, net_amount'),
     supabase.from('seller_transactions').select('shop_id, net_amount').eq('type', 'payout').eq('status', 'paid'),
   ]);
 
   const grossByShop = new Map<string, number>();
+  const commissionByShop = new Map<string, number>();
+  const netByShop = new Map<string, number>();
   for (const row of orderShopRows ?? []) {
     const sid = row.shop_id as string;
     grossByShop.set(sid, (grossByShop.get(sid) ?? 0) + ((row.subtotal as number) ?? 0));
+    commissionByShop.set(sid, (commissionByShop.get(sid) ?? 0) + ((row.commission_amount as number) ?? 0));
+    netByShop.set(sid, (netByShop.get(sid) ?? 0) + ((row.net_amount as number) ?? 0));
   }
 
   const paidByShop = new Map<string, number>();
@@ -68,8 +70,8 @@ export async function fetchAdminFinanceOverview(): Promise<AdminFinanceOverview>
 
   const shops: AdminShopFinanceSummary[] = (shopRows ?? []).map((s) => {
     const sales = grossByShop.get(s.id as string) ?? 0;
-    const commission = commissionOf(sales);
-    const netToSeller = sales - commission;
+    const commission = commissionByShop.get(s.id as string) ?? 0;
+    const netToSeller = netByShop.get(s.id as string) ?? 0;
     const alreadyPaid = paidByShop.get(s.id as string) ?? 0;
     const remaining = netToSeller - alreadyPaid;
     return {
@@ -121,7 +123,7 @@ export async function fetchAdminShopFinanceDetail(shopId: string): Promise<Admin
   if (error || !shopRow) return null;
 
   const [{ data: orderShopRows }, { data: payoutRows }] = await Promise.all([
-    supabase.from('order_shops').select('id, order_id, subtotal').eq('shop_id', shopId),
+    supabase.from('order_shops').select('id, order_id, subtotal, commission_amount, net_amount').eq('shop_id', shopId),
     supabase.from('seller_transactions').select('id, net_amount, status, created_at').eq('shop_id', shopId).eq('type', 'payout').order('created_at', { ascending: false }),
   ]);
 
@@ -135,7 +137,7 @@ export async function fetchAdminShopFinanceDetail(shopId: string): Promise<Admin
 
   const saleEntries: FinanceHistoryEntry[] = (orderShopRows ?? []).map((os) => {
     const gross = (os.subtotal as number) ?? 0;
-    const commission = commissionOf(gross);
+    const commission = (os.commission_amount as number) ?? 0;
     const order = orderById.get(os.order_id as string);
     return {
       id: `sale-${os.id}`,
@@ -144,7 +146,7 @@ export async function fetchAdminShopFinanceDetail(shopId: string): Promise<Admin
       orderNumber: order?.order_number ?? null,
       grossAmount: gross,
       commissionAmount: commission,
-      netAmount: gross - commission,
+      netAmount: (os.net_amount as number) ?? gross - commission,
     };
   });
 
@@ -162,8 +164,8 @@ export async function fetchAdminShopFinanceDetail(shopId: string): Promise<Admin
   const history = [...saleEntries, ...payoutEntries].sort((a, b) => (a.date < b.date ? 1 : -1));
 
   const sales = saleEntries.reduce((sum, e) => sum + e.grossAmount, 0);
-  const commission = commissionOf(sales);
-  const netToSeller = sales - commission;
+  const commission = saleEntries.reduce((sum, e) => sum + e.commissionAmount, 0);
+  const netToSeller = saleEntries.reduce((sum, e) => sum + e.netAmount, 0);
   const alreadyPaid = payoutEntries.reduce((sum, e) => sum + e.netAmount, 0);
   const remaining = netToSeller - alreadyPaid;
 

@@ -86,7 +86,7 @@ export default function AdminShopFinanceDetail({ shopId }: { shopId: string }) {
           <span className="font-medium text-ink">{formatFCFA(detail.sales)}</span>
         </div>
         <div className="flex justify-between text-sm">
-          <span className="text-ink/55">Commission Ezial cumulée (8%)</span>
+          <span className="text-ink/55">Commission Ezial cumulée</span>
           <span className="font-medium text-red-500">- {formatFCFA(detail.commission)}</span>
         </div>
         <div className="flex justify-between text-sm pt-2 border-t border-line">

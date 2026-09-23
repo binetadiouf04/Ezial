@@ -132,7 +132,7 @@ export default function AdminFinances() {
 
           <div className="card p-4 bg-cream/50">
             <p className="text-xs text-ink/45 text-center">
-              Commission Ezial (8%) appliquée uniquement sur les ventes produits. Les frais de livraison sont gérés séparément.
+              Commission Ezial appliquée produit par produit sur les ventes uniquement (8%, ou 5% sur un produit en promotion d'au moins 10%). Les frais de livraison sont gérés séparément.
             </p>
           </div>
         </>
