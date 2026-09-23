@@ -86,7 +86,7 @@ export default function OrderDetailPage({ orderId }: { orderId: string }) {
                 const isPickup = sf?.type === 'pickup';
                 return (
                   <div key={i} className="flex gap-3">
-                    <SmartImage src={p.images[0]} alt="" className="h-16 w-14 rounded-lg object-cover flex-shrink-0" />
+                    <SmartImage src={p.thumbnailUrl || p.images[0]} alt="" className="h-16 w-14 rounded-lg object-cover flex-shrink-0" />
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium text-ink line-clamp-1">{p.name}</p>
                       {Object.entries(item.variants).length > 0 && (

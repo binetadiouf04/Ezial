@@ -165,8 +165,21 @@ async function uploadMedia(
   for (let i = 0; i < items.length; i++) {
     const item = items[i];
     const upload = async (file: File, suffix: string) => {
-      const path = `${uid}/${productId}/${i}${suffix}-${sanitizeFileName(file.name)}`;
-      const { error } = await supabase.storage.from(PRODUCT_IMAGES_BUCKET).upload(path, file);
+      // A short random token makes every upload's path globally unique, even
+      // when a seller replaces the photo at the same slot (index i) more
+      // than once for the same product — without it, a delete-then-reupload
+      // to the exact same path is what lets the long cacheControl below
+      // actually be safe: the browser can never end up serving a stale file
+      // from a path that's since been overwritten with different content.
+      const token = Math.random().toString(36).slice(2, 8);
+      const path = `${uid}/${productId}/${i}${suffix}-${token}-${sanitizeFileName(file.name)}`;
+      // One year, immutable: product photos are never edited in place (a
+      // replacement always deletes the old file and uploads to a brand-new,
+      // unique path above), so once a path is public it never changes —
+      // safe to cache as aggressively as the browser allows instead of the
+      // Supabase Storage default (1 hour), which forced every repeat visit
+      // to re-download every product image on the page.
+      const { error } = await supabase.storage.from(PRODUCT_IMAGES_BUCKET).upload(path, file, { cacheControl: '31536000' });
       if (error) throw new Error(`L'envoi de "${file.name}" a échoué : ${error.message}.`);
       uploadedSoFar.push(path);
       return path;
@@ -381,7 +394,7 @@ export async function fetchSellerProducts(shopId: string): Promise<SellerProduct
 
   const [{ data: variantRows }, { data: imageRows }] = await Promise.all([
     supabase.from('product_variants').select('id, product_id, stock').in('product_id', productIds),
-    supabase.from('product_images').select('product_id, storage_path, is_primary, sort_order').in('product_id', productIds),
+    supabase.from('product_images').select('product_id, storage_path, thumbnail_storage_path, is_primary, sort_order').in('product_id', productIds),
   ]);
 
   const variantsByProduct = new Map<string, SellerProductVariantSummary[]>();
@@ -392,11 +405,16 @@ export async function fetchSellerProducts(shopId: string): Promise<SellerProduct
     variantsByProduct.set(pid, list);
   }
 
-  const imagesByProduct = new Map<string, { storagePath: string; isPrimary: boolean; sortOrder: number }[]>();
+  const imagesByProduct = new Map<string, { storagePath: string; thumbnailStoragePath: string | null; isPrimary: boolean; sortOrder: number }[]>();
   for (const row of imageRows ?? []) {
     const pid = row.product_id as string;
     const list = imagesByProduct.get(pid) ?? [];
-    list.push({ storagePath: (row.storage_path as string) ?? '', isPrimary: Boolean(row.is_primary), sortOrder: (row.sort_order as number) ?? 0 });
+    list.push({
+      storagePath: (row.storage_path as string) ?? '',
+      thumbnailStoragePath: (row.thumbnail_storage_path as string | null) ?? null,
+      isPrimary: Boolean(row.is_primary),
+      sortOrder: (row.sort_order as number) ?? 0,
+    });
     imagesByProduct.set(pid, list);
   }
 
@@ -414,7 +432,7 @@ export async function fetchSellerProducts(shopId: string): Promise<SellerProduct
       price: (row.base_price as number) ?? 0,
       stock: variants.reduce((sum, v) => sum + v.stock, 0),
       status: (row.status as SupabaseProductStatus) ?? 'draft',
-      imageUrl: images[0] ? resolveImageUrl(images[0].storagePath) : '',
+      imageUrl: images[0] ? resolveImageUrl(images[0].thumbnailStoragePath || images[0].storagePath) : '',
       variants,
     };
   });
@@ -484,8 +502,16 @@ export async function deleteSellerProduct(productId: string): Promise<DeleteProd
   const archived = Boolean((data as { archived?: boolean } | null)?.archived);
   if (archived) return { softDeleted: true };
 
+  // Fire-and-forget: the product_images/products rows are already gone via
+  // the RPC above, so the seller's UI has everything it needs to move on.
+  // Waiting on this extra Storage round trip before returning would only
+  // add latency to a delete that, from the seller's perspective, already
+  // succeeded — a failure here just leaves orphaned files behind (logged
+  // for follow-up), never a dangling DB reference.
   if (paths.length > 0) {
-    await supabase.storage.from(PRODUCT_IMAGES_BUCKET).remove(paths);
+    void supabase.storage.from(PRODUCT_IMAGES_BUCKET).remove(paths).then(({ error: storageError }) => {
+      if (storageError) console.error('[deleteSellerProduct] Storage cleanup failed:', storageError);
+    });
   }
   return { softDeleted: false };
 }

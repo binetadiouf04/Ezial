@@ -307,7 +307,7 @@ export default function ProfilePage() {
                     {order.items.slice(0, 4).map((item, i) => {
                       const p = catalogProducts.find((cp) => cp.id === item.productId);
                       if (!p) return null;
-                      return <SmartImage key={i} src={p.images[0]} alt="" className="h-12 w-10 rounded object-cover flex-shrink-0" />;
+                      return <SmartImage key={i} src={p.thumbnailUrl || p.images[0]} alt="" className="h-12 w-10 rounded object-cover flex-shrink-0" />;
                     })}
                     {order.items.length > 4 && <div className="flex h-12 w-10 items-center justify-center rounded bg-cream text-xs text-ink/40">+{order.items.length - 4}</div>}
                   </div>

@@ -34,6 +34,15 @@ const SUPABASE_STATUS_FOR_FORM_STATUS: Record<'draft' | 'published', SupabasePro
   published: 'active',
 };
 
+// Chrome (and other browsers) change a focused number input's value on
+// mouse-wheel scroll — so simply scrolling this long form with the cursor
+// resting over a stock or price field silently increments/decrements it
+// (a seller meaning to enter "5" for stock can end up seeing "15" without
+// ever touching the field). Blurring on wheel hands the scroll back to the
+// page instead of the input, exactly like every other number field the
+// seller doesn't expect to change from a scroll gesture.
+const blurOnWheel = (e: React.WheelEvent<HTMLInputElement>) => e.currentTarget.blur();
+
 // Which filter groups are single-choice (radio-like) vs descriptive multi-choice
 // (checkbox-like, but never split stock) vs true variant dimensions (checkbox-like
 // AND generate one stock/price line per selected value).
@@ -1136,6 +1145,7 @@ export default function SellerProductForm({ productId }: { productId?: string })
                     placeholder="Prix"
                     value={comboData[combo.key]?.price ?? ''}
                     onChange={(e) => updateComboPrice(combo.key, parseInt(e.target.value) || 0)}
+                    onWheel={blurOnWheel}
                   />
                   <span className="text-[11px] text-ink/40">FCFA</span>
                 </div>
@@ -1147,6 +1157,7 @@ export default function SellerProductForm({ productId }: { productId?: string })
                   placeholder="0"
                   value={comboData[combo.key]?.stock ?? ''}
                   onChange={(e) => updateComboStock(combo.key, parseInt(e.target.value) || 0)}
+                  onWheel={blurOnWheel}
                 />
                 <span className="text-[11px] text-ink/40">stock</span>
               </div>
@@ -1188,6 +1199,7 @@ export default function SellerProductForm({ productId }: { productId?: string })
                             placeholder="Prix"
                             value={comboData[combo.key]?.price ?? ''}
                             onChange={(e) => updateComboPrice(combo.key, parseInt(e.target.value) || 0)}
+                            onWheel={blurOnWheel}
                           />
                           <span className="text-[11px] text-ink/40">FCFA</span>
                         </div>
@@ -1199,6 +1211,7 @@ export default function SellerProductForm({ productId }: { productId?: string })
                           placeholder="0"
                           value={comboData[combo.key]?.stock ?? ''}
                           onChange={(e) => updateComboStock(combo.key, parseInt(e.target.value) || 0)}
+                          onWheel={blurOnWheel}
                         />
                       </div>
                     </div>
@@ -1500,6 +1513,7 @@ export default function SellerProductForm({ productId }: { productId?: string })
                       placeholder="Volume"
                       value={customVolumeMl}
                       onChange={(e) => setCustomVolumeMl(e.target.value)}
+                      onWheel={blurOnWheel}
                     />
                     <span className="text-xs text-ink/50">ml</span>
                   </div>
@@ -1515,7 +1529,7 @@ export default function SellerProductForm({ productId }: { productId?: string })
         <h2 className="text-sm font-semibold text-ink">Prix de base</h2>
         <div>
           <label className="block text-xs font-medium text-ink/60 mb-1.5">Prix (FCFA)</label>
-          <input className="input-field" type="number" value={price} onChange={(e) => setPrice(e.target.value)} />
+          <input className="input-field" type="number" value={price} onChange={(e) => setPrice(e.target.value)} onWheel={blurOnWheel} />
           {errors.price && <p className="mt-1 text-xs text-burgundy">{errors.price}</p>}
         </div>
         <label className="flex items-center gap-2.5 pt-1">
@@ -1546,7 +1560,7 @@ export default function SellerProductForm({ productId }: { productId?: string })
           <div className="space-y-4 fade-in">
             <div>
               <label className="block text-xs font-medium text-ink/60 mb-1.5">Prix promotionnel (FCFA)</label>
-              <input className="input-field" type="number" value={promoPrice} onChange={(e) => setPromoPrice(e.target.value)} />
+              <input className="input-field" type="number" value={promoPrice} onChange={(e) => setPromoPrice(e.target.value)} onWheel={blurOnWheel} />
               {errors.promoPrice && <p className="mt-1 text-xs text-burgundy">{errors.promoPrice}</p>}
             </div>
             {(() => {
@@ -1604,6 +1618,7 @@ export default function SellerProductForm({ productId }: { productId?: string })
               placeholder="0"
               value={simpleStock}
               onChange={(e) => setSimpleStock(e.target.value)}
+              onWheel={blurOnWheel}
             />
           </div>
         )}

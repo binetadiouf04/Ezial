@@ -55,7 +55,7 @@ export default function CartPage() {
                       const lineOldTotal = unitOldPrice ? unitOldPrice * item.quantity : undefined;
                       return (
                         <div key={index} className="flex gap-4">
-                          <SmartImage src={product.images[0]} alt="" className="h-24 w-20 flex-shrink-0 rounded-lg object-cover" />
+                          <SmartImage src={product.thumbnailUrl || product.images[0]} alt="" className="h-24 w-20 flex-shrink-0 rounded-lg object-cover" />
                           <div className="flex-1 min-w-0">
                             <button onClick={() => navigate(`/produit/${product.id}`)} className="text-sm font-medium text-ink leading-snug line-clamp-2 hover:text-burgundy">{product.name}</button>
                             {isMock && (
@@ -122,7 +122,7 @@ export default function CartPage() {
               const shop = getShop(saved.shopId);
               return (
                 <div key={idx} className="card p-4 flex items-center gap-4">
-                  <SmartImage src={product.images[0]} alt="" className="h-16 w-14 flex-shrink-0 rounded-lg object-cover" />
+                  <SmartImage src={product.thumbnailUrl || product.images[0]} alt="" className="h-16 w-14 flex-shrink-0 rounded-lg object-cover" />
                   <div className="flex-1 min-w-0">
                     <button onClick={() => navigate(`/produit/${product.id}`)} className="text-sm font-medium text-ink line-clamp-1 hover:text-burgundy">{product.name}</button>
                     {shop && <p className="text-xs text-ink/50">{shop.name}</p>}

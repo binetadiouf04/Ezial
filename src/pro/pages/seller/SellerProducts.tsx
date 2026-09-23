@@ -23,7 +23,6 @@ export default function SellerProducts() {
   const [actionError, setActionError] = useState('');
   const [actionNotice, setActionNotice] = useState('');
   const [productPendingDelete, setProductPendingDelete] = useState<SellerProductSummary | null>(null);
-  const [isDeleting, setIsDeleting] = useState(false);
 
   // Always the real products for the signed-in seller's real Supabase shop —
   // never the local mock sellerProducts array, which a fresh Supabase
@@ -63,26 +62,44 @@ export default function SellerProducts() {
 
   // Never fires on the first click — productPendingDelete only opens the
   // confirmation modal; the actual delete only runs from there.
+  //
+  // Optimistic: the product leaves the list — and the modal closes — the
+  // instant the seller confirms, instead of after a round trip to Supabase
+  // (image-paths lookup + the archive/delete RPC + Storage cleanup). The
+  // server call still runs to completion in the background; a genuine
+  // failure restores the product to its original spot with a clear error,
+  // and a history-guarded archive puts it back as disabled rather than
+  // leaving it looking deleted when it never actually was.
   const handleConfirmDelete = async () => {
     if (!productPendingDelete) return;
-    setIsDeleting(true);
+    const product = productPendingDelete;
+    const originalIndex = products.findIndex((p) => p.id === product.id);
     setActionError('');
     setActionNotice('');
-    const result = await deleteSellerProduct(productPendingDelete.id);
-    setIsDeleting(false);
+    setProductPendingDelete(null);
+    setProducts((prev) => prev.filter((p) => p.id !== product.id));
+
+    const restore = (next: SellerProductSummary) => {
+      setProducts((prev) => {
+        if (prev.some((p) => p.id === next.id)) return prev;
+        const copy = [...prev];
+        copy.splice(Math.min(originalIndex, copy.length), 0, next);
+        return copy;
+      });
+    };
+
+    const result = await deleteSellerProduct(product.id);
     if (result.error) {
+      restore(product);
       setActionError(result.error);
       return;
     }
     if (result.softDeleted) {
       // Has real order/review history — archived (status disabled) instead
       // of removed, exactly like "Désactiver" already does.
-      setProducts((prev) => prev.map((p) => (p.id === productPendingDelete.id ? { ...p, status: 'disabled' } : p)));
+      restore({ ...product, status: 'disabled' });
       setActionNotice('Ce produit possède un historique de commandes. Il a été retiré de la vente mais son historique est conservé.');
-    } else {
-      setProducts((prev) => prev.filter((p) => p.id !== productPendingDelete.id));
     }
-    setProductPendingDelete(null);
   };
 
   const categoryLabel = (category: string) => categoryMap[category as CategoryId]?.label ?? category;
@@ -177,20 +194,20 @@ export default function SellerProducts() {
 
       {/* Confirmation obligatoire — jamais de suppression au premier clic. */}
       {productPendingDelete && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/40 p-4" onClick={() => !isDeleting && setProductPendingDelete(null)}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/40 p-4" onClick={() => setProductPendingDelete(null)}>
           <div className="card w-full max-w-sm p-6" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-4">
               <h3 className="font-display text-lg font-semibold text-ink">Supprimer ce produit ?</h3>
-              <button onClick={() => setProductPendingDelete(null)} disabled={isDeleting}><X size={18} className="text-ink/40" /></button>
+              <button onClick={() => setProductPendingDelete(null)}><X size={18} className="text-ink/40" /></button>
             </div>
             <div className="flex items-start gap-2 mb-5 rounded-lg bg-burgundy/5 border border-burgundy/10 p-3">
               <AlertTriangle size={16} className="text-burgundy flex-shrink-0 mt-0.5" />
               <p className="text-xs text-burgundy/90">Supprimer « {productPendingDelete.name} » ? Cette action est définitive.</p>
             </div>
             <div className="flex gap-3">
-              <button onClick={() => setProductPendingDelete(null)} disabled={isDeleting} className="btn-outline flex-1">Annuler</button>
-              <button onClick={() => void handleConfirmDelete()} disabled={isDeleting} className="flex-1 rounded-lg bg-burgundy px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-burgundy/90 disabled:opacity-40">
-                {isDeleting ? 'Suppression…' : 'Supprimer'}
+              <button onClick={() => setProductPendingDelete(null)} className="btn-outline flex-1">Annuler</button>
+              <button onClick={() => void handleConfirmDelete()} className="flex-1 rounded-lg bg-burgundy px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-burgundy/90">
+                Supprimer
               </button>
             </div>
           </div>

@@ -112,7 +112,7 @@ export default function OrderTrackingPage({ orderId }: { orderId: string }) {
                 const shop = getShop(item.shopId);
                 return (
                   <div key={i} className="flex gap-2.5">
-                    <SmartImage src={p.images[0]} alt="" className="h-12 w-10 rounded object-cover flex-shrink-0" />
+                    <SmartImage src={p.thumbnailUrl || p.images[0]} alt="" className="h-12 w-10 rounded object-cover flex-shrink-0" />
                     <div className="flex-1 min-w-0">
                       <p className="text-xs font-medium text-ink line-clamp-1">{p.name}</p>
                       {Object.entries(item.variants).length > 0 && (
