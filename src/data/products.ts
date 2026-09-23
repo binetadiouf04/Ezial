@@ -40,6 +40,12 @@ export interface Product {
   // static mock catalog and on any real product whose primary photo predates
   // this feature; every caller falls back to `images[0]` in that case.
   thumbnailUrl?: string;
+  // Seller-declared "Fait à la main" — a characteristic, never a category.
+  // Backed by descriptive_attributes['Fait à la main'] (no new column); also
+  // read by searchProducts() to surface handmade products under a "made in
+  // senegal" search, connecting this flag to that existing section instead
+  // of building a second, parallel one.
+  handmade?: boolean;
 }
 
 const I = {
@@ -317,6 +323,14 @@ export function searchProducts(query: string, pool: Product[] = products): Searc
   // the whole catalog.
   const qRef = normalizeRef(query);
   const refQueryIsMeaningful = qRef.length >= 4;
+  // The "Made in Sénégal" tile/section is a plain search shortcut (see
+  // categories.ts: route "/recherche?q=made in senegal"), with no dedicated
+  // filter or column of its own. A handmade product doesn't necessarily
+  // mention "Sénégal" anywhere in its own text, so without this rule it
+  // would never actually surface there — this is what connects the "Fait à
+  // la main" toggle to that existing section instead of leaving it orphaned
+  // or requiring a second, parallel discovery system.
+  const isMadeInSenegalQuery = q.includes('senegal');
 
   const matchedShops = allShops.filter((s) => normalizeText(s.name).includes(q) || normalizeText(s.description).includes(q));
 
@@ -326,6 +340,7 @@ export function searchProducts(query: string, pool: Product[] = products): Searc
     const typeHits = terms.filter((t) => termMatches(t, fields.typeAndCategory)).length;
     const colorHits = terms.filter((t) => termMatches(t, fields.colorMotif)).length;
     const descHits = terms.filter((t) => termMatches(t, fields.description)).length;
+    const handmadeMatch = isMadeInSenegalQuery && Boolean(p.handmade);
 
     const refExact = refQueryIsMeaningful && fields.reference === qRef;
     const refPartial = !refExact && refQueryIsMeaningful && (fields.reference.includes(qRef) || qRef.includes(fields.reference));
@@ -338,9 +353,10 @@ export function searchProducts(query: string, pool: Product[] = products): Searc
     score += typeHits * 12; // 2. category/subcategory/type
     score += colorHits * 10; // 3. color/motif
     score += descHits * 4; // 4. description — lowest of the "real" tiers
+    if (handmadeMatch) score += 500; // 4bis. handmade product, "made in senegal" query
 
-    const allTermsCovered = refExact || refPartial || terms.every((t) => termMatches(t, fields.name) || termMatches(t, fields.typeAndCategory) || termMatches(t, fields.colorMotif) || termMatches(t, fields.description));
-    const anyHit = refExact || refPartial || nameHits + typeHits + colorHits + descHits > 0;
+    const allTermsCovered = refExact || refPartial || handmadeMatch || terms.every((t) => termMatches(t, fields.name) || termMatches(t, fields.typeAndCategory) || termMatches(t, fields.colorMotif) || termMatches(t, fields.description));
+    const anyHit = refExact || refPartial || handmadeMatch || nameHits + typeHits + colorHits + descHits > 0;
     return { p, score, allTermsCovered, anyHit };
   });
 

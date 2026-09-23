@@ -42,17 +42,21 @@ export default function OrderConfirmationPage({ orderId }: { orderId: string }) 
         <h2 className="text-sm font-semibold text-ink mb-4">Articles</h2>
         <div className="space-y-4">
           {order.items.map((item, i) => {
+            // A product archived/removed after this order was placed must
+            // never make its own line disappear from the order the
+            // customer already paid for — falls back to the name
+            // snapshotted at purchase time (item.productName) and a
+            // placeholder image instead of dropping the row.
             const p = catalogProducts.find((cp) => cp.id === item.productId);
-            if (!p) return null;
-            const price = item.unitPrice ?? p.price;
+            const price = item.unitPrice ?? p?.price ?? 0;
             const shop = getShop(item.shopId);
             const sf = order.shopFulfillments.find((f) => f.shopId === item.shopId);
             const isPickup = sf?.type === 'pickup';
             return (
               <div key={i} className="flex gap-3">
-                <SmartImage src={p.thumbnailUrl || p.images[0]} alt="" className="h-16 w-14 rounded-lg object-cover flex-shrink-0" />
+                <SmartImage src={p?.thumbnailUrl || p?.images[0] || `${import.meta.env.BASE_URL}ezial-fallback.webp`} alt="" className="h-16 w-14 rounded-lg object-cover flex-shrink-0" />
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-ink line-clamp-1">{p.name}</p>
+                  <p className="text-sm font-medium text-ink line-clamp-1">{p?.name ?? item.productName ?? 'Produit'}</p>
                   {Object.entries(item.variants).length > 0 && (
                     <p className="text-xs text-ink/50 mt-0.5">{Object.entries(item.variants).map(([k, v]) => `${k} : ${v}`).join(' · ')}</p>
                   )}

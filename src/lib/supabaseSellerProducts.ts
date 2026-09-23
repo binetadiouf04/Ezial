@@ -108,23 +108,26 @@ function shopReferencePrefix(shopId: string, shopName: string): string {
   return prefixes[shopId] ?? 'EZI';
 }
 
-// The next free reference for this shop's prefix, computed from the
-// products actually present in Supabase — never from local/mock counters.
-// products.reference is unique across the whole table (not per shop), so
-// this looks at every product sharing the prefix, across every shop, not
-// just this shop's own products: if two shops happen to compute the same
-// 3-letter code, their references still never collide, since both draw
-// their next number from the same shared count.
+// The next free reference for this shop's prefix — an atomic per-prefix
+// counter in Postgres (next_product_reference_seq(), see the migration this
+// function ships with), never a client-side MAX(reference)+1 over products
+// currently in the table. That MAX-based approach reused the exact number
+// of whichever product happened to be the highest-numbered for this prefix
+// the moment it was hard-deleted (no history, nothing left referencing it),
+// silently reissuing an already-used reference to a brand new product — a
+// real, observed failure mode, not a theoretical one. The counter only ever
+// increases, so a deleted product's reference is never reused, and the
+// increment itself is a single atomic statement server-side, so two
+// products created for the same prefix at the same instant still can never
+// collide (the products.reference UNIQUE constraint remains the final
+// backstop regardless).
 async function nextAvailableReference(shopId: string, shopName: string): Promise<string> {
   const prefix = shopReferencePrefix(shopId, shopName);
-  const { data } = await supabase.from('products').select('reference').like('reference', `EZ-${prefix}-%`);
-  const pattern = new RegExp(`^EZ-${prefix}-(\\d+)$`);
-  let maxSeq = 0;
-  for (const row of data ?? []) {
-    const match = (row.reference as string | null)?.match(pattern);
-    if (match) maxSeq = Math.max(maxSeq, parseInt(match[1], 10));
+  const { data, error } = await supabase.rpc('next_product_reference_seq', { p_prefix: prefix });
+  if (error || typeof data !== 'number') {
+    throw new Error(`Impossible de générer une référence produit : ${error?.message ?? 'erreur inconnue'}.`);
   }
-  return formatReference(prefix, maxSeq + 1);
+  return formatReference(prefix, data);
 }
 
 // Postgres' unique_violation code — used to tell "someone else just took

@@ -33,15 +33,12 @@ const allFragranceNotes = [...new Set([...parfumsFemmeNotes, ...parfumsHommeNote
 
 const encensMaisonTypes = ['Encens', 'Diffuseur', 'Bougie', 'Huile à brûler', 'Parfum d\'ambiance'];
 
-const jewelryTypes = ['Collier', 'Bracelet', 'Bague', 'Boucles d\'oreilles', 'Montre', 'Lunettes', 'Bijou de taille'];
 const jewelryMaterials = ['Or', 'Argent', 'Plaqué or', 'Acier inoxydable', 'Perles'];
 const jewelryColors = [
   'Doré', 'Argenté', 'Or rose', 'Noir', 'Blanc', 'Ivoire', 'Crème', 'Beige', 'Marron',
   'Rouge', 'Bordeaux', 'Rose', 'Mauve', 'Violet', 'Bleu', 'Bleu marine', 'Vert', 'Turquoise',
   'Jaune', 'Orange', 'Multicolore',
 ];
-
-const bagTypes = ['Sac à main', 'Sac bandoulière', 'Pochette', 'Portefeuille', 'Sac à dos'];
 
 const shoeTypesFemme = ['Baskets', 'Sandales', 'Talons', 'Mules', 'Claquettes', 'Ballerines', 'Mocassins', 'Chaussures plateformes', 'Bottes & bottines'];
 const shoeTypesHomme = ['Baskets', 'Sandales', 'Claquettes', 'Mocassins', 'Chaussures habillées', 'Bottes & bottines'];
@@ -62,7 +59,7 @@ const clothingTypesHomme = [
 
 const lingerieTypes = ['Pyjama', 'Nuisette', 'Soutien-gorge', 'Culotte', 'Sous-vêtement', 'Caleçon'];
 
-const makeupProductTypes = ['Fond de teint', 'Anticernes', 'Poudre', 'Blush', 'Bronzer', 'Highlighter', 'Mascara', 'Eyeliner', 'Palette', 'Fard à paupières', 'Rouge à lèvres', 'Gloss', 'Crayon à lèvres', 'Crayon à sourcils'];
+const makeupProductTypes = ['Fond de teint', 'Anticernes', 'Poudre', 'Blush', 'Bronzer', 'Highlighter', 'Mascara', 'Eyeliner', 'Palette', 'Fard à paupières', 'Rouge à lèvres', 'Gloss', 'Crayon à lèvres', 'Crayon à sourcils', 'Faux cils'];
 
 const makeupFilters: FilterGroup[] = [
   { id: 'typeproduit', label: 'Type de produit', options: makeupProductTypes },
@@ -182,8 +179,11 @@ export const filterConfig: Record<CategoryId, FilterGroup[]> = {
     { id: 'motif', label: 'Motif / Imprimé', options: commonPrints, collapsible: true },
     globalPriceFilter,
   ],
+  // No 'type' group here on purpose: the subcategory already selected
+  // (Sacs à main, Sacs bandoulière, Pochette, Portefeuilles, Sacs à dos —
+  // see categories.ts) is the exact same classification a "Type" group
+  // would otherwise ask for again.
   sacs: [
-    { id: 'type', label: 'Type', options: bagTypes },
     { id: 'couleur', label: 'Couleur', options: commonColors, collapsible: true },
     globalPriceFilter,
   ],
@@ -197,8 +197,11 @@ export const filterConfig: Record<CategoryId, FilterGroup[]> = {
     { id: 'famille', label: 'Notes / Famille olfactive', options: allFragranceNotes },
     globalPriceFilter,
   ],
+  // No 'type' group here on purpose: the subcategory already selected
+  // (Colliers, Bracelets, Bagues, Boucles d'oreilles, Montres, Lunettes,
+  // Bijou de taille, Ensemble/Parure — see categories.ts) is the exact same
+  // classification a "Type" group would otherwise ask for again.
   bijoux: [
-    { id: 'type', label: 'Type', options: jewelryTypes },
     { id: 'matiere', label: 'Matière', options: jewelryMaterials },
     { id: 'couleur', label: 'Couleur', options: jewelryColors, collapsible: true },
     globalPriceFilter,

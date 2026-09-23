@@ -11,7 +11,7 @@ import { SlidersHorizontal, ChevronRight } from 'lucide-react';
 const sortOptions = [{ id: 'populaire', label: 'Popularité' }, { id: 'prix-asc', label: 'Prix croissant' }, { id: 'prix-desc', label: 'Prix décroissant' }, { id: 'nouveau', label: 'Nouveautés' }];
 
 export default function CategoryPage({ categoryId, subId }: { categoryId: string; subId?: string }) {
-  const { navigate, catalogProducts } = useApp();
+  const { navigate, catalogProducts, catalogLoading } = useApp();
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [selectedFilters, setSelectedFilters] = useState<SelectedFilters>({});
   const [sort, setSort] = useState('populaire');
@@ -102,7 +102,9 @@ export default function CategoryPage({ categoryId, subId }: { categoryId: string
         </div>
         <div className="flex gap-8">
           <div className="hidden lg:block w-[220px] flex-shrink-0"><div className="sticky top-[140px]"><FilterPanel filters={filters} selected={selectedFilters} onChange={setSelectedFilters} onClear={() => setSelectedFilters({})} /></div></div>
-          <div className="min-w-0 flex-1"><ProductGrid products={filtered} columns={4} /></div>
+          <div className="min-w-0 flex-1">
+            {catalogLoading ? <p className="py-16 text-center text-sm text-ink/45">Chargement des produits…</p> : <ProductGrid products={filtered} columns={4} />}
+          </div>
         </div>
       </div>
       <FilterDrawer open={filtersOpen} onClose={() => setFiltersOpen(false)} filters={filters} selected={selectedFilters} onChange={setSelectedFilters} onClear={() => setSelectedFilters({})} />

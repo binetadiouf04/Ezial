@@ -123,7 +123,7 @@ const staticHeroSlides: HeroSlide[] = [
 ];
 
 export default function HomePage() {
-  const { navigate, catalogProducts: products, catalogShops: displayShops } = useApp();
+  const { navigate, catalogProducts: products, catalogShops: displayShops, catalogLoading } = useApp();
 
   // Hero and "À découvrir" are manually managed from the admin (hero_slides /
   // home_discover_tiles) — the static arrays above/in categories.ts are only
@@ -179,19 +179,28 @@ export default function HomePage() {
       </div>
 
       <div className="mt-10 space-y-16 lg:mt-14 lg:space-y-24">
-        <section>
-          <HomeProductPreview eyebrow="Pour vous" title="Sélection personnalisée" products={pourVous} seeAllRoute="/pour-vous" onNavigate={navigate} />
-        </section>
+        {catalogLoading ? (
+          // Never the demo/mock catalog while the real one is still in
+          // flight — a plain loading line here instead is what stops an
+          // old/fake product from ever flashing on a first visit.
+          <section className="py-16 text-center"><p className="text-sm text-ink/45">Chargement des produits…</p></section>
+        ) : (
+          <>
+            <section>
+              <HomeProductPreview eyebrow="Pour vous" title="Sélection personnalisée" products={pourVous} seeAllRoute="/pour-vous" onNavigate={navigate} />
+            </section>
 
-        {promos.length > 0 && (
-          <section className="rounded-2xl bg-burgundy/5 p-6 sm:p-10">
-            <HomeProductPreview eyebrow="Promotions" title="Offres à ne pas manquer" products={promos} seeAllRoute="/promos" onNavigate={navigate} />
-          </section>
+            {promos.length > 0 && (
+              <section className="rounded-2xl bg-burgundy/5 p-6 sm:p-10">
+                <HomeProductPreview eyebrow="Promotions" title="Offres à ne pas manquer" products={promos} seeAllRoute="/promos" onNavigate={navigate} />
+              </section>
+            )}
+
+            <section>
+              <HomeProductPreview eyebrow="Tendances du moment" title="Le plus aimé maintenant" products={trending} seeAllRoute="/tendances" onNavigate={navigate} />
+            </section>
+          </>
         )}
-
-        <section>
-          <HomeProductPreview eyebrow="Tendances du moment" title="Le plus aimé maintenant" products={trending} seeAllRoute="/tendances" onNavigate={navigate} />
-        </section>
 
         <section>
           <div className="mb-6 flex items-end justify-between">

@@ -310,6 +310,9 @@ export default function CheckoutPage() {
         variants: it.selected_options ?? {},
         unitPrice: it.unit_price,
         variantId: it.variant_id ?? undefined,
+        // Snapshotted now, from the live catalog, so this line still shows
+        // its real name later even if the product is archived by then.
+        productName: catalogProducts.find((cp) => cp.id === it.product_id)?.name,
       })),
       subtotal: result.order.products_subtotal,
       delivery: result.order.delivery_fee,

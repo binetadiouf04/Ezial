@@ -13,7 +13,14 @@ import { fetchCustomerOrders } from '@/lib/supabaseCustomerOrders';
 import { fetchReviewStatsForProducts } from '@/lib/supabaseReviews';
 import { isRealCatalogId } from '@/data/products';
 
-export interface CartItem { productId: string; shopId: string; quantity: number; variants: Record<string, string>; unitPrice?: number; variantId?: string; }
+// productName: only ever set on a real, already-placed order's item (see
+// supabaseCustomerOrders.ts), from order_items.product_name — the name
+// snapshotted at purchase time. A cart line being actively built has no use
+// for it (the live product is always resolved from catalogProducts there),
+// but a past order's line must still render correctly even after its
+// product is archived/removed from the catalog, which is exactly what this
+// snapshot is for.
+export interface CartItem { productId: string; shopId: string; quantity: number; variants: Record<string, string>; unitPrice?: number; variantId?: string; productName?: string; }
 export interface SavedItem { productId: string; shopId: string; quantity: number; variants: Record<string, string>; unitPrice?: number; variantId?: string; }
 
 export type ShopPrepStatus = 'preparing' | 'ready' | 'collected';
@@ -82,6 +89,12 @@ interface AppState {
   // Sélection personnalisée and the shops listing all see the same real
   // products/shops instead of each re-fetching independently.
   catalogProducts: Product[]; catalogShops: Shop[];
+  // True until the first Supabase catalog fetch settles (success or
+  // failure) — lets a page show a loader instead of painting anything
+  // (demo or real) before the real answer is known. False forever after
+  // that first settle, so it's a one-shot "initial load" flag, not a
+  // per-navigation one.
+  catalogLoading: boolean;
   favorites: string[]; toggleFavorite: (productId: string) => void; isFavorite: (productId: string) => boolean;
   cart: CartItem[]; addToCart: (item: CartItem) => void; removeFromCart: (index: number) => void;
   updateQuantity: (index: number, quantity: number) => void; clearCart: () => void;
@@ -275,12 +288,16 @@ function mergeOrders(prev: Order[], fetched: Order[]): Order[] {
 
 export function AppProvider({ children }: { children: ReactNode }) {
   const [route, setRoute] = useState(getInitialRoute());
-  // The demo catalog renders immediately; once the Supabase catalog fetch
-  // succeeds, it replaces this with the real, official-shop-only public
-  // catalog (see publicShopsFrom/publicProductsFrom above). On failure (or
-  // while still loading), the demo catalog stays as-is — never left empty.
-  const [catalogProducts, setCatalogProducts] = useState<Product[]>(allProducts);
-  const [catalogShops, setCatalogShops] = useState<Shop[]>(mockShops);
+  // Starts empty, never the demo catalog: painting the demo catalog first
+  // and swapping it for the real one once Supabase answers is exactly what
+  // made stale/fake products flash on a first visit before the real fetch
+  // resolved. catalogLoading below gates what a page shows in the meantime
+  // (a loader, not this empty array) — the demo catalog is only ever used
+  // as a genuine last-resort fallback (see publicShopsFrom/publicProductsFrom
+  // and the fetch failure handler below), never as an initial placeholder.
+  const [catalogProducts, setCatalogProducts] = useState<Product[]>([]);
+  const [catalogShops, setCatalogShops] = useState<Shop[]>([]);
+  const [catalogLoading, setCatalogLoading] = useState(true);
   const [favorites, setFavorites] = useState<string[]>(loadStoredFavorites);
   const [cart, setCart] = useState<CartItem[]>(loadStoredCart);
   const [savedItems, setSavedItems] = useState<SavedItem[]>([]);
@@ -364,9 +381,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
             }));
           });
         }
+        setCatalogLoading(false);
       })
       .catch(() => {
-        // Fetch itself failed unexpectedly — keep the mock catalog as-is.
+        if (cancelled) return;
+        // Fetch itself failed unexpectedly — the demo catalog is a genuine
+        // last-resort fallback here (real data truly unavailable), never
+        // the default a page saw before this point.
+        setCatalogProducts(allProducts);
+        setCatalogShops(mockShops);
+        setCatalogLoading(false);
       });
     return () => { cancelled = true; };
   }, []);
@@ -517,7 +541,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const updateCustomerInfo = useCallback((info: CustomerInfo) => setCustomerInfo(info), []);
 
   const value: AppState = {
-    route, navigate, catalogProducts, catalogShops, favorites, toggleFavorite, isFavorite,
+    route, navigate, catalogProducts, catalogShops, catalogLoading, favorites, toggleFavorite, isFavorite,
     cart, addToCart, removeFromCart, updateQuantity, clearCart,
     saveForLater, moveToCart, removeFromSaved, savedItems,
     cartCount, cartSubtotal, cartOpen, setCartOpen, categoryDrawerOpen, setCategoryDrawerOpen,

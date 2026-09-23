@@ -114,6 +114,11 @@ export async function fetchCustomerOrders(customerId: string): Promise<Order[]> 
         variants: it.selected_options ?? {},
         unitPrice: it.unit_price,
         variantId: it.variant_id ?? undefined,
+        // Snapshotted at purchase time — lets this line still render its
+        // real name even once the product itself is archived/removed from
+        // the live catalog (see the order pages' fallback for this exact
+        // case).
+        productName: it.product_name,
       })),
       subtotal: o.products_subtotal,
       delivery: o.delivery_fee,

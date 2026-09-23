@@ -7,7 +7,7 @@ import ShopCard from '@/components/ShopCard';
 import { Search as SearchIcon, X } from 'lucide-react';
 
 export default function SearchPage({ query }: { query: string }) {
-  const { navigate, catalogProducts } = useApp();
+  const { navigate, catalogProducts, catalogLoading } = useApp();
   const [input, setInput] = useState(query);
   const { exact, similar, shops } = searchProducts(query, catalogProducts);
   const suggestions = query.trim().length >= 2 ? categories.filter((c) => c.label.toLowerCase().includes(query.toLowerCase())).slice(0, 3) : [];
@@ -23,24 +23,32 @@ export default function SearchPage({ query }: { query: string }) {
         {input && <button type="button" onClick={() => setInput('')} className="absolute right-4 top-1/2 -translate-y-1/2 text-ink/40 hover:text-ink"><X size={18} /></button>}
       </form>
       <div className="mb-6"><h1 className="font-display text-2xl font-semibold text-ink">{query ? `Résultats pour « ${query} »` : 'Recherche'}</h1><p className="mt-1 text-sm text-ink/55">{totalCount} résultat{totalCount > 1 ? 's' : ''}</p></div>
-      {suggestions.length > 0 && <div className="mb-6 flex flex-wrap gap-2">{suggestions.map((c) => <button key={c.id} onClick={() => navigate(`/categorie/${c.id}`)} className="chip">{c.label}</button>)}</div>}
-      {shops.length > 0 && <section className="mb-10"><h2 className="mb-4 text-sm font-semibold uppercase tracking-wider text-ink/50">Boutiques</h2><div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">{shops.map((s) => <ShopCard key={s.id} shop={s} />)}</div></section>}
-      {exact.length > 0 && <section className="mb-10"><h2 className="mb-4 text-sm font-semibold uppercase tracking-wider text-ink/50">Produits</h2><ProductGrid products={exact} columns={4} /></section>}
-      {exact.length === 0 && shops.length === 0 && (
-        <div className="flex flex-col items-center justify-center py-16 text-center">
-          <SearchIcon size={40} className="text-ink/20" /><p className="mt-4 text-sm text-ink/60">Aucun résultat exact pour « {query} ».</p>
-          {similar.length === 0 && <p className="mt-1 text-xs text-ink/40">Essayez : perruque, parfum, robe, bracelet, skincare...</p>}
-          {similar.length === 0 && <div className="mt-6 flex flex-wrap justify-center gap-2">{categories.slice(0, 5).map((c) => <button key={c.id} onClick={() => navigate(`/categorie/${c.id}`)} className="chip">{c.label}</button>)}</div>}
-        </div>
-      )}
-      {/* Kept clearly separate from real matches — never presented as if it
-          answered the search itself, per the "produits similaires" rule. */}
-      {similar.length > 0 && (
-        <section>
-          <h2 className="mb-1 text-sm font-semibold uppercase tracking-wider text-ink/50">Produits similaires</h2>
-          <p className="mb-4 text-xs text-ink/40">{exact.length > 0 ? "D'autres produits qui pourraient vous intéresser." : `Pas de correspondance exacte pour « ${query} », voici des produits proches.`}</p>
-          <ProductGrid products={similar} columns={4} />
-        </section>
+      {catalogLoading ? (
+        // Never claim "no results" while the real catalog hasn't answered
+        // yet — that's a false negative, not just a stale product.
+        <p className="py-16 text-center text-sm text-ink/45">Chargement des produits…</p>
+      ) : (
+        <>
+          {suggestions.length > 0 && <div className="mb-6 flex flex-wrap gap-2">{suggestions.map((c) => <button key={c.id} onClick={() => navigate(`/categorie/${c.id}`)} className="chip">{c.label}</button>)}</div>}
+          {shops.length > 0 && <section className="mb-10"><h2 className="mb-4 text-sm font-semibold uppercase tracking-wider text-ink/50">Boutiques</h2><div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">{shops.map((s) => <ShopCard key={s.id} shop={s} />)}</div></section>}
+          {exact.length > 0 && <section className="mb-10"><h2 className="mb-4 text-sm font-semibold uppercase tracking-wider text-ink/50">Produits</h2><ProductGrid products={exact} columns={4} /></section>}
+          {exact.length === 0 && shops.length === 0 && (
+            <div className="flex flex-col items-center justify-center py-16 text-center">
+              <SearchIcon size={40} className="text-ink/20" /><p className="mt-4 text-sm text-ink/60">Aucun résultat exact pour « {query} ».</p>
+              {similar.length === 0 && <p className="mt-1 text-xs text-ink/40">Essayez : perruque, parfum, robe, bracelet, skincare...</p>}
+              {similar.length === 0 && <div className="mt-6 flex flex-wrap justify-center gap-2">{categories.slice(0, 5).map((c) => <button key={c.id} onClick={() => navigate(`/categorie/${c.id}`)} className="chip">{c.label}</button>)}</div>}
+            </div>
+          )}
+          {/* Kept clearly separate from real matches — never presented as if it
+              answered the search itself, per the "produits similaires" rule. */}
+          {similar.length > 0 && (
+            <section>
+              <h2 className="mb-1 text-sm font-semibold uppercase tracking-wider text-ink/50">Produits similaires</h2>
+              <p className="mb-4 text-xs text-ink/40">{exact.length > 0 ? "D'autres produits qui pourraient vous intéresser." : `Pas de correspondance exacte pour « ${query} », voici des produits proches.`}</p>
+              <ProductGrid products={similar} columns={4} />
+            </section>
+          )}
+        </>
       )}
     </div>
   );

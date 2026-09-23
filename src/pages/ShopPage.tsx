@@ -17,7 +17,7 @@ const sortOptions = [
 type SortId = (typeof sortOptions)[number]['id'];
 
 export default function ShopPage({ shopId }: { shopId: string }) {
-  const { catalogProducts } = useApp();
+  const { catalogProducts, catalogLoading } = useApp();
   const shop = getShop(shopId);
   const [tab, setTab] = useState<Tab>('Accueil');
   const [following, setFollowing] = useState(false);
@@ -46,7 +46,14 @@ export default function ShopPage({ shopId }: { shopId: string }) {
     return result;
   }, [allProducts, sort]);
 
-  if (!shop) return <div className="container-pro py-20 text-center text-ink/50">Boutique introuvable.</div>;
+  // A shop landed on directly (e.g. a shared link) isn't registered yet
+  // until the Supabase fetch that populates it settles — showing "Boutique
+  // introuvable" before that point would be a false negative, not a real
+  // 404, so a loading state takes priority over the not-found one.
+  if (!shop) {
+    if (catalogLoading) return <div className="container-pro py-20 text-center text-sm text-ink/45">Chargement…</div>;
+    return <div className="container-pro py-20 text-center text-ink/50">Boutique introuvable.</div>;
+  }
 
   const location = shop.address || shop.city;
 
@@ -79,7 +86,7 @@ export default function ShopPage({ shopId }: { shopId: string }) {
             <div className="space-y-8">
               <section>
                 <h2 className="mb-4 text-sm font-semibold uppercase tracking-wider text-ink/50">Produits phares</h2>
-                <ProductGrid products={allProducts.slice(0, 4)} columns={4} />
+                {catalogLoading ? <p className="py-10 text-center text-sm text-ink/45">Chargement…</p> : <ProductGrid products={allProducts.slice(0, 4)} columns={4} />}
               </section>
             </div>
           )}
@@ -93,7 +100,7 @@ export default function ShopPage({ shopId }: { shopId: string }) {
                   </select>
                 </div>
               )}
-              <ProductGrid products={sortedProducts} columns={4} />
+              {catalogLoading ? <p className="py-10 text-center text-sm text-ink/45">Chargement…</p> : <ProductGrid products={sortedProducts} columns={4} />}
             </div>
           )}
           {tab === 'Avis' && (

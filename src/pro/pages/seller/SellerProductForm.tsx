@@ -82,7 +82,12 @@ const ENCENS_MAISON_NOTES_OPTIONS = ['Orientale', 'Fruitée', 'Florale', 'Boisé
 // never shown for Soins, Henné or Vernis.
 const NAIL_LENGTH_OPTIONS = ['Court', 'Moyen', 'Long'];
 const NAIL_SHAPE_OPTIONS = ['Carré', 'Amande', 'Coffin', 'Stiletto', 'Ovale', 'Rond'];
-const NAIL_STYLE_OPTIONS = ['French', 'Nude', 'Marbré', 'Floral', '3D', 'Strass', 'Pailleté', 'Chromé', 'Léopard', 'Abstrait'];
+const NAIL_STYLE_OPTIONS = ['French', 'Uni', 'Nude', 'Marbré', 'Floral', 'Fleurs', '3D', 'Strass', 'Pailleté', 'Paillettes', 'Chromé', 'Léopard', 'Écaille', 'Cat Eye', 'Cœur', 'Papillon', 'Abstrait', 'Autre'];
+// Faux ongles color palette — uses the shared 'couleur' group id (already a
+// real stock-splitting variant dimension + color-swatch id everywhere else
+// in this form, e.g. clothing) so a nail-polish color is one more product
+// variant like any other, not a second color system.
+const NAIL_COLOR_OPTIONS = ['Noir', 'Blanc', 'Rouge', 'Rose', 'Nude', 'Beige', 'Marron', 'Bordeaux', 'Bleu', 'Vert', 'Violet', 'Doré', 'Argenté', 'Multicolore'];
 
 // Human labels for validate()'s error keys, used to build a clear summary
 // of exactly which field is blocking "Publier"/"Enregistrer en brouillon".
@@ -191,8 +196,13 @@ function computeOptionGroups(categoryId: string, subId: string, selectedTypeProd
   if (showsNailFields) {
     groups = [
       ...groups,
+      { id: 'couleur', label: 'Couleur', options: NAIL_COLOR_OPTIONS, collapsible: true },
       { id: 'longueurongles', label: 'Longueur', options: NAIL_LENGTH_OPTIONS },
       { id: 'formeongles', label: 'Forme', options: NAIL_SHAPE_OPTIONS },
+      // Label kept unchanged ("Type / style", not renamed to "Motif") so a
+      // product saved before this change still finds its own data back —
+      // descriptive_attributes is keyed by this exact label, both when
+      // writing (buildDescriptiveAttributes) and reading back on edit.
       { id: 'styleongles', label: 'Type / style', options: NAIL_STYLE_OPTIONS },
     ];
   }
@@ -313,6 +323,14 @@ export default function SellerProductForm({ productId }: { productId?: string })
   // descriptive_attributes key, never a variant dimension.
   const [notesInput, setNotesInput] = useState('');
 
+  // "Fait à la main" — a product-wide characteristic, independent of
+  // category/subcategory (never replaces either). Stored the same way as
+  // every other descriptive characteristic, under its own fixed
+  // descriptive_attributes key ("Fait à la main": ["Oui"]) — no new column.
+  // searchProducts() also boosts handmade products for a "made in senegal"
+  // query, so this single flag is what connects a product to that section.
+  const [isHandmade, setIsHandmade] = useState(false);
+
   // Price by option toggle
   const [priceByOption, setPriceByOption] = useState(false);
 
@@ -415,6 +433,7 @@ export default function SellerProductForm({ productId }: { productId?: string })
       if (data.category === 'parfums' && data.subcategory === 'huiles-brumes') {
         setNotesInput((data.descriptiveAttributes['Notes'] ?? []).join(', '));
       }
+      setIsHandmade((data.descriptiveAttributes['Fait à la main'] ?? []).includes('Oui'));
 
       // BUG FIX: a product only ever uses SOME of the variant dimensions a
       // category makes available (e.g. only "Couleur", never "Taille", for a
@@ -911,6 +930,7 @@ export default function SellerProductForm({ productId }: { productId?: string })
       const notes = notesInput.split(',').map((n) => n.trim()).filter(Boolean);
       if (notes.length > 0) result['Notes'] = notes;
     }
+    if (isHandmade) result['Fait à la main'] = ['Oui'];
     return result;
   };
 
@@ -1341,6 +1361,23 @@ export default function SellerProductForm({ productId }: { productId?: string })
           <textarea className="input-field" rows={3} placeholder={descriptionExample} value={description} onChange={(e) => setDescription(e.target.value)} />
           {errors.description && <p className="mt-1 text-xs text-burgundy">{errors.description}</p>}
         </div>
+      </div>
+
+      {/* 4bis. Fait à la main — a product-wide characteristic, independent of
+          category/subcategory/type: always shown, never gated behind a
+          specific category like classificationGroups above. */}
+      <div className="card p-5">
+        <label className="flex items-center gap-2.5">
+          <button
+            type="button"
+            onClick={() => setIsHandmade(!isHandmade)}
+            className={`relative h-6 w-11 flex-shrink-0 rounded-full transition-colors ${isHandmade ? 'bg-burgundy' : 'bg-ink/15'}`}
+          >
+            <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow-sm transition-transform ${isHandmade ? 'translate-x-5' : 'translate-x-0.5'}`} />
+          </button>
+          <span className="text-sm font-medium text-ink">Fait à la main</span>
+        </label>
+        <p className="mt-1.5 text-xs text-ink/45">Produit artisanal, fabriqué à la main. N'affecte pas la catégorie — apparaît aussi dans « Made in Sénégal ».</p>
       </div>
 
       {/* 5. Photos & vidéo */}

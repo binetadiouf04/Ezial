@@ -106,15 +106,16 @@ export default function OrderTrackingPage({ orderId }: { orderId: string }) {
             <h2 className="text-sm font-semibold text-ink mb-3">Vos articles</h2>
             <div className="space-y-3">
               {order.items.map((item, i) => {
+                // Falls back to the purchase-time snapshot (item.productName)
+                // instead of dropping the row for an archived product.
                 const p = catalogProducts.find((cp) => cp.id === item.productId);
-                if (!p) return null;
-                const price = item.unitPrice ?? p.price;
+                const price = item.unitPrice ?? p?.price ?? 0;
                 const shop = getShop(item.shopId);
                 return (
                   <div key={i} className="flex gap-2.5">
-                    <SmartImage src={p.thumbnailUrl || p.images[0]} alt="" className="h-12 w-10 rounded object-cover flex-shrink-0" />
+                    <SmartImage src={p?.thumbnailUrl || p?.images[0] || `${import.meta.env.BASE_URL}ezial-fallback.webp`} alt="" className="h-12 w-10 rounded object-cover flex-shrink-0" />
                     <div className="flex-1 min-w-0">
-                      <p className="text-xs font-medium text-ink line-clamp-1">{p.name}</p>
+                      <p className="text-xs font-medium text-ink line-clamp-1">{p?.name ?? item.productName ?? 'Produit'}</p>
                       {Object.entries(item.variants).length > 0 && (
                         <p className="text-[11px] text-ink/45">{Object.entries(item.variants).map(([k, v]) => `${k} : ${v}`).join(' · ')}</p>
                       )}

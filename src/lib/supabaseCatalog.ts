@@ -260,6 +260,7 @@ function mapProduct(row: ProductRow, imageRows: ProductImageRow[], variantRows: 
     variants: variantOptionsForProduct(row.id, variantRows),
     description: row.description ?? '',
     details: detailsFromDescriptiveAttributes(row.descriptive_attributes),
+    handmade: (row.descriptive_attributes?.['Fait à la main'] ?? []).includes('Oui'),
     delivery: '',
     pickup: undefined,
     isNew: undefined,

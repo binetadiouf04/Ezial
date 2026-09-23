@@ -63,6 +63,7 @@ export const categories: Category[] = [
     { id: 'colliers', label: 'Colliers' }, { id: 'bracelets', label: 'Bracelets' }, { id: 'bagues', label: 'Bagues' },
     { id: 'boucles-oreilles', label: 'Boucles d\'oreilles' }, { id: 'montres', label: 'Montres' },
     { id: 'lunettes', label: 'Lunettes' }, { id: 'bijoux-de-taille', label: 'Bijou de taille' },
+    { id: 'ensemble-parure', label: 'Ensemble / Parure' },
   ]},
   { id: 'lingerie', label: 'Pyjamas & Lingerie', subcategories: [
     { id: 'pyjamas', label: 'Pyjamas' }, { id: 'lingerie', label: 'Lingerie' },
