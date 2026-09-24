@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { usePro } from '../../ProContext';
-import { formatFCFA, formatDate } from '../../data';
+import { formatDate } from '../../data';
 import { Truck, MapPin, Store, CheckCircle2, Navigation, Clock } from 'lucide-react';
 
 type Tab = 'active' | 'available' | 'completed';
@@ -42,12 +42,9 @@ export default function DriverMissions() {
         ))}
       </div>
 
-      <div className="flex items-center justify-between border-t border-line pt-2.5">
-        <div className="flex items-center gap-2 text-xs text-ink/45">
-          <span className="flex items-center gap-1"><MapPin size={12} /> {mission.destination}</span>
-          {isCompleted && mission.deliveredAt && <span className="flex items-center gap-1"><Clock size={12} /> {formatDate(mission.deliveredAt)}</span>}
-        </div>
-        <span className="text-sm font-semibold text-burgundy">{formatFCFA(mission.earnings)}</span>
+      <div className="flex items-center gap-2 border-t border-line pt-2.5 text-xs text-ink/45">
+        <span className="flex items-center gap-1"><MapPin size={12} /> {mission.destination}</span>
+        {isCompleted && mission.deliveredAt && <span className="flex items-center gap-1"><Clock size={12} /> {formatDate(mission.deliveredAt)}</span>}
       </div>
     </button>
   );

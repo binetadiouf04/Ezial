@@ -1,15 +1,15 @@
 import { usePro } from '../ProContext';
-import { Home, Truck, Wallet, User, LogOut, ArrowLeft } from 'lucide-react';
+import { Home, Truck, History, User, LogOut, ArrowLeft } from 'lucide-react';
 import DriverHome from '../pages/driver/DriverHome';
 import DriverMissions from '../pages/driver/DriverMissions';
 import DriverMissionDetail from '../pages/driver/DriverMissionDetail';
-import DriverRevenue from '../pages/driver/DriverRevenue';
+import DriverHistory from '../pages/driver/DriverHistory';
 import DriverProfile from '../pages/driver/DriverProfile';
 
 const navItems = [
   { route: '/driver', label: 'Accueil', icon: Home },
   { route: '/driver/livraisons', label: 'Livraisons', icon: Truck },
-  { route: '/driver/revenus', label: 'Revenus', icon: Wallet },
+  { route: '/driver/historique', label: 'Historique', icon: History },
   { route: '/driver/profil', label: 'Profil', icon: User },
 ];
 
@@ -23,7 +23,7 @@ export default function DriverLayout() {
     if (clean === '/driver') return <DriverHome />;
     if (clean === '/driver/livraisons') return <DriverMissions />;
     if (missionDetailMatch) return <DriverMissionDetail missionId={missionDetailMatch[1]} />;
-    if (clean === '/driver/revenus') return <DriverRevenue />;
+    if (clean === '/driver/historique') return <DriverHistory />;
     if (clean === '/driver/profil') return <DriverProfile />;
     return <DriverHome />;
   };

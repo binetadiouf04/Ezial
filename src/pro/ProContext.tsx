@@ -200,6 +200,19 @@ function generateIdentifier(name: string): string {
   return `${cleaned}${digits}`;
 }
 
+// Read once per page load — the QR code on a delivery label encodes
+// #/pro?driver_order=<orderId>, so scanning it after the driver is already
+// authenticated jumps straight to that mission instead of the plain
+// dashboard. Never trusted on its own: the caller only uses this once role
+// is actually 'driver', and DriverMissionDetail's own isAssigned/isAvailable
+// checks still gate what that screen actually shows.
+function pendingDriverOrderId(): string | null {
+  const hash = window.location.hash;
+  const queryIndex = hash.indexOf('?');
+  if (queryIndex === -1) return null;
+  return new URLSearchParams(hash.slice(queryIndex + 1)).get('driver_order');
+}
+
 export function ProProvider({ children }: { children: ReactNode }) {
   const [role, setRole] = useState<Role | null>(null);
   const [identifier, setIdentifier] = useState('');
@@ -247,7 +260,9 @@ export function ProProvider({ children }: { children: ReactNode }) {
       setRole('driver');
       setIdentifier(parsed.identifier);
       setName(parsed.name);
-      setRoute('/driver');
+      const pendingOrderId = pendingDriverOrderId();
+      const pendingMission = pendingOrderId ? missions.find((m) => m.orderId === pendingOrderId) : undefined;
+      setRoute(pendingMission ? `/driver/livraisons/${pendingMission.id}` : '/driver');
       return;
     }
 
@@ -287,6 +302,10 @@ export function ProProvider({ children }: { children: ReactNode }) {
       const mockShop = initialShops.find((s) => s.sellerId === parsed.identifier);
       setSellerShop(mockShop ?? null);
     })();
+    // Deliberately mount-only — re-running this on every `missions` update
+    // (e.g. after collectParcel) would re-navigate the driver back to a
+    // stale deep link on each unrelated state change.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const navigate = useCallback((r: Route) => {
@@ -298,7 +317,12 @@ export function ProProvider({ children }: { children: ReactNode }) {
     setRole(r);
     setIdentifier(id);
     setName(n);
-    const homeRoute = r === 'admin' ? '/admin' : r === 'seller' ? '/seller' : '/driver';
+    let homeRoute = r === 'admin' ? '/admin' : r === 'seller' ? '/seller' : '/driver';
+    if (r === 'driver') {
+      const pendingOrderId = pendingDriverOrderId();
+      const pendingMission = pendingOrderId ? missions.find((m) => m.orderId === pendingOrderId) : undefined;
+      if (pendingMission) homeRoute = `/driver/livraisons/${pendingMission.id}`;
+    }
     setRoute(homeRoute);
     if (r === 'seller') {
       const shop = initialShops.find((s) => s.sellerId === id);
@@ -307,7 +331,7 @@ export function ProProvider({ children }: { children: ReactNode }) {
       setSellerShopIsOfficial(shopInfo?.isOfficial ?? false);
     }
     sessionStorage.setItem('ezial-pro-auth', JSON.stringify({ role: r, identifier: id, name: n }));
-  }, []);
+  }, [missions]);
 
   const logout = useCallback(() => {
     setRole(null);

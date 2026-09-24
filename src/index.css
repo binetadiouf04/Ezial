@@ -122,3 +122,27 @@
     animation: none !important;
   }
 }
+
+/* Delivery label printing (DeliveryLabel.tsx) — prints only the 4x6 label
+   itself, at its real size, never the rest of the app around it. */
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  #delivery-label-print-area,
+  #delivery-label-print-area * {
+    visibility: visible;
+  }
+  #delivery-label-print-area {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100mm;
+    height: 150mm;
+    border: none !important;
+  }
+  @page {
+    size: 100mm 150mm;
+    margin: 0;
+  }
+}

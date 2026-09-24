@@ -1,5 +1,4 @@
 import { usePro } from '../../ProContext';
-import { formatFCFA } from '../../data';
 import { Truck, MapPin, Store, ChevronRight, Navigation, CheckCircle2, Power, Package } from 'lucide-react';
 
 export default function DriverHome() {
@@ -9,11 +8,6 @@ export default function DriverHome() {
     if (!m.deliveredAt) return false;
     return new Date(m.deliveredAt).toDateString() === new Date().toDateString();
   }).length;
-
-  // Calculate live weekly earnings from completed missions + base
-  const sessionEarnings = completedMissions
-    .filter((m) => m.deliveredAt)
-    .reduce((sum, m) => sum + m.earnings, 0);
 
   return (
     <div className="space-y-5">
@@ -83,9 +77,8 @@ export default function DriverHome() {
                         </div>
                       ))}
                     </div>
-                    <div className="flex items-center justify-between text-xs text-ink/50 mb-1">
-                      <span className="flex items-center gap-1"><MapPin size={12} /> → {activeMission.destination}</span>
-                      <span className="font-semibold text-burgundy">{formatFCFA(activeMission.earnings)}</span>
+                    <div className="flex items-center gap-1 text-xs text-ink/50 mb-1">
+                      <MapPin size={12} /> → {activeMission.destination}
                     </div>
                   </button>
 
@@ -140,11 +133,7 @@ export default function DriverHome() {
                           <MapPin size={13} className="text-ink/35" /> → {mission.destination}
                         </p>
                       </div>
-                      <div className="flex items-center justify-between border-t border-line pt-3">
-                        <div>
-                          <p className="text-xs text-ink/45">Gain</p>
-                          <p className="text-sm font-semibold text-burgundy">{formatFCFA(mission.earnings)}</p>
-                        </div>
+                      <div className="flex items-center justify-end border-t border-line pt-3">
                         <button
                           onClick={() => acceptMission(mission.id)}
                           className="btn-primary"
@@ -159,15 +148,20 @@ export default function DriverHome() {
             </div>
           )}
 
-          {/* Quick stats */}
-          <div className="grid grid-cols-2 gap-3 pt-2">
+          {/* Quick stats — no financial data, ever (the driver is paid
+             monthly outside this app) */}
+          <div className="grid grid-cols-3 gap-3 pt-2">
             <button onClick={() => navigate('/driver/livraisons')} className="card p-4 text-left">
-              <p className="text-xs text-ink/45">Terminées aujourd'hui</p>
-              <p className="mt-1 font-display text-xl font-semibold text-ink">{completedToday}</p>
+              <p className="text-xs text-ink/45">À récupérer</p>
+              <p className="mt-1 font-display text-xl font-semibold text-ink">{availableMissions.length + (activeMission && activeMission.step === 'to_collection' ? 1 : 0)}</p>
             </button>
-            <button onClick={() => navigate('/driver/revenus')} className="card p-4 text-left">
-              <p className="text-xs text-ink/45">Revenus semaine</p>
-              <p className="mt-1 font-display text-xl font-semibold text-ink">{formatFCFA(47250 + sessionEarnings)}</p>
+            <button onClick={() => navigate('/driver/livraisons')} className="card p-4 text-left">
+              <p className="text-xs text-ink/45">En cours</p>
+              <p className="mt-1 font-display text-xl font-semibold text-ink">{activeMission ? 1 : 0}</p>
+            </button>
+            <button onClick={() => navigate('/driver/livraisons')} className="card p-4 text-left">
+              <p className="text-xs text-ink/45">Livrées aujourd'hui</p>
+              <p className="mt-1 font-display text-xl font-semibold text-ink">{completedToday}</p>
             </button>
           </div>
         </>

@@ -1,5 +1,4 @@
 import { usePro } from '../../ProContext';
-import { formatFCFA } from '../../data';
 import { User, Phone, IdCard, CheckCircle2, Calendar, Truck } from 'lucide-react';
 
 export default function DriverProfile() {
@@ -57,15 +56,9 @@ export default function DriverProfile() {
         </div>
       </div>
 
-      {/* Earnings summary */}
-      <div className="card p-4">
-        <p className="text-xs text-ink/45">Revenus annuels</p>
-        <p className="mt-1 font-display text-xl font-semibold text-ink">{formatFCFA(680000)}</p>
-      </div>
-
       {/* Non-editable note */}
       <p className="text-xs text-ink/35 text-center px-4">
-        Votre identifiant et vos informations financières sont gérés par Ezial.
+        Votre identifiant est géré par Ezial.
       </p>
     </div>
   );

@@ -1,10 +1,11 @@
 import { useState } from 'react';
 import { usePro, type Incident } from '../../ProContext';
-import { formatFCFA } from '../../data';
 import { StatusChip } from '../../components/StatusChip';
+import DeliveryLabel from '../../components/DeliveryLabel';
+import { haversineDistanceKm, formatDistanceKm, openNavigationTo, telHref } from '@/utils/geo';
 import {
   ArrowLeft, MapPin, Navigation, Phone, CheckCircle2, Package,
-  AlertTriangle, X, Camera,
+  AlertTriangle, X, Camera, Tag,
 } from 'lucide-react';
 
 const collectionIncidentReasons = [
@@ -40,6 +41,7 @@ export default function DriverMissionDetail({ missionId }: { missionId: string }
   const [proofPhoto, setProofPhoto] = useState('');
   const [codeError, setCodeError] = useState('');
   const [showSuccess, setShowSuccess] = useState(false);
+  const [labelForShopId, setLabelForShopId] = useState<string | null>(null);
 
   if (!mission) {
     return (
@@ -57,6 +59,28 @@ export default function DriverMissionDetail({ missionId }: { missionId: string }
   const collectedCount = mission.collections.filter((c) => c.collected).length;
   const isDelivered = mission.step === 'delivered';
   const currentCollection = mission.collections.find((c) => !c.collected);
+  const hasDestinationCoords = mission.destinationLatitude != null && mission.destinationLongitude != null;
+
+  // A simple, honest estimate — straight line from the first pickup to the
+  // customer, not a real route. Good enough for "is this worth accepting",
+  // never presented as turn-by-turn.
+  const firstCollectionWithCoords = mission.collections.find((c) => c.latitude != null && c.longitude != null);
+  const missionDistanceKm = firstCollectionWithCoords && hasDestinationCoords
+    ? haversineDistanceKm(
+      { latitude: firstCollectionWithCoords.latitude!, longitude: firstCollectionWithCoords.longitude! },
+      { latitude: mission.destinationLatitude!, longitude: mission.destinationLongitude! },
+    )
+    : null;
+  // Once every shop is collected there's no "current" pickup left to
+  // measure from — the closest honest reference point is the last shop
+  // actually visited, not the (non-existent) next one.
+  const lastLegOrigin = currentCollection ?? [...mission.collections].reverse().find((c) => c.latitude != null && c.longitude != null);
+  const currentLegDistanceKm = lastLegOrigin?.latitude != null && lastLegOrigin?.longitude != null && hasDestinationCoords
+    ? haversineDistanceKm(
+      { latitude: lastLegOrigin.latitude, longitude: lastLegOrigin.longitude },
+      { latitude: mission.destinationLatitude!, longitude: mission.destinationLongitude! },
+    )
+    : null;
 
   const handleAccept = () => {
     if (activeMission) return;
@@ -113,9 +137,6 @@ export default function DriverMissionDetail({ missionId }: { missionId: string }
           </div>
           <h2 className="mt-4 font-display text-xl font-semibold text-ink">Livraison terminée</h2>
           <p className="mt-1 text-sm text-ink/55">Commande {mission.orderId} livrée avec succès</p>
-          <div className="mt-4 inline-flex items-center gap-2 rounded-full bg-burgundy/10 px-4 py-2">
-            <span className="text-lg font-bold text-burgundy">+ {formatFCFA(mission.earnings)}</span>
-          </div>
         </div>
         <button onClick={() => navigate('/driver')} className="btn-primary w-full">Retour à l'accueil</button>
       </div>
@@ -216,11 +237,7 @@ export default function DriverMissionDetail({ missionId }: { missionId: string }
             <h2 className="text-sm font-semibold text-ink mb-3">Livraison</h2>
             <p className="text-sm font-medium text-ink">{mission.destination}</p>
             <p className="text-xs text-ink/50 mt-0.5">{mission.destinationAddress}</p>
-          </div>
-
-          <div className="card p-4 flex items-center justify-between">
-            <span className="text-sm text-ink/55">Gain</span>
-            <span className="font-display text-lg font-semibold text-burgundy">{formatFCFA(mission.earnings)}</span>
+            {missionDistanceKm != null && <p className="mt-1.5 text-xs font-medium text-ink/60">Distance estimée : {formatDistanceKm(missionDistanceKm)}</p>}
           </div>
 
           <button
@@ -284,19 +301,26 @@ export default function DriverMissionDetail({ missionId }: { missionId: string }
                 <p className="text-xs text-ink/45">Référence commande</p>
                 <p className="font-mono text-ink">{mission.orderId}</p>
                 <p className="text-xs text-ink/45 mt-2">Colis</p>
-                <p className="text-ink flex items-center gap-1.5"><Package size={14} className="text-ink/40" /> {currentCollection.parcelCount} colis</p>
+                <p className="text-ink flex items-center gap-1.5"><Package size={14} className="text-ink/40" /> Colis {collectedCount + 1}/{mission.collections.length} — {currentCollection.parcelCount} article{currentCollection.parcelCount > 1 ? 's' : ''}</p>
               </div>
 
               <button
-                onClick={() => alert('Navigation vers la boutique (mock)')}
+                onClick={() => currentCollection.latitude != null && currentCollection.longitude != null && openNavigationTo({ latitude: currentCollection.latitude, longitude: currentCollection.longitude }, currentCollection.shopName)}
+                disabled={currentCollection.latitude == null || currentCollection.longitude == null}
+                className="btn-outline w-full flex items-center justify-center gap-2 disabled:opacity-40"
+              >
+                <Navigation size={16} /> Itinéraire vers la boutique
+              </button>
+              <button
+                onClick={() => setLabelForShopId(currentCollection.shopId)}
                 className="btn-outline w-full flex items-center justify-center gap-2"
               >
-                <Navigation size={16} /> Ouvrir l'itinéraire
+                <Tag size={16} /> Imprimer l'étiquette
               </button>
 
               <div className="space-y-2 pt-1">
                 <button onClick={() => collectParcel(mission.id, currentCollection.shopId)} className="btn-primary w-full">
-                  Confirmer la récupération
+                  Colis récupéré
                 </button>
                 <button onClick={() => openIncidentCollection(currentCollection.shopId)} className="text-sm text-ink/50 hover:text-burgundy w-full text-center py-2">
                   Problème
@@ -323,6 +347,7 @@ export default function DriverMissionDetail({ missionId }: { missionId: string }
             <div>
               <p className="text-xs text-ink/45 mb-0.5">Adresse</p>
               <p className="text-ink flex items-center gap-1.5"><MapPin size={14} className="text-ink/40" /> {mission.destinationAddress}</p>
+              {currentLegDistanceKm != null && <p className="mt-1 text-xs font-medium text-ink/50">Distance estimée : {formatDistanceKm(currentLegDistanceKm)}</p>}
             </div>
             {mission.slot && (
               <div>
@@ -333,17 +358,18 @@ export default function DriverMissionDetail({ missionId }: { missionId: string }
           </div>
 
           <div className="flex gap-3">
-            <button
-              onClick={() => alert(`Appel au ${mission.customerPhone} (mock)`)}
+            <a
+              href={telHref(mission.customerPhone)}
               className="btn-outline flex-1 flex items-center justify-center gap-2"
             >
               <Phone size={16} /> Appeler
-            </button>
+            </a>
             <button
-              onClick={() => alert('Navigation vers le client (mock)')}
-              className="btn-outline flex-1 flex items-center justify-center gap-2"
+              onClick={() => hasDestinationCoords && openNavigationTo({ latitude: mission.destinationLatitude!, longitude: mission.destinationLongitude! }, mission.customerName)}
+              disabled={!hasDestinationCoords}
+              className="btn-outline flex-1 flex items-center justify-center gap-2 disabled:opacity-40"
             >
-              <Navigation size={16} /> Itinéraire
+              <Navigation size={16} /> Itinéraire vers le client
             </button>
           </div>
 
@@ -422,18 +448,15 @@ export default function DriverMissionDetail({ missionId }: { missionId: string }
             )}
           </div>
 
-          <div className="card p-4 flex items-center justify-between">
-            <span className="text-sm text-ink/55">Gain</span>
-            <span className="font-display text-lg font-semibold text-burgundy">+ {formatFCFA(mission.earnings)}</span>
-          </div>
-
           <div className="card p-4">
             <p className="text-xs font-semibold text-ink/50 mb-3">Collectes</p>
             <div className="space-y-2">
-              {mission.collections.map((c) => (
-                <div key={c.shopId} className="flex items-center gap-2 text-sm">
-                  <CheckCircle2 size={16} className="text-green-600" />
-                  <span className="text-ink/70">{c.shopName}</span>
+              {mission.collections.map((c, i) => (
+                <div key={c.shopId} className="flex items-center justify-between gap-2 text-sm">
+                  <span className="flex items-center gap-2 text-ink/70"><CheckCircle2 size={16} className="text-green-600" /> {c.shopName}</span>
+                  <button onClick={() => setLabelForShopId(c.shopId)} className="flex items-center gap-1 text-xs font-medium text-burgundy hover:underline">
+                    <Tag size={12} /> Étiquette {i + 1}/{mission.collections.length}
+                  </button>
                 </div>
               ))}
             </div>
@@ -442,6 +465,21 @@ export default function DriverMissionDetail({ missionId }: { missionId: string }
           <button onClick={() => navigate('/driver')} className="btn-outline w-full">Retour à l'accueil</button>
         </>
       )}
+
+      {labelForShopId && (() => {
+        const shop = mission.collections.find((c) => c.shopId === labelForShopId);
+        const parcelIndex = mission.collections.findIndex((c) => c.shopId === labelForShopId) + 1;
+        if (!shop) return null;
+        return (
+          <DeliveryLabel
+            mission={mission}
+            shopName={shop.shopName}
+            parcelIndex={parcelIndex}
+            parcelCount={mission.collections.length}
+            onClose={() => setLabelForShopId(null)}
+          />
+        );
+      })()}
     </div>
   );
 }

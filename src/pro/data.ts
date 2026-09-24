@@ -197,9 +197,17 @@ export interface Mission {
   id: string;
   orderId: string;
   driverId?: string;
-  collections: { shopId: string; shopName: string; area: string; address: string; status: OrderStatus; collected: boolean; collectedAt?: string; parcelCount: number }[];
+  // latitude/longitude here mirror shops.latitude/longitude (see Shop) —
+  // same GPS source the shop's own location page already saves, reused
+  // for the "itinéraire vers la boutique" deep link and distance estimate.
+  collections: { shopId: string; shopName: string; area: string; address: string; latitude?: number; longitude?: number; status: OrderStatus; collected: boolean; collectedAt?: string; parcelCount: number }[];
   destination: string;
   destinationAddress?: string;
+  // Mirrors orders.latitude/longitude — the exact point the customer
+  // dropped a pin on at checkout (see CheckoutPage's geolocation capture),
+  // never a re-geocoded approximation of the text address.
+  destinationLatitude?: number;
+  destinationLongitude?: number;
   slot: string;
   distance: string;
   step: DeliveryStep;
@@ -450,10 +458,11 @@ export const missions: Mission[] = [
   {
     id: 'EZI-2048', orderId: 'EZI-10485', driverId: 'abdou',
     collections: [
-      { shopId: 'maison-senteur', shopName: 'Maison Senteur', area: 'Plateau', address: '25 Rue LM, Plateau, Dakar', status: 'ready', collected: true, collectedAt: '2026-08-27T08:15:00', parcelCount: 1 },
-      { shopId: 'dakar-beauty', shopName: 'Dakar Beauty', area: 'Mermoz', address: '42 Rue KA, Mermoz, Dakar', status: 'ready', collected: true, collectedAt: '2026-08-27T08:35:00', parcelCount: 1 },
+      { shopId: 'maison-senteur', shopName: 'Maison Senteur', area: 'Plateau', address: '25 Rue LM, Plateau, Dakar', latitude: 14.6708, longitude: -17.4313, status: 'ready', collected: true, collectedAt: '2026-08-27T08:15:00', parcelCount: 1 },
+      { shopId: 'dakar-beauty', shopName: 'Dakar Beauty', area: 'Mermoz', address: '42 Rue KA, Mermoz, Dakar', latitude: 14.7167, longitude: -17.4677, status: 'ready', collected: true, collectedAt: '2026-08-27T08:35:00', parcelCount: 1 },
     ],
     destination: 'Parcelles', destinationAddress: 'Sacré-Cœur 3, Parcelles Assainies, Dakar',
+    destinationLatitude: 14.7692, destinationLongitude: -17.4197,
     slot: '09h–12h', distance: '12 km', step: 'to_customer',
     earnings: 2700, customerName: 'Cheikh Fall', customerPhone: '+221 77 444 55 66', date: '2026-08-27T08:00:00',
     deliveryCode: '4821',
@@ -462,10 +471,11 @@ export const missions: Mission[] = [
   {
     id: 'EZI-2049', orderId: 'EZI-10482', driverId: undefined,
     collections: [
-      { shopId: 'maison-fatou', shopName: 'Maison Fatou', area: 'Sicap Liberté', address: 'Sicap Liberté 6, Dakar', status: 'ready', collected: false, parcelCount: 1 },
-      { shopId: 'atelier-naya', shopName: 'Atelier Naya', area: 'Almadies', address: '8 Rue NG, Almadies, Dakar', status: 'ready', collected: false, parcelCount: 1 },
+      { shopId: 'maison-fatou', shopName: 'Maison Fatou', area: 'Sicap Liberté', address: 'Sicap Liberté 6, Dakar', latitude: 14.7247, longitude: -17.4581, status: 'ready', collected: false, parcelCount: 1 },
+      { shopId: 'atelier-naya', shopName: 'Atelier Naya', area: 'Almadies', address: '8 Rue NG, Almadies, Dakar', latitude: 14.7411, longitude: -17.5142, status: 'ready', collected: false, parcelCount: 1 },
     ],
     destination: 'Sacré-Cœur 3', destinationAddress: 'Sacré-Cœur 3, Yoff, Dakar',
+    destinationLatitude: 14.7461, destinationLongitude: -17.4685,
     slot: '15h–18h', distance: '18 km', step: 'accepted',
     earnings: 3150, customerName: 'Awa Ndiaye', customerPhone: '+221 77 111 22 33', date: '2026-08-27T10:30:00',
     deliveryCode: '2074',
@@ -474,9 +484,10 @@ export const missions: Mission[] = [
   {
     id: 'EZI-2051', orderId: 'EZI-10486', driverId: undefined,
     collections: [
-      { shopId: 'maison-senteur', shopName: 'Maison Senteur', area: 'Plateau', address: '25 Rue LM, Plateau, Dakar', status: 'ready', collected: false, parcelCount: 1 },
+      { shopId: 'maison-senteur', shopName: 'Maison Senteur', area: 'Plateau', address: '25 Rue LM, Plateau, Dakar', latitude: 14.6708, longitude: -17.4313, status: 'ready', collected: false, parcelCount: 1 },
     ],
     destination: 'Médina', destinationAddress: 'Rue 10 x Corniche, Médina, Dakar',
+    destinationLatitude: 14.6789, destinationLongitude: -17.4419,
     slot: '15h–18h', distance: '6 km', step: 'accepted',
     earnings: 2250, customerName: 'Aïcha Mbaye', customerPhone: '+221 77 555 66 77', date: '2026-08-27T12:00:00',
     deliveryCode: '6158',
@@ -485,10 +496,11 @@ export const missions: Mission[] = [
   {
     id: 'EZI-2050', orderId: 'EZI-10483', driverId: undefined,
     collections: [
-      { shopId: 'maison-fatou', shopName: 'Maison Fatou', area: 'Sicap Liberté', address: 'Sicap Liberté 6, Dakar', status: 'preparing', collected: false, parcelCount: 1 },
-      { shopId: 'atelier-naya', shopName: 'Atelier Naya', area: 'Almadies', address: '8 Rue NG, Almadies, Dakar', status: 'ready', collected: false, parcelCount: 1 },
+      { shopId: 'maison-fatou', shopName: 'Maison Fatou', area: 'Sicap Liberté', address: 'Sicap Liberté 6, Dakar', latitude: 14.7247, longitude: -17.4581, status: 'preparing', collected: false, parcelCount: 1 },
+      { shopId: 'atelier-naya', shopName: 'Atelier Naya', area: 'Almadies', address: '8 Rue NG, Almadies, Dakar', latitude: 14.7411, longitude: -17.5142, status: 'ready', collected: false, parcelCount: 1 },
     ],
     destination: 'Plateau', destinationAddress: 'Rue 12, Plateau, Dakar',
+    destinationLatitude: 14.6928, destinationLongitude: -17.4467,
     slot: '12h–15h', distance: '8 km', step: 'accepted',
     earnings: 2250, customerName: 'Mamadou Sy', customerPhone: '+221 77 222 33 44', date: '2026-08-27T11:15:00',
     deliveryCode: '3391',
@@ -497,9 +509,10 @@ export const missions: Mission[] = [
   {
     id: 'EZI-2045', orderId: 'EZI-10480', driverId: 'abdou',
     collections: [
-      { shopId: 'hair-studio-dakar', shopName: 'Hair Studio Dakar', area: 'Yoff', address: '10 Rue HI, Yoff, Dakar', status: 'delivered', collected: true, collectedAt: '2026-08-26T13:30:00', parcelCount: 1 },
+      { shopId: 'hair-studio-dakar', shopName: 'Hair Studio Dakar', area: 'Yoff', address: '10 Rue HI, Yoff, Dakar', latitude: 14.7500, longitude: -17.4676, status: 'delivered', collected: true, collectedAt: '2026-08-26T13:30:00', parcelCount: 1 },
     ],
     destination: 'Almadies', destinationAddress: 'Zone 10, Almadies, Dakar',
+    destinationLatitude: 14.7411, destinationLongitude: -17.5142,
     slot: '15h–18h', distance: '5 km', step: 'delivered',
     earnings: 3150, customerName: 'Khady Sow', customerPhone: '+221 77 666 77 88', date: '2026-08-26T14:00:00',
     deliveredAt: '2026-08-26T15:45:00', proofPhoto: 'mock-proof-1',
