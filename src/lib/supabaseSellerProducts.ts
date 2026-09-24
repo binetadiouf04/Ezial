@@ -385,11 +385,19 @@ export interface SellerProductSummary {
 
 // Every real product for this shop, with stock, primary image and variants
 // resolved from Supabase — never from local/mock state.
+//
+// archived_at IS NOT NULL means this product was removed via "Supprimer"
+// but kept (status 'disabled') only because real order/review history
+// references it — see seller_delete_or_archive_product. Unlike a product
+// the seller manually paused with "Désactiver" (same 'disabled' status,
+// archived_at stays null, still meant to be reactivated), an archived one
+// has no reason to ever appear in the seller's own dashboard again.
 export async function fetchSellerProducts(shopId: string): Promise<SellerProductSummary[]> {
   const { data: productRows, error: productsError } = await supabase
     .from('products')
     .select('id, reference, name, category, base_price, status, created_at')
     .eq('shop_id', shopId)
+    .is('archived_at', null)
     .order('created_at', { ascending: false });
   if (productsError || !productRows || productRows.length === 0) return [];
 
