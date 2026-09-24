@@ -6,6 +6,9 @@ import { assignShopPrefixes, nextReferenceForShop } from '@/utils/reference';
 import { signInSeller, restoreSellerSession, signOutSeller, signUpSeller, requestSellerPasswordReset, resendSellerConfirmation, type SignUpSellerInput, type SignUpSellerResult } from '@/lib/supabaseSellerAuth';
 import { deleteMyAccount } from '@/lib/supabaseAccountDeletion';
 import { signInAdmin, restoreAdminSession } from '@/lib/supabaseAdminAuth';
+import { signInDriver, restoreDriverSession } from '@/lib/supabaseDriverAuth';
+import { fetchDriverMissions, acceptDeliveryMission, markStopCollected, startMissionDelivery, completeMissionDelivery } from '@/lib/supabaseDriverMissions';
+import { supabase } from '@/lib/supabaseClient';
 
 type Route = string;
 
@@ -121,11 +124,22 @@ interface ProState extends AuthState {
   // granting access. Needed so RLS on manually-managed content (Hero,
   // "À découvrir") can actually restrict writes to admins.
   verifyAdminLogin: (email: string, password: string) => Promise<{ name: string } | { error: string }>;
+  // Driver login — authenticates a real email + password against Supabase
+  // Auth, then verifies profiles.role = 'driver' before granting access.
+  verifyDriverLogin: (email: string, password: string) => Promise<{ name: string } | { error: string }>;
   // Seller transactions
   sellerTransactions: typeof initialTransactions;
-  // Driver state
+  // Driver state — backed by real delivery_missions/delivery_stops/orders
+  // once a real driver session is active; empty until then, never mock.
   driverAvailable: boolean;
   setDriverAvailable: (available: boolean) => void;
+  // Every mission visible to the signed-in driver under RLS (their own +
+  // still-unclaimed ones) — used by DriverMissionDetail to look a mission
+  // up by id, including ones not yet accepted.
+  driverVisibleMissions: Mission[];
+  isDriverMissionsLoading: boolean;
+  driverActionError: string | null;
+  clearDriverActionError: () => void;
   driverMissions: Mission[];
   availableMissions: Mission[];
   activeMission: Mission | null;
@@ -133,7 +147,7 @@ interface ProState extends AuthState {
   driverTransactions: DriverTransaction[];
   collectParcel: (missionId: string, shopId: string) => void;
   startDelivery: (missionId: string) => void;
-  completeDelivery: (missionId: string, code: string, proofPhoto: string) => boolean;
+  completeDelivery: (missionId: string, code: string, proofPhotoFile: File) => Promise<{ error?: string }>;
   reportIncident: (missionId: string, incident: Incident) => void;
   // Admin state
   allOrders: Order[];
@@ -227,6 +241,12 @@ export function ProProvider({ children }: { children: ReactNode }) {
   const [sellerShopIsOfficial, setSellerShopIsOfficial] = useState(false);
   const [sellerTransactions] = useState(initialTransactions);
   const [driverAvailable, setDriverAvailable] = useState(true);
+  // Real, Supabase-backed missions visible to the signed-in driver — starts
+  // empty and is only ever populated by loadDriverMissions(); never falls
+  // back to the mock `missions` array below (that one stays admin-only).
+  const [driverVisibleMissions, setDriverVisibleMissions] = useState<Mission[]>([]);
+  const [isDriverMissionsLoading, setIsDriverMissionsLoading] = useState(false);
+  const [driverActionError, setDriverActionError] = useState<string | null>(null);
 
   // Admin state
   const [allShops, setAllShops] = useState<Shop[]>(initialShops);
@@ -245,6 +265,17 @@ export function ProProvider({ children }: { children: ReactNode }) {
   const [payoutStatuses, setPayoutStatuses] = useState<Record<string, 'pending' | 'available' | 'paid'>>({});
   const [driverPayoutStatuses, setDriverPayoutStatuses] = useState<Record<string, 'pending' | 'available' | 'paid'>>({});
 
+  // Fetches the real Supabase missions visible to the signed-in driver and
+  // replaces local state with them — the single place that state is ever
+  // written, so login/session-restore/every mutation stay consistent.
+  const loadDriverMissions = useCallback(async (): Promise<Mission[]> => {
+    setIsDriverMissionsLoading(true);
+    const real = await fetchDriverMissions();
+    setDriverVisibleMissions(real);
+    setIsDriverMissionsLoading(false);
+    return real;
+  }, []);
+
   useEffect(() => {
     const saved = sessionStorage.getItem('ezial-pro-auth');
     if (!saved) return;
@@ -256,13 +287,23 @@ export function ProProvider({ children }: { children: ReactNode }) {
     }
 
     if (parsed.role === 'driver') {
-      // Driver sessions are unchanged mock state — no Supabase involved.
-      setRole('driver');
-      setIdentifier(parsed.identifier);
-      setName(parsed.name);
-      const pendingOrderId = pendingDriverOrderId();
-      const pendingMission = pendingOrderId ? missions.find((m) => m.orderId === pendingOrderId) : undefined;
-      setRoute(pendingMission ? `/driver/livraisons/${pendingMission.id}` : '/driver');
+      // Driver sessions are never trusted from sessionStorage alone — the
+      // real Supabase session must still exist AND profiles.role must still
+      // be 'driver' before the driver area opens.
+      (async () => {
+        const driver = await restoreDriverSession();
+        if (!driver) {
+          sessionStorage.removeItem('ezial-pro-auth');
+          return;
+        }
+        setRole('driver');
+        setIdentifier(parsed.identifier);
+        setName(driver.name);
+        const real = await loadDriverMissions();
+        const pendingOrderId = pendingDriverOrderId();
+        const pendingMission = pendingOrderId ? real.find((m) => m.orderId === pendingOrderId) : undefined;
+        setRoute(pendingMission ? `/driver/livraisons/${pendingMission.id}` : '/driver');
+      })();
       return;
     }
 
@@ -317,21 +358,25 @@ export function ProProvider({ children }: { children: ReactNode }) {
     setRole(r);
     setIdentifier(id);
     setName(n);
-    let homeRoute = r === 'admin' ? '/admin' : r === 'seller' ? '/seller' : '/driver';
-    if (r === 'driver') {
-      const pendingOrderId = pendingDriverOrderId();
-      const pendingMission = pendingOrderId ? missions.find((m) => m.orderId === pendingOrderId) : undefined;
-      if (pendingMission) homeRoute = `/driver/livraisons/${pendingMission.id}`;
-    }
-    setRoute(homeRoute);
+    setRoute(r === 'admin' ? '/admin' : r === 'seller' ? '/seller' : '/driver');
     if (r === 'seller') {
       const shop = initialShops.find((s) => s.sellerId === id);
       setSellerShop(shop ?? null);
       setSellerSupabaseShopId(shopInfo?.supabaseShopId ?? null);
       setSellerShopIsOfficial(shopInfo?.isOfficial ?? false);
     }
+    if (r === 'driver') {
+      // The QR-code deep link (#/pro?driver_order=...) can only be resolved
+      // once real missions are fetched — jump there once they land instead
+      // of blocking the initial navigation on the network round trip.
+      void loadDriverMissions().then((real) => {
+        const pendingOrderId = pendingDriverOrderId();
+        const pendingMission = pendingOrderId ? real.find((m) => m.orderId === pendingOrderId) : undefined;
+        if (pendingMission) setRoute(`/driver/livraisons/${pendingMission.id}`);
+      });
+    }
     sessionStorage.setItem('ezial-pro-auth', JSON.stringify({ role: r, identifier: id, name: n }));
-  }, [missions]);
+  }, [loadDriverMissions]);
 
   const logout = useCallback(() => {
     setRole(null);
@@ -341,15 +386,26 @@ export function ProProvider({ children }: { children: ReactNode }) {
     setSellerShop(null);
     setSellerSupabaseShopId(null);
     setSellerShopIsOfficial(false);
+    setDriverVisibleMissions([]);
+    setDriverActionError(null);
     sessionStorage.removeItem('ezial-pro-auth');
     // Fire-and-forget: the local session is already cleared above regardless
     // of whether the Supabase sign-out call itself succeeds.
     void signOutSeller();
   }, []);
 
+  const clearDriverActionError = useCallback(() => setDriverActionError(null), []);
+
   const acceptMission = useCallback((id: string) => {
-    setMissions((prev) => prev.map((m) => (m.id === id ? { ...m, driverId: 'me', step: 'to_collection' } : m)));
-  }, []);
+    setDriverActionError(null);
+    void acceptDeliveryMission(id).then(({ error }) => {
+      if (error) {
+        setDriverActionError(error);
+        return;
+      }
+      void loadDriverMissions();
+    });
+  }, [loadDriverMissions]);
 
   const advanceMission = useCallback((id: string) => {
     setMissions((prev) =>
@@ -444,49 +500,59 @@ export function ProProvider({ children }: { children: ReactNode }) {
     return { name: result.name };
   }, []);
 
-  // === Driver actions ===
+  const verifyDriverLogin = useCallback(async (email: string, password: string): Promise<{ name: string } | { error: string }> => {
+    const result = await signInDriver(email.trim(), password);
+    if ('error' in result) return { error: result.error };
+    return { name: result.name };
+  }, []);
+
+  // === Driver actions — every mutation writes to Supabase first, then
+  // refetches so local state always reflects what was actually persisted
+  // (never an optimistic guess that could drift from the real row). ===
 
   const collectParcel = useCallback((missionId: string, shopId: string) => {
-    setMissions((prev) =>
-      prev.map((m) => {
-        if (m.id !== missionId) return m;
-        const collections = m.collections.map((c) =>
-          c.shopId === shopId ? { ...c, collected: true, collectedAt: new Date().toISOString() } : c,
-        );
-        const allCollected = collections.every((c) => c.collected);
-        return {
-          ...m,
-          collections,
-          step: allCollected ? 'all_collected' : 'to_collection',
-        };
-      }),
-    );
-  }, []);
+    setDriverActionError(null);
+    const mission = driverVisibleMissions.find((m) => m.id === missionId);
+    const stopId = mission?.collections.find((c) => c.shopId === shopId)?.stopId;
+    if (!stopId) {
+      setDriverActionError('Point de collecte introuvable.');
+      return;
+    }
+    void markStopCollected(stopId).then(({ error }) => {
+      if (error) {
+        setDriverActionError(error);
+        return;
+      }
+      void loadDriverMissions();
+    });
+  }, [driverVisibleMissions, loadDriverMissions]);
 
   const startDelivery = useCallback((missionId: string) => {
-    setMissions((prev) =>
-      prev.map((m) => (m.id === missionId ? { ...m, step: 'to_customer' } : m)),
-    );
-  }, []);
+    setDriverActionError(null);
+    void startMissionDelivery(missionId).then(({ error }) => {
+      if (error) {
+        setDriverActionError(error);
+        return;
+      }
+      void loadDriverMissions();
+    });
+  }, [loadDriverMissions]);
 
-  const completeDelivery = useCallback((missionId: string, code: string, proofPhoto: string): boolean => {
-    const mission = missions.find((m) => m.id === missionId);
-    if (!mission) return false;
-    if (code !== (mission.deliveryCode ?? '')) return false;
-    if (!proofPhoto) return false;
+  const completeDelivery = useCallback(async (missionId: string, code: string, proofPhotoFile: File): Promise<{ error?: string }> => {
+    const { data: userData } = await supabase.auth.getUser();
+    const driverAuthId = userData.user?.id;
+    if (!driverAuthId) return { error: 'Session expirée, reconnectez-vous.' };
+    const result = await completeMissionDelivery(missionId, driverAuthId, code, proofPhotoFile);
+    if (!result.error) await loadDriverMissions();
+    return result;
+  }, [loadDriverMissions]);
 
-    setMissions((prev) =>
-      prev.map((m) =>
-        m.id === missionId
-          ? { ...m, step: 'delivered', deliveredAt: new Date().toISOString(), proofPhoto }
-          : m,
-      ),
-    );
-    return true;
-  }, [missions]);
-
+  // Local-only for now: delivery_missions has no incident-persistence
+  // column yet (a minimal additive migration was proposed and is pending
+  // confirmation) — the report is visible in this session but does not
+  // survive a refresh.
   const reportIncident = useCallback((missionId: string, incident: Incident) => {
-    setMissions((prev) =>
+    setDriverVisibleMissions((prev) =>
       prev.map((m) => (m.id === missionId ? { ...m, incident } : m)),
     );
   }, []);
@@ -699,12 +765,13 @@ export function ProProvider({ children }: { children: ReactNode }) {
     payout: payoutStatuses[t.id] ?? t.payout,
   }));
 
-  // Derived driver mission lists
-  const driverMissions = missions.filter((m) => m.driverId === 'me' || m.driverId === 'abdou');
+  // Derived driver mission lists — sourced from the real, Supabase-backed
+  // driverVisibleMissions. RLS already only ever returns this driver's own
+  // missions or still-unclaimed ones, so a non-null driverId here can only
+  // mean "assigned to me".
+  const driverMissions = driverVisibleMissions.filter((m) => Boolean(m.driverId));
   const activeMission = driverMissions.find((m) => m.step !== 'delivered') ?? null;
-  const availableMissions = missions.filter(
-    (m) => !m.driverId && m.collections.every((c) => c.status === 'ready') && m.step === 'accepted',
-  );
+  const availableMissions = driverVisibleMissions.filter((m) => !m.driverId);
   const completedMissions = driverMissions.filter((m) => m.step === 'delivered');
 
   const value: ProState = {
@@ -737,9 +804,14 @@ export function ProProvider({ children }: { children: ReactNode }) {
     resendSellerConfirmationEmail,
     deleteSellerAccount,
     verifyAdminLogin,
+    verifyDriverLogin,
     sellerTransactions,
     driverAvailable,
     setDriverAvailable,
+    driverVisibleMissions,
+    isDriverMissionsLoading,
+    driverActionError,
+    clearDriverActionError,
     driverMissions,
     availableMissions,
     activeMission,

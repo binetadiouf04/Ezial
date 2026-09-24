@@ -27,11 +27,11 @@ const deliveryIncidentReasons = [
 
 export default function DriverMissionDetail({ missionId }: { missionId: string }) {
   const {
-    navigate, missions, acceptMission, activeMission,
+    navigate, driverVisibleMissions, acceptMission, activeMission,
     collectParcel, startDelivery, completeDelivery, reportIncident,
   } = usePro();
 
-  const mission = missions.find((m) => m.id === missionId);
+  const mission = driverVisibleMissions.find((m) => m.id === missionId);
   const [showIncident, setShowIncident] = useState(false);
   const [incidentReason, setIncidentReason] = useState('');
   const [incidentComment, setIncidentComment] = useState('');
@@ -39,7 +39,9 @@ export default function DriverMissionDetail({ missionId }: { missionId: string }
   const [incidentShopId, setIncidentShopId] = useState<string | undefined>(undefined);
   const [deliveryCode, setDeliveryCode] = useState('');
   const [proofPhoto, setProofPhoto] = useState('');
+  const [proofPhotoFile, setProofPhotoFile] = useState<File | null>(null);
   const [codeError, setCodeError] = useState('');
+  const [isSubmittingDelivery, setIsSubmittingDelivery] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
   const [labelForShopId, setLabelForShopId] = useState<string | null>(null);
 
@@ -53,8 +55,10 @@ export default function DriverMissionDetail({ missionId }: { missionId: string }
     );
   }
 
-  const isAssigned = mission.driverId === 'me' || mission.driverId === 'abdou';
-  const isAvailable = !mission.driverId && mission.collections.every((c) => c.status === 'ready');
+  // RLS only ever returns this driver's own missions or still-unclaimed
+  // ones, so a non-null driverId here can only mean "assigned to me".
+  const isAssigned = Boolean(mission.driverId);
+  const isAvailable = !mission.driverId;
   const allCollected = mission.collections.every((c) => c.collected);
   const collectedCount = mission.collections.filter((c) => c.collected).length;
   const isDelivered = mission.step === 'delivered';
@@ -87,14 +91,16 @@ export default function DriverMissionDetail({ missionId }: { missionId: string }
     acceptMission(mission.id);
   };
 
-  const handleComplete = () => {
-    if (!proofPhoto) return;
-    const success = completeDelivery(mission.id, deliveryCode, proofPhoto);
-    if (success) {
+  const handleComplete = async () => {
+    if (!proofPhotoFile) return;
+    setIsSubmittingDelivery(true);
+    const result = await completeDelivery(mission.id, deliveryCode, proofPhotoFile);
+    setIsSubmittingDelivery(false);
+    if (result.error) {
+      setCodeError(result.error);
+    } else {
       setShowSuccess(true);
       setCodeError('');
-    } else {
-      setCodeError('Code de livraison incorrect');
     }
   };
 
@@ -394,7 +400,7 @@ export default function DriverMissionDetail({ missionId }: { missionId: string }
             {proofPhoto ? (
               <div className="relative rounded-lg overflow-hidden h-40 bg-cream">
                 <img src={proofPhoto} alt="Preuve" className="h-full w-full object-cover" />
-                <button onClick={() => setProofPhoto('')} className="absolute top-2 right-2 rounded-full bg-white/90 p-1 text-ink/60">
+                <button onClick={() => { setProofPhoto(''); setProofPhotoFile(null); }} className="absolute top-2 right-2 rounded-full bg-white/90 p-1 text-ink/60">
                   <X size={16} />
                 </button>
               </div>
@@ -410,6 +416,7 @@ export default function DriverMissionDetail({ missionId }: { missionId: string }
                   onChange={(e) => {
                     const file = e.target.files?.[0];
                     if (file) {
+                      setProofPhotoFile(file);
                       const reader = new FileReader();
                       reader.onload = (ev) => setProofPhoto(ev.target?.result as string);
                       reader.readAsDataURL(file);
@@ -422,10 +429,10 @@ export default function DriverMissionDetail({ missionId }: { missionId: string }
 
           <button
             onClick={handleComplete}
-            disabled={!deliveryCode || !proofPhoto}
+            disabled={!deliveryCode || !proofPhotoFile || isSubmittingDelivery}
             className="btn-primary w-full disabled:opacity-40 disabled:cursor-not-allowed"
           >
-            Confirmer la livraison
+            {isSubmittingDelivery ? 'Confirmation…' : 'Confirmer la livraison'}
           </button>
           <button onClick={openIncidentDelivery} className="text-sm text-ink/50 hover:text-burgundy w-full text-center py-2">
             Problème

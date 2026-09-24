@@ -200,7 +200,10 @@ export interface Mission {
   // latitude/longitude here mirror shops.latitude/longitude (see Shop) —
   // same GPS source the shop's own location page already saves, reused
   // for the "itinéraire vers la boutique" deep link and distance estimate.
-  collections: { shopId: string; shopName: string; area: string; address: string; latitude?: number; longitude?: number; status: OrderStatus; collected: boolean; collectedAt?: string; parcelCount: number }[];
+  // stopId, when present, is the real delivery_stops row id — the value a
+  // real mutation (markStopCollected) must target; shopId alone is not
+  // unique enough to update the right row when Supabase-backed.
+  collections: { shopId: string; stopId?: string; shopName: string; area: string; address: string; latitude?: number; longitude?: number; status: OrderStatus; collected: boolean; collectedAt?: string; parcelCount: number }[];
   destination: string;
   destinationAddress?: string;
   // Mirrors orders.latitude/longitude — the exact point the customer

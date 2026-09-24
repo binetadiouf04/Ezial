@@ -10,7 +10,7 @@ import AdminLayout from '../layouts/AdminLayout';
 import { ArrowLeft } from 'lucide-react';
 
 export default function ProEntryPage() {
-  const { role, login, verifySellerLogin, signUpSellerAccount, requestSellerPasswordReset, resendSellerConfirmationEmail, verifyAdminLogin } = usePro();
+  const { role, login, verifySellerLogin, signUpSellerAccount, requestSellerPasswordReset, resendSellerConfirmationEmail, verifyAdminLogin, verifyDriverLogin } = usePro();
   const [selectedRole, setSelectedRole] = useState<Role | null>(null);
 
   // If seller is logged in, render the seller layout
@@ -48,7 +48,7 @@ export default function ProEntryPage() {
   if (selectedRole) {
     return (
       <div className="min-h-screen bg-cream flex items-center justify-center p-4">
-        <LoginForm role={selectedRole} onBack={() => setSelectedRole(null)} onLogin={(id, name, shopInfo) => login(selectedRole, id, name, shopInfo)} verifySeller={verifySellerLogin} verifyAdmin={verifyAdminLogin} />
+        <LoginForm role={selectedRole} onBack={() => setSelectedRole(null)} onLogin={(id, name, shopInfo) => login(selectedRole, id, name, shopInfo)} verifySeller={verifySellerLogin} verifyAdmin={verifyAdminLogin} verifyDriver={verifyDriverLogin} />
       </div>
     );
   }

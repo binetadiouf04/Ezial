@@ -12,6 +12,8 @@ interface LoginFormProps {
   verifySeller?: (identifier: string, password: string) => Promise<{ shop: { sellerId: string; name: string; supabaseShopId: string; isOfficial: boolean } } | { error: string }>;
   /** Admin-only: authenticates email + password against Supabase Auth, then checks public.admins membership. */
   verifyAdmin?: (email: string, password: string) => Promise<{ name: string } | { error: string }>;
+  /** Driver-only: authenticates email + password against Supabase Auth, then checks profiles.role = 'driver'. */
+  verifyDriver?: (email: string, password: string) => Promise<{ name: string } | { error: string }>;
 }
 
 // Kept complete for every Role even though 'seller' is intercepted earlier
@@ -35,15 +37,20 @@ const roleConfig: Record<Role, { title: string; subtitle: string; placeholder: s
   },
   driver: {
     title: 'Espace Livreur',
-    subtitle: 'Connectez-vous avec votre identifiant unique.',
-    placeholder: 'ABDOU7314',
-    hint: 'Votre identifiant a été fourni par EZIAL lors de votre inscription.',
-    demoId: 'ABDOU7314',
-    demoName: 'Abdou',
+    subtitle: 'Connectez-vous avec votre email et votre mot de passe.',
+    placeholder: 'livreur@ezial.sn',
+    hint: 'Vos identifiants vous ont été fournis par EZIAL.',
+    demoName: 'Livreur EZIAL',
   },
 };
 
-export default function LoginForm({ role, onBack, onLogin, verifySeller, verifyAdmin }: LoginFormProps) {
+// Admin and driver both authenticate the same way — real email + password
+// against Supabase Auth. Only seller keeps its own identifiant+password form.
+function isEmailAuthRole(role: Role): boolean {
+  return role === 'admin' || role === 'driver';
+}
+
+export default function LoginForm({ role, onBack, onLogin, verifySeller, verifyAdmin, verifyDriver }: LoginFormProps) {
   const cfg = roleConfig[role];
   const [email, setEmail] = useState('');
   const [identifier, setIdentifier] = useState('');
@@ -53,13 +60,14 @@ export default function LoginForm({ role, onBack, onLogin, verifySeller, verifyA
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (role === 'admin') {
+    if (isEmailAuthRole(role)) {
       if (!email.trim() || !password.trim()) {
         setError('Veuillez remplir tous les champs.');
         return;
       }
       setIsVerifying(true);
-      const result = await verifyAdmin?.(email.trim(), password);
+      const verify = role === 'admin' ? verifyAdmin : verifyDriver;
+      const result = await verify?.(email.trim(), password);
       setIsVerifying(false);
       if (!result || 'error' in result) {
         setError(result?.error ?? 'Connexion impossible.');
@@ -79,18 +87,7 @@ export default function LoginForm({ role, onBack, onLogin, verifySeller, verifyA
         return;
       }
       onLogin(result.shop.sellerId, result.shop.name, { supabaseShopId: result.shop.supabaseShopId, isOfficial: result.shop.isOfficial });
-    } else {
-      if (!identifier.trim()) {
-        setError('Veuillez saisir votre identifiant.');
-        return;
-      }
-      onLogin(identifier.trim().toUpperCase(), cfg.demoName);
     }
-  };
-
-  const fillDemo = () => {
-    if (cfg.demoId) setIdentifier(cfg.demoId);
-    setError('');
   };
 
   return (
@@ -104,7 +101,7 @@ export default function LoginForm({ role, onBack, onLogin, verifySeller, verifyA
         <p className="mt-1.5 text-sm text-ink/55">{cfg.subtitle}</p>
 
         <form onSubmit={submit} className="mt-6 space-y-4">
-          {role === 'admin' ? (
+          {isEmailAuthRole(role) ? (
             <>
               <div>
                 <label className="block text-xs font-medium text-ink/60 mb-1.5">Email</label>
@@ -125,6 +122,7 @@ export default function LoginForm({ role, onBack, onLogin, verifySeller, verifyA
                   leftIcon={<Lock size={16} className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-ink/35" />}
                 />
               </div>
+              <p className="text-xs text-ink/45">{cfg.hint}</p>
             </>
           ) : (
             <div className="space-y-4">
@@ -142,21 +140,19 @@ export default function LoginForm({ role, onBack, onLogin, verifySeller, verifyA
                   />
                 </div>
               </div>
-              {role === 'seller' && (
-                <div>
-                  <label className="block text-xs font-medium text-ink/60 mb-1.5">Mot de passe</label>
-                  <div className="relative">
-                    <Lock size={16} className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-ink/35" />
-                    <input
-                      type="password"
-                      value={password}
-                      onChange={(e) => { setPassword(e.target.value); setError(''); }}
-                      className="input-field pl-11"
-                      placeholder="••••••••"
-                    />
-                  </div>
+              <div>
+                <label className="block text-xs font-medium text-ink/60 mb-1.5">Mot de passe</label>
+                <div className="relative">
+                  <Lock size={16} className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-ink/35" />
+                  <input
+                    type="password"
+                    value={password}
+                    onChange={(e) => { setPassword(e.target.value); setError(''); }}
+                    className="input-field pl-11"
+                    placeholder="••••••••"
+                  />
                 </div>
-              )}
+              </div>
               <p className="text-xs text-ink/45">{cfg.hint}</p>
             </div>
           )}
@@ -167,14 +163,6 @@ export default function LoginForm({ role, onBack, onLogin, verifySeller, verifyA
             {isVerifying ? 'Connexion…' : 'Se connecter'}
           </button>
         </form>
-
-        {cfg.demoId && (
-          <div className="mt-5 border-t border-line pt-4">
-            <button onClick={fillDemo} className="text-xs font-medium text-burgundy hover:underline">
-              Utiliser le compte de démonstration ({cfg.demoId})
-            </button>
-          </div>
-        )}
       </div>
     </div>
   );

@@ -1,5 +1,5 @@
 import { usePro } from '../ProContext';
-import { Home, Truck, History, User, LogOut, ArrowLeft } from 'lucide-react';
+import { Home, Truck, History, User, LogOut, ArrowLeft, X } from 'lucide-react';
 import DriverHome from '../pages/driver/DriverHome';
 import DriverMissions from '../pages/driver/DriverMissions';
 import DriverMissionDetail from '../pages/driver/DriverMissionDetail';
@@ -14,12 +14,23 @@ const navItems = [
 ];
 
 export default function DriverLayout() {
-  const { route, navigate, logout, name } = usePro();
+  const { route, navigate, logout, name, isDriverMissionsLoading, driverVisibleMissions, driverActionError, clearDriverActionError } = usePro();
 
   const clean = route.split('?')[0];
   const missionDetailMatch = clean.match(/^\/driver\/livraisons\/(.+)$/);
 
   const renderPage = () => {
+    // Only block the very first load with a skeleton — a background
+    // refetch after a mutation must never hide already-visible missions.
+    if (isDriverMissionsLoading && driverVisibleMissions.length === 0) {
+      return (
+        <div className="space-y-3">
+          {[0, 1, 2].map((i) => (
+            <div key={i} className="card h-24 animate-pulse bg-ink/5" />
+          ))}
+        </div>
+      );
+    }
     if (clean === '/driver') return <DriverHome />;
     if (clean === '/driver/livraisons') return <DriverMissions />;
     if (missionDetailMatch) return <DriverMissionDetail missionId={missionDetailMatch[1]} />;
@@ -56,6 +67,18 @@ export default function DriverLayout() {
           </button>
         </div>
       </div>
+
+      {/* Real mutation errors (RLS/network) — surfaced once, globally, so
+          every driver action (accept/collect/start) shows a failure even
+          though its onClick doesn't await the result. */}
+      {driverActionError && (
+        <div className="mx-4 mt-3 max-w-md sm:mx-auto rounded-lg bg-burgundy/5 border border-burgundy/20 p-3 flex items-start justify-between gap-2">
+          <p className="text-sm text-burgundy">{driverActionError}</p>
+          <button onClick={clearDriverActionError} className="flex-shrink-0 text-burgundy/60 hover:text-burgundy">
+            <X size={16} />
+          </button>
+        </div>
+      )}
 
       {/* Main content */}
       <main className="px-4 py-5 max-w-md mx-auto pb-24">
