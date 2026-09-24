@@ -46,12 +46,17 @@ function HomeProductPreview({
   products,
   seeAllRoute,
   onNavigate,
+  priority = false,
 }: {
   eyebrow: string;
   title: string;
   products: Product[];
   seeAllRoute: string;
   onNavigate: (route: string) => void;
+  /** Only the first section actually rendered on the page (closest to the
+   * fold) should skip lazy loading — marking every section priority would
+   * just make all of them compete for bandwidth at once. */
+  priority?: boolean;
 }) {
   const preview = diversifyBySubcategory(products, HOME_SECTION_LIMIT);
   return (
@@ -64,7 +69,7 @@ function HomeProductPreview({
         <div className="flex flex-col items-center justify-center py-20 text-center"><p className="text-sm text-ink/50">Aucun produit trouvé.</p></div>
       ) : (
         <div className="grid grid-cols-3 gap-3 sm:gap-5 lg:grid-cols-6">
-          {preview.map((p) => <ProductCard key={p.id} product={p} />)}
+          {preview.map((p, i) => <ProductCard key={p.id} product={p} priority={priority && i < 3} />)}
         </div>
       )}
     </>
@@ -187,7 +192,7 @@ export default function HomePage() {
         ) : (
           <>
             <section>
-              <HomeProductPreview eyebrow="Pour vous" title="Sélection personnalisée" products={pourVous} seeAllRoute="/pour-vous" onNavigate={navigate} />
+              <HomeProductPreview eyebrow="Pour vous" title="Sélection personnalisée" products={pourVous} seeAllRoute="/pour-vous" onNavigate={navigate} priority />
             </section>
 
             {promos.length > 0 && (

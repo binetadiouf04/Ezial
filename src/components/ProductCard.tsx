@@ -6,7 +6,7 @@ import FavoriteButton from './FavoriteButton';
 import { getShop } from '@/data/shops';
 import SmartImage from './SmartImage';
 
-export default function ProductCard({ product }: { product: Product }) {
+export default function ProductCard({ product, priority = false }: { product: Product; priority?: boolean }) {
   const { navigate } = useApp();
   const shop = getShop(product.shopId);
   const outOfStock = product.stock === 0;
@@ -20,7 +20,13 @@ export default function ProductCard({ product }: { product: Product }) {
            gallery image just to shrink it down in a small card. Falls back
            to the full-size image for any product whose primary photo
            predates this feature. */}
-        <SmartImage src={product.thumbnailUrl || product.images[0]} alt={product.name} className={`h-full w-full object-cover transition-transform duration-700 group-hover:scale-105 ${outOfStock ? 'opacity-60 grayscale' : ''}`} />
+        <SmartImage
+          src={product.thumbnailUrl || product.images[0]}
+          alt={product.name}
+          loading={priority ? 'eager' : 'lazy'}
+          fetchPriority={priority ? 'high' : undefined}
+          className={`h-full w-full object-cover transition-transform duration-700 group-hover:scale-105 ${outOfStock ? 'opacity-60 grayscale' : ''}`}
+        />
         <div className="absolute right-2.5 top-2.5"><FavoriteButton productId={product.id} /></div>
         {product.isNew && !product.isPromo && <span className="absolute left-2.5 top-2.5 rounded-full bg-white/95 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-ink">Nouveau</span>}
         {outOfStock && <div className="absolute inset-0 flex items-center justify-center"><span className="rounded-full bg-ink/80 px-4 py-2 text-xs font-semibold uppercase tracking-wider text-white">Rupture de stock</span></div>}

@@ -27,7 +27,7 @@ const SITE_CONTENT_MAX_DIMENSION: Record<'hero' | 'discover', number> = { hero: 
 export async function uploadSiteContentImage(file: File, folder: 'hero' | 'discover'): Promise<{ url: string } | { error: string }> {
   const optimized = await optimizeImageFile(file, SITE_CONTENT_MAX_DIMENSION[folder]);
   const path = `${folder}/${Date.now()}-${optimized.name.replace(/[^a-zA-Z0-9_.-]/g, '_')}`;
-  const { error } = await supabase.storage.from(SITE_CONTENT_BUCKET).upload(path, optimized);
+  const { error } = await supabase.storage.from(SITE_CONTENT_BUCKET).upload(path, optimized, { cacheControl: '31536000' });
   if (error) return { error: `L'envoi de l'image a échoué : ${error.message}.` };
   return { url: resolveSiteContentUrl(path) };
 }
