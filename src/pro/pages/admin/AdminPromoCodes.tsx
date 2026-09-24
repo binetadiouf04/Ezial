@@ -8,7 +8,7 @@ import { Plus, Loader2, AlertCircle, Pencil, Trash2, X, Check } from 'lucide-rea
 
 const emptyInput: PromoCodeInput = { code: '', discountType: 'percent', discountValue: 10, minOrderAmount: null, startDate: null, endDate: null, isActive: true };
 
-function toDateInputValue(iso: string | null): string {
+function toDateInputValue(iso: string | null | undefined): string {
   if (!iso) return '';
   return iso.split('T')[0];
 }

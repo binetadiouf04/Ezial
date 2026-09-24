@@ -74,6 +74,7 @@ export default function ProductPage({ productId }: { productId: string }) {
   const [reviewSubmitting, setReviewSubmitting] = useState(false);
   const [reviewError, setReviewError] = useState('');
   const [reviewSaved, setReviewSaved] = useState(false);
+  const [enlargedReviewImage, setEnlargedReviewImage] = useState<string | null>(null);
 
   const loadReviews = () => {
     if (!product || !isRealCatalogId(product.id)) return;
@@ -286,7 +287,11 @@ export default function ProductPage({ productId }: { productId: string }) {
                         {rev.comment && <p className="mt-2 text-sm text-ink/70">{rev.comment}</p>}
                         {rev.images.length > 0 && (
                           <div className="mt-2 flex gap-2">
-                            {rev.images.map((img) => <SmartImage key={img.id} src={img.url} alt="" className="h-16 w-16 rounded-lg object-cover" />)}
+                            {rev.images.map((img) => (
+                              <button key={img.id} onClick={() => setEnlargedReviewImage(img.url)} className="block">
+                                <SmartImage src={img.url} alt="" className="h-16 w-16 rounded-lg object-cover" />
+                              </button>
+                            ))}
                           </div>
                         )}
                         {customerUser?.id === rev.userId && (
@@ -327,6 +332,12 @@ export default function ProductPage({ productId }: { productId: string }) {
           <div className="mb-5 flex items-center justify-between"><h2 className="section-title">Aussi chez {shop.name}</h2><button onClick={() => navigate(`/boutique/${shop.id}`)} className="text-sm font-medium text-burgundy hover:underline">Voir la boutique</button></div>
           <ProductCarousel products={sameShopProducts} />
         </section>
+      )}
+      {enlargedReviewImage && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4" onClick={() => setEnlargedReviewImage(null)}>
+          <button onClick={() => setEnlargedReviewImage(null)} className="absolute right-4 top-4 flex h-9 w-9 items-center justify-center rounded-full bg-white/90 text-ink" aria-label="Fermer"><X size={18} /></button>
+          <img src={enlargedReviewImage} alt="Photo de l'avis agrandie" className="max-h-[85vh] max-w-full rounded-lg object-contain" onClick={(e) => e.stopPropagation()} />
+        </div>
       )}
     </div>
   );

@@ -5,7 +5,6 @@ import AdminContent from '../pages/admin/AdminContent';
 import AdminOrders from '../pages/admin/AdminOrders';
 import AdminOrderDetail from '../pages/admin/AdminOrderDetail';
 import AdminProducts from '../pages/admin/AdminProducts';
-import AdminProductDetail from '../pages/admin/AdminProductDetail';
 import AdminShops from '../pages/admin/AdminShops';
 import AdminShopDetail from '../pages/admin/AdminShopDetail';
 import AdminDeliveries from '../pages/admin/AdminDeliveries';
@@ -32,7 +31,6 @@ export default function AdminLayout() {
 
   const clean = route.split('?')[0];
   const orderDetailMatch = clean.match(/^\/admin\/commandes\/(.+)$/);
-  const productDetailMatch = clean.match(/^\/admin\/produits\/(.+)$/);
   const shopDetailMatch = clean.match(/^\/admin\/boutiques\/(.+)$/);
   const deliveryDetailMatch = clean.match(/^\/admin\/livraisons\/(.+)$/);
   const driverDetailMatch = clean.match(/^\/admin\/livreurs\/(.+)$/);
@@ -45,7 +43,6 @@ export default function AdminLayout() {
     if (clean === '/admin/commandes') return <AdminOrders />;
     if (orderDetailMatch) return <AdminOrderDetail orderId={orderDetailMatch[1]} />;
     if (clean === '/admin/produits') return <AdminProducts />;
-    if (productDetailMatch) return <AdminProductDetail productId={productDetailMatch[1]} />;
     if (clean === '/admin/boutiques') return <AdminShops />;
     if (shopDetailMatch) return <AdminShopDetail shopId={shopDetailMatch[1]} />;
     if (clean === '/admin/contenu') return <AdminContent />;

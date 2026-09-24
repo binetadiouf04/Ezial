@@ -267,7 +267,7 @@ interface MediaItem {
 }
 
 export default function SellerProductForm({ productId }: { productId?: string }) {
-  const { navigate, name: sellerShopName, addSellerProduct, updateSellerProduct, sellerSupabaseShopId } = usePro();
+  const { navigate, name: sellerShopName, sellerSupabaseShopId } = usePro();
   const isEditing = Boolean(productId);
 
   // Real moderation flag on this product (public.moderation_flags), never
@@ -955,19 +955,6 @@ export default function SellerProductForm({ productId }: { productId?: string })
     // unexpected exception — so the button can never stay stuck on
     // "Enregistrement…" forever after a transient failure.
     try {
-      // Build variant definitions for the local mock record too —
-      // descriptive attributes (besoin, famille, style...) are saved there
-      // as well, just never split into stock lines.
-      const variantDefs = optionGroups.map((g) => ({
-        name: g.label,
-        values: effectiveValues(g.id),
-      }));
-
-      // localImages feeds the seller's own local mock product record (used
-      // by the Pro product list UI only) — videos are excluded since it's
-      // rendered as plain <img> thumbnails there, exactly like the public
-      // catalog's `images: string[]` excludes them for the same reason.
-      const localImages = images.filter((img) => img.kind === 'image').map((img) => img.previewUrl);
       const toNewMedia = (img: MediaItem): NewProductMedia => ({
         file: img.file as File,
         mediaType: img.kind,
@@ -1018,22 +1005,6 @@ export default function SellerProductForm({ productId }: { productId?: string })
             return;
           }
         }
-
-        updateSellerProduct(existingProductId, {
-          id: existingProductId,
-          reference: existingReference,
-          name: name.trim(),
-          shopId: sellerSupabaseShopId,
-          category: selectedCategory?.label ?? categoryId,
-          price: parseInt(price) || 0,
-          image: localImages[0] ?? '',
-          images: localImages,
-          stock: totalStock,
-          status,
-          variants: variantDefs.filter((v) => v.values.length > 0),
-          description: description.trim(),
-          supabaseProductId: existingProductId,
-        });
       } else {
         const supabaseResult = await createProductInSupabase({
           shopId: sellerSupabaseShopId,
@@ -1053,21 +1024,6 @@ export default function SellerProductForm({ productId }: { productId?: string })
           setSubmitError(supabaseResult.error);
           return;
         }
-
-        const product = {
-          id: `p${Date.now()}`,
-          name: name.trim(),
-          shopId: sellerSupabaseShopId,
-          category: selectedCategory?.label ?? categoryId,
-          price: parseInt(price),
-          image: localImages[0] ?? '',
-          stock: totalStock,
-          status,
-          variants: variantDefs.filter((v) => v.values.length > 0),
-          description: description.trim(),
-          supabaseProductId: supabaseResult.productId,
-        };
-        addSellerProduct({ ...product, images: localImages }, supabaseResult.reference);
       }
 
       navigate('/seller/produits');

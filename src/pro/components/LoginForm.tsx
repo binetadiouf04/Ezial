@@ -14,6 +14,10 @@ interface LoginFormProps {
   verifyAdmin?: (email: string, password: string) => Promise<{ name: string } | { error: string }>;
 }
 
+// Kept complete for every Role even though 'seller' is intercepted earlier
+// in ProEntryPage (routed to the richer SellerAuthPanel instead) — this
+// component's own submit()/JSX still branch on role === 'seller', so an
+// incomplete config here would throw the moment that ever changes.
 const roleConfig: Record<Role, { title: string; subtitle: string; placeholder: string; hint: string; demoId?: string; demoName: string }> = {
   admin: {
     title: 'Administration',
@@ -21,6 +25,13 @@ const roleConfig: Record<Role, { title: string; subtitle: string; placeholder: s
     placeholder: 'admin@ezial.sn',
     hint: 'Saisissez votre email et mot de passe.',
     demoName: 'Admin EZIAL',
+  },
+  seller: {
+    title: 'Espace Vendeur',
+    subtitle: 'Connectez-vous avec votre identifiant boutique.',
+    placeholder: 'Identifiant vendeur',
+    hint: 'Utilisez l\'identifiant et le mot de passe de votre boutique.',
+    demoName: 'Vendeur EZIAL',
   },
   driver: {
     title: 'Espace Livreur',
