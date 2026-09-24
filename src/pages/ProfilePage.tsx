@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useApp, type DeliveryStepStatus, type PickupStepStatus, type Order, quartiers } from '@/store/AppContext';
+import { useApp, type DeliveryStepStatus, type PickupStepStatus, type Order, type CustomerAddressInput, quartiers } from '@/store/AppContext';
 import { deliveryStatusLabels, pickupStepLabels } from '@/data/orderStatusLabels';
 import { formatFCFA } from '@/data/products';
 import ProductGrid from '@/components/ProductGrid';
@@ -8,7 +8,7 @@ import NotificationOptIn from '@/components/NotificationOptIn';
 import PasswordField from '@/components/PasswordField';
 import PhoneField from '@/components/PhoneField';
 import { isValidEmail, capitalizeFirst } from '@/lib/authErrors';
-import { User, Heart, ShoppingBag, LogOut, ChevronRight, Briefcase, Truck, Store, Check, AlertCircle, Loader2, MailCheck, Trash2 } from 'lucide-react';
+import { User, Heart, ShoppingBag, LogOut, ChevronRight, Briefcase, Truck, Store, Check, AlertCircle, Loader2, MailCheck, Trash2, MapPin, Plus, Pencil } from 'lucide-react';
 
 const deliveryStatusColors: Record<DeliveryStepStatus, string> = {
   confirmed: 'bg-blue-50 text-blue-700', preparing: 'bg-amber-50 text-amber-700', ready: 'bg-green-50 text-green-700',
@@ -40,7 +40,7 @@ function getOrderStatusColor(order: Order): string {
   return deliveryStatusColors[order.status] ?? deliveryStatusColors.confirmed;
 }
 
-type Tab = 'orders' | 'favorites' | 'info';
+type Tab = 'orders' | 'favorites' | 'addresses' | 'info';
 type AuthView = 'login' | 'signup' | 'forgot' | 'pending_confirmation';
 
 interface InfoForm { firstName: string; lastName: string; phone: string; email: string; quartier: string; landmark: string }
@@ -203,6 +203,148 @@ function AuthPanel() {
   );
 }
 
+const emptyAddressForm: CustomerAddressInput = { firstName: '', lastName: '', phone: '', addressLine: '', quartier: quartiers[0] ?? '', city: 'Dakar', instructions: '' };
+
+function AddressForm({ initial, onCancel, onSubmit, submitting, error }: { initial: CustomerAddressInput; onCancel: () => void; onSubmit: (input: CustomerAddressInput) => void; submitting: boolean; error: string }) {
+  const [form, setForm] = useState<CustomerAddressInput>(initial);
+  const update = (field: keyof CustomerAddressInput, value: string) =>
+    setForm((prev) => ({ ...prev, [field]: field === 'firstName' || field === 'lastName' ? capitalizeFirst(value) : value }));
+  const canSubmit = form.firstName.trim() && form.lastName.trim() && form.phone.trim() && form.addressLine.trim();
+
+  return (
+    <div className="card p-5 space-y-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div><label className="block text-xs font-medium text-ink/60 mb-1.5">Prénom</label><input className="input-field" value={form.firstName} onChange={(e) => update('firstName', e.target.value)} /></div>
+        <div><label className="block text-xs font-medium text-ink/60 mb-1.5">Nom</label><input className="input-field" value={form.lastName} onChange={(e) => update('lastName', e.target.value)} /></div>
+      </div>
+      <div><label className="block text-xs font-medium text-ink/60 mb-1.5">Téléphone</label><PhoneField value={form.phone} onChange={(v) => setForm((p) => ({ ...p, phone: v }))} className="input-field" /></div>
+      <div><label className="block text-xs font-medium text-ink/60 mb-1.5">Adresse</label><input className="input-field" placeholder="Ex: Villa 12, Cité Keur Gorgui" value={form.addressLine} onChange={(e) => update('addressLine', e.target.value)} /></div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div>
+          <label className="block text-xs font-medium text-ink/60 mb-1.5">Quartier</label>
+          <select className="input-field" value={form.quartier} onChange={(e) => update('quartier', e.target.value)}>
+            {quartiers.map((q) => <option key={q} value={q}>{q}</option>)}
+          </select>
+        </div>
+        <div><label className="block text-xs font-medium text-ink/60 mb-1.5">Ville</label><input className="input-field" value={form.city} onChange={(e) => update('city', e.target.value)} /></div>
+      </div>
+      <div><label className="block text-xs font-medium text-ink/60 mb-1.5">Instructions de livraison (facultatif)</label><textarea className="input-field" rows={2} placeholder="Ex: portail bleu, sonner deux fois..." value={form.instructions} onChange={(e) => update('instructions', e.target.value)} /></div>
+      {error && <p className="flex items-start gap-1.5 text-xs text-burgundy"><AlertCircle size={13} className="mt-0.5 flex-shrink-0" /> {error}</p>}
+      <div className="flex gap-3">
+        <button onClick={() => onSubmit(form)} disabled={submitting || !canSubmit} className="btn-primary">{submitting ? 'Enregistrement...' : 'Enregistrer'}</button>
+        <button onClick={onCancel} className="btn-outline">Annuler</button>
+      </div>
+    </div>
+  );
+}
+
+function AddressesTab() {
+  const { addresses, addAddress, updateAddress, deleteAddress, setDefaultAddress } = useApp();
+  const [adding, setAdding] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [formError, setFormError] = useState('');
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
+
+  const handleAdd = async (input: CustomerAddressInput) => {
+    setSubmitting(true); setFormError('');
+    const result = await addAddress(input);
+    setSubmitting(false);
+    if (result.error) { setFormError(result.error); return; }
+    setAdding(false);
+  };
+
+  const handleUpdate = async (id: string, input: CustomerAddressInput) => {
+    setSubmitting(true); setFormError('');
+    const result = await updateAddress(id, input);
+    setSubmitting(false);
+    if (result.error) { setFormError(result.error); return; }
+    setEditingId(null);
+  };
+
+  const handleDelete = async (id: string) => {
+    setBusyId(id);
+    await deleteAddress(id);
+    setBusyId(null);
+    setDeleteTargetId(null);
+  };
+
+  const handleSetDefault = async (id: string) => {
+    setBusyId(id);
+    await setDefaultAddress(id);
+    setBusyId(null);
+  };
+
+  return (
+    <div className="space-y-4">
+      {addresses.length === 0 && !adding && (
+        <div className="card p-8 text-center">
+          <MapPin size={28} className="mx-auto mb-3 text-ink/25" />
+          <p className="text-sm text-ink/55 mb-4">Aucune adresse enregistrée.</p>
+          <button onClick={() => setAdding(true)} className="btn-primary inline-flex items-center gap-1.5"><Plus size={16} /> Ajouter une adresse</button>
+        </div>
+      )}
+
+      {addresses.map((addr) => editingId === addr.id ? (
+        <AddressForm
+          key={addr.id}
+          initial={{ firstName: addr.firstName, lastName: addr.lastName, phone: addr.phone, addressLine: addr.addressLine, quartier: addr.quartier, city: addr.city, instructions: addr.instructions }}
+          submitting={submitting}
+          error={formError}
+          onCancel={() => { setEditingId(null); setFormError(''); }}
+          onSubmit={(input) => void handleUpdate(addr.id, input)}
+        />
+      ) : (
+        <div key={addr.id} className="card p-5">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <p className="text-sm font-semibold text-ink">{addr.firstName} {addr.lastName}</p>
+                {addr.isDefault && <span className="rounded-full bg-burgundy/10 px-2 py-0.5 text-[11px] font-medium text-burgundy">Adresse par défaut</span>}
+              </div>
+              <p className="mt-1 text-sm text-ink/70">{addr.addressLine}</p>
+              <p className="text-sm text-ink/55">{addr.quartier}{addr.city ? `, ${addr.city}` : ''}</p>
+              <p className="text-sm text-ink/55">{addr.phone}</p>
+              {addr.instructions && <p className="mt-1 text-xs text-ink/45">{addr.instructions}</p>}
+            </div>
+            <div className="flex flex-shrink-0 flex-col items-end gap-2">
+              <div className="flex gap-2">
+                <button onClick={() => { setEditingId(addr.id); setFormError(''); }} className="rounded-full border border-line p-2 text-ink/50 hover:bg-cream" aria-label="Modifier"><Pencil size={14} /></button>
+                <button onClick={() => setDeleteTargetId(addr.id)} className="rounded-full border border-line p-2 text-burgundy/70 hover:bg-burgundy/5" aria-label="Supprimer"><Trash2 size={14} /></button>
+              </div>
+              {!addr.isDefault && (
+                <button onClick={() => void handleSetDefault(addr.id)} disabled={busyId === addr.id} className="text-xs font-medium text-burgundy hover:underline">Définir par défaut</button>
+              )}
+            </div>
+          </div>
+        </div>
+      ))}
+
+      {adding ? (
+        <AddressForm initial={emptyAddressForm} submitting={submitting} error={formError} onCancel={() => { setAdding(false); setFormError(''); }} onSubmit={(input) => void handleAdd(input)} />
+      ) : addresses.length > 0 && (
+        <button onClick={() => setAdding(true)} className="btn-outline inline-flex items-center gap-1.5"><Plus size={16} /> Ajouter une adresse</button>
+      )}
+
+      {deleteTargetId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setDeleteTargetId(null)}>
+          <div className="card w-full max-w-sm p-6" onClick={(e) => e.stopPropagation()}>
+            <h3 className="font-display text-lg font-semibold text-ink">Supprimer cette adresse ?</h3>
+            <p className="mt-2 text-sm text-ink/60">Cette action est irréversible.</p>
+            <div className="mt-5 flex gap-3">
+              <button onClick={() => setDeleteTargetId(null)} className="btn-outline flex-1">Annuler</button>
+              <button onClick={() => void handleDelete(deleteTargetId)} disabled={busyId === deleteTargetId} className="flex-1 rounded-lg bg-burgundy px-4 py-2.5 text-sm font-medium text-white hover:bg-burgundy/90 disabled:opacity-60">
+                {busyId === deleteTargetId ? 'Suppression...' : 'Supprimer'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function ProfilePage() {
   const { orders, favorites, navigate, catalogProducts, customerUser, authLoading, signOutCustomerAccount, updateCustomerAccount, deleteCustomerAccount, changePassword } = useApp();
   const [tab, setTab] = useState<Tab>('orders');
@@ -249,6 +391,7 @@ export default function ProfilePage() {
   const navItems: { id: Tab; label: string; icon: typeof ShoppingBag }[] = [
     { id: 'orders', label: 'Mes commandes', icon: ShoppingBag },
     { id: 'favorites', label: 'Mes favoris', icon: Heart },
+    { id: 'addresses', label: 'Mes adresses', icon: MapPin },
     { id: 'info', label: 'Mes informations', icon: User },
   ];
 
@@ -387,6 +530,9 @@ export default function ProfilePage() {
           )}
         </div>
       )}
+
+      {/* === MES ADRESSES === */}
+      {tab === 'addresses' && <AddressesTab />}
 
       {/* === MES INFORMATIONS === */}
       {tab === 'info' && (

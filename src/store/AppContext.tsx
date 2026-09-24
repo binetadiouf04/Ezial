@@ -11,6 +11,12 @@ import { deleteMyAccount } from '@/lib/supabaseAccountDeletion';
 import { fetchFavoriteIds, addFavorite, removeFavorite, mergeLocalFavoritesIntoAccount } from '@/lib/supabaseFavorites';
 import { fetchCustomerOrders } from '@/lib/supabaseCustomerOrders';
 import { fetchReviewStatsForProducts } from '@/lib/supabaseReviews';
+import {
+  fetchCustomerAddresses, createCustomerAddress,
+  updateCustomerAddress as updateCustomerAddressApi, deleteCustomerAddress as deleteCustomerAddressApi,
+  setDefaultCustomerAddress as setDefaultCustomerAddressApi,
+  type CustomerAddress, type CustomerAddressInput,
+} from '@/lib/supabaseCustomerAddresses';
 import { isRealCatalogId } from '@/data/products';
 
 // productName: only ever set on a real, already-placed order's item (see
@@ -30,15 +36,8 @@ export type DeliveryStepStatus = 'confirmed' | 'preparing' | 'ready' | 'picked_u
 export interface DeliveryZone { id: string; label: string; fee: number; eta: string; }
 export interface DeliveryPreference { type: 'none' | 'preferred'; date?: string; window?: string; }
 
-export interface Address {
-  id: string;
-  firstName: string;
-  lastName: string;
-  phone: string;
-  quartier: string;
-  details: string;
-  isDefault: boolean;
-}
+export type Address = CustomerAddress;
+export type { CustomerAddressInput };
 
 export interface CustomerInfo {
   firstName: string;
@@ -104,7 +103,11 @@ interface AppState {
   cartOpen: boolean; setCartOpen: (open: boolean) => void;
   categoryDrawerOpen: boolean; setCategoryDrawerOpen: (open: boolean) => void;
   orders: Order[]; addOrder: (order: Order) => void;
-  addresses: Address[]; addAddress: (addr: Address) => void; updateAddress: (id: string, addr: Address) => void; deleteAddress: (id: string) => void; setDefaultAddress: (id: string) => void;
+  addresses: Address[];
+  addAddress: (input: CustomerAddressInput, makeDefault?: boolean) => Promise<{ error?: string }>;
+  updateAddress: (id: string, input: CustomerAddressInput) => Promise<{ error?: string }>;
+  deleteAddress: (id: string) => Promise<{ error?: string }>;
+  setDefaultAddress: (id: string) => Promise<{ error?: string }>;
   customerInfo: CustomerInfo; updateCustomerInfo: (info: CustomerInfo) => void;
   // Real customer auth (Supabase) — null while signed out or while the
   // initial session check (authLoading) hasn't resolved yet. A signed-out
@@ -238,10 +241,6 @@ export const quartiers = Object.keys(quartierToZone);
 
 export const deliveryWindows = ['09h–12h', '12h–15h', '15h–18h', '18h–20h'];
 
-export function generateAddressId(): string {
-  return `addr-${Math.floor(1000 + Math.random() * 9000)}`;
-}
-
 const defaultCustomerInfo: CustomerInfo = {
   firstName: 'Bineta',
   lastName: 'Diouf',
@@ -305,9 +304,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [cartOpen, setCartOpen] = useState(false);
   const [categoryDrawerOpen, setCategoryDrawerOpen] = useState(false);
   const [orders, setOrders] = useState<Order[]>([]);
-  const [addresses, setAddresses] = useState<Address[]>([
-    { id: 'addr-1', firstName: 'Bineta', lastName: 'Diouf', phone: '+221 77 123 45 67', quartier: 'Yoff', details: 'Près de la route de l\'aéroport, porte bleue', isDefault: true },
-  ]);
+  const [addresses, setAddresses] = useState<Address[]>([]);
   const [customerInfo, setCustomerInfo] = useState<CustomerInfo>(defaultCustomerInfo);
   const [customerUser, setCustomerUser] = useState<CustomerProfile | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
@@ -337,10 +334,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setCustomerUser(profile);
       setAuthLoading(false);
       if (profile) {
-        const [favIds, realOrders] = await Promise.all([fetchFavoriteIds(profile.id), fetchCustomerOrders(profile.id)]);
+        const [favIds, realOrders, realAddresses] = await Promise.all([fetchFavoriteIds(profile.id), fetchCustomerOrders(profile.id), fetchCustomerAddresses(profile.id)]);
         if (cancelled) return;
         setFavorites(favIds);
         setOrders((prev) => mergeOrders(prev, realOrders));
+        setAddresses(realAddresses);
       }
     }).catch(() => { if (!cancelled) setAuthLoading(false); });
     return () => { cancelled = true; };
@@ -424,9 +422,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (result.status === 'pending_confirmation') return { status: 'pending_confirmation' };
     setCustomerUser(result.profile);
     await mergeLocalFavoritesIntoAccount(result.profile.id, favorites);
-    const [favIds, realOrders] = await Promise.all([fetchFavoriteIds(result.profile.id), fetchCustomerOrders(result.profile.id)]);
+    const [favIds, realOrders, realAddresses] = await Promise.all([fetchFavoriteIds(result.profile.id), fetchCustomerOrders(result.profile.id), fetchCustomerAddresses(result.profile.id)]);
     setFavorites(favIds);
     setOrders((prev) => mergeOrders(prev, realOrders));
+    setAddresses(realAddresses);
     return { status: 'confirmed' };
   }, [favorites]);
 
@@ -435,9 +434,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if ('error' in result) return { error: result.error };
     setCustomerUser(result);
     await mergeLocalFavoritesIntoAccount(result.id, favorites);
-    const [favIds, realOrders] = await Promise.all([fetchFavoriteIds(result.id), fetchCustomerOrders(result.id)]);
+    const [favIds, realOrders, realAddresses] = await Promise.all([fetchFavoriteIds(result.id), fetchCustomerOrders(result.id), fetchCustomerAddresses(result.id)]);
     setFavorites(favIds);
     setOrders((prev) => mergeOrders(prev, realOrders));
+    setAddresses(realAddresses);
     return {};
   }, [favorites]);
 
@@ -445,6 +445,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setCustomerUser(null);
     setFavorites(loadStoredFavorites());
     setOrders([]);
+    setAddresses([]);
     void signOutCustomer();
   }, []);
 
@@ -474,6 +475,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setCustomerUser(null);
     setFavorites(loadStoredFavorites());
     setOrders([]);
+    setAddresses([]);
     return {};
   }, [customerUser]);
 
@@ -523,29 +525,36 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const cartSubtotal = cart.reduce((sum, i) => { const p = catalogProducts.find((p) => p.id === i.productId); return sum + (p ? (i.unitPrice ?? p.price) * i.quantity : 0); }, 0);
   const addOrder = useCallback((order: Order) => setOrders((prev) => [order, ...prev]), []);
 
-  const addAddress = useCallback((addr: Address) => {
-    setAddresses((prev) => {
-      if (addr.isDefault) return [...prev.map((a) => ({ ...a, isDefault: false })), addr];
-      return [...prev, addr];
-    });
+  const addAddress = useCallback(async (input: CustomerAddressInput, makeDefault?: boolean): Promise<{ error?: string }> => {
+    if (!customerUser) return { error: 'Non connecté.' };
+    const result = await createCustomerAddress(customerUser.id, input, Boolean(makeDefault) || addresses.length === 0);
+    if (result.error || !result.address) return { error: result.error ?? 'Impossible de créer l\'adresse.' };
+    const created = result.address;
+    setAddresses((prev) => [...prev.map((a) => (created.isDefault ? { ...a, isDefault: false } : a)), created]);
+    return {};
+  }, [customerUser, addresses.length]);
+
+  const updateAddress = useCallback(async (id: string, input: CustomerAddressInput): Promise<{ error?: string }> => {
+    const result = await updateCustomerAddressApi(id, input);
+    if (result.error) return result;
+    setAddresses((prev) => prev.map((a) => a.id === id ? { ...a, ...input } : a));
+    return {};
   }, []);
 
-  const updateAddress = useCallback((id: string, updated: Address) => {
-    setAddresses((prev) => {
-      if (updated.isDefault) {
-        return prev.map((a) => a.id === id ? updated : { ...a, isDefault: false });
-      }
-      return prev.map((a) => a.id === id ? updated : a);
-    });
-  }, []);
-
-  const deleteAddress = useCallback((id: string) => {
+  const deleteAddress = useCallback(async (id: string): Promise<{ error?: string }> => {
+    const result = await deleteCustomerAddressApi(id);
+    if (result.error) return result;
     setAddresses((prev) => prev.filter((a) => a.id !== id));
+    return {};
   }, []);
 
-  const setDefaultAddress = useCallback((id: string) => {
+  const setDefaultAddress = useCallback(async (id: string): Promise<{ error?: string }> => {
+    if (!customerUser) return { error: 'Non connecté.' };
+    const result = await setDefaultCustomerAddressApi(customerUser.id, id);
+    if (result.error) return result;
     setAddresses((prev) => prev.map((a) => ({ ...a, isDefault: a.id === id })));
-  }, []);
+    return {};
+  }, [customerUser]);
 
   const updateCustomerInfo = useCallback((info: CustomerInfo) => setCustomerInfo(info), []);
 
