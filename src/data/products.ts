@@ -33,7 +33,11 @@ export interface Product {
   // Ordered photo+video list for the product gallery. Absent on the static
   // mock catalog (which only ever has photos) — ProductGallery falls back
   // to `images` mapped to type 'image' when this is undefined.
-  media?: { url: string; type: 'image' | 'video' }[];
+  // thumbnailUrl (per item) is the same 240x300 crop generateThumbnail()
+  // produces for every uploaded photo, not just the primary one — used by
+  // the gallery's small thumbnail strip so it never downloads N full-size
+  // gallery images just to show N 56px squares.
+  media?: { url: string; type: 'image' | 'video'; thumbnailUrl?: string }[];
   // A small dedicated 240x300 WebP crop of the primary photo, generated at
   // upload time — used by ProductCard/Home/Catégories/Recherche instead of
   // downloading the full-size gallery image for a small card. Absent on the

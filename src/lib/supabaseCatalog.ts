@@ -178,9 +178,16 @@ function imagesForProduct(productId: string, imageRows: ProductImageRow[]): stri
 
 // Full ordered photo+video list (primary first, then sort_order) for the
 // product gallery, which — unlike `images` — knows how to render a video.
-function mediaForProduct(productId: string, imageRows: ProductImageRow[]): { url: string; type: 'image' | 'video' }[] {
+// thumbnailUrl carries each photo's own 240x300 crop (generated for every
+// upload, not just the primary one) so the gallery's thumbnail strip never
+// has to download the full-size image just to render a 56px square.
+function mediaForProduct(productId: string, imageRows: ProductImageRow[]): { url: string; type: 'image' | 'video'; thumbnailUrl?: string }[] {
   return sortedRowsForProduct(productId, imageRows)
-    .map((img) => ({ url: resolveImageUrl(img.storage_path ?? ''), type: img.media_type === 'video' ? ('video' as const) : ('image' as const) }))
+    .map((img) => ({
+      url: resolveImageUrl(img.storage_path ?? ''),
+      type: img.media_type === 'video' ? ('video' as const) : ('image' as const),
+      thumbnailUrl: img.thumbnail_storage_path ? (resolveImageUrl(img.thumbnail_storage_path) || undefined) : undefined,
+    }))
     .filter((item) => item.url);
 }
 

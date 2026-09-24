@@ -117,12 +117,32 @@ const SHOP_ASSETS_BUCKET = 'product-images';
 // optimizeImageFile), instead of storing the picked file as-is.
 const ASSET_MAX_DIMENSION: Record<'logo' | 'cover', number> = { logo: 512, cover: 1600 };
 
-export async function uploadShopAsset(shopId: string, kind: 'logo' | 'cover', file: File): Promise<{ url?: string; error?: string }> {
+// A previous logo/cover is never referenced again once replaced (the shop
+// row's *_url column is overwritten with the new one) — deleting it here
+// keeps Storage from silently accumulating an orphaned file on every
+// re-upload. previousUrl is a public URL (e.g. from shops.logo_url), not a
+// path — parsed back to a storage path via the bucket's own segment, so a
+// URL from a different bucket/host is safely ignored instead of guessed at.
+function storagePathFromPublicUrl(url: string, bucket: string): string | null {
+  const marker = `/object/public/${bucket}/`;
+  const i = url.indexOf(marker);
+  return i === -1 ? null : decodeURIComponent(url.slice(i + marker.length));
+}
+
+export async function uploadShopAsset(shopId: string, kind: 'logo' | 'cover', file: File, previousUrl?: string): Promise<{ url?: string; error?: string }> {
   const optimized = await optimizeImageFile(file, ASSET_MAX_DIMENSION[kind]);
   const ext = optimized.type === 'image/webp' ? 'webp' : optimized.type === 'image/png' ? 'png' : 'jpg';
   const path = `shops/${shopId}/${kind}-${Date.now()}.${ext}`;
-  const { error } = await supabase.storage.from(SHOP_ASSETS_BUCKET).upload(path, optimized);
+  // Immutable — the timestamp in the path guarantees a brand-new file every
+  // time, so caching it for a year is always safe (never a stale-content risk).
+  const { error } = await supabase.storage.from(SHOP_ASSETS_BUCKET).upload(path, optimized, { cacheControl: '31536000' });
   if (error) return { error: `Envoi impossible : ${error.message}` };
   const { data } = supabase.storage.from(SHOP_ASSETS_BUCKET).getPublicUrl(path);
+
+  if (previousUrl) {
+    const previousPath = storagePathFromPublicUrl(previousUrl, SHOP_ASSETS_BUCKET);
+    if (previousPath) void supabase.storage.from(SHOP_ASSETS_BUCKET).remove([previousPath]);
+  }
+
   return { url: data.publicUrl };
 }

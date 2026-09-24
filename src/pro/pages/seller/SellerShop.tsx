@@ -227,7 +227,7 @@ export default function SellerShop() {
     const file = files?.[0];
     if (!file || !file.type.startsWith('image/') || !sellerSupabaseShopId) return;
     setUploadingLogo(true);
-    const result = await uploadShopAsset(sellerSupabaseShopId, 'logo', file);
+    const result = await uploadShopAsset(sellerSupabaseShopId, 'logo', file, form.logoUrl || undefined);
     setUploadingLogo(false);
     if (result.url) setForm((f) => ({ ...f, logoUrl: result.url as string }));
   };
@@ -236,7 +236,7 @@ export default function SellerShop() {
     const file = files?.[0];
     if (!file || !file.type.startsWith('image/') || !sellerSupabaseShopId) return;
     setUploadingCover(true);
-    const result = await uploadShopAsset(sellerSupabaseShopId, 'cover', file);
+    const result = await uploadShopAsset(sellerSupabaseShopId, 'cover', file, form.coverUrl || undefined);
     setUploadingCover(false);
     if (result.url) setForm((f) => ({ ...f, coverUrl: result.url as string }));
   };

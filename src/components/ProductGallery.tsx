@@ -5,6 +5,10 @@ import SmartImage from './SmartImage';
 export interface GalleryMediaItem {
   url: string;
   type: 'image' | 'video';
+  /** The photo's own small 240x300 crop, when one exists — used for the
+   * thumbnail strip below so it never downloads N full-size gallery images
+   * (~80-200 Ko each) just to render N 56px squares. Falls back to `url`. */
+  thumbnailUrl?: string;
 }
 
 // Responsive at every width, not just "mobile vs desktop": a fixed
@@ -100,7 +104,7 @@ export default function ProductGallery({ media, alt }: { media: GalleryMediaItem
                   <Play size={16} className="text-ink/60" />
                 </div>
               ) : (
-                <SmartImage src={item.url} alt="" className="h-14 w-14 object-cover" />
+                <SmartImage src={item.thumbnailUrl || item.url} alt="" className="h-14 w-14 object-cover" />
               )}
             </button>
           ))}

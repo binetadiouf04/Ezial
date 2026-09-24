@@ -148,7 +148,14 @@ export async function submitReview(userId: string, input: SubmitReviewInput): Pr
     const { error } = await supabase.from('reviews').update({ rating: input.rating, comment: input.comment.trim() || null, updated_at: new Date().toISOString() }).eq('id', existing.id);
     if (error) return { error: error.message };
     reviewId = existing.id as string;
+    // The old photos are about to be replaced — remove their Storage files
+    // too, or every re-submitted review leaves its previous photos behind
+    // as orphans (never referenced again once the review_images rows are
+    // gone, but never freed either).
+    const { data: oldImages } = await supabase.from('review_images').select('storage_path').eq('review_id', reviewId);
+    const oldPaths = (oldImages ?? []).map((r) => r.storage_path as string).filter(Boolean);
     await supabase.from('review_images').delete().eq('review_id', reviewId);
+    if (oldPaths.length > 0) void supabase.storage.from(PRODUCT_IMAGES_BUCKET).remove(oldPaths);
   } else {
     const { data, error } = await supabase.from('reviews').insert({ product_id: input.productId, user_id: userId, rating: input.rating, comment: input.comment.trim() || null }).select('id').single();
     if (error || !data) return { error: error?.message ?? "Impossible d'enregistrer l'avis." };
@@ -159,7 +166,7 @@ export async function submitReview(userId: string, input: SubmitReviewInput): Pr
     const file = await optimizeImageFile(input.photos[i], REVIEW_PHOTO_MAX_DIMENSION);
     const ext = file.type === 'image/webp' ? 'webp' : file.type === 'image/png' ? 'png' : 'jpg';
     const path = `reviews/${userId}/${reviewId}-${i}-${Date.now()}.${ext}`;
-    const { error: uploadError } = await supabase.storage.from(PRODUCT_IMAGES_BUCKET).upload(path, file);
+    const { error: uploadError } = await supabase.storage.from(PRODUCT_IMAGES_BUCKET).upload(path, file, { cacheControl: '31536000' });
     if (!uploadError) await supabase.from('review_images').insert({ review_id: reviewId, storage_path: path, sort_order: i });
   }
 
@@ -167,6 +174,10 @@ export async function submitReview(userId: string, input: SubmitReviewInput): Pr
 }
 
 export async function deleteReview(reviewId: string): Promise<{ error?: string }> {
+  const { data: images } = await supabase.from('review_images').select('storage_path').eq('review_id', reviewId);
+  const paths = (images ?? []).map((r) => r.storage_path as string).filter(Boolean);
   const { error } = await supabase.from('reviews').delete().eq('id', reviewId);
-  return error ? { error: error.message } : {};
+  if (error) return { error: error.message };
+  if (paths.length > 0) void supabase.storage.from(PRODUCT_IMAGES_BUCKET).remove(paths);
+  return {};
 }
