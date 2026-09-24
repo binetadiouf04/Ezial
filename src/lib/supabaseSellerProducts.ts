@@ -750,17 +750,25 @@ export async function updateProductInSupabase(productId: string, input: UpdatePr
   }
   const idsToDelete = (existingVariants ?? []).map((row) => row.id as string).filter((id) => !matchedIds.has(id));
 
+  // .select('id') here is not cosmetic: without it, Supabase's update()
+  // returns data: null with NO error even when RLS silently excludes the
+  // row from the update (0 rows actually written) — the exact "stock edit
+  // looks like it saved but the real value never changed" bug. Checking
+  // that a row actually comes back is the only way to catch that silently.
   const updateResults = await Promise.all(
-    updates.map((u) => supabase.from('product_variants').update({ price: u.price, stock: u.stock }).eq('id', u.id)),
+    updates.map((u) => supabase.from('product_variants').update({ price: u.price, stock: u.stock }).eq('id', u.id).select('id')),
   );
   const failedUpdate = updateResults.find((r) => r.error);
   if (failedUpdate?.error) return { error: `Impossible de mettre à jour les variantes : ${failedUpdate.error.message}` };
+  const silentlyRejectedUpdate = updateResults.find((r) => (r.data?.length ?? 0) === 0);
+  if (silentlyRejectedUpdate) return { error: "Impossible de mettre à jour le stock : la modification a été refusée (droits d'accès). Réessayez ou contactez EZIAL si le problème persiste." };
 
   if (inserts.length > 0) {
-    const { error: insertError } = await supabase.from('product_variants').insert(
+    const { data: insertedRows, error: insertError } = await supabase.from('product_variants').insert(
       inserts.map((v) => ({ product_id: productId, attributes: v.attributes, price: v.price, stock: v.stock })),
-    );
+    ).select('id');
     if (insertError) return { error: `Impossible d'enregistrer les nouvelles variantes : ${insertError.message}` };
+    if ((insertedRows?.length ?? 0) !== inserts.length) return { error: "Impossible d'enregistrer certaines nouvelles variantes : la modification a été refusée (droits d'accès)." };
   }
 
   if (idsToDelete.length > 0) {
