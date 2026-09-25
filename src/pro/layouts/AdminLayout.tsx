@@ -1,5 +1,5 @@
 import { usePro } from '../ProContext';
-import { LayoutDashboard, ShoppingBag, Package, Store, Wallet, LogOut, ArrowLeft, Layers } from 'lucide-react';
+import { LayoutDashboard, ShoppingBag, Package, Store, Wallet, LogOut, ArrowLeft, Layers, Truck } from 'lucide-react';
 import AdminDashboard from '../pages/admin/AdminDashboard';
 import AdminContent from '../pages/admin/AdminContent';
 import AdminOrders from '../pages/admin/AdminOrders';
@@ -22,6 +22,7 @@ const navItems = [
   { route: '/admin/commandes', label: 'Commandes', icon: ShoppingBag },
   { route: '/admin/produits', label: 'Produits', icon: Package },
   { route: '/admin/boutiques', label: 'Boutiques', icon: Store },
+  { route: '/admin/livreurs', label: 'Livreurs', icon: Truck },
   { route: '/admin/contenu', label: 'Contenu', icon: Layers },
   { route: '/admin/finances', label: 'Finances', icon: Wallet },
 ];

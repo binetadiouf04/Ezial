@@ -12,15 +12,13 @@ interface LoginFormProps {
   verifySeller?: (identifier: string, password: string) => Promise<{ shop: { sellerId: string; name: string; supabaseShopId: string; isOfficial: boolean } } | { error: string }>;
   /** Admin-only: authenticates email + password against Supabase Auth, then checks public.admins membership. */
   verifyAdmin?: (email: string, password: string) => Promise<{ name: string } | { error: string }>;
-  /** Driver-only: authenticates email + password against Supabase Auth, then checks profiles.role = 'driver'. */
-  verifyDriver?: (email: string, password: string) => Promise<{ name: string } | { error: string }>;
 }
 
-// Kept complete for every Role even though 'seller' is intercepted earlier
-// in ProEntryPage (routed to the richer SellerAuthPanel instead) — this
-// component's own submit()/JSX still branch on role === 'seller', so an
-// incomplete config here would throw the moment that ever changes.
-const roleConfig: Record<Role, { title: string; subtitle: string; placeholder: string; hint: string; demoId?: string; demoName: string }> = {
+// Kept complete for every Role even though 'seller' and 'driver' are both
+// intercepted earlier in ProEntryPage (routed to their own richer panels
+// instead) — this component's own submit()/JSX still branch on role, so
+// an incomplete config here would throw the moment that ever changes.
+const roleConfig: Record<Role, { title: string; subtitle: string; placeholder: string; hint: string; demoName: string }> = {
   admin: {
     title: 'Administration',
     subtitle: "Accès réservé à l'équipe EZIAL.",
@@ -37,20 +35,14 @@ const roleConfig: Record<Role, { title: string; subtitle: string; placeholder: s
   },
   driver: {
     title: 'Espace Livreur',
-    subtitle: 'Connectez-vous avec votre email et votre mot de passe.',
-    placeholder: 'livreur@ezial.sn',
-    hint: 'Vos identifiants vous ont été fournis par EZIAL.',
+    subtitle: '',
+    placeholder: '',
+    hint: '',
     demoName: 'Livreur EZIAL',
   },
 };
 
-// Admin and driver both authenticate the same way — real email + password
-// against Supabase Auth. Only seller keeps its own identifiant+password form.
-function isEmailAuthRole(role: Role): boolean {
-  return role === 'admin' || role === 'driver';
-}
-
-export default function LoginForm({ role, onBack, onLogin, verifySeller, verifyAdmin, verifyDriver }: LoginFormProps) {
+export default function LoginForm({ role, onBack, onLogin, verifySeller, verifyAdmin }: LoginFormProps) {
   const cfg = roleConfig[role];
   const [email, setEmail] = useState('');
   const [identifier, setIdentifier] = useState('');
@@ -60,14 +52,13 @@ export default function LoginForm({ role, onBack, onLogin, verifySeller, verifyA
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (isEmailAuthRole(role)) {
+    if (role === 'admin') {
       if (!email.trim() || !password.trim()) {
         setError('Veuillez remplir tous les champs.');
         return;
       }
       setIsVerifying(true);
-      const verify = role === 'admin' ? verifyAdmin : verifyDriver;
-      const result = await verify?.(email.trim(), password);
+      const result = await verifyAdmin?.(email.trim(), password);
       setIsVerifying(false);
       if (!result || 'error' in result) {
         setError(result?.error ?? 'Connexion impossible.');
@@ -101,7 +92,7 @@ export default function LoginForm({ role, onBack, onLogin, verifySeller, verifyA
         <p className="mt-1.5 text-sm text-ink/55">{cfg.subtitle}</p>
 
         <form onSubmit={submit} className="mt-6 space-y-4">
-          {isEmailAuthRole(role) ? (
+          {role === 'admin' ? (
             <>
               <div>
                 <label className="block text-xs font-medium text-ink/60 mb-1.5">Email</label>

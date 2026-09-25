@@ -6,7 +6,7 @@ import { assignShopPrefixes, nextReferenceForShop } from '@/utils/reference';
 import { signInSeller, restoreSellerSession, signOutSeller, signUpSeller, requestSellerPasswordReset, resendSellerConfirmation, type SignUpSellerInput, type SignUpSellerResult } from '@/lib/supabaseSellerAuth';
 import { deleteMyAccount } from '@/lib/supabaseAccountDeletion';
 import { signInAdmin, restoreAdminSession } from '@/lib/supabaseAdminAuth';
-import { signInDriver, restoreDriverSession } from '@/lib/supabaseDriverAuth';
+import { checkDriverUsername, createDriverPin, signInDriverWithPin, restoreDriverSession, type DriverLoginStatus } from '@/lib/supabaseDriverAuth';
 import { fetchDriverMissions, acceptDeliveryMission, markStopCollected, startMissionDelivery, completeMissionDelivery } from '@/lib/supabaseDriverMissions';
 import { supabase } from '@/lib/supabaseClient';
 
@@ -124,9 +124,13 @@ interface ProState extends AuthState {
   // granting access. Needed so RLS on manually-managed content (Hero,
   // "À découvrir") can actually restrict writes to admins.
   verifyAdminLogin: (email: string, password: string) => Promise<{ name: string } | { error: string }>;
-  // Driver login — authenticates a real email + password against Supabase
-  // Auth, then verifies profiles.role = 'driver' before granting access.
-  verifyDriverLogin: (email: string, password: string) => Promise<{ name: string } | { error: string }>;
+  // Driver login — username + 6-digit NIP, never an email/password the
+  // driver has to see. checkDriverUsername tells the UI whether to show
+  // "create your PIN" or "enter your PIN"; the other two each establish a
+  // real Supabase Auth session on success (see supabaseDriverAuth.ts).
+  checkDriverUsername: (username: string) => Promise<DriverLoginStatus | { error: string }>;
+  createDriverPin: (username: string, pin: string) => Promise<{ id: string; username: string; name: string } | { error: string }>;
+  signInDriverWithPin: (username: string, pin: string) => Promise<{ id: string; username: string; name: string } | { error: string }>;
   // Seller transactions
   sellerTransactions: typeof initialTransactions;
   // Driver state — backed by real delivery_missions/delivery_stops/orders
@@ -500,11 +504,9 @@ export function ProProvider({ children }: { children: ReactNode }) {
     return { name: result.name };
   }, []);
 
-  const verifyDriverLogin = useCallback(async (email: string, password: string): Promise<{ name: string } | { error: string }> => {
-    const result = await signInDriver(email.trim(), password);
-    if ('error' in result) return { error: result.error };
-    return { name: result.name };
-  }, []);
+  const checkDriverUsernameAction = useCallback((username: string) => checkDriverUsername(username), []);
+  const createDriverPinAction = useCallback((username: string, pin: string) => createDriverPin(username, pin), []);
+  const signInDriverWithPinAction = useCallback((username: string, pin: string) => signInDriverWithPin(username, pin), []);
 
   // === Driver actions — every mutation writes to Supabase first, then
   // refetches so local state always reflects what was actually persisted
@@ -804,7 +806,9 @@ export function ProProvider({ children }: { children: ReactNode }) {
     resendSellerConfirmationEmail,
     deleteSellerAccount,
     verifyAdminLogin,
-    verifyDriverLogin,
+    checkDriverUsername: checkDriverUsernameAction,
+    createDriverPin: createDriverPinAction,
+    signInDriverWithPin: signInDriverWithPinAction,
     sellerTransactions,
     driverAvailable,
     setDriverAvailable,
