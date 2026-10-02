@@ -858,7 +858,12 @@ export default function SellerProductForm({ productId }: { productId?: string })
   // submission — the previous inline-only errors were easy to miss on a
   // long, scrollable form, making a correctly-working "Publier" button
   // look broken when a required field above the fold was simply empty.
-  const validate = (): Record<string, string> => {
+  // A draft is explicitly an unfinished product — it must stay saveable
+  // without a photo (the one thing most often missing at this stage), or
+  // "Enregistrer en brouillon" is indistinguishable from "Publier". Every
+  // other field stays required for both: they're cheap to fill and nothing
+  // reported them as a problem.
+  const validate = (status: 'draft' | 'published'): Record<string, string> => {
     const e: Record<string, string> = {};
     if (!categoryId) e.category = 'Veuillez choisir une catégorie';
     if (!name.trim()) e.name = 'Le nom du produit est obligatoire';
@@ -871,7 +876,7 @@ export default function SellerProductForm({ productId }: { productId?: string })
       else if (base > 0 && promo >= base) e.promoPrice = 'Le prix promotionnel doit être inférieur au prix de base.';
       if (promoStart && promoEnd && promoStart > promoEnd) e.promoEnd = 'La date de fin doit être après la date de début.';
     }
-    if (!images.some((img) => img.kind === 'image')) e.images = 'Ajoutez au moins une photo.';
+    if (status === 'published' && !images.some((img) => img.kind === 'image')) e.images = 'Ajoutez au moins une photo.';
     setErrors(e);
     return e;
   };
@@ -935,7 +940,7 @@ export default function SellerProductForm({ productId }: { productId?: string })
   };
 
   const handleSubmit = async (status: 'draft' | 'published') => {
-    const validationErrors = validate();
+    const validationErrors = validate(status);
     if (Object.keys(validationErrors).length > 0) {
       // Shown right above the action buttons (via submitError) instead of
       // only inline next to each field — the field itself may be scrolled
