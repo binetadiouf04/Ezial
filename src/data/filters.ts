@@ -185,6 +185,7 @@ export const filterConfig: Record<CategoryId, FilterGroup[]> = {
   // would otherwise ask for again.
   sacs: [
     { id: 'couleur', label: 'Couleur', options: commonColors, collapsible: true },
+    { id: 'motif', label: 'Motif / Imprimé', options: commonPrints, collapsible: true },
     globalPriceFilter,
   ],
   beaute: [
@@ -204,12 +205,14 @@ export const filterConfig: Record<CategoryId, FilterGroup[]> = {
   bijoux: [
     { id: 'matiere', label: 'Matière', options: jewelryMaterials },
     { id: 'couleur', label: 'Couleur', options: jewelryColors, collapsible: true },
+    { id: 'motif', label: 'Motif / Imprimé', options: commonPrints, collapsible: true },
     globalPriceFilter,
   ],
   lingerie: [
     { id: 'type', label: 'Type', options: lingerieTypes },
     { id: 'taille', label: 'Taille', options: clothingSizes },
     { id: 'couleur', label: 'Couleur', options: commonColors, collapsible: true },
+    { id: 'motif', label: 'Motif / Imprimé', options: commonPrints, collapsible: true },
     globalPriceFilter,
   ],
 };
