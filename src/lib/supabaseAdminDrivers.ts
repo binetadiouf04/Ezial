@@ -4,12 +4,11 @@ import { supabase } from './supabaseClient';
 // Real, Supabase-backed driver management for the admin area — replaces
 // the local mock array entirely (see ProContext's allDrivers/createDriver).
 
-// IMPORTANT: this project's Edge Functions get a dashboard-assigned deploy
-// slug that can differ from their source folder name — delete-account's
-// own slug is "bright-api" (see supabaseAccountDeletion.ts), not
-// "delete-account". After deploying create-driver, confirm its actual slug
-// in the Supabase dashboard and update this constant if it differs.
-const CREATE_DRIVER_FUNCTION_SLUG = 'create-driver';
+// Dashboard-assigned deploy slug (confirmed 2026-10 against the Edge
+// Functions list) — this project's functions get an auto-generated slug
+// that can differ from their source folder name, same as delete-account's
+// "bright-api". create-driver.ts is actually deployed under "bright-function".
+const CREATE_DRIVER_FUNCTION_SLUG = 'bright-function';
 
 export interface AdminDriverSummary {
   id: string;

@@ -19,13 +19,13 @@ export interface DriverAuthInfo {
 
 export type DriverLoginStatus = 'not_found' | 'suspended' | 'needs_pin_setup' | 'ready';
 
-// IMPORTANT: this project's Edge Functions get a dashboard-assigned deploy
-// slug that can differ from their source folder name — delete-account's own
-// slug is "bright-api" (see supabaseAccountDeletion.ts), not "delete-account".
-// After deploying driver-set-pin/driver-login, confirm their actual slugs in
-// the Supabase dashboard and update these two constants if they differ.
-const DRIVER_SET_PIN_FUNCTION_SLUG = 'driver-set-pin';
-const DRIVER_LOGIN_FUNCTION_SLUG = 'driver-login';
+// Dashboard-assigned deploy slugs (confirmed 2026-10 against the Edge
+// Functions list) — this project's functions get an auto-generated slug
+// that can differ from their source folder name, same as delete-account's
+// "bright-api". driver-set-pin.ts is deployed under "swift-processor",
+// driver-login.ts under "hyper-worker".
+const DRIVER_SET_PIN_FUNCTION_SLUG = 'swift-processor';
+const DRIVER_LOGIN_FUNCTION_SLUG = 'hyper-worker';
 
 const GENERIC_ERROR = 'Une erreur est survenue. Réessayez.';
 const NOT_DRIVER_ERROR = "Ce compte n'a pas d'accès livreur.";
