@@ -86,20 +86,24 @@ Deno.serve(async (req) => {
   });
   if (createError || !created.user) return json({ error: createError?.message ?? 'Création du compte impossible.' }, 500);
 
-  // handle_new_auth_user() already inserted a default profiles row (role
-  // defaults to 'customer') — overwrite it with the real driver identity.
+  // createUser() above is called with no raw_user_meta_data, so
+  // handle_new_auth_user() inserts nothing for this user (it only acts on
+  // role 'customer'/'seller') — there is no pre-existing profiles row to
+  // update. upsert() both creates it when absent and still works if a
+  // default row ever does exist, instead of silently matching zero rows.
   const { error: profileError } = await admin
     .from('profiles')
-    .update({
+    .upsert({
+      id: created.user.id,
       role: 'driver',
       username: normalizedUsername,
       first_name: firstName,
       last_name: lastName || null,
       phone,
+      email: technicalEmail,
       pin_setup_required: true,
       is_suspended: false,
-    })
-    .eq('id', created.user.id);
+    }, { onConflict: 'id' });
 
   if (profileError) {
     // Never leave a half-created, unmanageable auth user behind.
