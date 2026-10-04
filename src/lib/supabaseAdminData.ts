@@ -239,8 +239,11 @@ export interface AdminShopSummary {
 
 // Newest first — surfaces new onboarding requests (status 'pending') at the
 // top by default, matching how the admin Boutiques page uses this list.
+// Excludes 'deleted' shops — account deletion anonymizes a shop to this
+// status instead of removing the row (order/finance history depends on it
+// surviving), but it has no place in the normal admin management list.
 export async function fetchAdminShops(): Promise<AdminShopSummary[]> {
-  const { data: shopRows, error } = await supabase.from('shops').select('*').order('created_at', { ascending: false });
+  const { data: shopRows, error } = await supabase.from('shops').select('*').neq('status', 'deleted').order('created_at', { ascending: false });
   if (error || !shopRows) return [];
 
   const shopIds = shopRows.map((s) => s.id as string);
@@ -298,6 +301,9 @@ export interface AdminShopDetail {
   phone: string | null;
   neighborhood: string | null;
   address: string | null;
+  ownerName: string | null;
+  ownerEmail: string | null;
+  createdAt: string;
   products: AdminProductSummary[];
 }
 
@@ -305,7 +311,14 @@ export async function fetchAdminShopDetail(shopId: string): Promise<AdminShopDet
   const { data: shopRow, error } = await supabase.from('shops').select('*').eq('id', shopId).maybeSingle();
   if (error || !shopRow) return null;
 
-  const products = await fetchAdminProducts(shopId);
+  const [products, ownerRow] = await Promise.all([
+    fetchAdminProducts(shopId),
+    shopRow.owner_id
+      ? supabase.from('profiles').select('first_name, last_name, email').eq('id', shopRow.owner_id as string).maybeSingle().then((r) => r.data)
+      : Promise.resolve(null),
+  ]);
+
+  const ownerName = ownerRow ? [ownerRow.first_name, ownerRow.last_name].filter(Boolean).join(' ').trim() || null : null;
 
   return {
     id: shopRow.id as string,
@@ -318,6 +331,9 @@ export async function fetchAdminShopDetail(shopId: string): Promise<AdminShopDet
     phone: firstString(shopRow.phone),
     neighborhood: firstString(shopRow.neighborhood),
     address: firstString(shopRow.address_text),
+    ownerName,
+    ownerEmail: (ownerRow?.email as string | null) ?? null,
+    createdAt: (shopRow.created_at as string) ?? '',
     products,
   };
 }

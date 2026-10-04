@@ -262,7 +262,7 @@ export default function SellerShop() {
               <p className="text-xs font-medium text-ink/50">Statut de la boutique</p>
               <div className="mt-1.5"><StatusChip status={form.status} size="md" /></div>
             </div>
-            {form.status === 'draft' && (
+            {(form.status === 'draft' || form.status === 'rejected') && (
               <button onClick={() => void handleSubmitForReview()} disabled={submitting} className="btn-primary flex-shrink-0">
                 {submitting ? <><Loader2 size={15} className="animate-spin" /> Envoi...</> : <><Send size={15} /> Soumettre pour validation</>}
               </button>
@@ -270,7 +270,7 @@ export default function SellerShop() {
           </div>
           {form.status === 'draft' && <p className="text-xs text-ink/45">Complétez les informations ci-dessous puis soumettez votre boutique à l'équipe Ezial. Vous pouvez continuer à la préparer (produits inclus) en attendant.</p>}
           {form.status === 'pending' && <p className="text-xs text-ink/45">Votre demande est en cours d'examen par l'équipe Ezial. Vous pouvez continuer à préparer vos produits.</p>}
-          {form.status === 'rejected' && <p className="text-xs text-burgundy">Votre demande précédente n'a pas été approuvée. Vous pouvez mettre à jour les informations puis soumettre à nouveau.</p>}
+          {form.status === 'rejected' && <p className="text-xs text-burgundy">Votre demande précédente n'a pas été approuvée. Mettez à jour les informations puis soumettez à nouveau.</p>}
           {form.status === 'suspended' && <p className="text-xs text-burgundy">Votre boutique est actuellement suspendue par Ezial. Contactez l'équipe Ezial pour plus d'informations.</p>}
         </div>
       )}

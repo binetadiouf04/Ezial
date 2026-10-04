@@ -1,12 +1,19 @@
 import { useState, useEffect, useCallback } from 'react';
 import { usePro } from '../../ProContext';
-import { fetchAdminShopDetail, type AdminShopDetail as AdminShopDetailData } from '@/lib/supabaseAdminData';
+import { fetchAdminShopDetail, updateShopStatus, type AdminShopDetail as AdminShopDetailData } from '@/lib/supabaseAdminData';
 import { formatFCFA, shopModerationReasons } from '../../data';
 import { StatusChip } from '../../components/StatusChip';
 import FlagModal from '../../components/FlagModal';
 import { createModerationFlag, fetchModerationFlags, resolveModerationFlag, latestUnresolvedFlag, type ModerationFlagRow } from '@/lib/supabaseModeration';
-import { ArrowLeft, Phone, MapPin, Loader2, Flag } from 'lucide-react';
+import { ArrowLeft, Phone, MapPin, Loader2, Flag, Check, X, User } from 'lucide-react';
 import SmartImage from '@/components/SmartImage';
+
+function formatDate(iso: string): string {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  return d.toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' });
+}
 
 function formatDateTime(iso: string): string {
   if (!iso) return '';
@@ -22,6 +29,7 @@ export default function AdminShopDetail({ shopId }: { shopId: string }) {
   const [loadError, setLoadError] = useState('');
   const [flags, setFlags] = useState<ModerationFlagRow[]>([]);
   const [showFlagModal, setShowFlagModal] = useState(false);
+  const [acting, setActing] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -53,6 +61,13 @@ export default function AdminShopDetail({ shopId }: { shopId: string }) {
     await load();
   };
 
+  const act = async (status: 'active' | 'rejected') => {
+    setActing(true);
+    const result = await updateShopStatus(shopId, status);
+    setActing(false);
+    if (!result.error) setShop((s) => (s ? { ...s, status } : s));
+  };
+
   const activeFlag = latestUnresolvedFlag(flags);
 
   if (loading) {
@@ -75,14 +90,28 @@ export default function AdminShopDetail({ shopId }: { shopId: string }) {
       </button>
 
       {/* Shop header */}
-      <div className="card p-5 flex items-center gap-4">
-        {shop.logoUrl && <SmartImage src={shop.logoUrl} alt="" className="h-16 w-16 rounded-xl object-cover flex-shrink-0" />}
-        <div className="flex-1 min-w-0">
-          <h1 className="font-display text-lg font-semibold text-ink truncate">{shop.name}</h1>
-          {shop.sellerCode && <p className="text-xs text-ink/45 font-mono mt-0.5">{shop.sellerCode}</p>}
+      <div className="card overflow-hidden">
+        {shop.bannerUrl && <SmartImage src={shop.bannerUrl} alt="" className="h-28 w-full object-cover" />}
+        <div className="p-5 flex items-center gap-4">
+          {shop.logoUrl && <SmartImage src={shop.logoUrl} alt="" className="h-16 w-16 rounded-xl object-cover flex-shrink-0" />}
+          <div className="flex-1 min-w-0">
+            <h1 className="font-display text-lg font-semibold text-ink truncate">{shop.name}</h1>
+            {shop.sellerCode && <p className="text-xs text-ink/45 font-mono mt-0.5">{shop.sellerCode}</p>}
+          </div>
+          <StatusChip status={shop.status} size="md" label={shop.status === 'pending' ? 'À valider' : undefined} />
         </div>
-        <StatusChip status={shop.status} size="md" />
       </div>
+
+      {shop.status === 'pending' && (
+        <div className="card border-amber-200 bg-amber-50/30 p-4 flex gap-2">
+          <button onClick={() => void act('active')} disabled={acting} className="btn-primary flex-1">
+            {acting ? <Loader2 size={15} className="animate-spin" /> : <Check size={15} />} Accepter
+          </button>
+          <button onClick={() => void act('rejected')} disabled={acting} className="btn-outline flex-1">
+            {acting ? <Loader2 size={15} className="animate-spin" /> : <X size={15} />} Refuser
+          </button>
+        </div>
+      )}
 
       {activeFlag ? (
         <div className="card border-orange-200 bg-orange-50 p-4 space-y-2">
@@ -99,6 +128,18 @@ export default function AdminShopDetail({ shopId }: { shopId: string }) {
 
       {/* Info */}
       <div className="card divide-y divide-line">
+        {shop.ownerName && (
+          <div className="flex items-center justify-between p-4">
+            <span className="text-sm text-ink/55 flex items-center gap-1.5"><User size={13} className="text-ink/35" /> Propriétaire</span>
+            <span className="text-sm font-medium text-ink text-right">{shop.ownerName}{shop.ownerEmail ? ` · ${shop.ownerEmail}` : ''}</span>
+          </div>
+        )}
+        {shop.createdAt && (
+          <div className="flex items-center justify-between p-4">
+            <span className="text-sm text-ink/55">Soumise le</span>
+            <span className="text-sm font-medium text-ink">{formatDate(shop.createdAt)}</span>
+          </div>
+        )}
         {shop.description && (
           <div className="flex items-start justify-between gap-4 p-4">
             <span className="text-sm text-ink/55 flex-shrink-0">Description</span>

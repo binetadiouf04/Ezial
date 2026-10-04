@@ -109,7 +109,7 @@ export default function AdminShops() {
                       <p className="text-xs text-ink/45 mt-1.5">{shop.activeProductCount} produit{shop.activeProductCount > 1 ? 's' : ''} actif{shop.activeProductCount > 1 ? 's' : ''}</p>
                     </div>
                   </button>
-                  <StatusChip status={shop.status} size="md" />
+                  <StatusChip status={shop.status} size="md" label={shop.status === 'pending' ? 'À valider' : undefined} />
                   {shop.status === 'active' && (
                     <button onClick={() => void act(shop.id, 'suspended')} disabled={acting === shop.id} title="Suspendre" className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full text-ink/40 hover:bg-burgundy/5 hover:text-burgundy"><Ban size={16} /></button>
                   )}
