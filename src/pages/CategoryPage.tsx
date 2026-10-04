@@ -96,12 +96,15 @@ export default function CategoryPage({ categoryId, subId }: { categoryId: string
           </div>
         )}
         <div className="mb-6 flex items-center justify-between gap-3 border-b border-line pb-4">
-          <button onClick={() => setFiltersOpen(true)} className="flex items-center gap-2 rounded-full border border-line px-4 py-2 text-sm font-medium text-ink hover:border-ink/30 lg:hidden"><SlidersHorizontal size={16} />Filtres</button>
-          <div className="hidden lg:block" />
+          <button onClick={() => setFiltersOpen(true)} className="flex items-center gap-2 rounded-full border border-line px-4 py-2 text-sm font-medium text-ink hover:border-ink/30 md:hidden"><SlidersHorizontal size={16} />Filtres</button>
+          <div className="hidden md:block" />
           <div className="flex items-center gap-2"><span className="hidden sm:inline text-xs text-ink/45">Trier par</span><select value={sort} onChange={(e) => setSort(e.target.value)} className="rounded-full border border-line bg-white px-4 py-2 text-sm font-medium text-ink focus:border-burgundy focus:outline-none">{sortOptions.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}</select></div>
         </div>
         <div className="flex gap-8">
-          <div className="hidden lg:block w-[220px] flex-shrink-0"><div className="sticky top-[140px]"><FilterPanel filters={filters} selected={selectedFilters} onChange={setSelectedFilters} onClear={() => setSelectedFilters({})} /></div></div>
+          {/* Shown from md (tablet) up, not just lg — on an iPad-width
+             screen the content column has plenty of room for this and the
+             3-column grid together; only phones need the drawer instead. */}
+          <div className="hidden md:block w-[220px] flex-shrink-0"><div className="sticky top-[140px]"><FilterPanel filters={filters} selected={selectedFilters} onChange={setSelectedFilters} onClear={() => setSelectedFilters({})} /></div></div>
           <div className="min-w-0 flex-1">
             {catalogLoading ? <p className="py-16 text-center text-sm text-ink/45">Chargement des produits…</p> : <ProductGrid products={filtered} columns={4} />}
           </div>
