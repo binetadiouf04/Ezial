@@ -1,12 +1,18 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
   fetchPromoCodes, createPromoCode, updatePromoCode, deletePromoCode,
-  type AdminPromoCode, type PromoCodeInput, type PromoDiscountType,
+  type AdminPromoCode, type PromoCodeInput, type PromoDiscountType, type PromoUsageType,
 } from '@/lib/supabaseAdminPromoCodes';
 import { formatFCFA } from '../../data';
 import { Plus, Loader2, AlertCircle, Pencil, Trash2, X, Check } from 'lucide-react';
 
-const emptyInput: PromoCodeInput = { code: '', discountType: 'percent', discountValue: 10, minOrderAmount: null, startDate: null, endDate: null, isActive: true };
+const emptyInput: PromoCodeInput = { code: '', discountType: 'percent', discountValue: 10, minOrderAmount: null, startDate: null, endDate: null, isActive: true, usageType: 'reusable' };
+
+const usageLabels: Record<PromoUsageType, string> = {
+  reusable: 'Réutilisable',
+  once_per_customer: 'Usage unique/client',
+  once_total: 'Usage unique total',
+};
 
 function toDateInputValue(iso: string | null | undefined): string {
   if (!iso) return '';
@@ -42,7 +48,7 @@ export default function AdminPromoCodes() {
 
   const startNew = () => { setForm(emptyInput); setFormError(''); setEditing('new'); };
   const startEdit = (c: AdminPromoCode) => {
-    setForm({ code: c.code, discountType: c.discountType, discountValue: c.discountValue, minOrderAmount: c.minOrderAmount, startDate: c.startDate, endDate: c.endDate, isActive: c.isActive });
+    setForm({ code: c.code, discountType: c.discountType, discountValue: c.discountValue, minOrderAmount: c.minOrderAmount, startDate: c.startDate, endDate: c.endDate, isActive: c.isActive, usageType: c.usageType });
     setFormError('');
     setEditing(c.id);
   };
@@ -109,6 +115,14 @@ export default function AdminPromoCodes() {
               <input type="date" className="input-field" value={toDateInputValue(form.endDate)} onChange={(e) => setForm({ ...form, endDate: e.target.value || null })} />
             </div>
           </div>
+          <div>
+            <label className="block text-xs font-medium text-ink/60 mb-1.5">Usage du code</label>
+            <select className="input-field" value={form.usageType} onChange={(e) => setForm({ ...form, usageType: e.target.value as PromoUsageType })}>
+              <option value="reusable">Réutilisable — utilisable plusieurs fois tant qu'il est actif et dans ses dates</option>
+              <option value="once_per_customer">Usage unique par client — un même client ne peut l'utiliser qu'une fois (connexion requise)</option>
+              <option value="once_total">Usage unique total — une seule fois sur toute la marketplace</option>
+            </select>
+          </div>
           <label className="flex items-center gap-2 text-sm text-ink/70">
             <input type="checkbox" checked={form.isActive} onChange={(e) => setForm({ ...form, isActive: e.target.checked })} className="h-4 w-4 rounded border-line text-burgundy focus:ring-burgundy" />
             Actif
@@ -130,8 +144,10 @@ export default function AdminPromoCodes() {
           {codes.map((c) => (
             <div key={c.id} className="card p-4 flex items-center gap-3">
               <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
                   <span className="font-mono text-sm font-semibold text-ink">{c.code}</span>
+                  <span className="rounded-full bg-ink/5 px-2 py-0.5 text-[10px] font-medium text-ink/60">{usageLabels[c.usageType]}</span>
+                  {c.usageType === 'once_total' && c.consumedAt && <span className="rounded-full bg-ink/10 px-2 py-0.5 text-[10px] font-medium text-ink/60">Utilisé</span>}
                   {!c.isActive && <span className="rounded-full bg-ink/5 px-2 py-0.5 text-[10px] font-medium text-ink/50">Inactif</span>}
                   {isExpired(c) && <span className="rounded-full bg-red-50 px-2 py-0.5 text-[10px] font-medium text-red-700">Expiré</span>}
                 </div>

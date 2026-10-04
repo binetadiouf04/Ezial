@@ -7,6 +7,14 @@ import { supabase } from './supabaseClient';
 // which is the one place a discount amount is ever computed.
 
 export type PromoDiscountType = 'percent' | 'fixed';
+// 'reusable': current/original behavior, unlimited uses within dates.
+// 'once_per_customer': one use per signed-in customer_id (enforced via
+// promo_code_uses) — requires being logged in, since a guest has no
+// reliable identity to key this on.
+// 'once_total': one use across the whole marketplace, enforced via
+// promo_codes.consumed_at under a row lock in create_order() so two
+// simultaneous checkouts can't both consume it.
+export type PromoUsageType = 'reusable' | 'once_per_customer' | 'once_total';
 
 export interface AdminPromoCode {
   id: string;
@@ -17,6 +25,8 @@ export interface AdminPromoCode {
   startDate: string | null;
   endDate: string | null;
   isActive: boolean;
+  usageType: PromoUsageType;
+  consumedAt: string | null;
   createdAt: string;
 }
 
@@ -29,6 +39,8 @@ interface PromoCodeRow {
   start_date: string | null;
   end_date: string | null;
   is_active: boolean;
+  usage_type: PromoUsageType;
+  consumed_at: string | null;
   created_at: string;
 }
 
@@ -42,6 +54,8 @@ function mapRow(row: PromoCodeRow): AdminPromoCode {
     startDate: row.start_date,
     endDate: row.end_date,
     isActive: row.is_active,
+    usageType: row.usage_type ?? 'reusable',
+    consumedAt: row.consumed_at,
     createdAt: row.created_at,
   };
 }
@@ -60,6 +74,7 @@ export interface PromoCodeInput {
   startDate?: string | null;
   endDate?: string | null;
   isActive: boolean;
+  usageType: PromoUsageType;
 }
 
 export async function createPromoCode(input: PromoCodeInput): Promise<{ error?: string }> {
@@ -71,6 +86,7 @@ export async function createPromoCode(input: PromoCodeInput): Promise<{ error?: 
     start_date: input.startDate ?? null,
     end_date: input.endDate ?? null,
     is_active: input.isActive,
+    usage_type: input.usageType,
   });
   if (error) return { error: error.message.includes('duplicate') ? 'Ce code existe déjà.' : error.message };
   return {};
@@ -85,6 +101,7 @@ export async function updatePromoCode(id: string, input: PromoCodeInput): Promis
     start_date: input.startDate ?? null,
     end_date: input.endDate ?? null,
     is_active: input.isActive,
+    usage_type: input.usageType,
   }).eq('id', id);
   if (error) return { error: error.message.includes('duplicate') ? 'Ce code existe déjà.' : error.message };
   return {};
