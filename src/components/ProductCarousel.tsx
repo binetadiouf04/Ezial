@@ -18,9 +18,15 @@ export default function ProductCarousel({ products }: { products: Product[] }) {
         ref={scrollRef}
         className="flex gap-4 overflow-x-auto no-scrollbar snap-x snap-mandatory pb-2"
       >
-        {products.map((p) => (
+        {/* First few cards load eager + high priority, same reasoning as
+           ProductGrid's first row — a wider viewport (iPad) fits noticeably
+           more cards in the initially-visible strip than a phone does, so
+           leaving them all lazy means Safari has to resolve intersection
+           for far more simultaneous images on iPad than on iPhone for the
+           exact same carousel. */}
+        {products.map((p, i) => (
           <div key={p.id} className="w-[160px] flex-shrink-0 snap-start sm:w-[200px] lg:w-[240px]">
-            <ProductCard product={p} />
+            <ProductCard product={p} priority={i < 4} />
           </div>
         ))}
       </div>

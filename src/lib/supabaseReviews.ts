@@ -148,14 +148,15 @@ export async function submitReview(userId: string, input: SubmitReviewInput): Pr
     const { error } = await supabase.from('reviews').update({ rating: input.rating, comment: input.comment.trim() || null, updated_at: new Date().toISOString() }).eq('id', existing.id);
     if (error) return { error: error.message };
     reviewId = existing.id as string;
-    // The old photos are about to be replaced — remove their Storage files
-    // too, or every re-submitted review leaves its previous photos behind
-    // as orphans (never referenced again once the review_images rows are
-    // gone, but never freed either).
-    const { data: oldImages } = await supabase.from('review_images').select('storage_path').eq('review_id', reviewId);
-    const oldPaths = (oldImages ?? []).map((r) => r.storage_path as string).filter(Boolean);
-    await supabase.from('review_images').delete().eq('review_id', reviewId);
-    if (oldPaths.length > 0) void supabase.storage.from(PRODUCT_IMAGES_BUCKET).remove(oldPaths);
+    // Only replace photos when new ones were actually picked — editing just
+    // the rating/text (the common case) must never silently wipe photos
+    // the customer already uploaded.
+    if (input.photos.length > 0) {
+      const { data: oldImages } = await supabase.from('review_images').select('storage_path').eq('review_id', reviewId);
+      const oldPaths = (oldImages ?? []).map((r) => r.storage_path as string).filter(Boolean);
+      await supabase.from('review_images').delete().eq('review_id', reviewId);
+      if (oldPaths.length > 0) void supabase.storage.from(PRODUCT_IMAGES_BUCKET).remove(oldPaths);
+    }
   } else {
     const { data, error } = await supabase.from('reviews').insert({ product_id: input.productId, user_id: userId, rating: input.rating, comment: input.comment.trim() || null }).select('id').single();
     if (error || !data) return { error: error?.message ?? "Impossible d'enregistrer l'avis." };

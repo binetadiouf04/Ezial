@@ -75,15 +75,27 @@ export default function ProductPage({ productId }: { productId: string }) {
   const [reviewError, setReviewError] = useState('');
   const [reviewSaved, setReviewSaved] = useState(false);
   const [enlargedReviewImage, setEnlargedReviewImage] = useState<string | null>(null);
+  // Only true while the customer deliberately opened "Modifier mon avis" —
+  // the write form otherwise stays hidden once a review of theirs already
+  // exists, so publishing doesn't leave the form sitting on top of it.
+  const [isEditingReview, setIsEditingReview] = useState(false);
+
+  const myExistingReview = reviews.find((r) => r.userId === customerUser?.id);
 
   const loadReviews = () => {
     if (!product || !isRealCatalogId(product.id)) return;
     fetchProductReviews(product.id).then(({ reviews: fetched, stats }) => {
       setReviews(fetched);
       setReviewStats(stats);
-      const mine = fetched.find((r) => r.userId === customerUser?.id);
-      if (mine) { setMyRating(mine.rating); setMyComment(mine.comment); }
     });
+  };
+
+  const startEditReview = (rev: Review) => {
+    setMyRating(rev.rating);
+    setMyComment(rev.comment);
+    setMyPhotos([]);
+    setReviewError('');
+    setIsEditingReview(true);
   };
 
   useEffect(() => {
@@ -127,6 +139,7 @@ export default function ProductPage({ productId }: { productId: string }) {
     setReviewSubmitting(false);
     if (result.error) { setReviewError(result.error); return; }
     setMyPhotos([]);
+    setIsEditingReview(false);
     setReviewSaved(true);
     setTimeout(() => setReviewSaved(false), 2000);
     loadReviews();
@@ -136,6 +149,7 @@ export default function ProductPage({ productId }: { productId: string }) {
     await deleteReview(reviewId);
     setMyRating(0);
     setMyComment('');
+    setIsEditingReview(false);
     loadReviews();
   };
 
@@ -235,8 +249,9 @@ export default function ProductPage({ productId }: { productId: string }) {
                 isRealCatalogId(product.id) ? (
                   <div className="space-y-6">
                     {customerUser ? (
+                      (!myExistingReview || isEditingReview) && (
                       <div className="rounded-xl border border-line p-4 space-y-3">
-                        <h3 className="text-sm font-semibold text-ink">{myRating > 0 ? 'Modifier mon avis' : 'Donner mon avis'}</h3>
+                        <h3 className="text-sm font-semibold text-ink">{isEditingReview ? 'Modifier mon avis' : 'Donner mon avis'}</h3>
                         <div className="flex items-center gap-1">
                           {[1, 2, 3, 4, 5].map((n) => (
                             <button key={n} onClick={() => setMyRating(n)} type="button">
@@ -245,6 +260,14 @@ export default function ProductPage({ productId }: { productId: string }) {
                           ))}
                         </div>
                         <textarea className="input-field" rows={2} placeholder="Votre avis (facultatif)" value={myComment} onChange={(e) => setMyComment(e.target.value)} />
+                        {isEditingReview && myExistingReview && myExistingReview.images.length > 0 && (
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs text-ink/45">Photos actuelles :</span>
+                            {myExistingReview.images.map((img) => (
+                              <SmartImage key={img.id} src={img.url} alt="" className="h-10 w-10 rounded object-cover" />
+                            ))}
+                          </div>
+                        )}
                         <div className="flex items-center gap-2">
                           <label className="btn-outline cursor-pointer text-xs">
                             <Camera size={13} /> Ajouter des photos ({myPhotos.length}/3)
@@ -265,9 +288,13 @@ export default function ProductPage({ productId }: { productId: string }) {
                           <button onClick={() => void handleSubmitReview()} disabled={reviewSubmitting} className="btn-primary">
                             {reviewSubmitting ? <Loader2 size={15} className="animate-spin" /> : 'Publier'}
                           </button>
+                          {isEditingReview && (
+                            <button onClick={() => setIsEditingReview(false)} className="btn-outline">Annuler</button>
+                          )}
                           {reviewSaved && <span className="flex items-center gap-1 text-sm text-green-600"><Check size={14} /> Avis enregistré</span>}
                         </div>
                       </div>
+                      )
                     ) : (
                       <p className="text-sm text-ink/50">
                         <button onClick={() => navigate('/profil')} className="font-medium text-burgundy hover:underline">Connectez-vous</button> pour laisser un avis.
@@ -295,7 +322,10 @@ export default function ProductPage({ productId }: { productId: string }) {
                           </div>
                         )}
                         {customerUser?.id === rev.userId && (
-                          <button onClick={() => void handleDeleteReview(rev.id)} className="mt-2 text-xs font-medium text-burgundy hover:underline">Supprimer mon avis</button>
+                          <div className="mt-2 flex items-center gap-3">
+                            <button onClick={() => startEditReview(rev)} className="text-xs font-medium text-ink/60 hover:underline">Modifier mon avis</button>
+                            <button onClick={() => void handleDeleteReview(rev.id)} className="text-xs font-medium text-burgundy hover:underline">Supprimer mon avis</button>
+                          </div>
                         )}
                       </div>
                     ))}
