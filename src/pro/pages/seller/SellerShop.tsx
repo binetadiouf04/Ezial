@@ -5,8 +5,9 @@ import LocationPickerMap from '@/components/LocationPickerMap';
 import { StatusChip } from '../../components/StatusChip';
 import {
   fetchShopLocation, updateShopLocation, fetchShopOnboarding, updateShopOnboarding,
-  submitShopForReview, uploadShopAsset, type ShopOnboardingData,
+  submitShopForReview, uploadShopAsset, removeShopAsset, type ShopOnboardingData,
 } from '@/lib/supabaseSellerShop';
+import ImageCropModal from '@/components/ImageCropModal';
 import { fetchModerationFlags, latestUnresolvedFlag } from '@/lib/supabaseModeration';
 import { searchAddress, type GeocodeResult } from '@/lib/geocoding';
 import { quartiers } from '@/store/AppContext';
@@ -223,22 +224,50 @@ export default function SellerShop() {
     setForm((f) => ({ ...f, status: 'pending' }));
   };
 
-  const handleLogoFile = async (files: FileList | null) => {
+  // File picker only stages the raw file — the crop modal (opened from
+  // cropPending below) produces the final cropped File that actually gets
+  // uploaded, via confirmCrop().
+  const [cropPending, setCropPending] = useState<{ kind: 'logo' | 'cover'; file: File } | null>(null);
+
+  const handleLogoFile = (files: FileList | null) => {
     const file = files?.[0];
-    if (!file || !file.type.startsWith('image/') || !sellerSupabaseShopId) return;
-    setUploadingLogo(true);
-    const result = await uploadShopAsset(sellerSupabaseShopId, 'logo', file, form.logoUrl || undefined);
-    setUploadingLogo(false);
-    if (result.url) setForm((f) => ({ ...f, logoUrl: result.url as string }));
+    if (!file || !file.type.startsWith('image/')) return;
+    setCropPending({ kind: 'logo', file });
   };
 
-  const handleBannerFile = async (files: FileList | null) => {
+  const handleBannerFile = (files: FileList | null) => {
     const file = files?.[0];
-    if (!file || !file.type.startsWith('image/') || !sellerSupabaseShopId) return;
-    setUploadingCover(true);
-    const result = await uploadShopAsset(sellerSupabaseShopId, 'cover', file, form.coverUrl || undefined);
-    setUploadingCover(false);
-    if (result.url) setForm((f) => ({ ...f, coverUrl: result.url as string }));
+    if (!file || !file.type.startsWith('image/')) return;
+    setCropPending({ kind: 'cover', file });
+  };
+
+  const confirmCrop = async (croppedFile: File) => {
+    if (!cropPending || !sellerSupabaseShopId) return;
+    const { kind } = cropPending;
+    setCropPending(null);
+    if (kind === 'logo') {
+      setUploadingLogo(true);
+      const result = await uploadShopAsset(sellerSupabaseShopId, 'logo', croppedFile, form.logoUrl || undefined);
+      setUploadingLogo(false);
+      if (result.url) setForm((f) => ({ ...f, logoUrl: result.url as string }));
+    } else {
+      setUploadingCover(true);
+      const result = await uploadShopAsset(sellerSupabaseShopId, 'cover', croppedFile, form.coverUrl || undefined);
+      setUploadingCover(false);
+      if (result.url) setForm((f) => ({ ...f, coverUrl: result.url as string }));
+    }
+  };
+
+  const handleRemoveLogo = async () => {
+    if (!form.logoUrl) return;
+    await removeShopAsset(form.logoUrl);
+    setForm((f) => ({ ...f, logoUrl: '' }));
+  };
+
+  const handleRemoveCover = async () => {
+    if (!form.coverUrl) return;
+    await removeShopAsset(form.coverUrl);
+    setForm((f) => ({ ...f, coverUrl: '' }));
   };
 
   return (
@@ -306,8 +335,13 @@ export default function SellerShop() {
             </div>
             <label className="btn-outline cursor-pointer text-sm">
               {uploadingLogo ? <><Loader2 size={14} className="animate-spin" /> Envoi...</> : form.logoUrl ? 'Changer le logo' : 'Ajouter le logo'}
-              <input type="file" accept="image/*" className="hidden" disabled={uploadingLogo} onChange={(e) => void handleLogoFile(e.target.files)} />
+              <input type="file" accept="image/*" className="hidden" disabled={uploadingLogo} onChange={(e) => handleLogoFile(e.target.files)} />
             </label>
+            {form.logoUrl && (
+              <button type="button" onClick={() => void handleRemoveLogo()} className="flex items-center gap-1 text-xs font-medium text-burgundy hover:underline">
+                <Trash2 size={13} /> Supprimer
+              </button>
+            )}
           </div>
         </div>
 
@@ -321,11 +355,27 @@ export default function SellerShop() {
               <div className="flex h-full w-full items-center justify-center text-ink/25"><ImageIcon size={24} /></div>
             )}
           </div>
-          <label className="btn-outline mt-2 inline-flex cursor-pointer items-center gap-1.5 text-sm">
-            <Camera size={14} /> {uploadingCover ? 'Envoi...' : form.coverUrl ? "Changer l'image de couverture" : "Ajouter une image de couverture"}
-            <input type="file" accept="image/*" className="hidden" disabled={uploadingCover} onChange={(e) => void handleBannerFile(e.target.files)} />
-          </label>
+          <div className="mt-2 flex items-center gap-3">
+            <label className="btn-outline inline-flex cursor-pointer items-center gap-1.5 text-sm">
+              <Camera size={14} /> {uploadingCover ? 'Envoi...' : form.coverUrl ? "Changer l'image de couverture" : "Ajouter une image de couverture"}
+              <input type="file" accept="image/*" className="hidden" disabled={uploadingCover} onChange={(e) => handleBannerFile(e.target.files)} />
+            </label>
+            {form.coverUrl && (
+              <button type="button" onClick={() => void handleRemoveCover()} className="flex items-center gap-1 text-xs font-medium text-burgundy hover:underline">
+                <Trash2 size={13} /> Supprimer
+              </button>
+            )}
+          </div>
         </div>
+        {cropPending && (
+          <ImageCropModal
+            file={cropPending.file}
+            aspect={cropPending.kind === 'logo' ? 1 : 3}
+            title={cropPending.kind === 'logo' ? 'Ajuster le logo' : "Ajuster l'image de couverture"}
+            onCancel={() => setCropPending(null)}
+            onConfirm={(f) => void confirmCrop(f)}
+          />
+        )}
 
         <div>
           <label className="block text-xs font-medium text-ink/60 mb-1.5">Nom de la boutique</label>

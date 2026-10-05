@@ -394,6 +394,21 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return () => { cancelled = true; };
   }, []);
 
+  // A cart item whose product no longer resolves in the real catalog (sold
+  // out of the catalog entirely, deactivated, deleted) was previously only
+  // ever hidden from CartPage's own rendering (`if (!product) return null`)
+  // — it stayed in `cart`/localStorage forever, still counted by the header
+  // badge, making the cart look non-empty while showing nothing. Pruning it
+  // here once the real catalog is loaded keeps the badge and the page in
+  // sync, and also applies if a product is deactivated later mid-session.
+  useEffect(() => {
+    if (catalogLoading) return;
+    setCart((prev) => {
+      const pruned = prev.filter((item) => catalogProducts.some((p) => p.id === item.productId));
+      return pruned.length === prev.length ? prev : pruned;
+    });
+  }, [catalogLoading, catalogProducts]);
+
   const navigate = useCallback((r: string) => {
     window.location.hash = r; setRoute(r);
     setCategoryDrawerOpen(false);

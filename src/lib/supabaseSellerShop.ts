@@ -129,6 +129,15 @@ function storagePathFromPublicUrl(url: string, bucket: string): string | null {
   return i === -1 ? null : decodeURIComponent(url.slice(i + marker.length));
 }
 
+// Used by the "Supprimer" action — clearing a logo/cover doesn't just blank
+// the form field, it also frees the Storage file so a removed photo doesn't
+// linger as an orphan the way a replaced one already didn't (see
+// uploadShopAsset below).
+export async function removeShopAsset(url: string): Promise<void> {
+  const path = storagePathFromPublicUrl(url, SHOP_ASSETS_BUCKET);
+  if (path) await supabase.storage.from(SHOP_ASSETS_BUCKET).remove([path]);
+}
+
 export async function uploadShopAsset(shopId: string, kind: 'logo' | 'cover', file: File, previousUrl?: string): Promise<{ url?: string; error?: string }> {
   const optimized = await optimizeImageFile(file, ASSET_MAX_DIMENSION[kind]);
   const ext = optimized.type === 'image/webp' ? 'webp' : optimized.type === 'image/png' ? 'png' : 'jpg';
