@@ -42,8 +42,11 @@ function RouteView() {
   const { route } = useApp();
   const clean = route.split('?')[0];
 
-  // EZIAL PRO entry — render outside marketplace layout
-  if (clean === '/pro') return <ProEntryPage />;
+  // EZIAL PRO entry — render outside marketplace layout. Ezial Pro's own
+  // sub-route (seller/admin/driver pages) lives after "/pro" in this same
+  // hash (see ProContext's proSubRouteFromHash) so a refresh on any of
+  // those pages still matches here instead of falling through to Home.
+  if (clean === '/pro' || clean.startsWith('/pro/')) return <ProEntryPage />;
 
   // Home
   if (clean === '/' || clean === '') return <HomePage />;
@@ -143,7 +146,7 @@ function setMetaDescription(content: string) {
 
 function pageMetaFor(route: string): { title: string; description: string } {
   const clean = route.split('?')[0];
-  if (clean === '/pro') return { title: `Ezial Pro — Espace de gestion`, description: "L'espace privé pour les administrateurs, vendeurs et livreurs de la marketplace Ezial." };
+  if (clean === '/pro' || clean.startsWith('/pro/')) return { title: `Ezial Pro — Espace de gestion`, description: "L'espace privé pour les administrateurs, vendeurs et livreurs de la marketplace Ezial." };
   if (clean.startsWith('/produit/')) {
     const p = getProduct(clean.split('/')[2]);
     if (p) return { title: `${p.name} — ${SITE_TITLE}`, description: p.description.slice(0, 155) };
@@ -175,7 +178,7 @@ function Layout() {
   const { route } = useApp();
   const clean = route.split('?')[0];
   const isHome = clean === '/' || clean === '';
-  const isPro = clean === '/pro';
+  const isPro = clean === '/pro' || clean.startsWith('/pro/');
   const isCheckout = clean === '/checkout';
   const isOrderConfirm = clean.startsWith('/commande/');
 

@@ -12,6 +12,25 @@ import { supabase } from '@/lib/supabaseClient';
 
 type Route = string;
 
+// Ezial Pro's own sub-route lives under the same #/pro hash the top-level
+// AppContext already owns (e.g. #/pro/seller/produits), instead of a plain
+// in-memory state that reset to the role's default page on every refresh —
+// that reset-on-refresh was exactly the reported bug: a seller/admin/driver
+// refreshing any sub-page always landed back on their dashboard. Reusing
+// the same hash-based mechanism the marketplace side already uses (rather
+// than introducing a second router) keeps this additive, and leaves
+// #/pro?driver_order=... (read by pendingDriverOrderId below) untouched.
+function proSubRouteFromHash(): string {
+  const clean = window.location.hash.replace(/^#/, '').split('?')[0];
+  if (clean === '/pro') return '/';
+  if (clean.startsWith('/pro/')) return clean.slice(4);
+  return '/';
+}
+
+function writeProRouteToHash(r: Route) {
+  window.location.hash = r === '/' ? '/pro' : `/pro${r}`;
+}
+
 interface SellerProduct extends Product {
   images?: string[];
   // Set once a product has been created in the real Supabase backend —
@@ -235,7 +254,7 @@ export function ProProvider({ children }: { children: ReactNode }) {
   const [role, setRole] = useState<Role | null>(null);
   const [identifier, setIdentifier] = useState('');
   const [name, setName] = useState('');
-  const [route, setRoute] = useState('/');
+  const [route, setRoute] = useState<Route>(proSubRouteFromHash);
   const [missions, setMissions] = useState<Mission[]>(initialMissions);
   const [productStatusUpdates, setProductStatusUpdates] = useState<Record<string, ProductStatus>>({});
   const [orderUpdates, setOrderUpdates] = useState<Record<string, string>>({});
@@ -290,6 +309,13 @@ export function ProProvider({ children }: { children: ReactNode }) {
       return;
     }
 
+    // '/' means the hash was bare #/pro (a fresh entry, no sub-page) — only
+    // then does session restore pick the role's default landing route. A
+    // refresh on a specific sub-page (e.g. #/pro/seller/produits) already
+    // has that route from proSubRouteFromHash's initial state above, and
+    // must not be overwritten back to the dashboard once the role confirms.
+    const requestedRoute = proSubRouteFromHash();
+
     if (parsed.role === 'driver') {
       // Driver sessions are never trusted from sessionStorage alone — the
       // real Supabase session must still exist AND profiles.role must still
@@ -304,9 +330,12 @@ export function ProProvider({ children }: { children: ReactNode }) {
         setIdentifier(parsed.identifier);
         setName(driver.name);
         const real = await loadDriverMissions();
+        if (requestedRoute !== '/') return;
         const pendingOrderId = pendingDriverOrderId();
         const pendingMission = pendingOrderId ? real.find((m) => m.orderId === pendingOrderId) : undefined;
-        setRoute(pendingMission ? `/driver/livraisons/${pendingMission.id}` : '/driver');
+        const target = pendingMission ? `/driver/livraisons/${pendingMission.id}` : '/driver';
+        setRoute(target);
+        writeProRouteToHash(target);
       })();
       return;
     }
@@ -324,7 +353,7 @@ export function ProProvider({ children }: { children: ReactNode }) {
         setRole('admin');
         setIdentifier(parsed.identifier);
         setName(admin.name);
-        setRoute('/admin');
+        if (requestedRoute === '/') { setRoute('/admin'); writeProRouteToHash('/admin'); }
       })();
       return;
     }
@@ -343,7 +372,7 @@ export function ProProvider({ children }: { children: ReactNode }) {
       setName(shop.shopName);
       setSellerSupabaseShopId(shop.shopId);
       setSellerShopIsOfficial(shop.isOfficial);
-      setRoute('/seller');
+      if (requestedRoute === '/') { setRoute('/seller'); writeProRouteToHash('/seller'); }
       const mockShop = initialShops.find((s) => s.sellerId === parsed.identifier);
       setSellerShop(mockShop ?? null);
     })();
@@ -353,8 +382,18 @@ export function ProProvider({ children }: { children: ReactNode }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Mirrors AppContext's own hashchange handling — lets the browser's
+  // Back/Forward buttons move between Pro sub-pages too, and keeps `route`
+  // correct if the hash ever changes from outside navigate() itself.
+  useEffect(() => {
+    const onHash = () => setRoute(proSubRouteFromHash());
+    window.addEventListener('hashchange', onHash);
+    return () => window.removeEventListener('hashchange', onHash);
+  }, []);
+
   const navigate = useCallback((r: Route) => {
     setRoute(r);
+    writeProRouteToHash(r);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }, []);
 
@@ -362,7 +401,9 @@ export function ProProvider({ children }: { children: ReactNode }) {
     setRole(r);
     setIdentifier(id);
     setName(n);
-    setRoute(r === 'admin' ? '/admin' : r === 'seller' ? '/seller' : '/driver');
+    const target = r === 'admin' ? '/admin' : r === 'seller' ? '/seller' : '/driver';
+    setRoute(target);
+    writeProRouteToHash(target);
     if (r === 'seller') {
       const shop = initialShops.find((s) => s.sellerId === id);
       setSellerShop(shop ?? null);
@@ -376,7 +417,11 @@ export function ProProvider({ children }: { children: ReactNode }) {
       void loadDriverMissions().then((real) => {
         const pendingOrderId = pendingDriverOrderId();
         const pendingMission = pendingOrderId ? real.find((m) => m.orderId === pendingOrderId) : undefined;
-        if (pendingMission) setRoute(`/driver/livraisons/${pendingMission.id}`);
+        if (pendingMission) {
+          const t = `/driver/livraisons/${pendingMission.id}`;
+          setRoute(t);
+          writeProRouteToHash(t);
+        }
       });
     }
     sessionStorage.setItem('ezial-pro-auth', JSON.stringify({ role: r, identifier: id, name: n }));
@@ -387,6 +432,7 @@ export function ProProvider({ children }: { children: ReactNode }) {
     setIdentifier('');
     setName('');
     setRoute('/');
+    writeProRouteToHash('/');
     setSellerShop(null);
     setSellerSupabaseShopId(null);
     setSellerShopIsOfficial(false);
