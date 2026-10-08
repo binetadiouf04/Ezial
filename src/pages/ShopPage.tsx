@@ -3,8 +3,11 @@ import { useApp } from '@/store/AppContext';
 import { getShop } from '@/data/shops';
 import ProductGrid from '@/components/ProductGrid';
 import Rating from '@/components/Rating';
-import { UserPlus, Check, Package, MapPin } from 'lucide-react';
+import { UserPlus, Check, Package, MapPin, Flag } from 'lucide-react';
 import SmartImage from '@/components/SmartImage';
+import ShopReportModal from '@/components/ShopReportModal';
+import { createShopReport, type ShopReportReason } from '@/lib/supabaseShopReports';
+import { isRealCatalogId } from '@/data/products';
 
 const tabs = ['Accueil', 'Produits', 'Avis'] as const;
 type Tab = (typeof tabs)[number];
@@ -17,11 +20,12 @@ const sortOptions = [
 type SortId = (typeof sortOptions)[number]['id'];
 
 export default function ShopPage({ shopId }: { shopId: string }) {
-  const { catalogProducts, catalogLoading } = useApp();
+  const { catalogProducts, catalogLoading, customerUser, navigate } = useApp();
   const shop = getShop(shopId);
   const [tab, setTab] = useState<Tab>('Accueil');
   const [following, setFollowing] = useState(false);
   const [sort, setSort] = useState<SortId>('recent');
+  const [showReportModal, setShowReportModal] = useState(false);
 
   // Real shops resolve their products from the merged Supabase+mock
   // catalog (catalogProducts is already scoped to status = 'active' by
@@ -56,6 +60,11 @@ export default function ShopPage({ shopId }: { shopId: string }) {
   }
 
   const location = shop.address || shop.city;
+
+  const handleReport = async (reason: ShopReportReason, details: string) => {
+    if (!customerUser) return { error: 'Connectez-vous pour signaler une boutique.' };
+    return createShopReport(shopId, reason, details);
+  };
 
   return (
     <div className="py-6">
@@ -115,7 +124,23 @@ export default function ShopPage({ shopId }: { shopId: string }) {
             </div>
           )}
         </div>
+
+        <div className="mt-10 border-t border-line pt-4">
+          {!isRealCatalogId(shopId) ? null : customerUser ? (
+            <button onClick={() => setShowReportModal(true)} className="flex items-center gap-1.5 text-xs text-ink/40 hover:text-burgundy">
+              <Flag size={12} /> Signaler cette boutique
+            </button>
+          ) : (
+            <p className="text-xs text-ink/40">
+              <button onClick={() => navigate('/profil')} className="font-medium hover:text-burgundy hover:underline">Connectez-vous</button> pour signaler cette boutique.
+            </p>
+          )}
+        </div>
       </div>
+
+      {showReportModal && (
+        <ShopReportModal onCancel={() => setShowReportModal(false)} onConfirm={handleReport} />
+      )}
     </div>
   );
 }

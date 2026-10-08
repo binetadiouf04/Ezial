@@ -23,7 +23,7 @@ type LocationMode = 'gps' | 'manual';
 const emptyForm: ShopOnboardingData = {
   name: '', description: '', phone: '', addressText: '', neighborhood: '',
   logoUrl: '', coverUrl: '', categoryFocus: '', pickupEnabled: false,
-  status: 'draft', latitude: null, longitude: null,
+  status: 'draft', latitude: null, longitude: null, suspensionReason: null,
 };
 
 export default function SellerShop() {
@@ -300,7 +300,12 @@ export default function SellerShop() {
           {form.status === 'draft' && <p className="text-xs text-ink/45">Complétez les informations ci-dessous puis soumettez votre boutique à l'équipe Ezial. Vous pouvez continuer à la préparer (produits inclus) en attendant.</p>}
           {form.status === 'pending' && <p className="text-xs text-ink/45">Votre demande est en cours d'examen par l'équipe Ezial. Vous pouvez continuer à préparer vos produits.</p>}
           {form.status === 'rejected' && <p className="text-xs text-burgundy">Votre demande précédente n'a pas été approuvée. Mettez à jour les informations puis soumettez à nouveau.</p>}
-          {form.status === 'suspended' && <p className="text-xs text-burgundy">Votre boutique est actuellement suspendue par Ezial. Contactez l'équipe Ezial pour plus d'informations.</p>}
+          {form.status === 'suspended' && (
+            <p className="text-xs text-burgundy">
+              Votre boutique est actuellement désactivée par Ezial.
+              {form.suspensionReason ? ` Motif : ${form.suspensionReason}` : ' Contactez l\'équipe Ezial pour plus d\'informations.'}
+            </p>
+          )}
         </div>
       )}
 

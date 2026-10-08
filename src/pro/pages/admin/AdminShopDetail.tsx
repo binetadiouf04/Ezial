@@ -5,8 +5,18 @@ import { formatFCFA, shopModerationReasons } from '../../data';
 import { StatusChip } from '../../components/StatusChip';
 import FlagModal from '../../components/FlagModal';
 import { createModerationFlag, fetchModerationFlags, resolveModerationFlag, latestUnresolvedFlag, type ModerationFlagRow } from '@/lib/supabaseModeration';
-import { ArrowLeft, Phone, MapPin, Loader2, Flag, Check, X, User } from 'lucide-react';
+import { fetchShopReports, type AdminShopReport, type ShopReportReason } from '@/lib/supabaseShopReports';
+import { ArrowLeft, Phone, MapPin, Loader2, Flag, Check, X, User, Ban, AlertOctagon } from 'lucide-react';
 import SmartImage from '@/components/SmartImage';
+
+const suspensionReasons = ['Produits suspects ou contrefaits', 'Informations trompeuses', 'Comportement inapproprié', 'Non-conformité répétée'];
+
+const shopReportReasonLabels: Record<ShopReportReason, string> = {
+  contrefait: 'Produit suspect ou contrefait',
+  trompeur: 'Informations trompeuses',
+  comportement: 'Comportement inapproprié',
+  autre: 'Autre',
+};
 
 function formatDate(iso: string): string {
   if (!iso) return '';
@@ -28,16 +38,19 @@ export default function AdminShopDetail({ shopId }: { shopId: string }) {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
   const [flags, setFlags] = useState<ModerationFlagRow[]>([]);
+  const [reports, setReports] = useState<AdminShopReport[]>([]);
   const [showFlagModal, setShowFlagModal] = useState(false);
+  const [showSuspendModal, setShowSuspendModal] = useState(false);
   const [acting, setActing] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
     setLoadError('');
     try {
-      const [detail, flagRows] = await Promise.all([fetchAdminShopDetail(shopId), fetchModerationFlags('shop', shopId)]);
+      const [detail, flagRows, reportRows] = await Promise.all([fetchAdminShopDetail(shopId), fetchModerationFlags('shop', shopId), fetchShopReports(shopId)]);
       setShop(detail);
       setFlags(flagRows);
+      setReports(reportRows);
       if (!detail) setLoadError('Boutique introuvable.');
     } catch {
       setLoadError('Impossible de charger la boutique. Réessayez.');
@@ -61,11 +74,16 @@ export default function AdminShopDetail({ shopId }: { shopId: string }) {
     await load();
   };
 
-  const act = async (status: 'active' | 'rejected') => {
+  const act = async (status: 'active' | 'rejected' | 'suspended', reason?: string) => {
     setActing(true);
-    const result = await updateShopStatus(shopId, status);
+    const result = await updateShopStatus(shopId, status, reason);
     setActing(false);
-    if (!result.error) setShop((s) => (s ? { ...s, status } : s));
+    if (!result.error) setShop((s) => (s ? { ...s, status, suspensionReason: status === 'suspended' ? (reason ?? null) : null } : s));
+  };
+
+  const confirmSuspend = async (reason: string) => {
+    await act('suspended', reason);
+    setShowSuspendModal(false);
   };
 
   const activeFlag = latestUnresolvedFlag(flags);
@@ -110,6 +128,37 @@ export default function AdminShopDetail({ shopId }: { shopId: string }) {
           <button onClick={() => void act('rejected')} disabled={acting} className="btn-outline flex-1">
             {acting ? <Loader2 size={15} className="animate-spin" /> : <X size={15} />} Refuser
           </button>
+        </div>
+      )}
+
+      {shop.status === 'active' && (
+        <button onClick={() => setShowSuspendModal(true)} disabled={acting} className="btn-outline w-full flex items-center justify-center gap-1.5">
+          <Ban size={15} /> Désactiver la boutique
+        </button>
+      )}
+
+      {shop.status === 'suspended' && (
+        <div className="card border-red-200 bg-red-50/40 p-4 space-y-2">
+          <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-red-700"><Ban size={14} /> Boutique désactivée</p>
+          {shop.suspensionReason && <p className="text-sm text-red-800">Motif : {shop.suspensionReason}</p>}
+          <button onClick={() => void act('active')} disabled={acting} className="btn-primary mt-1 flex items-center gap-1.5">
+            {acting ? <Loader2 size={15} className="animate-spin" /> : <Check size={15} />} Réactiver la boutique
+          </button>
+        </div>
+      )}
+
+      {reports.length > 0 && (
+        <div className="card border-orange-200 bg-orange-50/40 p-4 space-y-3">
+          <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-orange-700"><AlertOctagon size={14} /> Signalements clients ({reports.length})</p>
+          <div className="space-y-2">
+            {reports.map((r) => (
+              <div key={r.id} className="rounded-lg bg-white/70 p-2.5 text-sm">
+                <p className="font-medium text-ink">{shopReportReasonLabels[r.reason]}</p>
+                {r.details && <p className="mt-0.5 text-ink/70">{r.details}</p>}
+                <p className="mt-1 text-xs text-ink/40">{formatDateTime(r.createdAt)}</p>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 
@@ -183,6 +232,10 @@ export default function AdminShopDetail({ shopId }: { shopId: string }) {
 
       {showFlagModal && (
         <FlagModal title="Signaler cette boutique" quickReasons={shopModerationReasons} onCancel={() => setShowFlagModal(false)} onConfirm={handleFlag} />
+      )}
+
+      {showSuspendModal && (
+        <FlagModal title="Désactiver la boutique" quickReasons={suspensionReasons} confirmLabel="Désactiver" onCancel={() => setShowSuspendModal(false)} onConfirm={confirmSuspend} />
       )}
     </div>
   );

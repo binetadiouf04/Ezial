@@ -235,6 +235,7 @@ export interface AdminShopSummary {
   phone: string | null;
   neighborhood: string | null;
   createdAt: string;
+  suspensionReason: string | null;
 }
 
 // Newest first — surfaces new onboarding requests (status 'pending') at the
@@ -267,15 +268,21 @@ export async function fetchAdminShops(): Promise<AdminShopSummary[]> {
     phone: (s.phone as string | null) ?? null,
     neighborhood: (s.neighborhood as string | null) ?? null,
     createdAt: (s.created_at as string) ?? '',
+    suspensionReason: (s.suspension_reason as string | null) ?? null,
   }));
 }
 
 // The only client-side way a shop's status ever changes to/from 'active' —
 // sellers can never reach this (see the shops UPDATE policy + safety
 // trigger in the migration this feature ships with, which block a non-admin
-// from changing shops.status at all).
-export async function updateShopStatus(shopId: string, status: 'active' | 'suspended' | 'rejected'): Promise<{ error?: string }> {
-  const { error } = await supabase.from('shops').update({ status }).eq('id', shopId);
+// from changing shops.status at all). `reason` is only ever meaningful (and
+// only ever stored) when suspending; reactivating always clears it, so an
+// old reason never lingers as if it still applied.
+export async function updateShopStatus(shopId: string, status: 'active' | 'suspended' | 'rejected', reason?: string): Promise<{ error?: string }> {
+  const { error } = await supabase.from('shops').update({
+    status,
+    suspension_reason: status === 'suspended' ? (reason?.trim() || null) : null,
+  }).eq('id', shopId);
   return error ? { error: error.message } : {};
 }
 
@@ -304,6 +311,7 @@ export interface AdminShopDetail {
   ownerName: string | null;
   ownerEmail: string | null;
   createdAt: string;
+  suspensionReason: string | null;
   products: AdminProductSummary[];
 }
 
@@ -334,6 +342,7 @@ export async function fetchAdminShopDetail(shopId: string): Promise<AdminShopDet
     ownerName,
     ownerEmail: (ownerRow?.email as string | null) ?? null,
     createdAt: (shopRow.created_at as string) ?? '',
+    suspensionReason: (shopRow.suspension_reason as string | null) ?? null,
     products,
   };
 }

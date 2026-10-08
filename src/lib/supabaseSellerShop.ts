@@ -48,6 +48,7 @@ export interface ShopOnboardingData {
   status: ShopWorkflowStatus;
   latitude: number | null;
   longitude: number | null;
+  suspensionReason: string | null;
 }
 
 export async function fetchShopOnboarding(shopId: string): Promise<ShopOnboardingData | null> {
@@ -66,6 +67,7 @@ export async function fetchShopOnboarding(shopId: string): Promise<ShopOnboardin
     status: ((data.status as ShopWorkflowStatus) ?? 'draft'),
     latitude: (data.latitude as number | null) ?? null,
     longitude: (data.longitude as number | null) ?? null,
+    suspensionReason: (data.suspension_reason as string | null) ?? null,
   };
 }
 

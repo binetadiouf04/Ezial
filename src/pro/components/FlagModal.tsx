@@ -4,6 +4,7 @@ import { X, AlertTriangle } from 'lucide-react';
 interface FlagModalProps {
   title: string;
   quickReasons: string[];
+  confirmLabel?: string;
   onCancel: () => void;
   onConfirm: (note: string) => Promise<void> | void;
 }
@@ -15,7 +16,7 @@ interface FlagModalProps {
  * reasons into the free-text note; there is no separate reason field to
  * keep the schema (and this feature) minimal.
  */
-export default function FlagModal({ title, quickReasons, onCancel, onConfirm }: FlagModalProps) {
+export default function FlagModal({ title, quickReasons, confirmLabel = 'Signaler', onCancel, onConfirm }: FlagModalProps) {
   const [note, setNote] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -61,7 +62,7 @@ export default function FlagModal({ title, quickReasons, onCancel, onConfirm }: 
         <div className="flex gap-3 mt-5">
           <button onClick={onCancel} className="btn-outline flex-1">Annuler</button>
           <button onClick={handleConfirm} disabled={saving} className="flex-1 rounded-lg bg-red-600 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-red-700 disabled:opacity-40">
-            {saving ? 'Envoi…' : 'Signaler'}
+            {saving ? 'Envoi…' : confirmLabel}
           </button>
         </div>
       </div>

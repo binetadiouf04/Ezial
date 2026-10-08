@@ -2,8 +2,11 @@ import { useState, useEffect, useCallback } from 'react';
 import { usePro } from '../../ProContext';
 import { fetchAdminShops, updateShopStatus, type AdminShopSummary } from '@/lib/supabaseAdminData';
 import { StatusChip } from '../../components/StatusChip';
+import FlagModal from '../../components/FlagModal';
 import { Search, Loader2, AlertCircle, Check, X, Ban, MapPin, Phone } from 'lucide-react';
 import SmartImage from '@/components/SmartImage';
+
+const suspensionReasons = ['Produits suspects ou contrefaits', 'Informations trompeuses', 'Comportement inapproprié', 'Non-conformité répétée'];
 
 function formatDate(iso: string): string {
   if (!iso) return '';
@@ -19,6 +22,7 @@ export default function AdminShops() {
   const [loadError, setLoadError] = useState('');
   const [search, setSearch] = useState('');
   const [acting, setActing] = useState<string | null>(null);
+  const [suspendTarget, setSuspendTarget] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -34,11 +38,17 @@ export default function AdminShops() {
 
   useEffect(() => { void load(); }, [load]);
 
-  const act = async (shopId: string, status: 'active' | 'suspended' | 'rejected') => {
+  const act = async (shopId: string, status: 'active' | 'suspended' | 'rejected', reason?: string) => {
     setActing(shopId);
-    const result = await updateShopStatus(shopId, status);
+    const result = await updateShopStatus(shopId, status, reason);
     setActing(null);
-    if (!result.error) setShops((prev) => prev.map((s) => s.id === shopId ? { ...s, status } : s));
+    if (!result.error) setShops((prev) => prev.map((s) => s.id === shopId ? { ...s, status, suspensionReason: status === 'suspended' ? (reason ?? null) : null } : s));
+  };
+
+  const confirmSuspend = async (reason: string) => {
+    if (!suspendTarget) return;
+    await act(suspendTarget, 'suspended', reason);
+    setSuspendTarget(null);
   };
 
   const pending = shops.filter((s) => s.status === 'pending');
@@ -107,11 +117,12 @@ export default function AdminShops() {
                       <p className="text-sm font-semibold text-ink truncate">{shop.name}</p>
                       {shop.sellerCode && <p className="text-xs text-ink/45 font-mono mt-0.5">{shop.sellerCode}</p>}
                       <p className="text-xs text-ink/45 mt-1.5">{shop.activeProductCount} produit{shop.activeProductCount > 1 ? 's' : ''} actif{shop.activeProductCount > 1 ? 's' : ''}</p>
+                      {shop.status === 'suspended' && shop.suspensionReason && <p className="text-xs text-burgundy mt-1">Motif : {shop.suspensionReason}</p>}
                     </div>
                   </button>
                   <StatusChip status={shop.status} size="md" label={shop.status === 'pending' ? 'À valider' : undefined} />
                   {shop.status === 'active' && (
-                    <button onClick={() => void act(shop.id, 'suspended')} disabled={acting === shop.id} title="Suspendre" className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full text-ink/40 hover:bg-burgundy/5 hover:text-burgundy"><Ban size={16} /></button>
+                    <button onClick={() => setSuspendTarget(shop.id)} disabled={acting === shop.id} title="Désactiver la boutique" className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full text-ink/40 hover:bg-burgundy/5 hover:text-burgundy"><Ban size={16} /></button>
                   )}
                   {shop.status === 'suspended' && (
                     <button onClick={() => void act(shop.id, 'active')} disabled={acting === shop.id} title="Réactiver" className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full text-ink/40 hover:bg-green-50 hover:text-green-700"><Check size={16} /></button>
@@ -121,6 +132,16 @@ export default function AdminShops() {
             )}
           </div>
         </>
+      )}
+
+      {suspendTarget && (
+        <FlagModal
+          title="Désactiver la boutique"
+          quickReasons={suspensionReasons}
+          confirmLabel="Désactiver"
+          onCancel={() => setSuspendTarget(null)}
+          onConfirm={confirmSuspend}
+        />
       )}
     </div>
   );
