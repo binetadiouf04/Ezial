@@ -22,7 +22,7 @@ const roleConfig: Record<Role, { title: string; subtitle: string; placeholder: s
   admin: {
     title: 'Administration',
     subtitle: "Accès réservé à l'équipe EZIAL.",
-    placeholder: 'admin@ezial.sn',
+    placeholder: 'admin@ezial.net',
     hint: 'Saisissez votre email et mot de passe.',
     demoName: 'Admin EZIAL',
   },

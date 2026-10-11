@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useApp } from '@/store/AppContext';
 import { paymentMethods } from '@/data/payments';
-import { Instagram, Facebook, Plus, Phone, Mail, MapPin } from 'lucide-react';
+import { Instagram, Facebook, Plus, Mail, MapPin } from 'lucide-react';
 
 function TikTokIcon({ size = 18, className = '' }: { size?: number; className?: string }) {
   return (
@@ -88,11 +88,8 @@ const SocialIcons = ({ size = 17, wrapSize = 'h-9 w-9' }: { size?: number; wrapS
 const ContactRows = () => (
   <div className="space-y-2.5">
     <p className="flex items-center gap-2 text-sm text-white/75"><MapPin size={14} className="text-white/50 flex-shrink-0" /> Dakar, Sénégal</p>
-    <a href="tel:+221770000000" className="flex items-center gap-2 text-sm text-white/75 hover:text-white hover:underline transition-colors">
-      <Phone size={14} className="text-white/50 flex-shrink-0" /> +221 77 000 00 00
-    </a>
-    <a href="mailto:contact@ezial.sn" className="flex items-center gap-2 text-sm text-white/75 hover:text-white hover:underline transition-colors">
-      <Mail size={14} className="text-white/50 flex-shrink-0" /> contact@ezial.sn
+    <a href="mailto:contact@ezial.net" className="flex items-center gap-2 text-sm text-white/75 hover:text-white hover:underline transition-colors">
+      <Mail size={14} className="text-white/50 flex-shrink-0" /> contact@ezial.net
     </a>
   </div>
 );
