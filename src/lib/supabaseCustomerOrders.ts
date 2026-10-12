@@ -86,6 +86,7 @@ export async function fetchCustomerOrders(customerId: string): Promise<Order[]> 
     const shopsForOrder = orderShops.filter((s) => s.order_id === o.id);
     const fulfillments: ShopFulfillment[] = shopsForOrder.map((s) => ({
       shopId: s.shop_id,
+      orderShopId: s.id,
       type: s.fulfillment_type,
       deliveryFee: 0,
       pickupCode: s.pickup_code ?? undefined,
@@ -119,6 +120,7 @@ export async function fetchCustomerOrders(customerId: string): Promise<Order[]> 
         // the live catalog (see the order pages' fallback for this exact
         // case).
         productName: it.product_name,
+        orderItemId: it.id,
       })),
       subtotal: o.products_subtotal,
       delivery: o.delivery_fee,

@@ -1,11 +1,14 @@
+import { useEffect, useState } from 'react';
 import { useApp, type DeliveryStepStatus, type PickupStepStatus, type Order } from '@/store/AppContext';
 import { formatFCFA } from '@/data/products';
 import { getShop } from '@/data/shops';
+import { fetchOrderDeliveryCode } from '@/lib/supabaseOrders';
 import { DeliveryTimeline, PickupTimeline } from '@/components/OrderTimeline';
 import { deliveryStatusLabels, pickupStepLabels } from '@/data/orderStatusLabels';
 import { paymentLabels } from '@/data/payments';
-import { Package, Truck, Store, MapPin, Smartphone, Clock, Check, KeySquare, ArrowLeft, CheckCircle2 } from 'lucide-react';
+import { Package, Truck, Store, MapPin, Smartphone, Clock, Check, KeySquare, ArrowLeft, CheckCircle2, AlertTriangle, RotateCcw } from 'lucide-react';
 import SmartImage from '@/components/SmartImage';
+import ClaimModal from '@/components/ClaimModal';
 
 const deliveryStatusColors: Record<DeliveryStepStatus, string> = {
   confirmed: 'bg-blue-50 text-blue-700', preparing: 'bg-amber-50 text-amber-700', ready: 'bg-green-50 text-green-700',
@@ -38,8 +41,15 @@ function getOrderStatusColor(order: Order): string {
 }
 
 export default function OrderDetailPage({ orderId }: { orderId: string }) {
-  const { orders, navigate, catalogProducts } = useApp();
+  const { orders, navigate, catalogProducts, customerUser } = useApp();
   const order = orders.find((o) => o.id === orderId);
+  const [deliveryCode, setDeliveryCode] = useState<string | null>(null);
+  const [claimModal, setClaimModal] = useState<'retour_echange' | 'probleme' | null>(null);
+
+  useEffect(() => {
+    if (!order?.supabaseOrderId) return;
+    void fetchOrderDeliveryCode(order.supabaseOrderId).then(setDeliveryCode);
+  }, [order?.supabaseOrderId]);
 
   if (!order) {
     return (
@@ -54,6 +64,7 @@ export default function OrderDetailPage({ orderId }: { orderId: string }) {
   const hasDelivery = order.shopFulfillments.some((f) => f.type === 'delivery');
   const pickupFulfillments = order.shopFulfillments.filter((f) => f.type === 'pickup');
   const isDelivered = order.status === 'delivered';
+  const showDeliveryCode = deliveryCode && ['picked_up', 'delivering'].includes(order.status);
 
   return (
     <div className="container-pro py-8 max-w-3xl">
@@ -118,6 +129,16 @@ export default function OrderDetailPage({ orderId }: { orderId: string }) {
             <div className="card p-6">
               <h2 className="text-sm font-semibold text-ink mb-4 flex items-center gap-1.5"><Truck size={15} className="text-burgundy" /> Suivi — Livraison Ezial</h2>
               <DeliveryTimeline status={order.status} />
+              {showDeliveryCode && (
+                <div className="mt-4 rounded-xl p-4 text-center" style={{ background: 'linear-gradient(135deg, rgba(128,23,37,0.04), rgba(128,23,37,0.08))' }}>
+                  <div className="flex items-center justify-center gap-2 mb-2">
+                    <KeySquare size={16} className="text-burgundy" />
+                    <p className="text-xs font-semibold uppercase tracking-wider text-ink/50">Code de livraison</p>
+                  </div>
+                  <p className="font-mono text-3xl font-bold tracking-[0.3em] text-burgundy">{deliveryCode}</p>
+                  <p className="mt-2 text-xs text-ink/50">Donnez ce code au livreur à la remise de votre colis.</p>
+                </div>
+              )}
               {isDelivered && (
                 <div className="mt-4 flex items-center gap-2 rounded-lg bg-green-50 p-3">
                   <CheckCircle2 size={16} className="text-green-600" />
@@ -210,10 +231,34 @@ export default function OrderDetailPage({ orderId }: { orderId: string }) {
             </div>
           </div>
 
+          {/* Retours / signalement — jamais bloqués par un délai côté
+              interface : le délai légal de 48h n'est qu'une recommandation
+              de service, jamais un verrou. */}
+          {order.supabaseOrderId && customerUser && (
+            <div className="card p-5 space-y-2">
+              <h2 className="text-sm font-semibold text-ink">Un souci avec cette commande ?</h2>
+              <button onClick={() => setClaimModal('retour_echange')} className="btn-outline w-full justify-start gap-2">
+                <RotateCcw size={15} /> Demander un retour ou un échange
+              </button>
+              <button onClick={() => setClaimModal('probleme')} className="btn-outline w-full justify-start gap-2">
+                <AlertTriangle size={15} /> Signaler un problème
+              </button>
+            </div>
+          )}
+
           {/* Actions */}
           <button onClick={() => navigate('/profil')} className="btn-outline w-full">Retour aux commandes</button>
         </div>
       </div>
+
+      {claimModal && customerUser && (
+        <ClaimModal
+          order={order}
+          claimType={claimModal}
+          customerId={customerUser.id}
+          onClose={() => setClaimModal(null)}
+        />
+      )}
     </div>
   );
 }

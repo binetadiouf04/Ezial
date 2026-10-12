@@ -128,3 +128,23 @@ export async function createOrderInSupabase(
   }
   return { result: data as CreatedOrderResult };
 }
+
+// Version string for the CGV currently shown at checkout — bump this the
+// day the CGV text actually changes, so every past consent stays tied to
+// the version the customer really saw.
+export const CGV_VERSION = 'v2026-10-11';
+
+// Called right after create_order() succeeds, once we have a real order id
+// to attach the consent to. Never blocks the order itself: the order is
+// already placed by the time this runs, so a failure here is logged, not
+// shown to the customer as a checkout error.
+export async function recordOrderCgvConsent(orderId: string): Promise<{ error?: string }> {
+  const { error } = await supabase.rpc('record_order_cgv_consent', { p_order_id: orderId, p_cgv_version: CGV_VERSION });
+  return error ? { error: error.message } : {};
+}
+
+export async function fetchOrderDeliveryCode(orderId: string): Promise<string | null> {
+  const { data, error } = await supabase.rpc('get_order_delivery_code', { p_order_id: orderId });
+  if (error || !data) return null;
+  return data as string;
+}

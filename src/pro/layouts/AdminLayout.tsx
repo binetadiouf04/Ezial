@@ -1,9 +1,11 @@
 import { usePro } from '../ProContext';
-import { LayoutDashboard, ShoppingBag, Package, Store, Wallet, LogOut, ArrowLeft, Layers, Truck } from 'lucide-react';
+import { LayoutDashboard, ShoppingBag, Package, Store, Wallet, LogOut, ArrowLeft, Layers, Truck, AlertTriangle } from 'lucide-react';
 import AdminDashboard from '../pages/admin/AdminDashboard';
 import AdminContent from '../pages/admin/AdminContent';
 import AdminOrders from '../pages/admin/AdminOrders';
 import AdminOrderDetail from '../pages/admin/AdminOrderDetail';
+import AdminClaims from '../pages/admin/AdminClaims';
+import AdminClaimDetail from '../pages/admin/AdminClaimDetail';
 import AdminProducts from '../pages/admin/AdminProducts';
 import AdminShops from '../pages/admin/AdminShops';
 import AdminShopDetail from '../pages/admin/AdminShopDetail';
@@ -21,6 +23,7 @@ import AdminNotificationBell from '../components/AdminNotificationBell';
 const navItems = [
   { route: '/admin', label: 'Tableau de bord', icon: LayoutDashboard },
   { route: '/admin/commandes', label: 'Commandes', icon: ShoppingBag },
+  { route: '/admin/reclamations', label: 'Réclamations', icon: AlertTriangle },
   { route: '/admin/produits', label: 'Produits', icon: Package },
   { route: '/admin/boutiques', label: 'Boutiques', icon: Store },
   { route: '/admin/livreurs', label: 'Livreurs', icon: Truck },
@@ -33,6 +36,7 @@ export default function AdminLayout() {
 
   const clean = route.split('?')[0];
   const orderDetailMatch = clean.match(/^\/admin\/commandes\/(.+)$/);
+  const claimDetailMatch = clean.match(/^\/admin\/reclamations\/(.+)$/);
   const shopDetailMatch = clean.match(/^\/admin\/boutiques\/(.+)$/);
   const deliveryDetailMatch = clean.match(/^\/admin\/livraisons\/(.+)$/);
   const driverDetailMatch = clean.match(/^\/admin\/livreurs\/(.+)$/);
@@ -44,6 +48,8 @@ export default function AdminLayout() {
     if (clean === '/admin') return <AdminDashboard />;
     if (clean === '/admin/commandes') return <AdminOrders />;
     if (orderDetailMatch) return <AdminOrderDetail orderId={orderDetailMatch[1]} />;
+    if (clean === '/admin/reclamations') return <AdminClaims />;
+    if (claimDetailMatch) return <AdminClaimDetail claimId={claimDetailMatch[1]} />;
     if (clean === '/admin/produits') return <AdminProducts />;
     if (clean === '/admin/boutiques') return <AdminShops />;
     if (shopDetailMatch) return <AdminShopDetail shopId={shopDetailMatch[1]} />;

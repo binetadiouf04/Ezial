@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { usePro } from '../ProContext';
-import { Home, ShoppingBag, Package, Wallet, Store, LogOut, ArrowLeft, Menu, X } from 'lucide-react';
+import { Home, ShoppingBag, Package, Wallet, Store, LogOut, ArrowLeft, Menu, X, AlertTriangle } from 'lucide-react';
 import SellerDashboard from '../pages/seller/SellerDashboard';
 import SellerOrders from '../pages/seller/SellerOrders';
 import SellerOrderDetail from '../pages/seller/SellerOrderDetail';
@@ -8,11 +8,14 @@ import SellerProducts from '../pages/seller/SellerProducts';
 import SellerProductForm from '../pages/seller/SellerProductForm';
 import SellerFinances from '../pages/seller/SellerFinances';
 import SellerShop from '../pages/seller/SellerShop';
+import SellerClaims from '../pages/seller/SellerClaims';
+import SellerClaimDetail from '../pages/seller/SellerClaimDetail';
 import SmartImage from '@/components/SmartImage';
 
 const navItems = [
   { route: '/seller', label: 'Accueil', icon: Home },
   { route: '/seller/commandes', label: 'Commandes', icon: ShoppingBag },
+  { route: '/seller/reclamations', label: 'Réclamations', icon: AlertTriangle },
   { route: '/seller/produits', label: 'Produits', icon: Package },
   { route: '/seller/finances', label: 'Finances', icon: Wallet },
   { route: '/seller/boutique', label: 'Ma boutique', icon: Store },
@@ -27,6 +30,8 @@ export default function SellerLayout() {
 
   // Order detail: /seller/commandes/:id
   const orderDetailMatch = clean.match(/^\/seller\/commandes\/(.+)$/);
+  // Claim detail: /seller/reclamations/:id
+  const claimDetailMatch = clean.match(/^\/seller\/reclamations\/(.+)$/);
   // Product edit: /seller/produits/modifier/:id
   const productEditMatch = clean.match(/^\/seller\/produits\/modifier\/(.+)$/);
   // Product add: /seller/produits/ajouter
@@ -54,6 +59,8 @@ export default function SellerLayout() {
     if (clean === '/seller') return <SellerDashboard />;
     if (clean === '/seller/commandes') return <SellerOrders />;
     if (orderDetailMatch) return <SellerOrderDetail orderId={orderDetailMatch[1]} />;
+    if (clean === '/seller/reclamations') return <SellerClaims />;
+    if (claimDetailMatch) return <SellerClaimDetail claimId={claimDetailMatch[1]} />;
     if (clean === '/seller/produits') return <SellerProducts />;
     if (isProductAdd) return <SellerProductForm />;
     if (productEditMatch) return <SellerProductForm productId={productEditMatch[1]} />;

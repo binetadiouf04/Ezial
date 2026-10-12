@@ -1,6 +1,8 @@
+import { useEffect, useState } from 'react';
 import { useApp } from '@/store/AppContext';
 import { formatFCFA } from '@/data/products';
 import { getShop } from '@/data/shops';
+import { fetchOrderDeliveryCode } from '@/lib/supabaseOrders';
 import { DeliveryTimeline, PickupTimeline } from '@/components/OrderTimeline';
 import { pickupStepLabels } from '@/data/orderStatusLabels';
 import { paymentLabels } from '@/data/payments';
@@ -13,6 +15,15 @@ const shopPrepColors: Record<string, string> = { preparing: 'bg-amber-50 text-am
 export default function OrderTrackingPage({ orderId }: { orderId: string }) {
   const { orders, navigate, catalogProducts } = useApp();
   const order = orders.find((o) => o.id === orderId);
+  const [deliveryCode, setDeliveryCode] = useState<string | null>(null);
+
+  // The driver asks the customer for this code before the delivery can be
+  // marked complete — until now it was never actually shown anywhere in
+  // the customer-facing app, making that check unenforceable in practice.
+  useEffect(() => {
+    if (!order?.supabaseOrderId) return;
+    void fetchOrderDeliveryCode(order.supabaseOrderId).then(setDeliveryCode);
+  }, [order?.supabaseOrderId]);
 
   if (!order) {
     return <div className="container-pro py-20 text-center"><Package size={42} className="mx-auto text-ink/20" /><p className="mt-4 text-sm text-ink/60">Commande introuvable.</p><button onClick={() => navigate('/profil')} className="btn-outline mt-6">Mes commandes</button></div>;
@@ -20,6 +31,7 @@ export default function OrderTrackingPage({ orderId }: { orderId: string }) {
 
   const hasDelivery = order.shopFulfillments.some((f) => f.type === 'delivery');
   const pickupFulfillments = order.shopFulfillments.filter((f) => f.type === 'pickup');
+  const showDeliveryCode = deliveryCode && ['picked_up', 'delivering'].includes(order.status);
 
   return (
     <div className="container-pro py-8 max-w-2xl">
@@ -35,6 +47,17 @@ export default function OrderTrackingPage({ orderId }: { orderId: string }) {
             <div className="card p-6">
               <h2 className="text-sm font-semibold text-ink mb-4 flex items-center gap-1.5"><Truck size={15} className="text-burgundy" /> Livraison Ezial</h2>
               <DeliveryTimeline status={order.status} />
+
+              {showDeliveryCode && (
+                <div className="mt-4 rounded-xl p-4 text-center" style={{ background: 'linear-gradient(135deg, rgba(128,23,37,0.04), rgba(128,23,37,0.08))' }}>
+                  <div className="flex items-center justify-center gap-2 mb-2">
+                    <KeySquare size={16} className="text-burgundy" />
+                    <p className="text-xs font-semibold uppercase tracking-wider text-ink/50">Code de livraison</p>
+                  </div>
+                  <p className="font-mono text-3xl font-bold tracking-[0.3em] text-burgundy">{deliveryCode}</p>
+                  <p className="mt-2 text-xs text-ink/50">Donnez ce code au livreur à la remise de votre colis.</p>
+                </div>
+              )}
             </div>
           )}
 

@@ -26,7 +26,19 @@ import { isRealCatalogId } from '@/data/products';
 // but a past order's line must still render correctly even after its
 // product is archived/removed from the catalog, which is exactly what this
 // snapshot is for.
-export interface CartItem { productId: string; shopId: string; quantity: number; variants: Record<string, string>; unitPrice?: number; variantId?: string; productName?: string; }
+export interface CartItem {
+  productId: string;
+  shopId: string;
+  quantity: number;
+  variants: Record<string, string>;
+  unitPrice?: number;
+  variantId?: string;
+  productName?: string;
+  // Real order_items.id — only present once this item comes from a real
+  // placed/fetched order (never for a cart line), needed to target a
+  // claim/return at this exact line (see ClaimModal).
+  orderItemId?: string;
+}
 export interface SavedItem { productId: string; shopId: string; quantity: number; variants: Record<string, string>; unitPrice?: number; variantId?: string; }
 
 export type ShopPrepStatus = 'preparing' | 'ready' | 'collected';
@@ -50,6 +62,10 @@ export interface CustomerInfo {
 
 export interface ShopFulfillment {
   shopId: string;
+  // Real order_shops.id — needed to file a claim/return against this
+  // exact shop-portion of the order (see ClaimModal). Absent only for an
+  // order never backed by a real Supabase row.
+  orderShopId?: string;
   type: 'delivery' | 'pickup';
   deliveryFee: number;
   zone?: DeliveryZone;
