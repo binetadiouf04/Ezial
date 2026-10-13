@@ -165,7 +165,10 @@ interface ProState extends AuthState {
   clearDriverActionError: () => void;
   driverMissions: Mission[];
   availableMissions: Mission[];
-  activeMission: Mission | null;
+  // Every mission this driver has accepted and not yet delivered — a
+  // driver can run several at once (e.g. nearby pickups/sectors), so this
+  // is never collapsed down to a single "the" active mission.
+  activeMissions: Mission[];
   completedMissions: Mission[];
   driverTransactions: DriverTransaction[];
   collectParcel: (missionId: string, shopId: string) => void;
@@ -818,7 +821,7 @@ export function ProProvider({ children }: { children: ReactNode }) {
   // missions or still-unclaimed ones, so a non-null driverId here can only
   // mean "assigned to me".
   const driverMissions = driverVisibleMissions.filter((m) => Boolean(m.driverId));
-  const activeMission = driverMissions.find((m) => m.step !== 'delivered') ?? null;
+  const activeMissions = driverMissions.filter((m) => m.step !== 'delivered');
   const availableMissions = driverVisibleMissions.filter((m) => !m.driverId);
   const completedMissions = driverMissions.filter((m) => m.step === 'delivered');
 
@@ -864,7 +867,7 @@ export function ProProvider({ children }: { children: ReactNode }) {
     clearDriverActionError,
     driverMissions,
     availableMissions,
-    activeMission,
+    activeMissions,
     completedMissions,
     driverTransactions: initialDriverTransactions,
     collectParcel,

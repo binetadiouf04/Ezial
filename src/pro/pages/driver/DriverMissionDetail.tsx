@@ -27,7 +27,7 @@ const deliveryIncidentReasons = [
 
 export default function DriverMissionDetail({ missionId }: { missionId: string }) {
   const {
-    navigate, driverVisibleMissions, acceptMission, activeMission,
+    navigate, driverVisibleMissions, acceptMission,
     collectParcel, startDelivery, completeDelivery, reportIncident,
   } = usePro();
 
@@ -87,7 +87,6 @@ export default function DriverMissionDetail({ missionId }: { missionId: string }
     : null;
 
   const handleAccept = () => {
-    if (activeMission) return;
     acceptMission(mission.id);
   };
 
@@ -246,12 +245,8 @@ export default function DriverMissionDetail({ missionId }: { missionId: string }
             {missionDistanceKm != null && <p className="mt-1.5 text-xs font-medium text-ink/60">Distance estimée : {formatDistanceKm(missionDistanceKm)}</p>}
           </div>
 
-          <button
-            onClick={handleAccept}
-            disabled={!!activeMission}
-            className="btn-primary w-full disabled:opacity-40 disabled:cursor-not-allowed"
-          >
-            {activeMission ? 'Vous avez déjà une livraison en cours' : 'Accepter la livraison'}
+          <button onClick={handleAccept} className="btn-primary w-full">
+            Accepter la livraison
           </button>
         </>
       )}
