@@ -108,6 +108,7 @@ export default function OrderDetailPage({ orderId }: { orderId: string }) {
             </div>
             <div className="border-t border-line mt-4 pt-3 space-y-1.5 text-sm">
               <div className="flex justify-between"><span className="text-ink/60">Produits</span><span className="font-medium">{formatFCFA(order.subtotal)}</span></div>
+              {order.discount > 0 && <div className="flex justify-between text-green-700"><span>Réduction</span><span className="font-medium">-{formatFCFA(order.discount)}</span></div>}
               <div className="flex justify-between"><span className="text-ink/60">Livraison Ezial</span><span className="font-medium">{order.delivery > 0 ? formatFCFA(order.delivery) : 'Gratuit'}</span></div>
               <div className="border-t border-line pt-1.5 flex justify-between"><span className="font-medium text-ink">Total</span><span className="font-semibold text-ink">{formatFCFA(order.total)}</span></div>
             </div>

@@ -73,6 +73,11 @@ export interface Order {
   customer: { firstName: string; lastName: string; phone: string; quartier: string; landmark?: string; instructions?: string };
   items: CartItem[];
   subtotal: number;
+  // Amount already deducted from `subtotal` (per-item promo + promo code
+  // combined, exactly as create_order() computes it) — `subtotal` here is
+  // always the pre-discount sum, so this is what makes "Produits" and the
+  // real per-item prices reconcile instead of silently disagreeing.
+  discount: number;
   delivery: number;
   total: number;
   shopFulfillments: ShopFulfillment[];

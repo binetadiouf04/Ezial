@@ -315,6 +315,7 @@ export default function CheckoutPage() {
         productName: catalogProducts.find((cp) => cp.id === it.product_id)?.name,
       })),
       subtotal: result.order.products_subtotal,
+      discount: result.order.discount_amount ?? 0,
       delivery: result.order.delivery_fee,
       total: result.order.total_amount,
       shopFulfillments: fulfillments,
