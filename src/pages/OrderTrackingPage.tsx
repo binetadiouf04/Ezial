@@ -2,9 +2,9 @@ import { useEffect, useState } from 'react';
 import { useApp } from '@/store/AppContext';
 import { formatFCFA } from '@/data/products';
 import { getShop } from '@/data/shops';
-import { fetchOrderDeliveryCode } from '@/lib/supabaseOrders';
+import { fetchOrderDeliveryCode, fetchOrderDeliveryMissionStatus } from '@/lib/supabaseOrders';
 import { DeliveryTimeline, PickupTimeline } from '@/components/OrderTimeline';
-import { pickupStepLabels } from '@/data/orderStatusLabels';
+import { pickupStepLabels, computeDeliveryStepStatus } from '@/data/orderStatusLabels';
 import { paymentLabels } from '@/data/payments';
 import { Phone, MapPin, Package, Store, Check, Clock, KeySquare, Truck, Smartphone } from 'lucide-react';
 import SmartImage from '@/components/SmartImage';
@@ -16,13 +16,18 @@ export default function OrderTrackingPage({ orderId }: { orderId: string }) {
   const { orders, navigate, catalogProducts } = useApp();
   const order = orders.find((o) => o.id === orderId);
   const [deliveryCode, setDeliveryCode] = useState<string | null>(null);
+  const [missionStatus, setMissionStatus] = useState<string | null>(null);
 
   // The driver asks the customer for this code before the delivery can be
   // marked complete — until now it was never actually shown anywhere in
   // the customer-facing app, making that check unenforceable in practice.
+  // orders.status is also never updated past its initial value, so the
+  // real progress comes from the delivery mission instead (see
+  // computeDeliveryStepStatus).
   useEffect(() => {
     if (!order?.supabaseOrderId) return;
     void fetchOrderDeliveryCode(order.supabaseOrderId).then(setDeliveryCode);
+    void fetchOrderDeliveryMissionStatus(order.supabaseOrderId).then(setMissionStatus);
   }, [order?.supabaseOrderId]);
 
   if (!order) {
@@ -31,7 +36,8 @@ export default function OrderTrackingPage({ orderId }: { orderId: string }) {
 
   const hasDelivery = order.shopFulfillments.some((f) => f.type === 'delivery');
   const pickupFulfillments = order.shopFulfillments.filter((f) => f.type === 'pickup');
-  const showDeliveryCode = deliveryCode && ['picked_up', 'delivering'].includes(order.status);
+  const effectiveStatus = computeDeliveryStepStatus(order, missionStatus);
+  const showDeliveryCode = deliveryCode && ['picked_up', 'delivering'].includes(effectiveStatus);
 
   return (
     <div className="container-pro py-8 max-w-2xl">
@@ -46,7 +52,7 @@ export default function OrderTrackingPage({ orderId }: { orderId: string }) {
           {hasDelivery && (
             <div className="card p-6">
               <h2 className="text-sm font-semibold text-ink mb-4 flex items-center gap-1.5"><Truck size={15} className="text-burgundy" /> Livraison Ezial</h2>
-              <DeliveryTimeline status={order.status} />
+              <DeliveryTimeline status={effectiveStatus} />
 
               {showDeliveryCode && (
                 <div className="mt-4 rounded-xl p-4 text-center" style={{ background: 'linear-gradient(135deg, rgba(128,23,37,0.04), rgba(128,23,37,0.08))' }}>

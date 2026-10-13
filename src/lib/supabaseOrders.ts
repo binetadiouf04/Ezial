@@ -148,3 +148,13 @@ export async function fetchOrderDeliveryCode(orderId: string): Promise<string | 
   if (error || !data) return null;
   return data as string;
 }
+
+// orders.status is never updated after create_order() writes it once — the
+// only real signal of delivery progress lives on delivery_missions, which
+// customers have no direct RLS access to (by design). This is the one
+// narrow read of it they get, mirroring fetchOrderDeliveryCode.
+export async function fetchOrderDeliveryMissionStatus(orderId: string): Promise<string | null> {
+  const { data, error } = await supabase.rpc('get_order_delivery_status', { p_order_id: orderId });
+  if (error) return null;
+  return (data as string | null) ?? null;
+}
