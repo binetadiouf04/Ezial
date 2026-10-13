@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, Suspense, lazy } from 'react';
 import { AppProvider, useApp } from '@/store/AppContext';
 import { ProProvider } from '@/pro/ProContext';
 import { getProduct } from '@/data/products';
@@ -7,27 +7,43 @@ import { categoryMap, type CategoryId } from '@/data/categories';
 import Header from '@/components/Header';
 import MobileCategoryDrawer from '@/components/MobileCategoryDrawer';
 import CartDrawer from '@/components/CartDrawer';
-import HomePage from '@/pages/HomePage';
-import CategoryPage from '@/pages/CategoryPage';
-import SearchPage from '@/pages/SearchPage';
-import ProductPage from '@/pages/ProductPage';
-import ShopPage from '@/pages/ShopPage';
-import FavoritesPage from '@/pages/FavoritesPage';
-import CartPage from '@/pages/CartPage';
-import CheckoutPage from '@/pages/CheckoutPage';
-import OrderConfirmationPage from '@/pages/OrderConfirmationPage';
-import OrderTrackingPage from '@/pages/OrderTrackingPage';
-import ProfilePage from '@/pages/ProfilePage';
-import OrderDetailPage from '@/pages/OrderDetailPage';
-import ProEntryPage from '@/pro/pages/ProEntryPage';
 import Footer from '@/components/Footer';
-import InfoPage from '@/pages/InfoPage';
-import PromoPage from '@/pages/PromoPage';
-import TrendingPage from '@/pages/TrendingPage';
-import ForYouPage from '@/pages/ForYouPage';
-import ShopsPage from '@/pages/ShopsPage';
-import SimilarProductsPage from '@/pages/SimilarProductsPage';
-import ResetPasswordPage from '@/pages/ResetPasswordPage';
+import { Loader2 } from 'lucide-react';
+import HomePage from '@/pages/HomePage';
+
+// Everything below is only ever needed once the visitor actually
+// navigates there — kept out of the bundle every first-time visitor to
+// the homepage had to download in full before. Ezial Pro in particular
+// (admin/seller/driver) is a large, completely separate render tree from
+// the public marketplace (see RouteView below) and almost nobody hits it,
+// so it's the single biggest win here.
+const CategoryPage = lazy(() => import('@/pages/CategoryPage'));
+const SearchPage = lazy(() => import('@/pages/SearchPage'));
+const ProductPage = lazy(() => import('@/pages/ProductPage'));
+const ShopPage = lazy(() => import('@/pages/ShopPage'));
+const FavoritesPage = lazy(() => import('@/pages/FavoritesPage'));
+const CartPage = lazy(() => import('@/pages/CartPage'));
+const CheckoutPage = lazy(() => import('@/pages/CheckoutPage'));
+const OrderConfirmationPage = lazy(() => import('@/pages/OrderConfirmationPage'));
+const OrderTrackingPage = lazy(() => import('@/pages/OrderTrackingPage'));
+const ProfilePage = lazy(() => import('@/pages/ProfilePage'));
+const OrderDetailPage = lazy(() => import('@/pages/OrderDetailPage'));
+const ProEntryPage = lazy(() => import('@/pro/pages/ProEntryPage'));
+const InfoPage = lazy(() => import('@/pages/InfoPage'));
+const PromoPage = lazy(() => import('@/pages/PromoPage'));
+const TrendingPage = lazy(() => import('@/pages/TrendingPage'));
+const ForYouPage = lazy(() => import('@/pages/ForYouPage'));
+const ShopsPage = lazy(() => import('@/pages/ShopsPage'));
+const SimilarProductsPage = lazy(() => import('@/pages/SimilarProductsPage'));
+const ResetPasswordPage = lazy(() => import('@/pages/ResetPasswordPage'));
+
+function RouteFallback() {
+  return (
+    <div className="flex min-h-[40vh] items-center justify-center">
+      <Loader2 size={24} className="animate-spin text-ink/30" />
+    </div>
+  );
+}
 
 // A Supabase password-recovery link redirects back here with `type=recovery`
 // in the URL (as a hash fragment or a query param, depending on the auth
@@ -193,7 +209,7 @@ function Layout() {
     return (
       <ProProvider>
         <div className="min-h-screen bg-white">
-          <RouteView />
+          <Suspense fallback={<RouteFallback />}><RouteView /></Suspense>
         </div>
       </ProProvider>
     );
@@ -209,15 +225,15 @@ function Layout() {
 
       {isHome ? (
         <main className="container-page flex-1 pt-2 pb-6">
-          <RouteView />
+          <Suspense fallback={<RouteFallback />}><RouteView /></Suspense>
         </main>
       ) : fullWidth ? (
         <main>
-          <RouteView />
+          <Suspense fallback={<RouteFallback />}><RouteView /></Suspense>
         </main>
       ) : (
         <main className="flex-1">
-          <RouteView />
+          <Suspense fallback={<RouteFallback />}><RouteView /></Suspense>
         </main>
       )}
 
@@ -228,7 +244,7 @@ function Layout() {
 
 export default function App() {
   const [isRecovery] = useState(isPasswordRecoveryLink);
-  if (isRecovery) return <ResetPasswordPage />;
+  if (isRecovery) return <Suspense fallback={<RouteFallback />}><ResetPasswordPage /></Suspense>;
 
   return (
     <AppProvider>
