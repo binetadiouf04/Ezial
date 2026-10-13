@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react';
-import { getPushSupportStatus, subscribeToPush, type PushSupportStatus } from '@/lib/supabasePush';
-import { Bell, Check, AlertCircle, Loader2 } from 'lucide-react';
+import { getPushSupportStatus, subscribeToPush, unsubscribeFromPush, isIosOutsideInstalledApp, type PushSupportStatus } from '@/lib/supabasePush';
+import { Bell, Check, AlertCircle, Loader2, Share } from 'lucide-react';
 
 // Explicit opt-in only — Web Push never subscribes silently. Reused for
-// both the customer account page and the seller "Ma boutique" page; the
-// only difference between them is which userId (auth.uid()) subscriptions
-// get tied to.
+// the customer account page, the seller "Ma boutique" page, the driver
+// home, and the admin layout; the only difference between call sites is
+// which userId (auth.uid()) subscriptions get tied to.
 export default function NotificationOptIn({ userId, label }: { userId: string; label: string }) {
   const [status, setStatus] = useState<PushSupportStatus>('default');
   const [loading, setLoading] = useState(false);
@@ -22,7 +22,32 @@ export default function NotificationOptIn({ userId, label }: { userId: string; l
     setStatus('granted');
   };
 
-  if (status === 'unsupported') return null; // never shown where it can't work (e.g. iOS Safari outside an installed PWA)
+  const handleDisable = async () => {
+    setLoading(true);
+    await unsubscribeFromPush(userId);
+    setLoading(false);
+    setStatus('default');
+  };
+
+  // iOS/iPadOS: Web Push only exists inside an installed (Home Screen) app —
+  // a plain Safari tab can never show it. Rather than silently hide the
+  // feature (which would look broken, not absent), this shows the one
+  // concrete step that unlocks it, instead of promising push on a bare tab.
+  if (status === 'unsupported' && isIosOutsideInstalledApp()) {
+    return (
+      <div className="card p-4 flex items-start gap-3">
+        <span className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-burgundy/10 text-burgundy"><Bell size={16} /></span>
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-medium text-ink">{label}</p>
+          <p className="mt-1 flex items-center gap-1.5 text-xs text-ink/55">
+            Sur iPhone/iPad : appuyez sur <Share size={13} className="inline" /> puis « Sur l'écran d'accueil » pour activer les notifications.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  if (status === 'unsupported') return null; // not supported at all on this browser/device
 
   return (
     <div className="card p-4 flex items-center gap-3">
@@ -33,7 +58,9 @@ export default function NotificationOptIn({ userId, label }: { userId: string; l
         {status === 'denied' && <p className="mt-0.5 text-xs text-ink/45">Autorisation refusée — modifiable dans les réglages de votre navigateur.</p>}
       </div>
       {status === 'granted' ? (
-        <span className="flex items-center gap-1 text-sm font-medium text-green-700 flex-shrink-0"><Check size={15} /> Activées</span>
+        <button onClick={() => void handleDisable()} disabled={loading} className="flex items-center gap-1.5 text-sm font-medium text-green-700 hover:text-ink/60 flex-shrink-0 transition-colors" title="Désactiver les notifications">
+          {loading ? <Loader2 size={15} className="animate-spin" /> : <><Check size={15} /> Activées</>}
+        </button>
       ) : status === 'default' ? (
         <button onClick={() => void handleEnable()} disabled={loading} className="btn-outline flex-shrink-0">
           {loading ? <Loader2 size={15} className="animate-spin" /> : 'Activer'}
