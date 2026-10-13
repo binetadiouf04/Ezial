@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useApp } from '@/store/AppContext';
 import { formatFCFA } from '@/data/products';
 import { getShop } from '@/data/shops';
-import { fetchOrderDeliveryCode, fetchOrderDeliveryMissionStatus } from '@/lib/supabaseOrders';
+import { ensureOrderDeliveryCode, fetchOrderDeliveryMissionStatus } from '@/lib/supabaseOrders';
 import { DeliveryTimeline, PickupTimeline } from '@/components/OrderTimeline';
 import { pickupStepLabels, computeDeliveryStepStatus } from '@/data/orderStatusLabels';
 import { paymentLabels } from '@/data/payments';
@@ -18,15 +18,13 @@ export default function OrderTrackingPage({ orderId }: { orderId: string }) {
   const [deliveryCode, setDeliveryCode] = useState<string | null>(null);
   const [missionStatus, setMissionStatus] = useState<string | null>(null);
 
-  // The driver asks the customer for this code before the delivery can be
-  // marked complete — until now it was never actually shown anywhere in
-  // the customer-facing app, making that check unenforceable in practice.
-  // orders.status is also never updated past its initial value, so the
-  // real progress comes from the delivery mission instead (see
-  // computeDeliveryStepStatus).
+  // Generated right at order confirmation (like Uber's ride PIN) — shown
+  // immediately, never gated on delivery progress. orders.status is never
+  // updated past its initial value, so the real progress comes from the
+  // delivery mission instead (see computeDeliveryStepStatus).
   useEffect(() => {
     if (!order?.supabaseOrderId) return;
-    void fetchOrderDeliveryCode(order.supabaseOrderId).then(setDeliveryCode);
+    void ensureOrderDeliveryCode(order.supabaseOrderId).then(setDeliveryCode);
     void fetchOrderDeliveryMissionStatus(order.supabaseOrderId).then(setMissionStatus);
   }, [order?.supabaseOrderId]);
 
@@ -37,7 +35,6 @@ export default function OrderTrackingPage({ orderId }: { orderId: string }) {
   const hasDelivery = order.shopFulfillments.some((f) => f.type === 'delivery');
   const pickupFulfillments = order.shopFulfillments.filter((f) => f.type === 'pickup');
   const effectiveStatus = computeDeliveryStepStatus(order, missionStatus);
-  const showDeliveryCode = deliveryCode && ['picked_up', 'delivering'].includes(effectiveStatus);
 
   return (
     <div className="container-pro py-8 max-w-2xl">
@@ -49,21 +46,21 @@ export default function OrderTrackingPage({ orderId }: { orderId: string }) {
       <div className="grid gap-6 lg:grid-cols-[1fr_300px]">
         <div className="space-y-5">
           {/* Overall delivery timeline (if any delivery) */}
+          {hasDelivery && deliveryCode && (
+            <div className="rounded-2xl p-6 text-center" style={{ background: 'linear-gradient(135deg, rgba(128,23,37,0.06), rgba(128,23,37,0.12))' }}>
+              <div className="flex items-center justify-center gap-2 mb-2">
+                <KeySquare size={18} className="text-burgundy" />
+                <p className="text-sm font-semibold uppercase tracking-wider text-burgundy">Votre code de livraison</p>
+              </div>
+              <p className="font-mono text-5xl font-bold tracking-[0.3em] text-burgundy">{deliveryCode}</p>
+              <p className="mt-3 text-sm font-medium text-ink/70">Communiquez ce code au livreur uniquement au moment où il vous remet votre colis.</p>
+            </div>
+          )}
+
           {hasDelivery && (
             <div className="card p-6">
               <h2 className="text-sm font-semibold text-ink mb-4 flex items-center gap-1.5"><Truck size={15} className="text-burgundy" /> Livraison Ezial</h2>
               <DeliveryTimeline status={effectiveStatus} />
-
-              {showDeliveryCode && (
-                <div className="mt-4 rounded-xl p-4 text-center" style={{ background: 'linear-gradient(135deg, rgba(128,23,37,0.04), rgba(128,23,37,0.08))' }}>
-                  <div className="flex items-center justify-center gap-2 mb-2">
-                    <KeySquare size={16} className="text-burgundy" />
-                    <p className="text-xs font-semibold uppercase tracking-wider text-ink/50">Code de livraison</p>
-                  </div>
-                  <p className="font-mono text-3xl font-bold tracking-[0.3em] text-burgundy">{deliveryCode}</p>
-                  <p className="mt-2 text-xs text-ink/50">Donnez ce code au livreur à la remise de votre colis.</p>
-                </div>
-              )}
             </div>
           )}
 
