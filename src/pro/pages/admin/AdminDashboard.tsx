@@ -3,6 +3,8 @@ import { usePro } from '../../ProContext';
 import { fetchAdminDashboardStats, type AdminDashboardStats } from '@/lib/supabaseAdminData';
 import { formatFCFA } from '../../data';
 import { StatusChip } from '../../components/StatusChip';
+import { supabase } from '@/lib/supabaseClient';
+import NotificationOptIn from '@/components/NotificationOptIn';
 import { ShoppingBag, Store, Package, Loader2, AlertCircle } from 'lucide-react';
 
 function formatDateTime(iso: string): string {
@@ -17,6 +19,8 @@ export default function AdminDashboard() {
   const [stats, setStats] = useState<AdminDashboardStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
+  const [authUserId, setAuthUserId] = useState<string | null>(null);
+  useEffect(() => { void supabase.auth.getUser().then(({ data }) => setAuthUserId(data.user?.id ?? null)); }, []);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -41,6 +45,8 @@ export default function AdminDashboard() {
   return (
     <div className="space-y-6">
       <h1 className="font-display text-2xl font-semibold text-ink">Tableau de bord</h1>
+
+      {authUserId && <NotificationOptIn userId={authUserId} label="Notifications administrateur" />}
 
       {loadError && (
         <p className="flex items-start gap-1.5 rounded-lg bg-burgundy/5 p-3 text-sm text-burgundy">

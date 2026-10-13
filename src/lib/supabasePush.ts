@@ -25,6 +25,20 @@ function urlBase64ToUint8Array(base64String: string): Uint8Array {
 
 export type PushSupportStatus = 'unsupported' | 'default' | 'granted' | 'denied';
 
+// iOS/iPadOS only exposes the Push API inside an installed (Home Screen)
+// PWA — a plain Safari tab has no 'PushManager' at all, which getPushSupportStatus
+// below already reports as 'unsupported'. This distinguishes that specific
+// case so the UI can show "add to Home Screen first" instead of silently
+// hiding the feature, per Apple's own requirement — never promising push
+// on a bare Safari tab.
+export function isIosOutsideInstalledApp(): boolean {
+  const isIos = /iPad|iPhone|iPod/.test(navigator.userAgent) && !('MSStream' in window);
+  if (!isIos) return false;
+  const isStandalone = (navigator as { standalone?: boolean }).standalone === true
+    || window.matchMedia('(display-mode: standalone)').matches;
+  return !isStandalone;
+}
+
 export function getPushSupportStatus(): PushSupportStatus {
   if (!('serviceWorker' in navigator) || !('PushManager' in window) || !VAPID_PUBLIC_KEY) return 'unsupported';
   return Notification.permission as PushSupportStatus;

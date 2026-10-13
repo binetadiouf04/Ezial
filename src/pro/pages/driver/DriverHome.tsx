@@ -1,8 +1,13 @@
+import { useState, useEffect } from 'react';
 import { usePro } from '../../ProContext';
+import { supabase } from '@/lib/supabaseClient';
+import NotificationOptIn from '@/components/NotificationOptIn';
 import { Truck, MapPin, Store, ChevronRight, Navigation, CheckCircle2, Power, Package } from 'lucide-react';
 
 export default function DriverHome() {
   const { name, driverAvailable, setDriverAvailable, navigate, activeMissions, availableMissions, acceptMission, completedMissions, collectParcel, startDelivery } = usePro();
+  const [authUserId, setAuthUserId] = useState<string | null>(null);
+  useEffect(() => { void supabase.auth.getUser().then(({ data }) => setAuthUserId(data.user?.id ?? null)); }, []);
 
   const completedToday = completedMissions.filter((m) => {
     if (!m.deliveredAt) return false;
@@ -14,6 +19,8 @@ export default function DriverHome() {
   return (
     <div className="space-y-5">
       <h1 className="font-display text-2xl font-semibold text-ink">Bonjour, {name}</h1>
+
+      {authUserId && <NotificationOptIn userId={authUserId} label="Notifications de nouvelles missions" />}
 
       {/* Availability toggle */}
       <button
