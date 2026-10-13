@@ -13,6 +13,8 @@ import {
   deleteProductImage,
   addProductMedia,
   reorderProductMedia,
+  fetchProductSupplier,
+  saveProductSupplier,
   MAX_PRODUCT_MEDIA_ITEMS,
   MAX_PRODUCT_VIDEOS,
   MAX_VIDEO_SIZE_MB,
@@ -267,7 +269,7 @@ interface MediaItem {
 }
 
 export default function SellerProductForm({ productId }: { productId?: string }) {
-  const { navigate, name: sellerShopName, sellerSupabaseShopId } = usePro();
+  const { navigate, name: sellerShopName, sellerSupabaseShopId, sellerShopIsOfficial } = usePro();
   const isEditing = Boolean(productId);
 
   // Real moderation flag on this product (public.moderation_flags), never
@@ -323,6 +325,12 @@ export default function SellerProductForm({ productId }: { productId?: string })
   // descriptive_attributes key, never a variant dimension.
   const [notesInput, setNotesInput] = useState('');
 
+  // Fournisseur — official Ezial shop only (sellerShopIsOfficial, from
+  // shops.is_official — never the shop's displayed name). Free text, stored
+  // in its own RLS-protected table (product_suppliers), never shown to
+  // customers or other shops. See fetchProductSupplier/saveProductSupplier.
+  const [supplier, setSupplier] = useState('');
+
   // "Fait à la main" — a product-wide characteristic, independent of
   // category/subcategory (never replaces either). Stored the same way as
   // every other descriptive characteristic, under its own fixed
@@ -368,6 +376,9 @@ export default function SellerProductForm({ productId }: { productId?: string })
       }
 
       setExistingProductId(data.id);
+      if (sellerShopIsOfficial) {
+        fetchProductSupplier(data.id).then((s) => { if (!cancelled) setSupplier(s ?? ''); });
+      }
       setExistingReference(data.reference);
       setExistingStatus(data.status);
       setCategoryId(data.category);
@@ -467,7 +478,7 @@ export default function SellerProductForm({ productId }: { productId?: string })
       setLoadingExisting(false);
     });
     return () => { cancelled = true; };
-  }, [productId, sellerSupabaseShopId]);
+  }, [productId, sellerSupabaseShopId, sellerShopIsOfficial]);
 
   const selectedCategory = categoryId ? categoryMap[categoryId as CategoryId] : null;
   const selectedTypeProduit = selections.typeproduit?.[0];
@@ -1010,6 +1021,14 @@ export default function SellerProductForm({ productId }: { productId?: string })
             return;
           }
         }
+
+        if (sellerShopIsOfficial) {
+          const supplierResult = await saveProductSupplier(existingProductId, supplier);
+          if (supplierResult.error) {
+            setSubmitError(supplierResult.error);
+            return;
+          }
+        }
       } else {
         const supabaseResult = await createProductInSupabase({
           shopId: sellerSupabaseShopId,
@@ -1028,6 +1047,14 @@ export default function SellerProductForm({ productId }: { productId?: string })
         if ('error' in supabaseResult) {
           setSubmitError(supabaseResult.error);
           return;
+        }
+
+        if (sellerShopIsOfficial) {
+          const supplierResult = await saveProductSupplier(supabaseResult.productId, supplier);
+          if (supplierResult.error) {
+            setSubmitError(supplierResult.error);
+            return;
+          }
         }
       }
 
@@ -1322,6 +1349,18 @@ export default function SellerProductForm({ productId }: { productId?: string })
           <textarea className="input-field" rows={3} placeholder={descriptionExample} value={description} onChange={(e) => setDescription(e.target.value)} />
           {errors.description && <p className="mt-1 text-xs text-burgundy">{errors.description}</p>}
         </div>
+        {sellerShopIsOfficial && (
+          <div>
+            <label className="block text-xs font-medium text-ink/60 mb-1.5">Fournisseur</label>
+            <input
+              className="input-field"
+              placeholder={'Ex. "Fournisseur Dakar", "Boutique Aminata" — ou "Ezial" si le stock vient directement d\'EZIAL'}
+              value={supplier}
+              onChange={(e) => setSupplier(e.target.value)}
+            />
+            <p className="mt-1 text-xs text-ink/45">Visible uniquement en interne (EZIAL) — jamais affiché aux clients ni aux autres boutiques.</p>
+          </div>
+        )}
       </div>
 
       {/* 4bis. Fait à la main — a product-wide characteristic, independent of

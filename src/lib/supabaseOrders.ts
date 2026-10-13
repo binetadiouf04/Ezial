@@ -162,3 +162,18 @@ export async function fetchOrderDeliveryMissionStatus(orderId: string): Promise<
   if (error) return null;
   return (data as string | null) ?? null;
 }
+
+// Batched sibling of fetchOrderDeliveryMissionStatus — one round trip for a
+// whole order list (Mes commandes) instead of one RPC call per order. Only
+// orders actually owned by the caller come back; orders with no mission yet
+// come back with status null.
+export async function fetchOrderDeliveryMissionStatuses(orderIds: string[]): Promise<Record<string, string | null>> {
+  if (orderIds.length === 0) return {};
+  const { data, error } = await supabase.rpc('get_order_delivery_statuses', { p_order_ids: orderIds });
+  if (error || !data) return {};
+  const result: Record<string, string | null> = {};
+  for (const row of data as { order_id: string; status: string | null }[]) {
+    result[row.order_id] = row.status;
+  }
+  return result;
+}
