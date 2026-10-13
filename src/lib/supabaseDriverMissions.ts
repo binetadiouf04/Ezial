@@ -9,18 +9,19 @@ import type { Mission } from '@/pro/data';
 // so DriverHome/DriverMissions/DriverMissionDetail/DriverHistory needed no
 // redesign, only a real data source.
 //
-// Status vocabulary chosen here (delivery_missions.status progression:
-// available -> accepted -> in_delivery -> delivered) is this integration's
-// own choice, not reverse-engineered from existing production data — the
-// tables were empty except for the literal 'available' string already
-// baked into the RLS policies (see accept_delivery_mission). Every status
-// write in this file goes through the one set of constants below, so
-// correcting a string later is a one-place change.
+// Status vocabulary matches the real delivery_missions_status_check
+// constraint exactly: available, accepted, picking_up, out_for_delivery,
+// delivered, cancelled. 'picking_up' and 'cancelled' aren't written by
+// this file yet (collection progress is tracked per-stop on delivery_stops
+// instead, and there's no cancellation flow here), but the allowed set is
+// listed in full so a future addition doesn't have to rediscover it.
 export const MISSION_STATUS = {
   available: 'available',
   accepted: 'accepted',
-  inDelivery: 'in_delivery',
+  pickingUp: 'picking_up',
+  outForDelivery: 'out_for_delivery',
   delivered: 'delivered',
+  cancelled: 'cancelled',
 } as const;
 
 const STOP_STATUS = {
@@ -79,9 +80,9 @@ function fullName(firstName: string | null, lastName: string | null): string {
 }
 
 // Every mission the signed-in driver can currently see: their own
-// (accepted/in_delivery/delivered) plus every still-unclaimed one, exactly
-// mirroring the RLS policies on delivery_missions/delivery_stops/orders —
-// never a broader fetch than what those policies already allow.
+// (accepted/out_for_delivery/delivered) plus every still-unclaimed one,
+// exactly mirroring the RLS policies on delivery_missions/delivery_stops/
+// orders — never a broader fetch than what those policies already allow.
 export async function fetchDriverMissions(): Promise<Mission[]> {
   const { data: missionRows, error: missionsError } = await supabase
     .from('delivery_missions')
@@ -154,7 +155,7 @@ export async function fetchDriverMissions(): Promise<Mission[]> {
       slot: order?.preferred_delivery_slot ?? '',
       distance: '',
       step: row.status === MISSION_STATUS.delivered ? 'delivered'
-        : row.status === MISSION_STATUS.inDelivery ? 'to_customer'
+        : row.status === MISSION_STATUS.outForDelivery ? 'to_customer'
         : allCollected ? 'all_collected'
         : 'to_collection',
       // Never read/displayed by the driver UI — the driver is paid
@@ -192,7 +193,7 @@ export async function markStopCollected(stopId: string): Promise<{ error?: strin
 export async function startMissionDelivery(missionId: string): Promise<{ error?: string }> {
   const { data, error } = await supabase
     .from('delivery_missions')
-    .update({ status: MISSION_STATUS.inDelivery })
+    .update({ status: MISSION_STATUS.outForDelivery })
     .eq('id', missionId)
     .select('id');
   if (error) return { error: error.message };
