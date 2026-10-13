@@ -129,11 +129,12 @@ export async function createOrderInSupabase(
   return { result: data as CreatedOrderResult };
 }
 
-// Customer-scoped read of the delivery code the driver must collect from
-// them — previously never surfaced anywhere in the customer-facing app,
-// making that check unenforceable in practice (see get_order_delivery_code()).
-export async function fetchOrderDeliveryCode(orderId: string): Promise<string | null> {
-  const { data, error } = await supabase.rpc('get_order_delivery_code', { p_order_id: orderId });
+// Generates the delivery code at order-confirmation time (like Uber's ride
+// PIN), not when a driver mission eventually gets created — idempotent, so
+// calling it again on every page view just returns the same code. Returns
+// null for a pickup-only order (no delivery leg to protect with a code).
+export async function ensureOrderDeliveryCode(orderId: string): Promise<string | null> {
+  const { data, error } = await supabase.rpc('ensure_order_delivery_code', { p_order_id: orderId });
   if (error || !data) return null;
   return data as string;
 }
