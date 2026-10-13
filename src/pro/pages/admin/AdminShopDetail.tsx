@@ -6,7 +6,7 @@ import { StatusChip } from '../../components/StatusChip';
 import FlagModal from '../../components/FlagModal';
 import { createModerationFlag, fetchModerationFlags, resolveModerationFlag, latestUnresolvedFlag, type ModerationFlagRow } from '@/lib/supabaseModeration';
 import { fetchShopReports, type AdminShopReport, type ShopReportReason } from '@/lib/supabaseShopReports';
-import { ArrowLeft, Phone, MapPin, Loader2, Flag, Check, X, User, Ban, AlertOctagon } from 'lucide-react';
+import { ArrowLeft, Phone, MapPin, Loader2, Flag, Check, User, Ban, AlertOctagon } from 'lucide-react';
 import SmartImage from '@/components/SmartImage';
 
 const suspensionReasons = ['Produits suspects ou contrefaits', 'Informations trompeuses', 'Comportement inapproprié', 'Non-conformité répétée'];
@@ -116,20 +116,9 @@ export default function AdminShopDetail({ shopId }: { shopId: string }) {
             <h1 className="font-display text-lg font-semibold text-ink truncate">{shop.name}</h1>
             {shop.sellerCode && <p className="text-xs text-ink/45 font-mono mt-0.5">{shop.sellerCode}</p>}
           </div>
-          <StatusChip status={shop.status} size="md" label={shop.status === 'pending' ? 'À valider' : undefined} />
+          <StatusChip status={shop.status} size="md" />
         </div>
       </div>
-
-      {shop.status === 'pending' && (
-        <div className="card border-amber-200 bg-amber-50/30 p-4 flex gap-2">
-          <button onClick={() => void act('active')} disabled={acting} className="btn-primary flex-1">
-            {acting ? <Loader2 size={15} className="animate-spin" /> : <Check size={15} />} Accepter
-          </button>
-          <button onClick={() => void act('rejected')} disabled={acting} className="btn-outline flex-1">
-            {acting ? <Loader2 size={15} className="animate-spin" /> : <X size={15} />} Refuser
-          </button>
-        </div>
-      )}
 
       {shop.status === 'active' && (
         <button onClick={() => setShowSuspendModal(true)} disabled={acting} className="btn-outline w-full flex items-center justify-center gap-1.5">
@@ -147,13 +136,13 @@ export default function AdminShopDetail({ shopId }: { shopId: string }) {
         </div>
       )}
 
-      {/* Filet de sécurité : si une boutique reste bloquée dans un statut
-          que l'auto-activation n'a pas prévu (ex. "draft" — email du
-          vendeur jamais confirmé), l'admin doit toujours pouvoir l'activer
-          manuellement plutôt que de n'avoir aucune action possible. */}
-      {!['pending', 'active', 'suspended'].includes(shop.status) && (
+      {/* L'auto-activation à la confirmation d'email gère le cas normal ;
+          ce bloc générique est le seul filet de sécurité qui reste pour
+          toute boutique non active/suspendue (pending, draft, ou tout
+          autre statut), plus de file d'approbation manuelle séparée. */}
+      {!['active', 'suspended'].includes(shop.status) && (
         <div className="card border-amber-200 bg-amber-50/30 p-4 space-y-2">
-          <p className="text-sm text-ink/70">Statut actuel : <span className="font-medium">{shop.status}</span>. Cette boutique n'a pas encore de produits actifs ou n'a pas été activée automatiquement (email non confirmé, par exemple).</p>
+          <p className="text-sm text-ink/70">Statut actuel : <span className="font-medium">{shop.status}</span>. Cette boutique n'a pas été activée automatiquement (email non confirmé, par exemple).</p>
           <button onClick={() => void act('active')} disabled={acting} className="btn-primary flex items-center gap-1.5">
             {acting ? <Loader2 size={15} className="animate-spin" /> : <Check size={15} />} Activer la boutique
           </button>
