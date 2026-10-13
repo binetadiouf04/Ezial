@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useApp, type DeliveryStepStatus, type PickupStepStatus, type Order, type CustomerAddressInput, quartiers } from '@/store/AppContext';
-import { deliveryStatusLabels, pickupStepLabels } from '@/data/orderStatusLabels';
+import { deliveryStatusLabels, pickupStepLabels, computeDeliveryStepStatus } from '@/data/orderStatusLabels';
+import { fetchOrderDeliveryMissionStatus } from '@/lib/supabaseOrders';
 import { formatFCFA } from '@/data/products';
 import ProductGrid from '@/components/ProductGrid';
 import SmartImage from '@/components/SmartImage';
@@ -18,7 +19,7 @@ const pickupStepColors: Record<PickupStepStatus, string> = {
   preparing: 'bg-amber-50 text-amber-700', ready_for_pickup: 'bg-green-50 text-green-700', picked_up: 'bg-ink/5 text-ink/60',
 };
 
-function getOrderStatusLabel(order: Order): string {
+function getOrderStatusLabel(order: Order, effectiveStatus: DeliveryStepStatus): string {
   const hasPickup = order.shopFulfillments.some((f) => f.type === 'pickup');
   const hasDelivery = order.shopFulfillments.some((f) => f.type === 'delivery');
   if (hasPickup && !hasDelivery) {
@@ -26,10 +27,10 @@ function getOrderStatusLabel(order: Order): string {
     const worst = pickupStatuses.sort((a, b) => Object.keys(pickupStepLabels).indexOf(a) - Object.keys(pickupStepLabels).indexOf(b))[0];
     return pickupStepLabels[worst] ?? pickupStepLabels.preparing;
   }
-  return deliveryStatusLabels[order.status] ?? deliveryStatusLabels.confirmed;
+  return deliveryStatusLabels[effectiveStatus] ?? deliveryStatusLabels.confirmed;
 }
 
-function getOrderStatusColor(order: Order): string {
+function getOrderStatusColor(order: Order, effectiveStatus: DeliveryStepStatus): string {
   const hasPickup = order.shopFulfillments.some((f) => f.type === 'pickup');
   const hasDelivery = order.shopFulfillments.some((f) => f.type === 'delivery');
   if (hasPickup && !hasDelivery) {
@@ -37,7 +38,7 @@ function getOrderStatusColor(order: Order): string {
     const worst = pickupStatuses.sort((a, b) => Object.keys(pickupStepColors).indexOf(a) - Object.keys(pickupStepColors).indexOf(b))[0];
     return pickupStepColors[worst] ?? deliveryStatusColors.confirmed;
   }
-  return deliveryStatusColors[order.status] ?? deliveryStatusColors.confirmed;
+  return deliveryStatusColors[effectiveStatus] ?? deliveryStatusColors.confirmed;
 }
 
 type Tab = 'orders' | 'favorites' | 'addresses' | 'info';
@@ -348,6 +349,16 @@ function AddressesTab() {
 export default function ProfilePage() {
   const { orders, favorites, navigate, catalogProducts, customerUser, authLoading, signOutCustomerAccount, updateCustomerAccount, deleteCustomerAccount, changePassword } = useApp();
   const [tab, setTab] = useState<Tab>('orders');
+  // orders.status is never updated after creation (see computeDeliveryStepStatus)
+  // — this fetches each order's real delivery_missions.status in parallel so
+  // the badge in the list reflects actual progress, not a frozen value.
+  const [missionStatuses, setMissionStatuses] = useState<Record<string, string | null>>({});
+  useEffect(() => {
+    const deliveryOrders = orders.filter((o) => o.supabaseOrderId && o.shopFulfillments.some((f) => f.type === 'delivery'));
+    if (deliveryOrders.length === 0) return;
+    void Promise.all(deliveryOrders.map((o) => fetchOrderDeliveryMissionStatus(o.supabaseOrderId!).then((s) => [o.id, s] as const)))
+      .then((pairs) => setMissionStatuses(Object.fromEntries(pairs)));
+  }, [orders]);
   const [infoForm, setInfoForm] = useState<InfoForm>(() => ({
     firstName: customerUser?.firstName ?? '', lastName: customerUser?.lastName ?? '',
     phone: customerUser?.phone ?? '', email: customerUser?.email ?? '',
@@ -477,6 +488,7 @@ export default function ProfilePage() {
             orders.map((order) => {
               const hasPickup = order.shopFulfillments.some((f) => f.type === 'pickup');
               const hasDelivery = order.shopFulfillments.some((f) => f.type === 'delivery');
+              const effectiveStatus = computeDeliveryStepStatus(order, missionStatuses[order.id] ?? null);
               return (
                 <div key={order.id} className="card p-5">
                   <div className="flex items-start justify-between mb-3">
@@ -484,7 +496,7 @@ export default function ProfilePage() {
                       <span className="font-mono text-sm font-semibold text-ink">{order.id}</span>
                       <p className="text-xs text-ink/45 mt-0.5">{new Date(order.date).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</p>
                     </div>
-                    <span className={`rounded-full px-3 py-1 text-xs font-medium ${getOrderStatusColor(order)}`}>{getOrderStatusLabel(order)}</span>
+                    <span className={`rounded-full px-3 py-1 text-xs font-medium ${getOrderStatusColor(order, effectiveStatus)}`}>{getOrderStatusLabel(order, effectiveStatus)}</span>
                   </div>
                   <div className="flex gap-2 mb-3">
                     {order.items.slice(0, 4).map((item, i) => {

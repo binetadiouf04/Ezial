@@ -1,8 +1,10 @@
+import { useEffect, useState } from 'react';
 import { useApp, type DeliveryStepStatus, type PickupStepStatus, type Order } from '@/store/AppContext';
 import { formatFCFA } from '@/data/products';
 import { getShop } from '@/data/shops';
+import { fetchOrderDeliveryCode, fetchOrderDeliveryMissionStatus } from '@/lib/supabaseOrders';
 import { DeliveryTimeline, PickupTimeline } from '@/components/OrderTimeline';
-import { deliveryStatusLabels, pickupStepLabels } from '@/data/orderStatusLabels';
+import { deliveryStatusLabels, pickupStepLabels, computeDeliveryStepStatus } from '@/data/orderStatusLabels';
 import { paymentLabels } from '@/data/payments';
 import { Package, Truck, Store, MapPin, Smartphone, Clock, Check, KeySquare, ArrowLeft, CheckCircle2 } from 'lucide-react';
 import SmartImage from '@/components/SmartImage';
@@ -15,7 +17,7 @@ const pickupStepColors: Record<PickupStepStatus, string> = {
   preparing: 'bg-amber-50 text-amber-700', ready_for_pickup: 'bg-green-50 text-green-700', picked_up: 'bg-ink/5 text-ink/60',
 };
 
-function getOrderStatusLabel(order: Order): string {
+function getOrderStatusLabel(order: Order, effectiveStatus: DeliveryStepStatus): string {
   const hasPickup = order.shopFulfillments.some((f) => f.type === 'pickup');
   const hasDelivery = order.shopFulfillments.some((f) => f.type === 'delivery');
   if (hasPickup && !hasDelivery) {
@@ -23,10 +25,10 @@ function getOrderStatusLabel(order: Order): string {
     const worst = pickupStatuses.sort((a, b) => Object.keys(pickupStepLabels).indexOf(a) - Object.keys(pickupStepLabels).indexOf(b))[0];
     return pickupStepLabels[worst] ?? pickupStepLabels.preparing;
   }
-  return deliveryStatusLabels[order.status] ?? deliveryStatusLabels.confirmed;
+  return deliveryStatusLabels[effectiveStatus] ?? deliveryStatusLabels.confirmed;
 }
 
-function getOrderStatusColor(order: Order): string {
+function getOrderStatusColor(order: Order, effectiveStatus: DeliveryStepStatus): string {
   const hasPickup = order.shopFulfillments.some((f) => f.type === 'pickup');
   const hasDelivery = order.shopFulfillments.some((f) => f.type === 'delivery');
   if (hasPickup && !hasDelivery) {
@@ -34,12 +36,20 @@ function getOrderStatusColor(order: Order): string {
     const worst = pickupStatuses.sort((a, b) => Object.keys(pickupStepColors).indexOf(a) - Object.keys(pickupStepColors).indexOf(b))[0];
     return pickupStepColors[worst] ?? deliveryStatusColors.confirmed;
   }
-  return deliveryStatusColors[order.status] ?? deliveryStatusColors.confirmed;
+  return deliveryStatusColors[effectiveStatus] ?? deliveryStatusColors.confirmed;
 }
 
 export default function OrderDetailPage({ orderId }: { orderId: string }) {
   const { orders, navigate, catalogProducts } = useApp();
   const order = orders.find((o) => o.id === orderId);
+  const [deliveryCode, setDeliveryCode] = useState<string | null>(null);
+  const [missionStatus, setMissionStatus] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!order?.supabaseOrderId) return;
+    void fetchOrderDeliveryCode(order.supabaseOrderId).then(setDeliveryCode);
+    void fetchOrderDeliveryMissionStatus(order.supabaseOrderId).then(setMissionStatus);
+  }, [order?.supabaseOrderId]);
 
   if (!order) {
     return (
@@ -53,7 +63,9 @@ export default function OrderDetailPage({ orderId }: { orderId: string }) {
 
   const hasDelivery = order.shopFulfillments.some((f) => f.type === 'delivery');
   const pickupFulfillments = order.shopFulfillments.filter((f) => f.type === 'pickup');
-  const isDelivered = order.status === 'delivered';
+  const effectiveStatus = computeDeliveryStepStatus(order, missionStatus);
+  const isDelivered = effectiveStatus === 'delivered';
+  const showDeliveryCode = deliveryCode && ['picked_up', 'delivering'].includes(effectiveStatus);
 
   return (
     <div className="container-pro py-8 max-w-3xl">
@@ -68,7 +80,7 @@ export default function OrderDetailPage({ orderId }: { orderId: string }) {
           <h1 className="font-display text-2xl font-semibold text-ink">Commande {order.id}</h1>
           <p className="mt-1 text-sm text-ink/55">{new Date(order.date).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</p>
         </div>
-        <span className={`rounded-full px-3.5 py-1.5 text-xs font-medium ${getOrderStatusColor(order)}`}>{getOrderStatusLabel(order)}</span>
+        <span className={`rounded-full px-3.5 py-1.5 text-xs font-medium ${getOrderStatusColor(order, effectiveStatus)}`}>{getOrderStatusLabel(order, effectiveStatus)}</span>
       </div>
 
       <div className="grid gap-6 lg:grid-cols-[1fr_300px]">
@@ -118,7 +130,17 @@ export default function OrderDetailPage({ orderId }: { orderId: string }) {
           {hasDelivery && (
             <div className="card p-6">
               <h2 className="text-sm font-semibold text-ink mb-4 flex items-center gap-1.5"><Truck size={15} className="text-burgundy" /> Suivi — Livraison Ezial</h2>
-              <DeliveryTimeline status={order.status} />
+              <DeliveryTimeline status={effectiveStatus} />
+              {showDeliveryCode && (
+                <div className="mt-4 rounded-xl p-4 text-center" style={{ background: 'linear-gradient(135deg, rgba(128,23,37,0.04), rgba(128,23,37,0.08))' }}>
+                  <div className="flex items-center justify-center gap-2 mb-2">
+                    <KeySquare size={16} className="text-burgundy" />
+                    <p className="text-xs font-semibold uppercase tracking-wider text-ink/50">Code de livraison</p>
+                  </div>
+                  <p className="font-mono text-3xl font-bold tracking-[0.3em] text-burgundy">{deliveryCode}</p>
+                  <p className="mt-2 text-xs text-ink/50">Donnez ce code au livreur à la remise de votre colis.</p>
+                </div>
+              )}
               {isDelivered && (
                 <div className="mt-4 flex items-center gap-2 rounded-lg bg-green-50 p-3">
                   <CheckCircle2 size={16} className="text-green-600" />

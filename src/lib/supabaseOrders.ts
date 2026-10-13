@@ -128,3 +128,22 @@ export async function createOrderInSupabase(
   }
   return { result: data as CreatedOrderResult };
 }
+
+// Customer-scoped read of the delivery code the driver must collect from
+// them — previously never surfaced anywhere in the customer-facing app,
+// making that check unenforceable in practice (see get_order_delivery_code()).
+export async function fetchOrderDeliveryCode(orderId: string): Promise<string | null> {
+  const { data, error } = await supabase.rpc('get_order_delivery_code', { p_order_id: orderId });
+  if (error || !data) return null;
+  return data as string;
+}
+
+// orders.status is never updated after create_order() writes it once — the
+// only real signal of delivery progress lives on delivery_missions, which
+// customers have no direct RLS access to (by design). This is a narrow,
+// customer-scoped read of it (see get_order_delivery_status()).
+export async function fetchOrderDeliveryMissionStatus(orderId: string): Promise<string | null> {
+  const { data, error } = await supabase.rpc('get_order_delivery_status', { p_order_id: orderId });
+  if (error) return null;
+  return (data as string | null) ?? null;
+}
