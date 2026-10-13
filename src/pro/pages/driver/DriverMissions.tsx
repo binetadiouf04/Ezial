@@ -6,11 +6,11 @@ import { Truck, MapPin, Store, CheckCircle2, Navigation, Clock } from 'lucide-re
 type Tab = 'active' | 'available' | 'completed';
 
 export default function DriverMissions() {
-  const { navigate, activeMission, availableMissions, completedMissions } = usePro();
-  const [tab, setTab] = useState<Tab>(activeMission ? 'active' : 'available');
+  const { navigate, activeMissions, availableMissions, completedMissions } = usePro();
+  const [tab, setTab] = useState<Tab>(activeMissions.length > 0 ? 'active' : 'available');
 
   const tabs: { id: Tab; label: string; count: number }[] = [
-    { id: 'active', label: 'En cours', count: activeMission ? 1 : 0 },
+    { id: 'active', label: 'En cours', count: activeMissions.length },
     { id: 'available', label: 'Disponibles', count: availableMissions.length },
     { id: 'completed', label: 'Terminées', count: completedMissions.length },
   ];
@@ -69,7 +69,7 @@ export default function DriverMissions() {
       {/* Content */}
       <div className="space-y-3">
         {tab === 'active' && (
-          activeMission ? renderMissionCard(activeMission, true) : (
+          activeMissions.length > 0 ? activeMissions.map((m) => renderMissionCard(m, true)) : (
             <div className="card p-8 text-center">
               <Truck size={28} className="mx-auto text-ink/20" />
               <p className="mt-2 text-sm text-ink/45">Aucune livraison en cours</p>
