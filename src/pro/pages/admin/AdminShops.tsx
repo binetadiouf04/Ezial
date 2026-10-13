@@ -3,17 +3,10 @@ import { usePro } from '../../ProContext';
 import { fetchAdminShops, updateShopStatus, type AdminShopSummary } from '@/lib/supabaseAdminData';
 import { StatusChip } from '../../components/StatusChip';
 import FlagModal from '../../components/FlagModal';
-import { Search, Loader2, AlertCircle, Check, X, Ban, MapPin, Phone } from 'lucide-react';
+import { Search, Loader2, AlertCircle, Check, Ban } from 'lucide-react';
 import SmartImage from '@/components/SmartImage';
 
 const suspensionReasons = ['Produits suspects ou contrefaits', 'Informations trompeuses', 'Comportement inapproprié', 'Non-conformité répétée'];
-
-function formatDate(iso: string): string {
-  if (!iso) return '';
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return '';
-  return d.toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' });
-}
 
 export default function AdminShops() {
   const { navigate } = usePro();
@@ -51,7 +44,6 @@ export default function AdminShops() {
     setSuspendTarget(null);
   };
 
-  const pending = shops.filter((s) => s.status === 'pending');
   const filtered = shops.filter((s) => {
     if (!search.trim()) return true;
     const q = search.toLowerCase();
@@ -72,33 +64,6 @@ export default function AdminShops() {
         <div className="card p-10 text-center"><Loader2 size={20} className="mx-auto animate-spin text-ink/30" /></div>
       ) : (
         <>
-          {/* Demandes en attente — un bouton, pas un processus compliqué */}
-          {pending.length > 0 && (
-            <div className="space-y-3">
-              <h2 className="text-sm font-semibold text-ink">Demandes en attente ({pending.length})</h2>
-              {pending.map((shop) => (
-                <div key={shop.id} className="card p-4 border-amber-200 bg-amber-50/30 space-y-3">
-                  <div className="flex items-center gap-3">
-                    {shop.logoUrl && <SmartImage src={shop.logoUrl} alt="" className="h-12 w-12 rounded-lg object-cover flex-shrink-0" />}
-                    <div className="flex-1 min-w-0">
-                      <button onClick={() => navigate(`/admin/boutiques/${shop.id}`)} className="text-sm font-semibold text-ink hover:text-burgundy truncate">{shop.name}</button>
-                      {shop.sellerCode && <p className="text-xs text-ink/45 font-mono mt-0.5">{shop.sellerCode}</p>}
-                      <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] text-ink/45">
-                        {shop.phone && <span className="flex items-center gap-1"><Phone size={10} /> {shop.phone}</span>}
-                        {shop.neighborhood && <span className="flex items-center gap-1"><MapPin size={10} /> {shop.neighborhood}</span>}
-                        {shop.createdAt && <span>Demande le {formatDate(shop.createdAt)}</span>}
-                      </div>
-                    </div>
-                  </div>
-                  <div className="flex gap-2">
-                    <button onClick={() => void act(shop.id, 'active')} disabled={acting === shop.id} className="btn-primary flex-1"><Check size={15} /> Approuver</button>
-                    <button onClick={() => void act(shop.id, 'rejected')} disabled={acting === shop.id} className="btn-outline flex-1"><X size={15} /> Refuser</button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-
           {/* Search */}
           <div className="relative">
             <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink/30" />
@@ -120,12 +85,12 @@ export default function AdminShops() {
                       {shop.status === 'suspended' && shop.suspensionReason && <p className="text-xs text-burgundy mt-1">Motif : {shop.suspensionReason}</p>}
                     </div>
                   </button>
-                  <StatusChip status={shop.status} size="md" label={shop.status === 'pending' ? 'À valider' : undefined} />
+                  <StatusChip status={shop.status} size="md" />
                   {shop.status === 'active' && (
                     <button onClick={() => setSuspendTarget(shop.id)} disabled={acting === shop.id} title="Désactiver la boutique" className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full text-ink/40 hover:bg-burgundy/5 hover:text-burgundy"><Ban size={16} /></button>
                   )}
-                  {shop.status === 'suspended' && (
-                    <button onClick={() => void act(shop.id, 'active')} disabled={acting === shop.id} title="Réactiver" className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full text-ink/40 hover:bg-green-50 hover:text-green-700"><Check size={16} /></button>
+                  {shop.status !== 'active' && (
+                    <button onClick={() => void act(shop.id, 'active')} disabled={acting === shop.id} title="Activer" className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full text-ink/40 hover:bg-green-50 hover:text-green-700"><Check size={16} /></button>
                   )}
                 </div>
               ))
