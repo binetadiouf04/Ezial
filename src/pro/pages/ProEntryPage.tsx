@@ -1,14 +1,26 @@
-import { useState } from 'react';
+import { useState, Suspense, lazy } from 'react';
 import { usePro } from '../ProContext';
 import type { Role } from '../data';
 import RoleCard from '../components/RoleCard';
 import LoginForm from '../components/LoginForm';
 import SellerAuthPanel from '../components/SellerAuthPanel';
 import DriverLoginPanel from '../components/DriverLoginPanel';
-import SellerLayout from '../layouts/SellerLayout';
-import DriverLayout from '../layouts/DriverLayout';
-import AdminLayout from '../layouts/AdminLayout';
-import { ArrowLeft } from 'lucide-react';
+import { Loader2, ArrowLeft } from 'lucide-react';
+
+// Each role's layout (and every page it pulls in) is its own chunk — a
+// seller logging in never has to download the admin dashboard's code, or
+// the driver app's, and vice versa.
+const SellerLayout = lazy(() => import('../layouts/SellerLayout'));
+const DriverLayout = lazy(() => import('../layouts/DriverLayout'));
+const AdminLayout = lazy(() => import('../layouts/AdminLayout'));
+
+function ProRouteFallback() {
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-cream">
+      <Loader2 size={24} className="animate-spin text-ink/30" />
+    </div>
+  );
+}
 
 export default function ProEntryPage() {
   const { role, login, verifySellerLogin, signUpSellerAccount, requestSellerPasswordReset, resendSellerConfirmationEmail, verifyAdminLogin, checkDriverUsername, createDriverPin, signInDriverWithPin } = usePro();
@@ -16,17 +28,17 @@ export default function ProEntryPage() {
 
   // If seller is logged in, render the seller layout
   if (role === 'seller') {
-    return <SellerLayout />;
+    return <Suspense fallback={<ProRouteFallback />}><SellerLayout /></Suspense>;
   }
 
   // If driver is logged in, render the driver layout
   if (role === 'driver') {
-    return <DriverLayout />;
+    return <Suspense fallback={<ProRouteFallback />}><DriverLayout /></Suspense>;
   }
 
   // If admin is logged in, render the admin layout
   if (role === 'admin') {
-    return <AdminLayout />;
+    return <Suspense fallback={<ProRouteFallback />}><AdminLayout /></Suspense>;
   }
 
   // Login form for selected role — seller gets its own richer panel
