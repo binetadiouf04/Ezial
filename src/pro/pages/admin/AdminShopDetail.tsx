@@ -147,6 +147,19 @@ export default function AdminShopDetail({ shopId }: { shopId: string }) {
         </div>
       )}
 
+      {/* Filet de sécurité : si une boutique reste bloquée dans un statut
+          que l'auto-activation n'a pas prévu (ex. "draft" — email du
+          vendeur jamais confirmé), l'admin doit toujours pouvoir l'activer
+          manuellement plutôt que de n'avoir aucune action possible. */}
+      {!['pending', 'active', 'suspended'].includes(shop.status) && (
+        <div className="card border-amber-200 bg-amber-50/30 p-4 space-y-2">
+          <p className="text-sm text-ink/70">Statut actuel : <span className="font-medium">{shop.status}</span>. Cette boutique n'a pas encore de produits actifs ou n'a pas été activée automatiquement (email non confirmé, par exemple).</p>
+          <button onClick={() => void act('active')} disabled={acting} className="btn-primary flex items-center gap-1.5">
+            {acting ? <Loader2 size={15} className="animate-spin" /> : <Check size={15} />} Activer la boutique
+          </button>
+        </div>
+      )}
+
       {reports.length > 0 && (
         <div className="card border-orange-200 bg-orange-50/40 p-4 space-y-3">
           <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-orange-700"><AlertOctagon size={14} /> Signalements clients ({reports.length})</p>
