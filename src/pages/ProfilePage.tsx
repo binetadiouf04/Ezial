@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useApp, type DeliveryStepStatus, type PickupStepStatus, type Order, type CustomerAddressInput, quartiers } from '@/store/AppContext';
 import { deliveryStatusLabels, pickupStepLabels, computeDeliveryStepStatus } from '@/data/orderStatusLabels';
-import { fetchOrderDeliveryMissionStatus } from '@/lib/supabaseOrders';
+import { fetchOrderDeliveryMissionStatuses } from '@/lib/supabaseOrders';
 import { formatFCFA } from '@/data/products';
 import ProductGrid from '@/components/ProductGrid';
 import SmartImage from '@/components/SmartImage';
@@ -350,14 +350,23 @@ export default function ProfilePage() {
   const { orders, favorites, navigate, catalogProducts, customerUser, authLoading, signOutCustomerAccount, updateCustomerAccount, deleteCustomerAccount, changePassword } = useApp();
   const [tab, setTab] = useState<Tab>('orders');
   // orders.status is never updated after creation (see computeDeliveryStepStatus)
-  // — this fetches each order's real delivery_missions.status in parallel so
-  // the badge in the list reflects actual progress, not a frozen value.
+  // — this fetches each order's real delivery_missions.status in one batched
+  // RPC call (get_order_delivery_statuses) so the badge in the list reflects
+  // actual progress, not a frozen value. Previously issued one RPC call per
+  // order (N+1) — a customer with a long order history refetched every one
+  // of them on every orders-array update, not just the new order.
   const [missionStatuses, setMissionStatuses] = useState<Record<string, string | null>>({});
   useEffect(() => {
     const deliveryOrders = orders.filter((o) => o.supabaseOrderId && o.shopFulfillments.some((f) => f.type === 'delivery'));
     if (deliveryOrders.length === 0) return;
-    void Promise.all(deliveryOrders.map((o) => fetchOrderDeliveryMissionStatus(o.supabaseOrderId!).then((s) => [o.id, s] as const)))
-      .then((pairs) => setMissionStatuses(Object.fromEntries(pairs)));
+    const supabaseIds = deliveryOrders.map((o) => o.supabaseOrderId!);
+    void fetchOrderDeliveryMissionStatuses(supabaseIds).then((statusesBySupabaseId) => {
+      const byOrderId: Record<string, string | null> = {};
+      for (const o of deliveryOrders) {
+        byOrderId[o.id] = statusesBySupabaseId[o.supabaseOrderId!] ?? null;
+      }
+      setMissionStatuses(byOrderId);
+    });
   }, [orders]);
   const [infoForm, setInfoForm] = useState<InfoForm>(() => ({
     firstName: customerUser?.firstName ?? '', lastName: customerUser?.lastName ?? '',

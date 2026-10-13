@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { fetchAdminProducts, type AdminProductSummary } from '@/lib/supabaseAdminData';
+import { fetchProductsSuppliers } from '@/lib/supabaseSellerProducts';
 import { formatFCFA, productModerationReasons } from '../../data';
 import { StatusChip } from '../../components/StatusChip';
 import FlagModal from '../../components/FlagModal';
@@ -10,6 +11,7 @@ import SmartImage from '@/components/SmartImage';
 export default function AdminProducts() {
   const [products, setProducts] = useState<AdminProductSummary[]>([]);
   const [flagsByProduct, setFlagsByProduct] = useState<Map<string, ModerationFlagRow[]>>(new Map());
+  const [suppliers, setSuppliers] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
   const [search, setSearch] = useState('');
@@ -22,6 +24,12 @@ export default function AdminProducts() {
       const rows = await fetchAdminProducts();
       setProducts(rows);
       setFlagsByProduct(await fetchModerationFlagsForTargets('product', rows.map((p) => p.id)));
+      // Only the official Ezial shop's products can ever have a fournisseur
+      // row (RLS on product_suppliers rejects everything else) — scoping
+      // the batch call to just those ids avoids asking for rows that could
+      // never exist.
+      const officialIds = rows.filter((p) => p.isOfficialShop).map((p) => p.id);
+      setSuppliers(await fetchProductsSuppliers(officialIds));
     } catch {
       setLoadError('Impossible de charger les produits. Réessayez.');
     } finally {
@@ -82,6 +90,9 @@ export default function AdminProducts() {
                         <span className="text-sm font-semibold text-ink">{formatFCFA(product.price)}</span>
                         <span className="text-xs text-ink/45">Stock : {product.stock}</span>
                       </div>
+                      {product.isOfficialShop && suppliers[product.id] && (
+                        <p className="mt-1 text-xs text-ink/45">Fournisseur : <span className="font-medium text-ink/70">{suppliers[product.id]}</span></p>
+                      )}
                     </div>
                     <div className="flex flex-col items-end gap-1.5 flex-shrink-0">
                       <StatusChip status={product.status} />

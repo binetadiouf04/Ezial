@@ -292,6 +292,7 @@ export interface AdminProductSummary {
   imageUrl: string;
   shopId: string;
   shopName: string;
+  isOfficialShop: boolean;
   price: number;
   stock: number;
   status: string;
@@ -363,7 +364,10 @@ export async function fetchAdminProducts(shopId?: string): Promise<AdminProductS
   const [{ data: variantRows }, { data: imageRows }, { data: shopRows }] = await Promise.all([
     supabase.from('product_variants').select('product_id, stock').in('product_id', productIds),
     supabase.from('product_images').select('product_id, storage_path, is_primary, sort_order').in('product_id', productIds),
-    shopId ? Promise.resolve({ data: null }) : supabase.from('shops').select('id, name').in('id', shopIds),
+    // is_official is always needed (to flag the Fournisseur column), even
+    // when shopId narrows to a single shop — only the name lookup is
+    // skippable then, since the caller already knows which shop it is.
+    supabase.from('shops').select('id, name, is_official').in('id', shopIds),
   ]);
 
   const stockByProduct = new Map<string, number>();
@@ -381,6 +385,7 @@ export async function fetchAdminProducts(shopId?: string): Promise<AdminProductS
   }
 
   const shopNameById = new Map<string, string>((shopRows ?? []).map((s) => [s.id as string, s.name as string]));
+  const isOfficialById = new Map<string, boolean>((shopRows ?? []).map((s) => [s.id as string, Boolean(s.is_official)]));
 
   return productRows.map((p) => {
     const pid = p.id as string;
@@ -391,6 +396,7 @@ export async function fetchAdminProducts(shopId?: string): Promise<AdminProductS
       imageUrl: images[0] ? resolveImageUrl(images[0].storagePath) : '',
       shopId: p.shop_id as string,
       shopName: shopId ? '' : (shopNameById.get(p.shop_id as string) ?? ''),
+      isOfficialShop: isOfficialById.get(p.shop_id as string) ?? false,
       price: (p.base_price as number) ?? 0,
       stock: stockByProduct.get(pid) ?? 0,
       status: (p.status as string) ?? 'draft',

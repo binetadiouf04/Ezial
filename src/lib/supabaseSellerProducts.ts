@@ -817,3 +817,46 @@ export async function addProductMedia(
   }
   return {};
 }
+
+// === Fournisseur (official Ezial shop only) ===
+//
+// Stored in its own table (product_suppliers), never a column on products —
+// its RLS policies scope every row to the official shop's own owner
+// (shops.is_official + shops.owner_id = auth.uid(), never the shop's
+// displayed name) or an admin. Any other seller's insert/select/update is
+// rejected at the database level, not just hidden in this form.
+
+export async function fetchProductSupplier(productId: string): Promise<string | null> {
+  const { data, error } = await supabase.from('product_suppliers').select('supplier').eq('product_id', productId).maybeSingle();
+  if (error || !data) return null;
+  return (data.supplier as string) ?? null;
+}
+
+// Empty input deletes the row instead of writing an empty string — there is
+// no "set but blank" state, absence of a row already means "no fournisseur
+// recorded". Untouched (unchanged) input re-upserts the same value, which is
+// how an edit that never touches this field still preserves it.
+export async function saveProductSupplier(productId: string, supplier: string): Promise<{ error?: string }> {
+  const trimmed = supplier.trim();
+  if (!trimmed) {
+    const { error } = await supabase.from('product_suppliers').delete().eq('product_id', productId);
+    if (error) return { error: `Impossible de supprimer le fournisseur : ${error.message}` };
+    return {};
+  }
+  const { error } = await supabase
+    .from('product_suppliers')
+    .upsert({ product_id: productId, supplier: trimmed, updated_at: new Date().toISOString() });
+  if (error) return { error: `Impossible d'enregistrer le fournisseur : ${error.message}` };
+  return {};
+}
+
+// Batched for the admin product-management view — one request for every
+// product on screen instead of one per row.
+export async function fetchProductsSuppliers(productIds: string[]): Promise<Record<string, string>> {
+  if (productIds.length === 0) return {};
+  const { data, error } = await supabase.from('product_suppliers').select('product_id, supplier').in('product_id', productIds);
+  if (error || !data) return {};
+  const result: Record<string, string> = {};
+  for (const row of data as { product_id: string; supplier: string }[]) result[row.product_id] = row.supplier;
+  return result;
+}
