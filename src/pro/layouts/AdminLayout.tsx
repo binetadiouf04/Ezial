@@ -87,7 +87,7 @@ export default function AdminLayout() {
                 <p className="text-xs text-ink/40">Supervision</p>
               </div>
             </div>
-            <AdminNotificationBell onOpenShop={(shopId) => navigate(`/admin/boutiques/${shopId}`)} />
+            <AdminNotificationBell onNavigate={(url) => navigate(url.replace(/^\/pro/, ''))} />
           </div>
         </div>
         <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
@@ -120,7 +120,7 @@ export default function AdminLayout() {
       <div className="lg:hidden sticky top-0 z-20 border-b border-line bg-white px-3 py-2.5 flex items-center justify-between gap-2">
         <span className="truncate text-sm font-semibold text-ink">Ezial Admin</span>
         <div className="flex flex-shrink-0 items-center gap-1.5">
-          <AdminNotificationBell onOpenShop={(shopId) => navigate(`/admin/boutiques/${shopId}`)} />
+          <AdminNotificationBell onNavigate={(url) => navigate(url.replace(/^\/pro/, ''))} />
           <button
             onClick={() => { window.location.hash = '/'; }}
             className="flex items-center gap-1.5 rounded-lg border border-line px-2.5 py-1.5 text-xs font-medium text-ink/60 hover:border-burgundy/30 hover:text-burgundy transition-colors"

@@ -12,10 +12,11 @@ function formatDateTime(iso: string): string {
   return d.toLocaleString('fr-FR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
 }
 
-// Purely informational feed (currently: new-shop-signup events written by
-// the handle_auth_user_email_confirmed() DB trigger) — never blocks or
-// reverses anything it reports on.
-export default function AdminNotificationBell({ onOpenShop }: { onOpenShop: (shopId: string) => void }) {
+// Purely informational broadcast feed (new claims/litiges via notify_admins(),
+// and new-shop-signup events where that DB trigger exists) — never blocks or
+// reverses anything it reports on. `onNavigate` receives the notification's
+// stored `url` and decides how to get there (the caller's own router).
+export default function AdminNotificationBell({ onNavigate }: { onNavigate: (url: string) => void }) {
   const [open, setOpen] = useState(false);
   const [notifications, setNotifications] = useState<AdminNotification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
@@ -47,7 +48,9 @@ export default function AdminNotificationBell({ onOpenShop }: { onOpenShop: (sho
       setNotifications((prev) => prev.map((x) => x.id === n.id ? { ...x, isRead: true } : x));
       refreshCount();
     }
-    if (n.shopId) { onOpenShop(n.shopId); setOpen(false); }
+    if (n.url) onNavigate(n.url);
+    else if (n.shopId) onNavigate(`/admin/boutiques/${n.shopId}`);
+    setOpen(false);
   };
 
   const handleMarkAllRead = async () => {

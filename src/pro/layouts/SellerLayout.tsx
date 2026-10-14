@@ -11,6 +11,7 @@ import SellerShop from '../pages/seller/SellerShop';
 import SellerClaims from '../pages/seller/SellerClaims';
 import SellerClaimDetail from '../pages/seller/SellerClaimDetail';
 import SmartImage from '@/components/SmartImage';
+import NotificationBell from '@/components/NotificationBell';
 
 const navItems = [
   { route: '/seller', label: 'Accueil', icon: Home },
@@ -81,10 +82,11 @@ export default function SellerLayout() {
         <div className="p-5 border-b border-line">
           <div className="flex items-center gap-3">
             {sellerShop && <SmartImage src={sellerShop.logo} alt="" className="h-10 w-10 rounded-lg object-cover" />}
-            <div className="min-w-0">
+            <div className="min-w-0 flex-1">
               <p className="text-sm font-semibold text-ink truncate">{sellerShop?.name ?? name}</p>
               <p className="text-xs text-ink/40 font-mono">{identifier}</p>
             </div>
+            <NotificationBell onNavigate={(url) => navigate(url.replace(/^\/pro/, ''))} />
           </div>
         </div>
         <nav className="flex-1 p-3 space-y-1">
@@ -123,20 +125,23 @@ export default function SellerLayout() {
           {sellerShop && <SmartImage src={sellerShop.logo} alt="" className="h-8 w-8 flex-shrink-0 rounded-lg object-cover" />}
           <span className="truncate text-sm font-semibold text-ink">{sellerShop?.name ?? name}</span>
         </div>
-        <button
-          onClick={() => (isOnProductForm ? navigate('/seller/produits') : goToMarketplace())}
-          className="flex flex-shrink-0 items-center gap-1.5 rounded-lg border border-line px-2.5 py-1.5 text-xs font-medium text-ink/60 hover:border-burgundy/30 hover:text-burgundy transition-colors"
-        >
-          <ArrowLeft size={14} />
-          {isOnProductForm ? (
-            <span>Retour</span>
-          ) : (
-            <>
-              <span className="hidden sm:inline">Retourner sur Ezial Marketplace</span>
-              <span className="sm:hidden">Marketplace</span>
-            </>
-          )}
-        </button>
+        <div className="flex flex-shrink-0 items-center gap-1.5">
+          <NotificationBell onNavigate={(url) => navigate(url.replace(/^\/pro/, ''))} />
+          <button
+            onClick={() => (isOnProductForm ? navigate('/seller/produits') : goToMarketplace())}
+            className="flex items-center gap-1.5 rounded-lg border border-line px-2.5 py-1.5 text-xs font-medium text-ink/60 hover:border-burgundy/30 hover:text-burgundy transition-colors"
+          >
+            <ArrowLeft size={14} />
+            {isOnProductForm ? (
+              <span>Retour</span>
+            ) : (
+              <>
+                <span className="hidden sm:inline">Retourner sur Ezial Marketplace</span>
+                <span className="sm:hidden">Marketplace</span>
+              </>
+            )}
+          </button>
+        </div>
       </div>
 
       {/* Mobile menu drawer — replaces the old fixed bottom nav; carries the
