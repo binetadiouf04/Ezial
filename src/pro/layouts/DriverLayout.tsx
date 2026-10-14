@@ -1,5 +1,6 @@
 import { usePro } from '../ProContext';
 import { Home, Truck, History, User, LogOut, ArrowLeft, X } from 'lucide-react';
+import NotificationBell from '@/components/NotificationBell';
 import DriverHome from '../pages/driver/DriverHome';
 import DriverMissions from '../pages/driver/DriverMissions';
 import DriverMissionDetail from '../pages/driver/DriverMissionDetail';
@@ -54,6 +55,7 @@ export default function DriverLayout() {
           <p className="truncate text-sm font-semibold text-ink">{name}</p>
         </div>
         <div className="flex flex-shrink-0 items-center gap-1.5">
+          <NotificationBell onNavigate={(url) => navigate(url.replace(/^\/pro/, ''))} />
           <button
             onClick={() => { window.location.hash = '/'; }}
             className="flex items-center gap-1.5 rounded-lg border border-line px-2.5 py-1.5 text-xs font-medium text-ink/60 hover:border-burgundy/30 hover:text-burgundy transition-colors"

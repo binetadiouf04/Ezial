@@ -1,15 +1,17 @@
 import { supabase } from './supabaseClient';
 
 // Real Supabase-backed admin notification feed (public.admin_notifications)
-// — currently only ever written by the handle_auth_user_email_confirmed()
-// DB trigger when a seller's shop auto-activates. Purely informational:
-// nothing here ever blocks or reverses that activation.
+// — a broadcast every admin shares (unlike public.notifications, which is
+// private per user). Written by notify_admins() (new claims/litiges) and,
+// when that trigger exists, by a shop-signup DB trigger. Purely
+// informational: nothing here ever blocks or reverses anything it reports.
 
 export interface AdminNotification {
   id: string;
   type: string;
   message: string;
   shopId: string | null;
+  url: string | null;
   isRead: boolean;
   createdAt: string;
 }
@@ -20,6 +22,7 @@ function mapRow(row: Record<string, unknown>): AdminNotification {
     type: row.type as string,
     message: row.message as string,
     shopId: (row.shop_id as string | null) ?? null,
+    url: (row.url as string | null) ?? null,
     isRead: Boolean(row.is_read),
     createdAt: (row.created_at as string) ?? '',
   };
