@@ -3,7 +3,8 @@ import { useApp } from '@/store/AppContext';
 import { getProduct, getVariantPrice, getProductsFromSameShop, getSimilarProducts, isRealCatalogId } from '@/data/products';
 import { getShop, registerSupabaseShops } from '@/data/shops';
 import { fetchProductDetailFromSupabase } from '@/lib/supabaseCatalog';
-import { fetchProductReviews, checkCanReview, submitReview, deleteReview, type Review } from '@/lib/supabaseReviews';
+import { fetchProductReviews, checkCanReview, submitReview, deleteReview, createReviewReport, type Review, type ReviewReportReason } from '@/lib/supabaseReviews';
+import ReviewReportModal from '@/components/ReviewReportModal';
 import { categoryMap } from '@/data/categories';
 import ProductGallery from '@/components/ProductGallery';
 import VariantSelector from '@/components/VariantSelector';
@@ -75,6 +76,7 @@ export default function ProductPage({ productId }: { productId: string }) {
   const [reviewError, setReviewError] = useState('');
   const [reviewSaved, setReviewSaved] = useState(false);
   const [enlargedReviewImage, setEnlargedReviewImage] = useState<string | null>(null);
+  const [reportingReviewId, setReportingReviewId] = useState<string | null>(null);
   // Only true while the customer deliberately opened "Modifier mon avis" —
   // the write form otherwise stays hidden once a review of theirs already
   // exists, so publishing doesn't leave the form sitting on top of it.
@@ -143,6 +145,11 @@ export default function ProductPage({ productId }: { productId: string }) {
     setReviewSaved(true);
     setTimeout(() => setReviewSaved(false), 2000);
     loadReviews();
+  };
+
+  const handleReportReview = (reason: ReviewReportReason, details: string) => {
+    if (!reportingReviewId) return Promise.resolve({ error: "Avis introuvable." });
+    return createReviewReport(reportingReviewId, reason, details);
   };
 
   const handleDeleteReview = async (reviewId: string) => {
@@ -321,10 +328,14 @@ export default function ProductPage({ productId }: { productId: string }) {
                             ))}
                           </div>
                         )}
-                        {customerUser?.id === rev.userId && (
+                        {customerUser?.id === rev.userId ? (
                           <div className="mt-2 flex items-center gap-3">
                             <button onClick={() => startEditReview(rev)} className="text-xs font-medium text-ink/60 hover:underline">Modifier mon avis</button>
                             <button onClick={() => void handleDeleteReview(rev.id)} className="text-xs font-medium text-burgundy hover:underline">Supprimer mon avis</button>
+                          </div>
+                        ) : customerUser && (
+                          <div className="mt-2">
+                            <button onClick={() => setReportingReviewId(rev.id)} className="text-xs font-medium text-ink/40 hover:text-burgundy hover:underline">Signaler cet avis</button>
                           </div>
                         )}
                       </div>
@@ -368,6 +379,9 @@ export default function ProductPage({ productId }: { productId: string }) {
           <button onClick={() => setEnlargedReviewImage(null)} className="absolute right-4 top-4 flex h-9 w-9 items-center justify-center rounded-full bg-white/90 text-ink" aria-label="Fermer"><X size={18} /></button>
           <img src={enlargedReviewImage} alt="Photo de l'avis agrandie" className="max-h-[85vh] max-w-full rounded-lg object-contain" onClick={(e) => e.stopPropagation()} />
         </div>
+      )}
+      {reportingReviewId && (
+        <ReviewReportModal onCancel={() => setReportingReviewId(null)} onConfirm={handleReportReview} />
       )}
     </div>
   );

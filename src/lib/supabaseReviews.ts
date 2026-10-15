@@ -182,3 +182,21 @@ export async function deleteReview(reviewId: string): Promise<{ error?: string }
   if (paths.length > 0) void supabase.storage.from(PRODUCT_IMAGES_BUCKET).remove(paths);
   return {};
 }
+
+// Customer-facing "Signaler cet avis" (public.review_reports) — mirrors
+// shop_reports: never visible to the review's author, only to admins.
+// Reporting never hides the review by itself; an admin reviews it
+// separately (see AdminReviews).
+export type ReviewReportReason = 'faux' | 'insulte' | 'hors-sujet' | 'autre';
+
+export async function createReviewReport(reviewId: string, reason: ReviewReportReason, details: string): Promise<{ error?: string }> {
+  const { data: userData, error: userError } = await supabase.auth.getUser();
+  if (userError || !userData.user) return { error: 'Connectez-vous pour signaler un avis.' };
+  const { error } = await supabase.from('review_reports').insert({
+    review_id: reviewId,
+    reporter_id: userData.user.id,
+    reason,
+    details: details.trim() || null,
+  });
+  return error ? { error: error.message } : {};
+}
