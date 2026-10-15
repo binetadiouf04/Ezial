@@ -1,5 +1,5 @@
 import { supabase } from './supabaseClient';
-import { resolveImageUrl } from './supabaseCatalog';
+import { resolveSecurePhotoUrls } from './secureStorage';
 import type { ClaimType, ClaimStatus, DesiredSolution } from './supabaseClaims';
 
 // Seller-side view of public.order_claims — RLS (order_claims_select_seller)
@@ -24,7 +24,7 @@ export interface SellerClaim {
   createdAt: string;
 }
 
-function mapRow(row: Record<string, unknown>): SellerClaim {
+async function mapRow(row: Record<string, unknown>): Promise<SellerClaim> {
   const photoPaths = (row.photo_paths as string[] | null) ?? [];
   const order = row.orders as { order_number?: string } | null;
   return {
@@ -35,7 +35,7 @@ function mapRow(row: Record<string, unknown>): SellerClaim {
     motif: row.motif as string,
     desiredSolution: row.desired_solution as DesiredSolution,
     details: (row.details as string | null) ?? null,
-    photoUrls: photoPaths.map(resolveImageUrl),
+    photoUrls: await resolveSecurePhotoUrls(photoPaths),
     status: row.status as ClaimStatus,
     sellerResponse: (row.seller_response as string | null) ?? null,
     refusalReason: (row.refusal_reason as string | null) ?? null,
@@ -49,7 +49,7 @@ export async function fetchSellerClaims(): Promise<SellerClaim[]> {
     .select('*, orders(order_number)')
     .order('created_at', { ascending: false });
   if (error || !data) return [];
-  return data.map(mapRow);
+  return Promise.all(data.map(mapRow));
 }
 
 export async function fetchSellerClaimDetail(claimId: string): Promise<SellerClaim | null> {
@@ -59,7 +59,7 @@ export async function fetchSellerClaimDetail(claimId: string): Promise<SellerCla
     .eq('id', claimId)
     .maybeSingle();
   if (error || !data) return null;
-  return mapRow(data);
+  return await mapRow(data);
 }
 
 export async function sellerRespondToClaim(claimId: string, response: string): Promise<{ error?: string }> {

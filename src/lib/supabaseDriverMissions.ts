@@ -1,5 +1,5 @@
 import { supabase } from './supabaseClient';
-import { resolveImageUrl, PRODUCT_IMAGES_BUCKET } from './supabaseCatalog';
+import { uploadSecurePhoto, resolveSecurePhotoUrl } from './secureStorage';
 import { optimizeImageFile } from '@/utils/imageOptimize';
 import type { Mission } from '@/pro/data';
 
@@ -114,6 +114,13 @@ export async function fetchDriverMissions(): Promise<Mission[]> {
     stopsByMission.set(stop.mission_id, list);
   }
 
+  const proofUrlsByMissionId = new Map<string, string>();
+  await Promise.all(rows.map(async (row) => {
+    if (!row.proof_photo_path) return;
+    const url = await resolveSecurePhotoUrl(row.proof_photo_path);
+    if (url) proofUrlsByMissionId.set(row.id, url);
+  }));
+
   return rows.map((row): Mission => {
     const order = ordersById.get(row.order_id);
     const missionStops = stopsByMission.get(row.id) ?? [];
@@ -166,7 +173,7 @@ export async function fetchDriverMissions(): Promise<Mission[]> {
       customerPhone: order?.phone ?? '',
       date: row.created_at,
       deliveryCode: row.delivery_code ?? undefined,
-      proofPhoto: row.proof_photo_path ? resolveImageUrl(row.proof_photo_path) : undefined,
+      proofPhoto: proofUrlsByMissionId.get(row.id),
       deliveredAt: row.delivered_at ?? undefined,
     };
   });
@@ -221,13 +228,12 @@ export async function completeMissionDelivery(
 
   const optimized = await optimizeImageFile(proofPhotoFile, PROOF_PHOTO_MAX_DIMENSION);
   const token = Math.random().toString(36).slice(2, 8);
-  // The product-images bucket's storage policies require the path's first
-  // folder segment to equal auth.uid() (see "Sellers/Users can upload own
-  // product files") — driverId here must be the real auth uid, or the
-  // upload is silently rejected by storage RLS.
+  // The secure-photos bucket's storage policies require the path's first
+  // folder segment to equal auth.uid() — driverId here must be the real
+  // auth uid, or the upload is silently rejected by storage RLS.
   const path = `${driverId}/delivery-proofs/${missionId}-${token}.webp`;
-  const { error: uploadError } = await supabase.storage.from(PRODUCT_IMAGES_BUCKET).upload(path, optimized, { cacheControl: '31536000' });
-  if (uploadError) return { error: `Envoi de la preuve photo impossible : ${uploadError.message}` };
+  const { error: uploadError } = await uploadSecurePhoto(path, optimized);
+  if (uploadError) return { error: `Envoi de la preuve photo impossible : ${uploadError}` };
 
   const { data, error } = await supabase
     .from('delivery_missions')

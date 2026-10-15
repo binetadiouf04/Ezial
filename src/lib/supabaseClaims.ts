@@ -1,6 +1,6 @@
 import { supabase } from './supabaseClient';
-import { PRODUCT_IMAGES_BUCKET, resolveImageUrl } from './supabaseCatalog';
 import { optimizeImageFile } from '@/utils/imageOptimize';
+import { uploadSecurePhoto, resolveSecurePhotoUrls } from './secureStorage';
 
 // Real Supabase-backed claims/returns/refunds (public.order_claims /
 // order_claim_events) — every write goes through a SECURITY DEFINER RPC
@@ -28,8 +28,8 @@ async function uploadClaimPhotos(customerId: string, files: File[]): Promise<str
   for (let i = 0; i < files.length; i++) {
     const optimized = await optimizeImageFile(files[i], CLAIM_PHOTOS_MAX_DIMENSION);
     const path = `${customerId}/claims/${token}-${i}.webp`;
-    const { error } = await supabase.storage.from(PRODUCT_IMAGES_BUCKET).upload(path, optimized, { cacheControl: '31536000' });
-    if (error) throw new Error(`Envoi de la photo impossible : ${error.message}`);
+    const { error } = await uploadSecurePhoto(path, optimized);
+    if (error) throw new Error(`Envoi de la photo impossible : ${error}`);
     paths.push(path);
   }
   return paths;
@@ -93,7 +93,7 @@ export interface CustomerClaim {
   createdAt: string;
 }
 
-function mapClaimRow(row: Record<string, unknown>): CustomerClaim {
+async function mapClaimRow(row: Record<string, unknown>): Promise<CustomerClaim> {
   const photoPaths = (row.photo_paths as string[] | null) ?? [];
   return {
     id: row.id as string,
@@ -103,7 +103,7 @@ function mapClaimRow(row: Record<string, unknown>): CustomerClaim {
     motif: row.motif as string,
     desiredSolution: row.desired_solution as DesiredSolution,
     details: (row.details as string | null) ?? null,
-    photoUrls: photoPaths.map(resolveImageUrl),
+    photoUrls: await resolveSecurePhotoUrls(photoPaths),
     status: row.status as ClaimStatus,
     refusalReason: (row.refusal_reason as string | null) ?? null,
     refundAmount: (row.refund_amount as number | null) ?? null,
@@ -121,5 +121,5 @@ export async function fetchCustomerClaimsForOrder(orderId: string): Promise<Cust
     .eq('order_id', orderId)
     .order('created_at', { ascending: false });
   if (error || !data) return [];
-  return data.map(mapClaimRow);
+  return Promise.all(data.map(mapClaimRow));
 }

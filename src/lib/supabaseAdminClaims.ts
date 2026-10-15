@@ -1,5 +1,5 @@
 import { supabase } from './supabaseClient';
-import { resolveImageUrl } from './supabaseCatalog';
+import { resolveSecurePhotoUrls } from './secureStorage';
 import type { ClaimType, ClaimStatus, DesiredSolution } from './supabaseClaims';
 
 // Admin-side view of public.order_claims — full visibility (RLS:
@@ -27,7 +27,7 @@ export interface AdminClaim {
   createdAt: string;
 }
 
-function mapAdminClaimRow(row: Record<string, unknown>): AdminClaim {
+async function mapAdminClaimRow(row: Record<string, unknown>): Promise<AdminClaim> {
   const photoPaths = (row.photo_paths as string[] | null) ?? [];
   const order = row.orders as { order_number?: string } | null;
   const shop = row.shops as { name?: string } | null;
@@ -41,7 +41,7 @@ function mapAdminClaimRow(row: Record<string, unknown>): AdminClaim {
     motif: row.motif as string,
     desiredSolution: row.desired_solution as DesiredSolution,
     details: (row.details as string | null) ?? null,
-    photoUrls: photoPaths.map(resolveImageUrl),
+    photoUrls: await resolveSecurePhotoUrls(photoPaths),
     status: row.status as ClaimStatus,
     refusalReason: (row.refusal_reason as string | null) ?? null,
     refundAmount: (row.refund_amount as number | null) ?? null,
@@ -59,7 +59,7 @@ export async function fetchAdminClaims(): Promise<AdminClaim[]> {
     .select('*, orders(order_number), shops(name)')
     .order('created_at', { ascending: false });
   if (error || !data) return [];
-  return data.map(mapAdminClaimRow);
+  return Promise.all(data.map(mapAdminClaimRow));
 }
 
 export async function fetchAdminClaimDetail(claimId: string): Promise<AdminClaim | null> {
@@ -69,7 +69,7 @@ export async function fetchAdminClaimDetail(claimId: string): Promise<AdminClaim
     .eq('id', claimId)
     .maybeSingle();
   if (error || !data) return null;
-  return mapAdminClaimRow(data);
+  return await mapAdminClaimRow(data);
 }
 
 export interface ClaimEvent {
