@@ -12,12 +12,19 @@ import { isRealCatalogId } from '@/data/products';
 const tabs = ['Accueil', 'Produits', 'Avis'] as const;
 type Tab = (typeof tabs)[number];
 
+// "Plus récent" used to bucket on isNew (a boolean, never set for real
+// Supabase products) — switched to the real createdAt field. No
+// "Popularité"/"Meilleures évaluations" here either: there's no real
+// popularity signal yet, and rating/reviewCount are hardcoded to 0 for
+// every real product until the reviews system aggregates public.reviews.
 const sortOptions = [
-  { id: 'recent', label: 'Plus récent' },
+  { id: 'recent', label: 'Plus récents' },
   { id: 'prix-asc', label: 'Prix croissant' },
   { id: 'prix-desc', label: 'Prix décroissant' },
 ] as const;
 type SortId = (typeof sortOptions)[number]['id'];
+
+interface ShopFilters { enStock: boolean; enPromotion: boolean }
 
 export default function ShopPage({ shopId }: { shopId: string }) {
   const { catalogProducts, catalogLoading, customerUser, navigate } = useApp();
@@ -26,6 +33,7 @@ export default function ShopPage({ shopId }: { shopId: string }) {
   const [following, setFollowing] = useState(false);
   const [sort, setSort] = useState<SortId>('recent');
   const [showReportModal, setShowReportModal] = useState(false);
+  const [shopFilters, setShopFilters] = useState<ShopFilters>({ enStock: false, enPromotion: false });
 
   // Real shops resolve their products from the merged Supabase+mock
   // catalog (catalogProducts is already scoped to status = 'active' by
@@ -40,15 +48,22 @@ export default function ShopPage({ shopId }: { shopId: string }) {
     [catalogProducts, shopId],
   );
 
+  const filteredProducts = useMemo(() => {
+    let result = [...allProducts];
+    if (shopFilters.enStock) result = result.filter((p) => p.stock > 0);
+    if (shopFilters.enPromotion) result = result.filter((p) => p.isPromo);
+    return result;
+  }, [allProducts, shopFilters]);
+
   const sortedProducts = useMemo(() => {
-    const result = [...allProducts];
+    const result = [...filteredProducts];
     switch (sort) {
       case 'prix-asc': result.sort((a, b) => a.price - b.price); break;
       case 'prix-desc': result.sort((a, b) => b.price - a.price); break;
-      default: result.sort((a, b) => (b.isNew ? 1 : 0) - (a.isNew ? 1 : 0)); break;
+      default: result.sort((a, b) => (b.createdAt ?? '').localeCompare(a.createdAt ?? '')); break;
     }
     return result;
-  }, [allProducts, sort]);
+  }, [filteredProducts, sort]);
 
   // A shop landed on directly (e.g. a shared link) isn't registered yet
   // until the Supabase fetch that populates it settles — showing "Boutique
@@ -102,11 +117,14 @@ export default function ShopPage({ shopId }: { shopId: string }) {
           {tab === 'Produits' && (
             <div>
               {allProducts.length > 0 && (
-                <div className="mb-5 flex items-center gap-2">
-                  <span className="text-xs text-ink/45">Trier par</span>
-                  <select value={sort} onChange={(e) => setSort(e.target.value as SortId)} className="rounded-full border border-line bg-white px-4 py-2 text-sm font-medium text-ink focus:border-burgundy focus:outline-none">
+                <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button onClick={() => setShopFilters((f) => ({ ...f, enStock: !f.enStock }))} className={`chip ${shopFilters.enStock ? 'chip-active' : ''}`}>En stock</button>
+                    <button onClick={() => setShopFilters((f) => ({ ...f, enPromotion: !f.enPromotion }))} className={`chip ${shopFilters.enPromotion ? 'chip-active' : ''}`}>En promotion</button>
+                  </div>
+                  <div className="flex items-center gap-2"><span className="hidden sm:inline text-xs text-ink/45">Trier par</span><select value={sort} onChange={(e) => setSort(e.target.value as SortId)} className="rounded-full border border-line bg-white px-4 py-2 text-sm font-medium text-ink focus:border-burgundy focus:outline-none">
                     {sortOptions.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
-                  </select>
+                  </select></div>
                 </div>
               )}
               {catalogLoading ? <p className="py-10 text-center text-sm text-ink/45">Chargement…</p> : <ProductGrid products={sortedProducts} columns={4} />}
