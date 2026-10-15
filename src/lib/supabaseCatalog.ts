@@ -238,12 +238,15 @@ function detailsFromDescriptiveAttributes(attrs: Record<string, string[]> | null
     .map(([label, values]) => ({ label, value: values.join(', ') }));
 }
 
-function mapProduct(row: ProductRow, imageRows: ProductImageRow[], variantRows: ProductVariantRow[]): Product {
+interface ReviewStats { average: number; count: number }
+
+function mapProduct(row: ProductRow, imageRows: ProductImageRow[], variantRows: ProductVariantRow[], reviewStats?: Map<string, ReviewStats>): Product {
   const promoActive = isPromoActive(row);
   const images = imagesForProduct(row.id, imageRows);
   const media = mediaForProduct(row.id, imageRows);
   const variants = variantRowsForProduct(row.id, variantRows);
   const stockFromVariants = variants.reduce((sum, v) => sum + (v.stock ?? 0), 0);
+  const stats = reviewStats?.get(row.id);
 
   return {
     id: row.id,
@@ -257,9 +260,13 @@ function mapProduct(row: ProductRow, imageRows: ProductImageRow[], variantRows: 
     images: images.length > 0 ? images : [FALLBACK_PRODUCT_IMAGE],
     media: media.length > 0 ? media : [{ url: FALLBACK_PRODUCT_IMAGE, type: 'image' as const }],
     thumbnailUrl: thumbnailUrlForProduct(row.id, imageRows),
-    // No Supabase equivalent — neutral defaults, not invented columns.
-    rating: undefined,
-    reviewCount: undefined,
+    // Real aggregate from public.reviews (RLS already scopes this to
+    // is_hidden = false for a normal customer-facing query — a moderated
+    // review never counts toward what's shown here). undefined (not 0)
+    // when there are no reviews yet, so callers can tell "no reviews" from
+    // "reviewed, average 0" apart.
+    rating: stats?.average,
+    reviewCount: stats?.count,
     // products has no stock column in this schema — stock lives on
     // product_variants. Summed here when the product has variants; a
     // product with none has no stock source at all, so it defaults to 0.
@@ -322,21 +329,36 @@ export async function fetchActiveCatalogFromSupabase(): Promise<SupabaseCatalogR
 
   let imageRows: ProductImageRow[] = [];
   let variantRows: ProductVariantRow[] = [];
+  let reviewStats = new Map<string, ReviewStats>();
 
   if (productIds.length > 0) {
-    const [imagesRes, variantsRes] = await Promise.all([
+    const [imagesRes, variantsRes, reviewsRes] = await Promise.all([
       supabase.from('product_images').select('*').in('product_id', productIds),
       supabase.from('product_variants').select('*').in('product_id', productIds),
+      // RLS already scopes this to is_hidden = false for a normal customer
+      // session — a moderated review never reaches this aggregate.
+      supabase.from('reviews').select('product_id, rating').in('product_id', productIds),
     ]);
     if (imagesRes.error) errors.push(`product_images: ${imagesRes.error.message}`);
     if (variantsRes.error) errors.push(`product_variants: ${variantsRes.error.message}`);
     imageRows = (imagesRes.data ?? []) as ProductImageRow[];
     variantRows = (variantsRes.data ?? []) as ProductVariantRow[];
+
+    const ratingsByProduct = new Map<string, number[]>();
+    for (const row of (reviewsRes.data ?? []) as { product_id: string; rating: number }[]) {
+      const list = ratingsByProduct.get(row.product_id) ?? [];
+      list.push(row.rating);
+      ratingsByProduct.set(row.product_id, list);
+    }
+    reviewStats = new Map([...ratingsByProduct].map(([productId, ratings]) => [
+      productId,
+      { average: ratings.reduce((s, r) => s + r, 0) / ratings.length, count: ratings.length },
+    ]));
   }
 
   return {
     shops: shopRows.map(mapShop),
-    products: productRows.map((row) => mapProduct(row, imageRows, variantRows)),
+    products: productRows.map((row) => mapProduct(row, imageRows, variantRows, reviewStats)),
     errors,
   };
 }

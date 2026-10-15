@@ -6,14 +6,16 @@ import ProductGrid from '@/components/ProductGrid';
 import ShopCard from '@/components/ShopCard';
 import { Search as SearchIcon, X } from 'lucide-react';
 
-type SortId = 'pertinence' | 'recent' | 'prix-asc' | 'prix-desc';
-// Same rationale as CategoryPage/ShopPage: no "Popularité"/"Meilleures
-// évaluations" until there's a real signal to sort by.
+type SortId = 'pertinence' | 'recent' | 'prix-asc' | 'prix-desc' | 'note';
+// Same rationale as CategoryPage/ShopPage: no "Popularité", there's no real
+// signal for it. "Meilleures évaluations" uses the real public.reviews
+// aggregate (fetchActiveCatalogFromSupabase), not a fake one.
 const sortOptions: { id: SortId; label: string }[] = [
   { id: 'pertinence', label: 'Pertinence' },
   { id: 'recent', label: 'Plus récents' },
   { id: 'prix-asc', label: 'Prix croissant' },
   { id: 'prix-desc', label: 'Prix décroissant' },
+  { id: 'note', label: 'Meilleures évaluations' },
 ];
 
 export default function SearchPage({ query }: { query: string }) {
@@ -32,6 +34,7 @@ export default function SearchPage({ query }: { query: string }) {
       case 'prix-asc': result.sort((a, b) => a.price - b.price); break;
       case 'prix-desc': result.sort((a, b) => b.price - a.price); break;
       case 'recent': result.sort((a, b) => (b.createdAt ?? '').localeCompare(a.createdAt ?? '')); break;
+      case 'note': result.sort((a, b) => (b.rating ?? 0) - (a.rating ?? 0) || (b.reviewCount ?? 0) - (a.reviewCount ?? 0)); break;
       default: break; // 'pertinence' — keep searchProducts' own relevance order
     }
     return result;

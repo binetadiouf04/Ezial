@@ -14,13 +14,14 @@ type Tab = (typeof tabs)[number];
 
 // "Plus récent" used to bucket on isNew (a boolean, never set for real
 // Supabase products) — switched to the real createdAt field. No
-// "Popularité"/"Meilleures évaluations" here either: there's no real
-// popularity signal yet, and rating/reviewCount are hardcoded to 0 for
-// every real product until the reviews system aggregates public.reviews.
+// "Popularité" here: there's no real popularity signal at all.
+// "Meilleures évaluations" uses the real aggregate from public.reviews
+// (fetchActiveCatalogFromSupabase), not a fake one.
 const sortOptions = [
   { id: 'recent', label: 'Plus récents' },
   { id: 'prix-asc', label: 'Prix croissant' },
   { id: 'prix-desc', label: 'Prix décroissant' },
+  { id: 'note', label: 'Meilleures évaluations' },
 ] as const;
 type SortId = (typeof sortOptions)[number]['id'];
 
@@ -60,6 +61,7 @@ export default function ShopPage({ shopId }: { shopId: string }) {
     switch (sort) {
       case 'prix-asc': result.sort((a, b) => a.price - b.price); break;
       case 'prix-desc': result.sort((a, b) => b.price - a.price); break;
+      case 'note': result.sort((a, b) => (b.rating ?? 0) - (a.rating ?? 0) || (b.reviewCount ?? 0) - (a.reviewCount ?? 0)); break;
       default: result.sort((a, b) => (b.createdAt ?? '').localeCompare(a.createdAt ?? '')); break;
     }
     return result;

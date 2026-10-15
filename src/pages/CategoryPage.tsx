@@ -13,11 +13,9 @@ import { SlidersHorizontal, ChevronRight } from 'lucide-react';
 // undefined, see supabaseCatalog.ts), so it silently did nothing for real
 // data. Dropped rather than kept as a fake signal; "recent" (real
 // createdAt, not the same isNew-boolean bucket either) is the honest
-// default instead. "Meilleures évaluations" isn't here yet for the same
-// reason — rating/reviewCount are hardcoded to 0 for every real product
-// until the reviews system actually aggregates public.reviews into the
-// catalog fetch.
-const sortOptions = [{ id: 'recent', label: 'Plus récents' }, { id: 'prix-asc', label: 'Prix croissant' }, { id: 'prix-desc', label: 'Prix décroissant' }];
+// default instead. "Meilleures évaluations" now uses the real aggregate
+// from public.reviews (fetchActiveCatalogFromSupabase), not a fake one.
+const sortOptions = [{ id: 'recent', label: 'Plus récents' }, { id: 'prix-asc', label: 'Prix croissant' }, { id: 'prix-desc', label: 'Prix décroissant' }, { id: 'note', label: 'Meilleures évaluations' }];
 
 export default function CategoryPage({ categoryId, subId }: { categoryId: string; subId?: string }) {
   const { navigate, catalogProducts, catalogShops, catalogLoading } = useApp();
@@ -97,6 +95,7 @@ export default function CategoryPage({ categoryId, subId }: { categoryId: string
     switch (sort) {
       case 'prix-asc': result.sort((a, b) => a.price - b.price); break;
       case 'prix-desc': result.sort((a, b) => b.price - a.price); break;
+      case 'note': result.sort((a, b) => (b.rating ?? 0) - (a.rating ?? 0) || (b.reviewCount ?? 0) - (a.reviewCount ?? 0)); break;
       default: result.sort((a, b) => (b.createdAt ?? '').localeCompare(a.createdAt ?? ''));
     }
     return result;
