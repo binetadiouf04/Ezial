@@ -431,7 +431,7 @@ export function getSimilarProducts(product: Product, pool: Product[] = products,
   const priceMax = product.price * 2;
 
   const scored = pool
-    .filter((p) => !exclude.has(p.id))
+    .filter((p) => !exclude.has(p.id) && p.stock > 0)
     .map((p) => {
       // Same subcategory/type is the strongest signal, then same broader
       // category, then just a comparable price range in a different
