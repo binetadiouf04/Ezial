@@ -20,15 +20,31 @@ export default function SmartImage({
   fallbackSrc?: string;
 }) {
   const [errored, setErrored] = useState(false);
+  const [loaded, setLoaded] = useState(false);
+  // Two failure modes `onError` alone misses: an empty/falsy `src` (some
+  // browsers never fire `error` for `<img src="">` — it just renders
+  // nothing, the exact "big empty rectangle" symptom) and a corrupted or
+  // zero-byte file that "loads" (no network error) but decodes to 0×0 — a
+  // truncated upload, for instance. Both are treated as real failures here
+  // so the fallback only ever replaces a genuinely unavailable image, never
+  // a slow-but-working one.
+  const showFallback = errored || !src;
+  // A subtle pulse while the real image is still in flight — a slow
+  // connection (the iPad/Wi-Fi case already diagnosed elsewhere) otherwise
+  // reads as "broken" for however long the request takes, even though
+  // nothing is actually wrong. Never applied to the fallback itself (a
+  // small local asset, effectively instant).
+  const pulseClass = !loaded && !showFallback ? ' bg-ink/5 animate-pulse' : '';
   return (
     <img
-      src={errored ? fallbackSrc : src}
+      src={showFallback ? fallbackSrc : src}
       alt={alt}
       loading={loading}
       decoding="async"
       fetchPriority={fetchPriority}
       onError={() => setErrored(true)}
-      className={className}
+      onLoad={(e) => { if (e.currentTarget.naturalWidth === 0) setErrored(true); else setLoaded(true); }}
+      className={`${className ?? ''}${pulseClass}`}
     />
   );
 }
