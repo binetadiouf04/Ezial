@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useApp } from '@/store/AppContext';
 import { searchProducts } from '@/data/products';
 import { categories } from '@/data/categories';
@@ -6,10 +6,37 @@ import ProductGrid from '@/components/ProductGrid';
 import ShopCard from '@/components/ShopCard';
 import { Search as SearchIcon, X } from 'lucide-react';
 
+type SortId = 'pertinence' | 'recent' | 'prix-asc' | 'prix-desc';
+// Same rationale as CategoryPage/ShopPage: no "Popularité"/"Meilleures
+// évaluations" until there's a real signal to sort by.
+const sortOptions: { id: SortId; label: string }[] = [
+  { id: 'pertinence', label: 'Pertinence' },
+  { id: 'recent', label: 'Plus récents' },
+  { id: 'prix-asc', label: 'Prix croissant' },
+  { id: 'prix-desc', label: 'Prix décroissant' },
+];
+
 export default function SearchPage({ query }: { query: string }) {
   const { navigate, catalogProducts, catalogLoading } = useApp();
   const [input, setInput] = useState(query);
-  const { exact, similar, shops } = searchProducts(query, catalogProducts);
+  const [sort, setSort] = useState<SortId>('pertinence');
+  const [enStock, setEnStock] = useState(false);
+  const [enPromotion, setEnPromotion] = useState(false);
+  const { exact: exactRaw, similar, shops } = searchProducts(query, catalogProducts);
+
+  const exact = useMemo(() => {
+    let result = [...exactRaw];
+    if (enStock) result = result.filter((p) => p.stock > 0);
+    if (enPromotion) result = result.filter((p) => p.isPromo);
+    switch (sort) {
+      case 'prix-asc': result.sort((a, b) => a.price - b.price); break;
+      case 'prix-desc': result.sort((a, b) => b.price - a.price); break;
+      case 'recent': result.sort((a, b) => (b.createdAt ?? '').localeCompare(a.createdAt ?? '')); break;
+      default: break; // 'pertinence' — keep searchProducts' own relevance order
+    }
+    return result;
+  }, [exactRaw, sort, enStock, enPromotion]);
+
   const suggestions = query.trim().length >= 2 ? categories.filter((c) => c.label.toLowerCase().includes(query.toLowerCase())).slice(0, 3) : [];
   const totalCount = exact.length + shops.length;
 
@@ -31,8 +58,22 @@ export default function SearchPage({ query }: { query: string }) {
         <>
           {suggestions.length > 0 && <div className="mb-6 flex flex-wrap gap-2">{suggestions.map((c) => <button key={c.id} onClick={() => navigate(`/categorie/${c.id}`)} className="chip">{c.label}</button>)}</div>}
           {shops.length > 0 && <section className="mb-10"><h2 className="mb-4 text-sm font-semibold uppercase tracking-wider text-ink/50">Boutiques</h2><div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">{shops.map((s) => <ShopCard key={s.id} shop={s} />)}</div></section>}
-          {exact.length > 0 && <section className="mb-10"><h2 className="mb-4 text-sm font-semibold uppercase tracking-wider text-ink/50">Produits</h2><ProductGrid products={exact} columns={4} /></section>}
-          {exact.length === 0 && shops.length === 0 && (
+          {exactRaw.length > 0 && (
+            <section className="mb-10">
+              <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                <h2 className="text-sm font-semibold uppercase tracking-wider text-ink/50">Produits</h2>
+                <div className="flex flex-wrap items-center gap-2">
+                  <button onClick={() => setEnStock((v) => !v)} className={`chip ${enStock ? 'chip-active' : ''}`}>En stock</button>
+                  <button onClick={() => setEnPromotion((v) => !v)} className={`chip ${enPromotion ? 'chip-active' : ''}`}>En promotion</button>
+                  <select value={sort} onChange={(e) => setSort(e.target.value as SortId)} className="rounded-full border border-line bg-white px-4 py-2 text-sm font-medium text-ink focus:border-burgundy focus:outline-none">
+                    {sortOptions.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
+                  </select>
+                </div>
+              </div>
+              {exact.length > 0 ? <ProductGrid products={exact} columns={4} /> : <p className="text-sm text-ink/45">Aucun produit ne correspond à ces filtres.</p>}
+            </section>
+          )}
+          {exact.length === 0 && shops.length === 0 && exactRaw.length === 0 && (
             <div className="flex flex-col items-center justify-center py-16 text-center">
               <SearchIcon size={40} className="text-ink/20" /><p className="mt-4 text-sm text-ink/60">Aucun résultat exact pour « {query} ».</p>
               {similar.length === 0 && <p className="mt-1 text-xs text-ink/40">Essayez : perruque, parfum, robe, bracelet, skincare...</p>}
