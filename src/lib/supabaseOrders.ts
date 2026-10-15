@@ -129,6 +129,20 @@ export async function createOrderInSupabase(
   return { result: data as CreatedOrderResult };
 }
 
+// Version string for the CGV currently shown at checkout — bump this the
+// day the CGV text actually changes, so every past consent stays tied to
+// the version the customer really saw.
+export const CGV_VERSION = 'v2026-10-11';
+
+// Called right after create_order() succeeds, once we have a real order id
+// to attach the consent to. Never blocks the order itself: the order is
+// already placed by the time this runs, so a failure here is logged, not
+// shown to the customer as a checkout error.
+export async function recordOrderCgvConsent(orderId: string): Promise<{ error?: string }> {
+  const { error } = await supabase.rpc('record_order_cgv_consent', { p_order_id: orderId, p_cgv_version: CGV_VERSION });
+  return error ? { error: error.message } : {};
+}
+
 // Generates the delivery code at order-confirmation time (like Uber's ride
 // PIN), not when a driver mission eventually gets created — idempotent, so
 // calling it again on every page view just returns the same code. Returns
@@ -141,8 +155,8 @@ export async function ensureOrderDeliveryCode(orderId: string): Promise<string |
 
 // orders.status is never updated after create_order() writes it once — the
 // only real signal of delivery progress lives on delivery_missions, which
-// customers have no direct RLS access to (by design). This is a narrow,
-// customer-scoped read of it (see get_order_delivery_status()).
+// customers have no direct RLS access to (by design). This is the one
+// narrow read of it they get, mirroring fetchOrderDeliveryCode.
 export async function fetchOrderDeliveryMissionStatus(orderId: string): Promise<string | null> {
   const { data, error } = await supabase.rpc('get_order_delivery_status', { p_order_id: orderId });
   if (error) return null;

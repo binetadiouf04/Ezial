@@ -6,6 +6,7 @@ import { formatFCFA } from '@/data/products';
 import ProductGrid from '@/components/ProductGrid';
 import SmartImage from '@/components/SmartImage';
 import NotificationOptIn from '@/components/NotificationOptIn';
+import MarketingPushToggle from '@/components/MarketingPushToggle';
 import PasswordField from '@/components/PasswordField';
 import PhoneField from '@/components/PhoneField';
 import { isValidEmail, capitalizeFirst } from '@/lib/authErrors';
@@ -559,6 +560,7 @@ export default function ProfilePage() {
       {tab === 'info' && (
         <div className="space-y-6">
           <NotificationOptIn userId={customerUser.id} label="Notifications de suivi de commande" />
+          <MarketingPushToggle />
 
           {/* Informations personnelles */}
           <div className="card p-5 space-y-4">

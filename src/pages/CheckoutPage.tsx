@@ -4,7 +4,7 @@ import { formatFCFA, isRealCatalogId, getVariantPrice } from '@/data/products';
 import PriceDisplay from '@/components/PriceDisplay';
 import { getShop } from '@/data/shops';
 import { paymentMethods as paymentMethodsData } from '@/data/payments';
-import { createOrderInSupabase, type CreateOrderPayload, type CreateOrderShopFulfillmentInput, type CreatedOrderResult } from '@/lib/supabaseOrders';
+import { createOrderInSupabase, recordOrderCgvConsent, type CreateOrderPayload, type CreateOrderShopFulfillmentInput, type CreatedOrderResult } from '@/lib/supabaseOrders';
 import { validatePromoCode } from '@/lib/supabasePromoCode';
 import { searchAddress, reverseGeocode, type GeocodeResult } from '@/lib/geocoding';
 import { estimateDeliveryFee, DELIVERY_FEE_FLOOR } from '@/lib/deliveryEstimate';
@@ -65,6 +65,11 @@ export default function CheckoutPage() {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [processing, setProcessing] = useState(false);
   const [submitError, setSubmitError] = useState('');
+  // Distinct from any marketing-opt-in checkbox elsewhere — this one only
+  // ever means "j'ai lu et j'accepte les CGV", unchecked by default, and
+  // the version + timestamp are recorded server-side via record_order_cgv_consent()
+  // right after the order itself is created.
+  const [cgvAccepted, setCgvAccepted] = useState(false);
   const [location, setLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [locationStatus, setLocationStatus] = useState<LocationStatus>('idle');
   const [locationMode, setLocationMode] = useState<LocationMode>('gps');
@@ -291,6 +296,7 @@ export default function CheckoutPage() {
   const mapToLocalOrder = (result: CreatedOrderResult): Order => {
     const fulfillments: ShopFulfillment[] = result.shops.map((s) => ({
       shopId: s.shop_id,
+      orderShopId: s.id,
       type: s.fulfillment_type,
       deliveryFee: 0, // frais consolidé au niveau de la commande, jamais par boutique
       pickupCode: s.pickup_code ?? undefined,
@@ -328,6 +334,10 @@ export default function CheckoutPage() {
   const placeOrder = async () => {
     if (hasDeliveryShops && !location) {
       setSubmitError('Position de livraison manquante. Autorisez la géolocalisation ou choisissez le retrait en boutique.');
+      return;
+    }
+    if (!cgvAccepted) {
+      setSubmitError('Vous devez accepter les conditions générales de vente pour valider votre commande.');
       return;
     }
     setSubmitError('');
@@ -393,6 +403,11 @@ export default function CheckoutPage() {
       }
 
       const order = mapToLocalOrder(outcome.result);
+      // Best-effort: the order itself is already placed by this point, so a
+      // failure here is never shown as a checkout error — it would just
+      // mean cgv_accepted_at stays null for this order, visible to an admin
+      // reviewing it later, not a reason to alarm the customer.
+      if (outcome.result.order.id) void recordOrderCgvConsent(outcome.result.order.id);
       addOrder(order);
       clearCart();
       navigate(`/commande/${order.id}`);
@@ -795,6 +810,22 @@ export default function CheckoutPage() {
                 })}
               </div>
 
+              <label className="flex cursor-pointer items-start gap-2.5">
+                <input
+                  type="checkbox"
+                  className="mt-0.5 h-4 w-4 rounded border-line text-burgundy focus:ring-burgundy"
+                  checked={cgvAccepted}
+                  onChange={(e) => setCgvAccepted(e.target.checked)}
+                />
+                <span className="text-sm text-ink/70">
+                  J'ai lu et j'accepte les{' '}
+                  <button type="button" onClick={() => navigate('/info/conditions-generales')} className="font-medium text-burgundy hover:underline">
+                    conditions générales de vente
+                  </button>
+                  .
+                </span>
+              </label>
+
               {submitError && (
                 <p className="flex items-start gap-1.5 rounded-lg bg-burgundy/5 p-3 text-sm text-burgundy">
                   <AlertCircle size={15} className="mt-0.5 flex-shrink-0" /> {submitError}
@@ -803,7 +834,7 @@ export default function CheckoutPage() {
 
               <div className="flex gap-3">
                 <button onClick={() => setStep(1)} className="btn-outline flex-1" disabled={processing}>Retour</button>
-                <button onClick={placeOrder} className="btn-primary flex-1" disabled={processing}>
+                <button onClick={placeOrder} className="btn-primary flex-1 disabled:opacity-50 disabled:cursor-not-allowed" disabled={processing || !cgvAccepted}>
                   {processing ? <><Loader2 size={17} className="animate-spin" /> Traitement...</> : `Payer ${formatFCFA(estimatedTotal)} ${hasDeliveryShops && !deliveryFeeKnown ? '(à partir de)' : '(estimé)'}`}
                 </button>
               </div>
