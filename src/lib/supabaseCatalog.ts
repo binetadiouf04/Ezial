@@ -66,6 +66,7 @@ interface ShopRow {
   pin_hash?: string | null;
   active_product_limit?: number | null;
   is_official?: boolean | null;
+  pickup_enabled?: boolean | null;
   latitude?: number | null;
   longitude?: number | null;
   created_at?: string;
@@ -143,7 +144,11 @@ function mapShop(row: ShopRow): Shop {
     rating: 0,
     reviewCount: 0,
     address: row.address_text ?? '',
-    pickupEnabled: false,
+    // Was hardcoded false here, so no real shop could ever offer pickup at
+    // checkout even after a seller enabled it in "Ma boutique" — shops.
+    // pickup_enabled was already a real, seller-settable column, just never
+    // read on this side.
+    pickupEnabled: Boolean(row.pickup_enabled),
     pickupEta: '',
     isOfficial: Boolean(row.is_official),
     latitude: row.latitude ?? undefined,
