@@ -541,7 +541,7 @@ export default function CheckoutPage() {
                           <Store size={18} className={current === 'pickup' ? 'text-burgundy' : 'text-ink/40'} />
                           <div>
                             <p className="text-sm font-medium text-ink">Retrait en boutique</p>
-                            <p className="text-xs text-ink/50">{shop.address} · {shop.pickupEta}</p>
+                            {shop.address && <p className="text-xs text-ink/50">{shop.address}</p>}
                           </div>
                           {current === 'pickup' && <Check size={16} className="ml-auto text-burgundy" />}
                         </button>
@@ -549,7 +549,7 @@ export default function CheckoutPage() {
                     </div>
                     {current === 'pickup' && (
                       <div className="rounded-lg bg-cream/40 p-3 fade-in">
-                        <p className="text-xs text-ink/55 leading-relaxed">Vous pourrez récupérer votre commande dès qu'elle sera marquée prête. {shop.pickupEta}.</p>
+                        <p className="text-xs text-ink/55 leading-relaxed">Vous pourrez récupérer votre commande dès qu'elle sera marquée prête.</p>
                       </div>
                     )}
                   </div>
@@ -669,20 +669,26 @@ export default function CheckoutPage() {
                 </div>
               )}
 
-              <div>
-                <label className="block text-xs font-medium text-ink/60 mb-1.5">Point de repère (optionnel)</label>
-                <input className="input-field" placeholder="Ex: près de la pharmacie, en face de..." value={form.landmark} onChange={(e) => setForm({ ...form, landmark: e.target.value })} />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-ink/60 mb-1.5">Instructions pour la livraison (facultatif)</label>
-                <textarea className="input-field" rows={2} placeholder="Ex. Appelez-moi en arrivant, portail noir..." value={form.instructions} onChange={(e) => setForm({ ...form, instructions: e.target.value })} />
-              </div>
+              {hasDeliveryShops && (
+                <>
+                  <div>
+                    <label className="block text-xs font-medium text-ink/60 mb-1.5">Point de repère (optionnel)</label>
+                    <input className="input-field" placeholder="Ex: près de la pharmacie, en face de..." value={form.landmark} onChange={(e) => setForm({ ...form, landmark: e.target.value })} />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-ink/60 mb-1.5">Instructions pour la livraison (facultatif)</label>
+                    <textarea className="input-field" rows={2} placeholder="Ex. Appelez-moi en arrivant, portail noir..." value={form.instructions} onChange={(e) => setForm({ ...form, instructions: e.target.value })} />
+                  </div>
+                </>
+              )}
 
-              {/* Pickup shop info */}
+              {/* Pickup shop info — only the pieces that actually have a
+                  real value; pickupEta has no backing data yet (no stored
+                  delay/hours per shop), so it's never rendered as a bare,
+                  empty line. */}
               {pickupShops.map((shop) => (
                 <div key={`pickup-${shop.id}`} className="rounded-lg bg-cream/40 p-3 space-y-1">
-                  <p className="text-xs text-ink/55 flex items-center gap-1.5"><Store size={12} /> {shop.name} · {shop.address}</p>
-                  <p className="text-xs text-ink/55 flex items-center gap-1.5"><Clock size={12} /> {shop.pickupEta}</p>
+                  <p className="text-xs text-ink/55 flex items-center gap-1.5"><Store size={12} /> {shop.name}{shop.address ? ` · ${shop.address}` : ''}</p>
                 </div>
               ))}
 
