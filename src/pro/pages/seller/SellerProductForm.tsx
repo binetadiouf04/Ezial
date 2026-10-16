@@ -1373,7 +1373,7 @@ export default function SellerProductForm({ productId }: { productId?: string })
             onClick={() => setIsHandmade(!isHandmade)}
             className={`relative h-6 w-11 flex-shrink-0 rounded-full transition-colors ${isHandmade ? 'bg-burgundy' : 'bg-ink/15'}`}
           >
-            <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow-sm transition-transform ${isHandmade ? 'translate-x-5' : 'translate-x-0.5'}`} />
+            <span className={`absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-white shadow-sm transition-transform ${isHandmade ? 'translate-x-5' : 'translate-x-0'}`} />
           </button>
           <span className="text-sm font-medium text-ink">Fait à la main</span>
         </label>
@@ -1575,7 +1575,7 @@ export default function SellerProductForm({ productId }: { productId?: string })
             onClick={() => setPriceByOption(!priceByOption)}
             className={`relative h-6 w-11 rounded-full transition-colors ${priceByOption ? 'bg-burgundy' : 'bg-ink/15'}`}
           >
-            <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow-sm transition-transform ${priceByOption ? 'translate-x-5' : 'translate-x-0.5'}`} />
+            <span className={`absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-white shadow-sm transition-transform ${priceByOption ? 'translate-x-5' : 'translate-x-0'}`} />
           </button>
           <span className="text-sm text-ink/70">Le prix change selon les options</span>
         </label>
@@ -1590,7 +1590,7 @@ export default function SellerProductForm({ productId }: { productId?: string })
             onClick={() => setIsPromo(!isPromo)}
             className={`relative h-6 w-11 rounded-full transition-colors ${isPromo ? 'bg-burgundy' : 'bg-ink/15'}`}
           >
-            <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow-sm transition-transform ${isPromo ? 'translate-x-5' : 'translate-x-0.5'}`} />
+            <span className={`absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-white shadow-sm transition-transform ${isPromo ? 'translate-x-5' : 'translate-x-0'}`} />
           </button>
         </div>
         {isPromo && (

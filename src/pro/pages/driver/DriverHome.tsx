@@ -43,7 +43,7 @@ export default function DriverHome() {
           </div>
         </div>
         <div className={`relative h-7 w-12 rounded-full transition-colors ${driverAvailable ? 'bg-green-500' : 'bg-ink/20'}`}>
-          <span className={`absolute top-0.5 h-6 w-6 rounded-full bg-white shadow-sm transition-transform ${driverAvailable ? 'translate-x-5' : 'translate-x-0.5'}`} />
+          <span className={`absolute left-0.5 top-0.5 h-6 w-6 rounded-full bg-white shadow-sm transition-transform ${driverAvailable ? 'translate-x-5' : 'translate-x-0'}`} />
         </div>
       </button>
 
