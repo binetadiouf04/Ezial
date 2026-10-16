@@ -39,8 +39,8 @@ export default function NotificationOptIn({ userId, label }: { userId: string; l
         <span className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-burgundy/10 text-burgundy"><Bell size={16} /></span>
         <div className="flex-1 min-w-0">
           <p className="text-sm font-medium text-ink">{label}</p>
-          <p className="mt-1 flex items-center gap-1.5 text-xs text-ink/55">
-            Sur iPhone/iPad : appuyez sur <Share size={13} className="inline" /> puis « Sur l'écran d'accueil » pour activer les notifications.
+          <p className="mt-1 text-xs text-ink/55">
+            Sur iPhone/iPad : appuyez sur <Share size={13} className="inline-block align-text-bottom" /> puis « Sur l'écran d'accueil » pour activer les notifications.
           </p>
         </div>
       </div>
