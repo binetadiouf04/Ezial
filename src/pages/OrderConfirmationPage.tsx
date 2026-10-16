@@ -1,8 +1,10 @@
+import { useState, useEffect } from 'react';
 import { useApp } from '@/store/AppContext';
 import { formatFCFA } from '@/data/products';
 import { getShop } from '@/data/shops';
+import { ensureOrderDeliveryCode } from '@/lib/supabaseOrders';
 import { paymentLabels } from '@/data/payments';
-import { CheckCircle2, Truck, Store, MapPin, Smartphone, Clock } from 'lucide-react';
+import { CheckCircle2, Truck, Store, MapPin, Smartphone, Clock, KeySquare } from 'lucide-react';
 import SmartImage from '@/components/SmartImage';
 
 const paymentIcons: Record<string, typeof Smartphone> = { wave: Smartphone, orange: Smartphone };
@@ -10,6 +12,15 @@ const paymentIcons: Record<string, typeof Smartphone> = { wave: Smartphone, oran
 export default function OrderConfirmationPage({ orderId }: { orderId: string }) {
   const { orders, navigate, catalogProducts } = useApp();
   const order = orders.find((o) => o.id === orderId);
+  const [deliveryCode, setDeliveryCode] = useState<string | null>(null);
+
+  // Same code OrderTrackingPage shows later — generated right at order
+  // creation, so it's already there to display the first time the
+  // customer sees this page, not only once they go look for it.
+  useEffect(() => {
+    if (!order?.supabaseOrderId) return;
+    void ensureOrderDeliveryCode(order.supabaseOrderId).then(setDeliveryCode);
+  }, [order?.supabaseOrderId]);
 
   if (!order) {
     return (
@@ -80,21 +91,34 @@ export default function OrderConfirmationPage({ orderId }: { orderId: string }) 
 
       {/* Delivery info */}
       {hasDelivery && (
-        <div className="card p-5 mb-5">
-          <h2 className="text-sm font-semibold text-ink mb-2 flex items-center gap-1.5"><Truck size={15} className="text-burgundy" /> Livraison Ezial</h2>
-          <div className="space-y-1 text-sm text-ink/60">
-            <p>{order.customer.firstName} {order.customer.lastName}</p>
-            <p>{order.customer.quartier}{order.customer.landmark && ` · ${order.customer.landmark}`}</p>
-            <p>{order.customer.phone}</p>
-            {order.customer.instructions && <p className="text-ink/45 italic">« {order.customer.instructions} »</p>}
-            {order.preference?.type === 'preferred' && (
-              <p className="flex items-center gap-1.5 text-ink/55"><Clock size={13} /> Préférence : {order.preference.date} · {order.preference.window}</p>
-            )}
+        <>
+          {deliveryCode && (
+            <div className="card mb-5 rounded-2xl p-6 text-center" style={{ background: 'linear-gradient(135deg, rgba(128,23,37,0.06), rgba(128,23,37,0.12))' }}>
+              <div className="flex items-center justify-center gap-2 mb-2">
+                <KeySquare size={18} className="text-burgundy" />
+                <p className="text-sm font-semibold uppercase tracking-wider text-burgundy">Votre code de livraison</p>
+              </div>
+              <p className="font-mono text-5xl font-bold tracking-[0.3em] text-burgundy">{deliveryCode}</p>
+              <p className="mt-3 text-sm font-medium text-ink/70">Communiquez ce code au livreur uniquement au moment où il vous remet votre colis.</p>
+            </div>
+          )}
+          <div className="card p-5 mb-5">
+            <h2 className="text-sm font-semibold text-ink mb-2 flex items-center gap-1.5"><Truck size={15} className="text-burgundy" /> Livraison Ezial</h2>
+            <div className="space-y-1 text-sm text-ink/60">
+              <p>{order.customer.firstName} {order.customer.lastName}</p>
+              <p>{order.customer.quartier}{order.customer.landmark && ` · ${order.customer.landmark}`}</p>
+              <p>{order.customer.phone}</p>
+              {order.customer.instructions && <p className="text-ink/45 italic">« {order.customer.instructions} »</p>}
+              {order.preference?.type === 'preferred' && (
+                <p className="flex items-center gap-1.5 text-ink/55"><Clock size={13} /> Préférence : {order.preference.date} · {order.preference.window}</p>
+              )}
+            </div>
           </div>
-        </div>
+        </>
       )}
 
-      {/* Pickup info per shop */}
+      {/* Pickup info per shop — pickupEta has no real backing data yet, so
+          it's never shown as a bare, empty line. */}
       {pickupShops.map((sf) => {
         const shop = getShop(sf.shopId);
         if (!shop) return null;
@@ -103,8 +127,7 @@ export default function OrderConfirmationPage({ orderId }: { orderId: string }) 
             <h2 className="text-sm font-semibold text-ink mb-2 flex items-center gap-1.5"><Store size={15} className="text-burgundy" /> Retrait en boutique</h2>
             <div className="space-y-1 text-sm text-ink/60">
               <p>{shop.name}</p>
-              <p className="flex items-center gap-1.5"><MapPin size={13} className="text-ink/40" /> {shop.address}</p>
-              <p className="flex items-center gap-1.5"><Clock size={13} className="text-ink/40" /> {shop.pickupEta}</p>
+              {shop.address && <p className="flex items-center gap-1.5"><MapPin size={13} className="text-ink/40" /> {shop.address}</p>}
             </div>
           </div>
         );
