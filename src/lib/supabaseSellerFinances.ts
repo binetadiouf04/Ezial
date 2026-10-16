@@ -75,3 +75,12 @@ export async function fetchSellerFinances(shopId: string): Promise<SellerFinance
 
   return { transactions, grossTotal, commissionTotal, netTotal, availableBalance, alreadyPaid };
 }
+
+// Notifies admins that the seller wants their available balance paid out —
+// never moves money or changes any transaction itself (payouts are still
+// recorded by an admin, manually, outside the app). Rejects a request with
+// no available balance server-side, not just by hiding the button.
+export async function requestSellerPayout(shopId: string): Promise<{ error?: string }> {
+  const { error } = await supabase.rpc('request_seller_payout', { p_shop_id: shopId });
+  return error ? { error: error.message } : {};
+}
