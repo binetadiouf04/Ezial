@@ -41,7 +41,10 @@ export default function SmartImage({
       alt={alt}
       loading={loading}
       decoding="async"
-      fetchPriority={fetchPriority}
+      // React 18.3 doesn't special-case fetchPriority yet (unlike React 19),
+      // so passing it as a JSX prop warns about an unrecognized DOM
+      // attribute. The lowercase HTML attribute name sidesteps that.
+      {...(fetchPriority ? { fetchpriority: fetchPriority } : {})}
       onError={() => setErrored(true)}
       onLoad={(e) => { if (e.currentTarget.naturalWidth === 0) setErrored(true); else setLoaded(true); }}
       className={`${className ?? ''}${pulseClass}`}
