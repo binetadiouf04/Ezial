@@ -8,6 +8,7 @@ import { formatFCFA, formatDateTime } from '../../data';
 import SummaryCard from '../../components/SummaryCard';
 import { StatusChip } from '../../components/StatusChip';
 import NotificationOptIn from '@/components/NotificationOptIn';
+import NotificationGateModal from '@/components/NotificationGateModal';
 import { ShoppingBag, Package, Wallet, Clock, ChevronRight, Truck, Store, Loader2 } from 'lucide-react';
 
 const MAX_ACTIVE = 25;
@@ -62,7 +63,12 @@ export default function SellerDashboard() {
         <p className="mt-1 text-sm text-ink/55">Vue d'ensemble de votre activité</p>
       </div>
 
-      {authUserId && <NotificationOptIn userId={authUserId} label="Notifications de nouvelles commandes" />}
+      {authUserId && (
+        <>
+          <NotificationGateModal userId={authUserId} label="Notifications de nouvelles commandes" />
+          <NotificationOptIn userId={authUserId} label="Notifications de nouvelles commandes" />
+        </>
+      )}
 
       {/* Summary cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">

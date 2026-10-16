@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { usePro } from '../../ProContext';
 import { supabase } from '@/lib/supabaseClient';
 import NotificationOptIn from '@/components/NotificationOptIn';
+import NotificationGateModal from '@/components/NotificationGateModal';
 import { Truck, MapPin, Store, ChevronRight, Navigation, CheckCircle2, Power, Package } from 'lucide-react';
 
 export default function DriverHome() {
@@ -20,7 +21,12 @@ export default function DriverHome() {
     <div className="space-y-5">
       <h1 className="font-display text-2xl font-semibold text-ink">Bonjour, {name}</h1>
 
-      {authUserId && <NotificationOptIn userId={authUserId} label="Notifications de nouvelles missions" />}
+      {authUserId && (
+        <>
+          <NotificationGateModal userId={authUserId} label="Notifications de nouvelles missions" />
+          <NotificationOptIn userId={authUserId} label="Notifications de nouvelles missions" />
+        </>
+      )}
 
       {/* Availability toggle */}
       <button
