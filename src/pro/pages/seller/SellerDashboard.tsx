@@ -1,11 +1,13 @@
 import { useState, useEffect, useCallback } from 'react';
 import { usePro } from '../../ProContext';
+import { supabase } from '@/lib/supabaseClient';
 import { fetchSellerFinances } from '@/lib/supabaseSellerFinances';
 import { fetchSellerOrders, type SellerOrderSummary } from '@/lib/supabaseSellerOrders';
 import { fetchSellerProducts } from '@/lib/supabaseSellerProducts';
 import { formatFCFA, formatDateTime } from '../../data';
 import SummaryCard from '../../components/SummaryCard';
 import { StatusChip } from '../../components/StatusChip';
+import NotificationOptIn from '@/components/NotificationOptIn';
 import { ShoppingBag, Package, Wallet, Clock, ChevronRight, Truck, Store, Loader2 } from 'lucide-react';
 
 const MAX_ACTIVE = 25;
@@ -16,6 +18,8 @@ export default function SellerDashboard() {
   const [orders, setOrders] = useState<SellerOrderSummary[]>([]);
   const [activeProducts, setActiveProducts] = useState(0);
   const [availableBalance, setAvailableBalance] = useState(0);
+  const [authUserId, setAuthUserId] = useState<string | null>(null);
+  useEffect(() => { void supabase.auth.getUser().then(({ data }) => setAuthUserId(data.user?.id ?? null)); }, []);
 
   const load = useCallback(async (shopId: string) => {
     setLoading(true);
@@ -57,6 +61,8 @@ export default function SellerDashboard() {
         <h1 className="font-display text-2xl font-semibold text-ink">Accueil</h1>
         <p className="mt-1 text-sm text-ink/55">Vue d'ensemble de votre activité</p>
       </div>
+
+      {authUserId && <NotificationOptIn userId={authUserId} label="Notifications de nouvelles commandes" />}
 
       {/* Summary cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">

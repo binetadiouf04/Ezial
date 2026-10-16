@@ -51,6 +51,29 @@ export default function NotificationOptIn({ userId, label }: { userId: string; l
 
   if (status === 'unsupported') return null; // not supported at all on this browser/device
 
+  // Undecided (status === 'default') gets a deliberately bolder treatment —
+  // this is the one state a seller/driver might otherwise never notice or
+  // think to act on, so it reads as a prompt, not a quiet settings row.
+  // It keeps reappearing on every visit until the browser's own permission
+  // dialog is actually answered (granted or denied), which is the only
+  // thing that moves status away from 'default' — no separate "dismiss"
+  // state to track.
+  if (status === 'default') {
+    return (
+      <div className="card flex items-center gap-3 border-burgundy/25 bg-burgundy/5 p-4">
+        <span className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-burgundy text-white"><Bell size={18} /></span>
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-semibold text-ink">{label}</p>
+          <p className="mt-0.5 text-xs text-ink/60">Activez pour être alerté immédiatement, même quand Ezial est fermé.</p>
+          {error && <p className="mt-1 flex items-center gap-1 text-xs text-burgundy"><AlertCircle size={11} /> {error}</p>}
+        </div>
+        <button onClick={() => void handleEnable()} disabled={loading} className="btn-primary flex-shrink-0">
+          {loading ? <Loader2 size={15} className="animate-spin" /> : 'Activer'}
+        </button>
+      </div>
+    );
+  }
+
   return (
     <div className="card p-4 flex items-center gap-3">
       <span className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-burgundy/10 text-burgundy"><Bell size={16} /></span>
@@ -59,15 +82,11 @@ export default function NotificationOptIn({ userId, label }: { userId: string; l
         {error && <p className="mt-0.5 flex items-center gap-1 text-xs text-burgundy"><AlertCircle size={11} /> {error}</p>}
         {status === 'denied' && <p className="mt-0.5 text-xs text-ink/45">Autorisation refusée — modifiable dans les réglages de votre navigateur.</p>}
       </div>
-      {status === 'granted' ? (
+      {status === 'granted' && (
         <button onClick={() => void handleDisable()} disabled={loading} className="flex items-center gap-1.5 text-sm font-medium text-green-700 hover:text-ink/60 flex-shrink-0 transition-colors" title="Désactiver les notifications">
           {loading ? <Loader2 size={15} className="animate-spin" /> : <><Check size={15} /> Activées</>}
         </button>
-      ) : status === 'default' ? (
-        <button onClick={() => void handleEnable()} disabled={loading} className="btn-outline flex-shrink-0">
-          {loading ? <Loader2 size={15} className="animate-spin" /> : 'Activer'}
-        </button>
-      ) : null}
+      )}
     </div>
   );
 }
