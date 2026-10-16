@@ -6,7 +6,11 @@ import SmartImage from './SmartImage';
 export default function ShopCard({ shop }: { shop: Shop }) {
   const { navigate } = useApp();
   return (
-    <button onClick={() => navigate(`/boutique/${shop.id}`)} className="group flex flex-col overflow-hidden rounded-xl border border-line bg-white text-left transition-all hover:card-shadow">
+    // A real href (not just an onClick) so Google's own rendering pass can
+    // discover and follow this link to the shop's static SEO page
+    // (scripts/prerender-seo.mjs) — preventDefault keeps the click itself
+    // on the existing in-app (hash) navigation, unchanged for visitors.
+    <a href={`/boutique/${shop.id}/`} onClick={(e) => { e.preventDefault(); navigate(`/boutique/${shop.id}`); }} className="group flex flex-col overflow-hidden rounded-xl border border-line bg-white text-left transition-all hover:card-shadow">
       <div className="relative h-28 w-full overflow-hidden bg-cream"><SmartImage src={shop.banner} alt={shop.name} className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-105" /></div>
       <div className="flex items-center gap-3 p-4">
         <SmartImage src={shop.logo} alt={shop.name} className="h-12 w-12 rounded-full border-2 border-white object-cover -mt-8 shadow-sm" />
@@ -16,6 +20,6 @@ export default function ShopCard({ shop }: { shop: Shop }) {
         </div>
         {shop.rating && <Rating rating={shop.rating} count={shop.reviewCount} showCount={false} />}
       </div>
-    </button>
+    </a>
   );
 }
