@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react';
 import { usePro } from '../../ProContext';
 import { formatFCFA, formatDate } from '../../data';
-import { fetchSellerFinances, type SellerTransactionRow } from '@/lib/supabaseSellerFinances';
+import { fetchSellerFinances, requestSellerPayout, type SellerTransactionRow } from '@/lib/supabaseSellerFinances';
 import FinanceSummary from '../../components/FinanceSummary';
 import { StatusChip } from '../../components/StatusChip';
-import { Wallet, TrendingUp, Calendar } from 'lucide-react';
+import { Wallet, TrendingUp, Calendar, Check, Loader2 } from 'lucide-react';
 
 export default function SellerFinances() {
   const { sellerSupabaseShopId } = usePro();
@@ -14,6 +14,9 @@ export default function SellerFinances() {
   const [netTotal, setNetTotal] = useState(0);
   const [availableBalance, setAvailableBalance] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
+  const [requesting, setRequesting] = useState(false);
+  const [requestError, setRequestError] = useState('');
+  const [requestSent, setRequestSent] = useState(false);
 
   // Real financial history for the signed-in seller's real Supabase shop —
   // never the mock sellerTransactions array, which only ever matched one
@@ -36,6 +39,17 @@ export default function SellerFinances() {
     });
     return () => { cancelled = true; };
   }, [sellerSupabaseShopId]);
+
+  const handleRequestPayout = async () => {
+    if (!sellerSupabaseShopId) return;
+    setRequesting(true);
+    setRequestError('');
+    const result = await requestSellerPayout(sellerSupabaseShopId);
+    setRequesting(false);
+    if (result.error) { setRequestError(result.error); return; }
+    setRequestSent(true);
+    setTimeout(() => setRequestSent(false), 4000);
+  };
 
   const now = Date.now();
   const weeklyNet = transactions
@@ -75,12 +89,18 @@ export default function SellerFinances() {
       />
 
       {/* Available balance */}
-      <div className="card p-5 flex items-center justify-between">
-        <div>
-          <p className="text-xs font-medium text-ink/50 flex items-center gap-1.5"><Wallet size={14} /> Solde disponible</p>
-          <p className="mt-1 font-display text-2xl font-semibold text-burgundy">{formatFCFA(availableBalance)}</p>
+      <div className="card p-5">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <p className="text-xs font-medium text-ink/50 flex items-center gap-1.5"><Wallet size={14} /> Solde disponible</p>
+            <p className="mt-1 font-display text-2xl font-semibold text-burgundy">{formatFCFA(availableBalance)}</p>
+          </div>
+          <button onClick={() => void handleRequestPayout()} disabled={requesting || availableBalance <= 0} className="btn-primary flex items-center gap-1.5 flex-shrink-0">
+            {requesting ? <Loader2 size={15} className="animate-spin" /> : requestSent ? <Check size={15} /> : null}
+            {requestSent ? 'Demande envoyée' : 'Demander un paiement'}
+          </button>
         </div>
-        <button className="btn-primary">Demander un paiement</button>
+        {requestError && <p className="mt-2 text-sm text-burgundy">{requestError}</p>}
       </div>
 
       {/* Period summaries */}
