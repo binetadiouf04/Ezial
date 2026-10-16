@@ -39,9 +39,11 @@ export default function NotificationOptIn({ userId, label }: { userId: string; l
         <span className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-burgundy/10 text-burgundy"><Bell size={16} /></span>
         <div className="flex-1 min-w-0">
           <p className="text-sm font-medium text-ink">{label}</p>
-          <p className="mt-1 text-xs text-ink/55">
-            Sur iPhone/iPad : appuyez sur <Share size={13} className="inline-block align-text-bottom" /> puis « Sur l'écran d'accueil » pour activer les notifications.
-          </p>
+          <p className="mt-1 text-xs text-ink/55">Pour les recevoir sur iPhone/iPad, ajoutez d'abord Ezial à votre écran d'accueil :</p>
+          <ol className="mt-1 list-inside list-decimal space-y-0.5 text-xs text-ink/55">
+            <li>Appuyez sur <Share size={12} className="inline-block align-text-bottom" /> (Partager)</li>
+            <li>Choisissez « Sur l'écran d'accueil »</li>
+          </ol>
         </div>
       </div>
     );
