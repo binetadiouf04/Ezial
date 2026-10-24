@@ -187,6 +187,7 @@ function pageMetaFor(route: string): { title: string; description: string } {
   if (clean === '/pour-vous') return { title: `Sélection pour vous — ${SITE_TITLE}`, description: 'Notre sélection de produits personnalisée sur Ezial.' };
   if (clean === '/boutiques') return { title: `Boutiques — ${SITE_TITLE}`, description: 'Toutes les boutiques actives sur Ezial.' };
   if (clean.startsWith('/recherche')) return { title: `Recherche — ${SITE_TITLE}`, description: DEFAULT_DESCRIPTION };
+  if (clean === '/info/mentions-legales') return { title: `Mentions légales — ${SITE_TITLE}`, description: "Éditeur, hébergement et informations légales de la plateforme Ezial." };
   return { title: `${SITE_TITLE} — Mode, beauté & lifestyle à Dakar`, description: DEFAULT_DESCRIPTION };
 }
 
