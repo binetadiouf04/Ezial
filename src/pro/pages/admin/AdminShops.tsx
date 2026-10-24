@@ -15,6 +15,7 @@ export default function AdminShops() {
   const [loadError, setLoadError] = useState('');
   const [search, setSearch] = useState('');
   const [acting, setActing] = useState<string | null>(null);
+  const [actionError, setActionError] = useState('');
   const [suspendTarget, setSuspendTarget] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -33,9 +34,11 @@ export default function AdminShops() {
 
   const act = async (shopId: string, status: 'active' | 'suspended' | 'rejected', reason?: string) => {
     setActing(shopId);
+    setActionError('');
     const result = await updateShopStatus(shopId, status, reason);
     setActing(null);
-    if (!result.error) setShops((prev) => prev.map((s) => s.id === shopId ? { ...s, status, suspensionReason: status === 'suspended' ? (reason ?? null) : null } : s));
+    if (result.error) { setActionError(result.error); return; }
+    setShops((prev) => prev.map((s) => s.id === shopId ? { ...s, status, suspensionReason: status === 'suspended' ? (reason ?? null) : null } : s));
   };
 
   const confirmSuspend = async (reason: string) => {
@@ -54,9 +57,9 @@ export default function AdminShops() {
     <div className="space-y-5">
       <h1 className="font-display text-2xl font-semibold text-ink">Boutiques</h1>
 
-      {loadError && (
+      {(loadError || actionError) && (
         <p className="flex items-start gap-1.5 rounded-lg bg-burgundy/5 p-3 text-sm text-burgundy">
-          <AlertCircle size={15} className="mt-0.5 flex-shrink-0" /> {loadError}
+          <AlertCircle size={15} className="mt-0.5 flex-shrink-0" /> {loadError || actionError}
         </p>
       )}
 
