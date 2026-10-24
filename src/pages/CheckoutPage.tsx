@@ -6,10 +6,12 @@ import { getShop } from '@/data/shops';
 import { paymentMethods as paymentMethodsData } from '@/data/payments';
 import { createOrderInSupabase, recordOrderCgvConsent, type CreateOrderPayload, type CreateOrderShopFulfillmentInput, type CreatedOrderResult } from '@/lib/supabaseOrders';
 import { validatePromoCode } from '@/lib/supabasePromoCode';
-import { searchAddress, reverseGeocode, type GeocodeResult } from '@/lib/geocoding';
+import { reverseGeocode, type GeocodeResult } from '@/lib/geocoding';
+import { searchPlaces } from '@/lib/googleMaps';
 import { estimateDeliveryFee, DELIVERY_FEE_FLOOR } from '@/lib/deliveryEstimate';
+import { fetchDeliveryFeeQuote, type DeliveryFeeQuote } from '@/lib/supabaseDeliveryFee';
 import CheckoutSteps from '@/components/CheckoutSteps';
-import LocationPickerMap from '@/components/LocationPickerMap';
+import GoogleLocationPickerMap from '@/components/GoogleLocationPickerMap';
 import PhoneField from '@/components/PhoneField';
 import { Check, Truck, Store, Smartphone, Wallet, Clock, Loader2, AlertCircle, AlertTriangle, MapPin, Navigation, Search, ArrowLeft, Gift } from 'lucide-react';
 import SmartImage from '@/components/SmartImage';
@@ -73,6 +75,13 @@ export default function CheckoutPage() {
   const [location, setLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [locationStatus, setLocationStatus] = useState<LocationStatus>('idle');
   const [locationMode, setLocationMode] = useState<LocationMode>('gps');
+  // Real-road-distance quote from calculate-delivery-fee (Google Routes
+  // API) — preferred for display the moment it resolves, and the only
+  // thing ever sent on to create_order() as routeDistanceKm. Never
+  // required: estimateDeliveryFee()'s Haversine estimate below covers
+  // display while this is loading or if it fails, and create_order() has
+  // its own Haversine fallback if this is simply never sent.
+  const [deliveryQuote, setDeliveryQuote] = useState<DeliveryFeeQuote | null>(null);
 
   // Gift order — kept out of the persisted draft on purpose (recipient
   // details are typically one-off, unlike the buyer's own info). When
@@ -130,6 +139,30 @@ export default function CheckoutPage() {
     }));
   }, [customerUser]);
 
+  // A minimal, self-contained echo of the delivery-shop-ids-in-cart
+  // computation further down (which needs shopsInCart, only built after
+  // the early returns below) — hooks can never be conditional, so this
+  // quote-fetching effect has to live above those returns, keyed off
+  // values already available from cart/shopFulfillments alone.
+  const earlyDeliveryShopIds = [...new Set(
+    cart.filter((i) => (shopFulfillments[i.shopId] ?? 'delivery') === 'delivery').map((i) => i.shopId),
+  )];
+  const earlyDeliveryShopIdsKey = earlyDeliveryShopIds.slice().sort().join(',');
+
+  useEffect(() => {
+    if (earlyDeliveryShopIds.length === 0 || !location) { setDeliveryQuote(null); return; }
+    let cancelled = false;
+    // Debounced — a map drag or quartier change fires many updates in a
+    // row; only the one the customer settles on should spend a Google call.
+    const timer = setTimeout(() => {
+      void fetchDeliveryFeeQuote(earlyDeliveryShopIds, location.lat, location.lng).then((quote) => {
+        if (!cancelled) setDeliveryQuote(quote);
+      });
+    }, 500);
+    return () => { cancelled = true; clearTimeout(timer); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [earlyDeliveryShopIdsKey, location?.lat, location?.lng]);
+
   const hasMockItem = cart.some((item) => !isRealCatalogId(item.productId));
 
   if (cart.length === 0) {
@@ -171,13 +204,17 @@ export default function CheckoutPage() {
   const deliveryFeeEstimate = hasDeliveryShops && location && deliveryShopCoords
     ? estimateDeliveryFee(deliveryShopCoords, location)
     : null;
-  const deliveryFeeKnown = deliveryFeeEstimate !== null;
+  // The real Google Routes API quote, once it resolves, replaces the
+  // Haversine estimate for display — same source create_order() itself
+  // will use, so the number shown stops being an approximation.
+  const effectiveDeliveryFeeEstimate = deliveryQuote?.feeFcfa ?? deliveryFeeEstimate;
+  const deliveryFeeKnown = effectiveDeliveryFeeEstimate !== null;
   const deliveryFeeText = !hasDeliveryShops
     ? 'Gratuit'
     : deliveryFeeKnown
-      ? `Livraison estimée : ${formatFCFA(deliveryFeeEstimate)}`
+      ? `Livraison estimée : ${formatFCFA(effectiveDeliveryFeeEstimate)}`
       : `Livraison à partir de ${formatFCFA(DELIVERY_FEE_FLOOR)}`;
-  const estimatedDeliveryFee = hasDeliveryShops ? (deliveryFeeKnown ? deliveryFeeEstimate : DELIVERY_FEE_FLOOR) : 0;
+  const estimatedDeliveryFee = hasDeliveryShops ? (deliveryFeeKnown ? effectiveDeliveryFeeEstimate : DELIVERY_FEE_FLOOR) : 0;
   const estimatedGiftWrapFee = giftWrap ? GIFT_WRAP_FEE : 0;
   const promoDiscount = appliedPromo?.discountAmount ?? 0;
   const estimatedTotal = Math.max(0, cartSubtotal + estimatedDeliveryFee + estimatedGiftWrapFee - promoDiscount);
@@ -259,7 +296,7 @@ export default function CheckoutPage() {
     setSearchResults(null);
     setSearchNotice('');
     try {
-      const { results, usedFallback } = await searchAddress(query);
+      const { results, usedFallback } = await searchPlaces(query);
       const notice = usedFallback ? 'Lieu exact non trouvé. Voici les résultats les plus proches.' : '';
       if (results.length === 0) {
         // Never a dead end: the map right below stays available for the
@@ -377,6 +414,12 @@ export default function CheckoutPage() {
           : [form.landmark.trim() && `Point de repère : ${form.landmark.trim()}`, form.instructions.trim()].filter(Boolean).join('. ') || undefined,
         latitude: hasDeliveryShops ? location?.lat ?? null : null,
         longitude: hasDeliveryShops ? location?.lng ?? null : null,
+        // The real Google Routes API distance for this exact delivery, when
+        // it resolved — create_order() only ever uses it after sanity-
+        // checking it against its own Haversine distance, and simply uses
+        // that Haversine distance (unchanged behavior) whenever this is
+        // absent (quote still loading, or the call failed).
+        routeDistanceKm: hasDeliveryShops ? deliveryQuote?.distanceKm : undefined,
         preferredDeliveryDate: hasDeliveryShops && preference.type === 'preferred' ? preference.date ?? null : null,
         preferredDeliverySlot: hasDeliveryShops && preference.type === 'preferred' ? preference.window ?? null : null,
         paymentMethod: payment,
@@ -662,7 +705,7 @@ export default function CheckoutPage() {
                         </div>
                       )}
 
-                      <LocationPickerMap position={location} onChange={handleMapPick} />
+                      <GoogleLocationPickerMap position={location} onChange={handleMapPick} />
                       <p className="text-xs text-ink/40">Cliquez sur la carte ou faites glisser le repère pour préciser l'emplacement exact de livraison. Vous pouvez rechercher une autre adresse à tout moment.</p>
                     </div>
                   )}
@@ -767,7 +810,7 @@ export default function CheckoutPage() {
                 </div>
                 <div className="border-t border-line pt-3 space-y-1.5 text-sm">
                   <div className="flex justify-between"><span className="text-ink/60">Produits</span><span className="font-medium">{formatFCFA(cartSubtotal)}</span></div>
-                  <div className="flex justify-between"><span className="text-ink/60">{hasDeliveryShops && deliveryFeeKnown ? 'Livraison Ezial (estimation)' : 'Livraison Ezial'}</span><span className="font-medium">{!hasDeliveryShops ? 'Gratuit' : deliveryFeeKnown ? formatFCFA(deliveryFeeEstimate) : `À partir de ${formatFCFA(DELIVERY_FEE_FLOOR)}`}</span></div>
+                  <div className="flex justify-between"><span className="text-ink/60">{hasDeliveryShops && deliveryFeeKnown ? 'Livraison Ezial (estimation)' : 'Livraison Ezial'}</span><span className="font-medium">{!hasDeliveryShops ? 'Gratuit' : deliveryFeeKnown ? formatFCFA(effectiveDeliveryFeeEstimate) : `À partir de ${formatFCFA(DELIVERY_FEE_FLOOR)}`}</span></div>
                   {isGift && giftWrap && <div className="flex justify-between"><span className="text-ink/60">Emballage cadeau</span><span className="font-medium">{formatFCFA(GIFT_WRAP_FEE)}</span></div>}
                   {appliedPromo && <div className="flex justify-between text-green-700"><span>Code promo {appliedPromo.code}</span><span className="font-medium">-{formatFCFA(appliedPromo.discountAmount)}</span></div>}
                   <div className="border-t border-line pt-1.5 flex justify-between"><span className="font-medium text-ink">{hasDeliveryShops && !deliveryFeeKnown ? 'Total à partir de' : 'Total estimé'}</span><span className="font-semibold text-ink">{formatFCFA(estimatedTotal)}</span></div>
@@ -878,7 +921,7 @@ export default function CheckoutPage() {
               <div className="flex justify-between"><span className="text-ink/60">Produits</span><span className="font-medium">{formatFCFA(cartSubtotal)}</span></div>
               <div className="flex justify-between">
                 <span className="text-ink/60">Livraison Ezial</span>
-                <span className="font-medium">{!hasDeliveryShops ? 'Gratuit' : deliveryFeeKnown ? formatFCFA(deliveryFeeEstimate) : `À partir de ${formatFCFA(DELIVERY_FEE_FLOOR)}`}</span>
+                <span className="font-medium">{!hasDeliveryShops ? 'Gratuit' : deliveryFeeKnown ? formatFCFA(effectiveDeliveryFeeEstimate) : `À partir de ${formatFCFA(DELIVERY_FEE_FLOOR)}`}</span>
               </div>
               {isGift && giftWrap && (
                 <div className="flex justify-between">

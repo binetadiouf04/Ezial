@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { usePro } from '../../ProContext';
 import VendorNoticeBanner, { type VendorNotice } from '../../components/VendorNoticeBanner';
-import LocationPickerMap from '@/components/LocationPickerMap';
+import GoogleLocationPickerMap from '@/components/GoogleLocationPickerMap';
 import { StatusChip } from '../../components/StatusChip';
 import {
   fetchShopLocation, updateShopLocation, fetchShopOnboarding, updateShopOnboarding,
@@ -9,7 +9,8 @@ import {
 } from '@/lib/supabaseSellerShop';
 import ImageCropModal from '@/components/ImageCropModal';
 import { fetchModerationFlags, latestUnresolvedFlag } from '@/lib/supabaseModeration';
-import { searchAddress, type GeocodeResult } from '@/lib/geocoding';
+import { type GeocodeResult } from '@/lib/geocoding';
+import { searchPlaces } from '@/lib/googleMaps';
 import { quartiers } from '@/store/AppContext';
 import { categories } from '@/data/categories';
 import { supabase } from '@/lib/supabaseClient';
@@ -169,7 +170,7 @@ export default function SellerShop() {
     setSearchResults(null);
     setSearchNotice('');
     try {
-      const { results, usedFallback } = await searchAddress(query);
+      const { results, usedFallback } = await searchPlaces(query);
       const notice = usedFallback ? 'Lieu exact non trouvé. Voici les résultats les plus proches.' : '';
       if (results.length === 0) {
         setSearchError('Adresse introuvable. Essayez avec le quartier, la commune ou un lieu connu à proximité, ou placez le repère directement sur la carte.');
@@ -545,7 +546,7 @@ export default function SellerShop() {
                   </div>
                 )}
 
-                <LocationPickerMap position={manualPosition} onChange={handleMapPick} />
+                <GoogleLocationPickerMap position={manualPosition} onChange={handleMapPick} />
                 <p className="text-xs text-ink/40">Cliquez sur la carte ou faites glisser le repère pour ajuster précisément l'emplacement réel de la boutique.</p>
                 {manualError && <p className="text-xs text-burgundy">{manualError}</p>}
                 <div className="flex items-center gap-3">

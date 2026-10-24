@@ -38,6 +38,12 @@ export interface CreateOrderPayload {
   // fabricated client-side when unavailable.
   latitude?: number | null;
   longitude?: number | null;
+  // Real road distance (km) for this delivery, from calculate-delivery-fee
+  // (Google Routes API) — create_order() only ever uses it in place of its
+  // own Haversine distance after sanity-checking it against that same
+  // Haversine value; omitted or implausible, it falls back to that
+  // Haversine distance unchanged, exactly as before this field existed.
+  routeDistanceKm?: number | null;
   preferredDeliveryDate?: string | null;
   preferredDeliverySlot?: string | null;
   paymentMethod: string;
