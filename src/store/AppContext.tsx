@@ -286,16 +286,13 @@ const defaultCustomerInfo: CustomerInfo = {
   landmark: "Près de la route de l'aéroport, porte bleue",
 };
 
-// TEMPORARY LAUNCH GATE — before real sellers are onboarded, the public
-// marketplace (Home, Catégories, Recherche, Boutiques) shows only the
-// official Ezial shop and its own real products, never the old static
-// demo catalog (src/data/products.ts / src/data/shops.ts) that used to be
-// merged in permanently to keep the app looking populated. This sits on
-// top of the existing approval workflow (products.status/shops.status,
-// already filtered to 'active' by fetchActiveCatalogFromSupabase) without
-// changing it — lifting this gate once real approved sellers should start
-// appearing publicly is exactly flipping this one constant.
-const PUBLIC_CATALOG_OFFICIAL_SHOP_ONLY = true;
+// Launch gate, now lifted — every approved (status = 'active') shop shows
+// publicly, not just the official Ezial shop. See git history for the
+// original "official shop only" soft-launch period this replaces; the
+// underlying approval workflow (products.status/shops.status, already
+// filtered to 'active' by fetchActiveCatalogFromSupabase) is unchanged —
+// this only decides which of those active shops are public.
+const PUBLIC_CATALOG_OFFICIAL_SHOP_ONLY = false;
 
 function publicShopsFrom(supabaseShops: Shop[]): Shop[] {
   const filtered = PUBLIC_CATALOG_OFFICIAL_SHOP_ONLY ? supabaseShops.filter((s) => s.isOfficial) : supabaseShops;
