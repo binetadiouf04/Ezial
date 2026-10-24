@@ -89,6 +89,16 @@ export async function signUpCustomer(input: SignUpCustomerInput): Promise<SignUp
   }
   if (!data.user) return { error: mapAuthErrorMessage(undefined) };
 
+  // Supabase never raises an "already registered" error for an email that
+  // already has a CONFIRMED account — it silently returns a fake success
+  // instead (anti-enumeration). The one client-visible signal for this
+  // exact case is an empty `identities` array — without this check, e.g. a
+  // seller trying to also sign up as a customer on their existing email
+  // saw "check your email" forever, with nothing ever sent.
+  if (data.user.identities && data.user.identities.length === 0) {
+    return { error: 'Un compte existe déjà avec cette adresse e-mail.', code: 'email_taken' };
+  }
+
   // No session yet — email confirmation is pending. The profile row was
   // already created server-side (see migration), so nothing else to do
   // here; the customer will be able to log in once confirmed.

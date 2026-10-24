@@ -204,6 +204,19 @@ export async function signUpSeller(input: SignUpSellerInput): Promise<SignUpSell
   }
   if (!data.user) return { error: mapAuthErrorMessage(undefined) };
 
+  // Supabase never raises an "already registered" error for an email that
+  // already has a CONFIRMED account — it silently returns a fake success
+  // instead (anti-enumeration: this is the only way an attacker couldn't
+  // otherwise tell which emails are already taken). The one client-visible
+  // signal for this exact case is an empty `identities` array. Without this
+  // check, a customer trying to also become a seller on their existing
+  // email saw "check your email" forever, with nothing ever sent — this
+  // routes them to the same existing-account path a real "already
+  // registered" error already triggers above.
+  if (data.user.identities && data.user.identities.length === 0) {
+    return linkShopToExistingAccount({ email, password: input.password, shopName: input.shopName, username });
+  }
+
   if (!data.session) return { status: 'pending_confirmation' };
 
   const shop = await shopForCurrentUser();
