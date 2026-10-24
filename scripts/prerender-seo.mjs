@@ -312,6 +312,41 @@ for (const [categoryId, categoryLabel] of Object.entries(CATEGORY_LABELS)) {
   for (const subId of subIds) buildCategoryPage(subId);
 }
 
+// --- Static info pages (no Supabase dependency) --------------------------
+// Content mirrors src/pages/InfoPage.tsx's infoContent['mentions-legales']
+// exactly — kept here too (not imported) for the same reason as
+// CATEGORY_LABELS above: this plain Node script has no access to the
+// Vite/TSX module graph. Only mentions-legales so far; add an entry here
+// whenever another static info page needs its own indexable URL.
+const INFO_PAGES = [
+  {
+    slug: 'mentions-legales',
+    title: 'Mentions légales — Ezial',
+    description: "Éditeur, hébergement et informations légales de la plateforme Ezial.",
+    heading: 'Mentions légales',
+    paragraphs: [
+      "Le site internet www.ezial.net est une plateforme de commerce électronique exploitée par une entreprise individuelle immatriculée au Sénégal.",
+      "Plateforme : Ezial. Exploitante : Bineta DIOUF. Forme juridique : Entreprise individuelle. Numéro RCCM : SN.DKR.2026.A.40238. Numéro NINEA : 013246576. Adresse professionnelle : Grand Yoff, quartier Sicap Foire, villa n° 48, Dakar, Sénégal. Adresse électronique : contact@ezial.net. Téléphone : +221 71 105 52 52.",
+      "La responsable de la publication du site est Bineta DIOUF, en sa qualité d'exploitante de l'entreprise individuelle. Toute demande concernant le site peut être adressée à contact@ezial.net.",
+      "Le site Ezial est hébergé et publié à l'aide du service GitHub Pages, fourni par GitHub, Inc. Le fonctionnement de la plateforme repose également sur des services techniques tiers, notamment Supabase.",
+      "Ezial est une marketplace multivendeur facilitant la mise en relation entre les consommateurs et des boutiques partenaires indépendantes au Sénégal.",
+    ],
+  },
+];
+
+for (const info of INFO_PAGES) {
+  const canonical = `${SITE_URL}/info/${info.slug}/`;
+  const bodyHtml = `
+    <main>
+      <h1>${esc(info.heading)}</h1>
+      ${info.paragraphs.map((p) => `<p>${esc(p)}</p>`).join('')}
+    </main>`;
+  writeFile(`/info/${info.slug}/index.html`, renderPage({
+    title: info.title, description: info.description, canonical, bodyHtml, jsonLd: [],
+  }));
+  sitemapUrls.push(canonical);
+}
+
 // --- Organization + WebSite JSON-LD on the homepage itself --------------
 {
   const homeJsonLd = [

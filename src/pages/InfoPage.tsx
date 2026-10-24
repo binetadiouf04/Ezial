@@ -228,26 +228,127 @@ const infoContent: Record<string, { title: string; body: React.ReactNode }> = {
     title: 'Mentions légales',
     body: (
       <>
-        {/* Only real, confirmed information is published here — RCCM,
-           NINEA, exploitant's legal name, professional address and phone
-           are not yet filled in administratively, and a legal page must
-           never show placeholder brackets or invented values. These
-           fields are added as soon as they're provided (see the
-           administrator report), not fabricated in the meantime. */}
-        <p>Le site www.ezial.net est exploité sous le nom commercial Ezial.</p>
-        <p>Courriel : contact@ezial.net</p>
+        <p className="text-xs text-ink/45">Dernière mise à jour : 23 octobre 2026</p>
 
-        <H2>Hébergement et prestataires techniques</H2>
-        <p>Hébergement du site : GitHub Pages, sous réserve de vérification de l'architecture effectivement déployée.</p>
-        <p>Services techniques : Supabase, sous réserve de vérification des prestataires et de leurs rôles.</p>
+        <H2>1. Éditeur du site</H2>
+        <p>Le site internet www.ezial.net est une plateforme de commerce électronique exploitée par une entreprise individuelle immatriculée au Sénégal.</p>
+        <p>Les informations relatives à l'entreprise exploitante sont les suivantes :</p>
+        <p>• <strong>Plateforme</strong> : Ezial</p>
+        <p>• <strong>Exploitante</strong> : Bineta DIOUF</p>
+        <p>• <strong>Forme juridique</strong> : Entreprise individuelle</p>
+        <p>• <strong>Numéro RCCM</strong> : SN.DKR.2026.A.40238</p>
+        <p>• <strong>Numéro NINEA</strong> : 013246576</p>
+        <p>• <strong>Adresse professionnelle</strong> : Grand Yoff, quartier Sicap Foire, villa n° 48, Dakar, Sénégal</p>
+        <p>• <strong>Adresse électronique</strong> : contact@ezial.net</p>
+        <p>• <strong>Téléphone</strong> : +221 71 105 52 52</p>
+        <p>• <strong>Site internet</strong> : https://www.ezial.net</p>
+        <p>Ezial est une plateforme de vente en ligne permettant à des boutiques et vendeurs partenaires de proposer leurs produits aux consommateurs, principalement au Sénégal.</p>
 
-        <H2>Propriété intellectuelle</H2>
-        <p>Les informations, photographies, éléments graphiques et contenus présents sur le site sont protégés conformément aux règles applicables.</p>
+        <H2>2. Responsable de la publication</H2>
+        <p>La responsable de la publication du site est Bineta DIOUF, en sa qualité d'exploitante de l'entreprise individuelle.</p>
+        <p>Toute demande concernant le site peut être adressée à : contact@ezial.net.</p>
 
-        <p className="text-xs text-ink/45 mt-6">Les informations relatives à la forme juridique, à l'immatriculation (RCCM, NINEA) et aux coordonnées professionnelles complètes de l'exploitant seront ajoutées dès leur communication par l'administration d'Ezial.</p>
+        <H2>3. Hébergement et infrastructure technique</H2>
+        <p>Le site Ezial est hébergé et publié à l'aide du service GitHub Pages, fourni par GitHub, Inc.</p>
+        <p>Le fonctionnement de la plateforme repose également sur des services techniques tiers, notamment Supabase pour la gestion de certaines données et fonctionnalités applicatives.</p>
+        <p>Les coordonnées légales complètes des prestataires d'hébergement et les informations relatives à la localisation des données sont précisées conformément aux obligations légales applicables.</p>
 
-        <H2>Contact</H2>
-        <p>Toute question concernant l'exploitation du site peut être adressée à contact@ezial.net.</p>
+        <H2>4. Objet de la plateforme</H2>
+        <p>Ezial est une marketplace multivendeur facilitant la mise en relation entre les consommateurs et des boutiques partenaires indépendantes.</p>
+        <p>La plateforme permet notamment :</p>
+        <p>• La consultation de produits et de catalogues de boutiques.</p>
+        <p>• La recherche et la sélection de produits.</p>
+        <p>• La constitution de paniers regroupant plusieurs boutiques.</p>
+        <p>• La passation et le suivi de commandes.</p>
+        <p>• Le paiement par les moyens proposés sur le site.</p>
+        <p>• L'organisation de la livraison à domicile ou du retrait en boutique.</p>
+        <p>• La communication d'informations relatives aux commandes.</p>
+        <p>Ezial fournit une infrastructure numérique et des services facilitant les transactions commerciales entre les utilisateurs et les vendeurs partenaires.</p>
+        <p>Les modalités précises de chaque transaction sont définies dans les Conditions générales de vente et les conditions applicables aux vendeurs partenaires.</p>
+
+        <H2>5. Informations relatives aux vendeurs partenaires</H2>
+        <p>Les produits proposés sur Ezial peuvent être commercialisés par des vendeurs professionnels indépendants.</p>
+        <p>Chaque vendeur partenaire est responsable des informations qu'il communique concernant ses produits, notamment :</p>
+        <p>• Les descriptions et caractéristiques.</p>
+        <p>• Les photographies et illustrations.</p>
+        <p>• Les prix et promotions.</p>
+        <p>• Les disponibilités et les stocks.</p>
+        <p>• La conformité, l'authenticité et la qualité des produits.</p>
+        <p>Ezial se réserve le droit de vérifier, modifier, suspendre ou supprimer toute annonce qui ne respecte pas les règles de la plateforme ou la réglementation applicable.</p>
+        <p>Cette disposition ne limite pas les responsabilités légales pouvant incomber à Ezial dans le cadre de ses propres prestations.</p>
+
+        <H2>6. Prix et modalités de paiement</H2>
+        <p>Les prix affichés sur la plateforme sont exprimés en francs CFA (FCFA).</p>
+        <p>Les frais de livraison et les éventuels frais supplémentaires applicables sont communiqués au client avant la validation définitive de sa commande.</p>
+        <p>Selon les options effectivement disponibles, les paiements peuvent être réalisés par :</p>
+        <p>• Wave.</p>
+        <p>• Orange Money.</p>
+        <p>• Carte bancaire.</p>
+        <p>Les transactions sont soumises aux conditions et aux mesures de sécurité des prestataires de paiement concernés.</p>
+        <p>Ezial s'engage à présenter les informations tarifaires de manière claire et transparente, conformément à la réglementation applicable.</p>
+
+        <H2>7. Livraison et retrait des commandes</H2>
+        <p>Ezial propose, selon les produits et les boutiques concernés, des services de livraison à domicile et de retrait en boutique.</p>
+        <p>Les zones desservies, les délais estimés, les frais applicables et les conditions de retrait sont communiqués au moment de la commande.</p>
+        <p>Pour les livraisons à Dakar, Ezial vise un délai de livraison de 24 heures, sous réserve des disponibilités, des conditions logistiques et des informations précisées lors de la commande.</p>
+        <p>Les modalités détaillées de livraison, de retrait, de réclamation et de remboursement sont définies dans les politiques commerciales applicables.</p>
+
+        <H2>8. Propriété intellectuelle</H2>
+        <p>Le nom Ezial, son logo, son identité visuelle, son interface, ses éléments graphiques et les contenus originaux réalisés pour la plateforme sont protégés par les dispositions applicables en matière de propriété intellectuelle.</p>
+        <p>Toute reproduction, modification, distribution ou exploitation non autorisée d'éléments protégés est interdite, sous réserve des exceptions prévues par la loi.</p>
+        <p>Les photographies, marques, descriptions et autres contenus fournis par les vendeurs partenaires demeurent la propriété de leurs titulaires respectifs.</p>
+        <p>Les vendeurs garantissent disposer des droits ou autorisations nécessaires à l'utilisation des contenus qu'ils publient sur Ezial.</p>
+
+        <H2>9. Protection des données personnelles</H2>
+        <p>Dans le cadre de ses activités, Ezial peut être amené à collecter et traiter des données personnelles concernant les clients, vendeurs et livreurs utilisant la plateforme.</p>
+        <p>Ces informations peuvent notamment comprendre :</p>
+        <p>• Le nom et le prénom.</p>
+        <p>• Les coordonnées téléphoniques et électroniques.</p>
+        <p>• Les adresses de livraison.</p>
+        <p>• Les informations relatives aux commandes.</p>
+        <p>• Les données nécessaires à la gestion des comptes et des prestations.</p>
+        <p>Ces traitements sont réalisés conformément à la législation sénégalaise applicable, notamment la loi n° 2008-12 du 25 janvier 2008 relative à la protection des données à caractère personnel.</p>
+        <p>Les données sont utilisées pour les finalités déterminées et légitimes liées au fonctionnement de la plateforme, à la gestion des commandes, aux paiements, à la livraison, à l'assistance aux utilisateurs et au respect des obligations légales.</p>
+        <p>Certaines informations peuvent être transmises aux vendeurs, livreurs ou prestataires techniques lorsque cela est nécessaire à l'exécution des services concernés.</p>
+        <p>Les utilisateurs disposent des droits prévus par la législation applicable.</p>
+        <p>Pour toute question ou demande concernant leurs données personnelles, ils peuvent contacter : contact@ezial.net.</p>
+        <p>Les informations détaillées relatives aux traitements de données figurent dans la <button onClick={() => window.location.hash = '/info/confidentialite'} className="text-burgundy hover:underline">Politique de confidentialité</button> d'Ezial.</p>
+
+        <H2>10. Cookies et technologies similaires</H2>
+        <p>Ezial peut utiliser des cookies ou des technologies similaires afin d'assurer le fonctionnement de la plateforme, de maintenir les sessions des utilisateurs et d'améliorer les services proposés.</p>
+        <p>Lorsque leur utilisation nécessite un consentement préalable, les technologies non essentielles ne sont activées qu'après obtention de celui-ci.</p>
+        <p>Les utilisateurs sont informés des catégories de cookies utilisées et des modalités de gestion de leurs préférences dans la politique correspondante.</p>
+
+        <H2>11. Responsabilité</H2>
+        <p>Ezial s'efforce de garantir l'accessibilité, la sécurité et le bon fonctionnement de sa plateforme.</p>
+        <p>Des interruptions temporaires peuvent toutefois intervenir en raison d'opérations de maintenance, de mises à jour, d'incidents techniques ou d'événements indépendants de sa volonté.</p>
+        <p>Les vendeurs partenaires demeurent responsables de leurs propres obligations commerciales et légales.</p>
+        <p>Ezial reste responsable des obligations qui lui incombent en vertu de la réglementation applicable et des engagements contractuels qu'elle assume dans le cadre de ses services.</p>
+        <p>Aucune disposition des présentes mentions légales ne peut être interprétée comme excluant une responsabilité qui ne pourrait légalement être écartée.</p>
+
+        <H2>12. Liens vers des services tiers</H2>
+        <p>Le site peut contenir des liens vers des sites internet, services de paiement ou plateformes exploités par des tiers.</p>
+        <p>Ces services sont soumis à leurs propres conditions d'utilisation et politiques de confidentialité.</p>
+        <p>Ezial n'exerce pas nécessairement de contrôle sur leur contenu ou leur fonctionnement et ne saurait être tenue responsable de leurs activités en dehors des obligations qui lui sont légalement applicables.</p>
+
+        <H2>13. Signalements et réclamations</H2>
+        <p>Tout utilisateur peut contacter Ezial pour signaler :</p>
+        <p>• Une information inexacte ou trompeuse.</p>
+        <p>• Un produit suspect ou non conforme.</p>
+        <p>• Un contenu portant atteinte à des droits.</p>
+        <p>• Une utilisation frauduleuse de la plateforme.</p>
+        <p>• Un problème relatif à une commande.</p>
+        <p>• Une difficulté concernant la livraison ou le service client.</p>
+        <p>Les demandes et réclamations peuvent être adressées à : contact@ezial.net.</p>
+        <p>Ezial examine les signalements reçus et prend les mesures appropriées conformément à ses obligations légales et contractuelles.</p>
+
+        <H2>14. Droit applicable</H2>
+        <p>Les présentes mentions légales sont régies par la législation applicable au Sénégal, notamment les dispositions relatives aux transactions électroniques, à la protection des données personnelles et aux activités commerciales.</p>
+        <p>Tout différend relatif à l'utilisation du site est soumis aux règles de compétence prévues par la législation applicable, sans préjudice des dispositions impératives protégeant les consommateurs.</p>
+
+        <H2>15. Modification des mentions légales</H2>
+        <p>Ezial peut actualiser les présentes mentions légales afin de tenir compte de l'évolution de ses services, de sa structure administrative, de ses prestataires ou de la réglementation applicable.</p>
+        <p>La version en vigueur est celle publiée sur le site internet, accompagnée de sa date de dernière mise à jour.</p>
       </>
     ),
   },
