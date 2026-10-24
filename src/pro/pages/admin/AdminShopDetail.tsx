@@ -42,6 +42,7 @@ export default function AdminShopDetail({ shopId }: { shopId: string }) {
   const [showFlagModal, setShowFlagModal] = useState(false);
   const [showSuspendModal, setShowSuspendModal] = useState(false);
   const [acting, setActing] = useState(false);
+  const [actionError, setActionError] = useState('');
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -76,9 +77,11 @@ export default function AdminShopDetail({ shopId }: { shopId: string }) {
 
   const act = async (status: 'active' | 'rejected' | 'suspended', reason?: string) => {
     setActing(true);
+    setActionError('');
     const result = await updateShopStatus(shopId, status, reason);
     setActing(false);
-    if (!result.error) setShop((s) => (s ? { ...s, status, suspensionReason: status === 'suspended' ? (reason ?? null) : null } : s));
+    if (result.error) { setActionError(result.error); return; }
+    setShop((s) => (s ? { ...s, status, suspensionReason: status === 'suspended' ? (reason ?? null) : null } : s));
   };
 
   const confirmSuspend = async (reason: string) => {
@@ -119,6 +122,8 @@ export default function AdminShopDetail({ shopId }: { shopId: string }) {
           <StatusChip status={shop.status} size="md" />
         </div>
       </div>
+
+      {actionError && <p className="text-sm text-burgundy">{actionError}</p>}
 
       {shop.status === 'active' && (
         <button onClick={() => setShowSuspendModal(true)} disabled={acting} className="btn-outline w-full flex items-center justify-center gap-1.5">
