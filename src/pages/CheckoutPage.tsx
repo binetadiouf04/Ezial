@@ -186,6 +186,13 @@ export default function CheckoutPage() {
 
   const hasDeliveryShops = shopsInCart.some((s) => getShopFulfillment(s.id) === 'delivery');
 
+  // Whether there's an actual choice to show at all — a shop with no pickup
+  // option is always delivery, so a per-shop card with one single,
+  // permanently-selected "Livraison" button is pure noise when it's true
+  // for every shop in the cart; the one consolidated Ezial delivery card
+  // below already says that plainly.
+  const anyShopOffersPickup = shopsInCart.some((s) => s.pickupEnabled);
+
   // Live mirror of create_order()'s own formula (Haversine, 100 FCFA/km,
   // min 800, max 4000) — for display only, recalculated the instant the
   // delivery position or the shop coordinates change. Never sent to the
@@ -523,12 +530,16 @@ export default function CheckoutPage() {
                 )}
               </div>
 
-              <div className="border-t border-line pt-5">
-                <h3 className="text-sm font-semibold text-ink mb-3">Mode de réception</h3>
-              </div>
+              {anyShopOffersPickup && (
+                <div className="border-t border-line pt-5">
+                  <h3 className="text-sm font-semibold text-ink mb-3">Mode de réception</h3>
+                </div>
+              )}
 
-              {/* Per-shop delivery/pickup choice */}
-              {shopsInCart.map((shop) => {
+              {/* Per-shop delivery/pickup choice — skipped entirely when no
+                  shop in the cart offers pickup at all (see
+                  anyShopOffersPickup above). */}
+              {anyShopOffersPickup && shopsInCart.map((shop) => {
                 const current = getShopFulfillment(shop.id);
                 const shopItems = cart.filter((i) => i.shopId === shop.id);
                 return (

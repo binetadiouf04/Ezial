@@ -61,12 +61,17 @@ async function textSearch(query: string): Promise<GeocodeResult[]> {
   const data: PlacesTextSearchResult = await res.json();
   return (data.places ?? [])
     .filter((p) => p.location)
-    .map((p) => ({
-      id: p.id,
-      label: p.formattedAddress || p.displayName?.text || query,
-      lat: p.location!.latitude,
-      lng: p.location!.longitude,
-    }));
+    .map((p) => {
+      const name = p.displayName?.text;
+      const address = p.formattedAddress;
+      // A named place (a hotel, a landmark) always leads — Google's own
+      // formattedAddress is frequently just a Plus Code in Dakar (most
+      // streets here have no conventional postal address), which alone
+      // means nothing to someone who searched for "Awa Plaza" and has no
+      // idea what "QH84+236, Dakar" refers to.
+      const label = name && address && address !== name ? `${name} — ${address}` : name || address || query;
+      return { id: p.id, label, lat: p.location!.latitude, lng: p.location!.longitude };
+    });
 }
 
 // Same progressive-fallback contract as geocoding.ts's searchAddress() —
