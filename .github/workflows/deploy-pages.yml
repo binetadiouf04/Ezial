@@ -44,6 +44,21 @@ jobs:
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
           VITE_VAPID_PUBLIC_KEY: ${{ secrets.VITE_VAPID_PUBLIC_KEY }}
+          VITE_GOOGLE_MAPS_API_KEY: ${{ secrets.VITE_GOOGLE_MAPS_API_KEY }}
+
+      # Generates the real, static, crawlable product/boutique/categorie
+      # pages + sitemap.xml straight from the current Supabase catalog (see
+      # scripts/prerender-seo.mjs) — runs after the build so it can reuse
+      # dist/index.html's own hashed asset tags, and before the upload so
+      # those generated files are included in the deployed artifact. A
+      # failure here must fail the whole deploy rather than publish a dist
+      # missing every SEO page (GitHub Pages only updates on a successful
+      # job, so the previous deploy stays live instead).
+      - name: Generate SEO pages + sitemap
+        run: node scripts/prerender-seo.mjs
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
 
       # Generates the real, static, crawlable product/boutique/categorie
       # pages + sitemap.xml straight from the current Supabase catalog (see
