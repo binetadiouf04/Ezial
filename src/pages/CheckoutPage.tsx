@@ -7,7 +7,7 @@ import { paymentMethods as paymentMethodsData } from '@/data/payments';
 import { createOrderInSupabase, recordOrderCgvConsent, type CreateOrderPayload, type CreateOrderShopFulfillmentInput, type CreatedOrderResult } from '@/lib/supabaseOrders';
 import { validatePromoCode } from '@/lib/supabasePromoCode';
 import { reverseGeocode, type GeocodeResult } from '@/lib/geocoding';
-import { searchPlaces } from '@/lib/googleMaps';
+import { useAddressSearch } from '@/lib/useAddressSearch';
 import { estimateDeliveryFee, DELIVERY_FEE_FLOOR } from '@/lib/deliveryEstimate';
 import { fetchDeliveryFeeQuote, type DeliveryFeeQuote } from '@/lib/supabaseDeliveryFee';
 import CheckoutSteps from '@/components/CheckoutSteps';
@@ -110,11 +110,7 @@ export default function CheckoutPage() {
   // wherever the map/search lands on, and the only address text sent with
   // the order (there's no separate manually-typed address field anymore).
   const [manualAdjusted, setManualAdjusted] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [searching, setSearching] = useState(false);
-  const [searchError, setSearchError] = useState('');
-  const [searchResults, setSearchResults] = useState<GeocodeResult[] | null>(null);
-  const [searchNotice, setSearchNotice] = useState('');
+  const addressSearch = useAddressSearch();
   const [selectedLabel, setSelectedLabel] = useState<string | null>(null);
   const [resolvingAddress, setResolvingAddress] = useState(false);
 
@@ -272,47 +268,16 @@ export default function CheckoutPage() {
   const openManualLocationMode = () => {
     setManualAdjusted(false);
     setSelectedLabel(null);
-    setSearchQuery('');
-    setSearchResults(null);
-    setSearchError('');
-    setSearchNotice('');
+    addressSearch.reset();
     setLocationMode('manual');
   };
 
-  const applySearchResult = (result: GeocodeResult, notice = '') => {
+  const applySearchResult = (result: GeocodeResult) => {
     setLocation({ lat: result.lat, lng: result.lng });
     setSelectedLabel(result.label);
     setManualAdjusted(false);
-    setSearchResults(null);
-    setSearchError('');
-    setSearchNotice(notice);
-  };
-
-  const handleSearchAddress = async () => {
-    const query = searchQuery.trim();
-    if (!query || searching) return;
-    setSearching(true);
-    setSearchError('');
-    setSearchResults(null);
-    setSearchNotice('');
-    try {
-      const { results, usedFallback } = await searchPlaces(query);
-      const notice = usedFallback ? 'Lieu exact non trouvé. Voici les résultats les plus proches.' : '';
-      if (results.length === 0) {
-        // Never a dead end: the map right below stays available for the
-        // customer to place the point by hand.
-        setSearchError('Adresse introuvable. Essayez avec le quartier, la commune ou un lieu connu à proximité, ou placez le repère directement sur la carte.');
-      } else if (results.length === 1) {
-        applySearchResult(results[0], notice);
-      } else {
-        setSearchResults(results);
-        setSearchNotice(notice);
-      }
-    } catch {
-      setSearchError('La recherche a échoué. Vérifiez votre connexion et réessayez, ou placez le repère directement sur la carte.');
-    } finally {
-      setSearching(false);
-    }
+    addressSearch.clearResults();
+    addressSearch.setQuery('');
   };
 
   const handleMapPick = (lat: number, lng: number) => {
@@ -656,31 +621,28 @@ export default function CheckoutPage() {
                     <div className="space-y-3 rounded-lg border border-line p-3.5">
                       <div>
                         <label className="block text-xs font-medium text-ink/60 mb-1.5">Rechercher une adresse ou un lieu</label>
-                        <div className="flex gap-2">
+                        <div className="relative">
                           <input
                             type="text"
-                            className="input-field min-w-0 flex-1"
+                            className="input-field min-w-0 w-full pr-10"
                             placeholder="Ex. : Sacré-Cœur 3, Dakar"
-                            value={searchQuery}
-                            onChange={(e) => setSearchQuery(e.target.value)}
-                            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); void handleSearchAddress(); } }}
+                            value={addressSearch.query}
+                            onChange={(e) => addressSearch.setQuery(e.target.value)}
                           />
-                          <button type="button" onClick={() => void handleSearchAddress()} disabled={searching || !searchQuery.trim()} className="inline-flex flex-shrink-0 items-center justify-center gap-1.5 rounded-full border border-line bg-white px-3.5 py-3 text-sm font-medium text-ink transition-all hover:border-ink/30 active:scale-[0.98] disabled:opacity-40">
-                            {searching ? <Loader2 size={15} className="animate-spin" /> : <Search size={15} />}
-                            Rechercher
-                          </button>
+                          <span className="pointer-events-none absolute right-3.5 top-1/2 -translate-y-1/2 text-ink/30">
+                            {addressSearch.searching ? <Loader2 size={15} className="animate-spin" /> : <Search size={15} />}
+                          </span>
                         </div>
-                        <p className="mt-1.5 text-xs text-ink/40">Exemple : Cité Soprim, Dakar · Sea Plaza Dakar · Sacré-Cœur 3, Dakar</p>
                       </div>
 
-                      {searchError && <p className="flex items-start gap-1.5 text-xs text-burgundy"><AlertCircle size={13} className="mt-0.5 flex-shrink-0" /> {searchError}</p>}
+                      {addressSearch.error && <p className="flex items-start gap-1.5 text-xs text-burgundy"><AlertCircle size={13} className="mt-0.5 flex-shrink-0" /> {addressSearch.error}</p>}
 
-                      {searchResults && searchResults.length > 0 && (
+                      {addressSearch.results && addressSearch.results.length > 0 && (
                         <div className="space-y-2">
-                          {searchNotice && <p className="text-xs text-ink/50">{searchNotice}</p>}
+                          {addressSearch.notice && <p className="text-xs text-ink/50">{addressSearch.notice}</p>}
                           <div className="divide-y divide-line overflow-hidden rounded-lg border border-line">
-                            {searchResults.map((r) => (
-                              <button key={r.id} type="button" onClick={() => applySearchResult(r, searchNotice)} className="block w-full px-3 py-2.5 text-left text-sm text-ink/75 hover:bg-cream/60">
+                            {addressSearch.results.map((r) => (
+                              <button key={r.id} type="button" onClick={() => applySearchResult(r)} className="block w-full px-3 py-2.5 text-left text-sm text-ink/75 hover:bg-cream/60">
                                 {r.label}
                               </button>
                             ))}
@@ -693,7 +655,6 @@ export default function CheckoutPage() {
                           <Check size={16} className="mt-0.5 flex-shrink-0 text-green-600" />
                           <div className="min-w-0 flex-1">
                             <p className="text-sm font-medium text-green-800">Adresse sélectionnée</p>
-                            {searchNotice && !manualAdjusted && <p className="text-xs text-ink/50">{searchNotice}</p>}
                             {resolvingAddress ? (
                               <p className="mt-0.5 text-xs text-ink/50">Récupération de l'adresse...</p>
                             ) : selectedLabel ? (

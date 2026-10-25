@@ -1,7 +1,7 @@
 // Shared driver geo helpers — distance estimate + native navigation
 // deep-linking. No paid API: distance is computed locally from GPS
 // coordinates (haversine, straight-line), and "itinerary" always opens the
-// phone's own maps app rather than a routing engine Ezial would have to pay
+// driver's own maps app rather than a routing engine Ezial would have to pay
 // for. This is explicitly an estimate, never presented as an exact route.
 
 export interface GeoPoint {
@@ -27,26 +27,34 @@ export function formatDistanceKm(km: number): string {
   return `${km.toLocaleString('fr-FR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} km`;
 }
 
-// Detects the platform once per session — cheap, and the result never
-// changes mid-session, so no need to recompute per call.
-function isIOS(): boolean {
-  return /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-}
+export type NavigationApp = 'google' | 'apple' | 'waze';
+
+export const navigationAppLabels: Record<NavigationApp, string> = {
+  google: 'Google Maps',
+  apple: 'Plans (Apple)',
+  waze: 'Waze',
+};
 
 /**
- * Opens the phone's own navigation app pointed at exact GPS coordinates —
- * never a routing engine Ezial operates or pays for. iOS opens Apple Maps
- * (universally installed there); everywhere else opens Google Maps, which
- * itself falls back to a browser map view when the native app isn't
- * installed — never a dead link.
+ * Deep link for one specific navigation app, pointed at exact GPS
+ * coordinates — never a routing engine Ezial operates or pays for. Each
+ * link falls back to that app's own web/store behavior when the native app
+ * isn't installed on the driver's phone, so there's never a dead link —
+ * which app is actually installed is for the driver to know, not us, hence
+ * letting them pick rather than guessing from the platform.
  */
-export function openNavigationTo(point: GeoPoint, label?: string): void {
+export function navigationUrl(app: NavigationApp, point: GeoPoint, label?: string): string {
   const { latitude, longitude } = point;
   const encodedLabel = label ? encodeURIComponent(label) : '';
-  const url = isIOS()
-    ? `https://maps.apple.com/?daddr=${latitude},${longitude}${label ? `&q=${encodedLabel}` : ''}`
-    : `https://www.google.com/maps/dir/?api=1&destination=${latitude},${longitude}${label ? `&destination_place_id=&q=${encodedLabel}` : ''}`;
-  window.open(url, '_blank', 'noopener,noreferrer');
+  switch (app) {
+    case 'apple':
+      return `https://maps.apple.com/?daddr=${latitude},${longitude}${label ? `&q=${encodedLabel}` : ''}`;
+    case 'waze':
+      return `https://waze.com/ul?ll=${latitude},${longitude}&navigate=yes`;
+    case 'google':
+    default:
+      return `https://www.google.com/maps/dir/?api=1&destination=${latitude},${longitude}${label ? `&destination_place_id=&q=${encodedLabel}` : ''}`;
+  }
 }
 
 /** tel: link target — lets the phone's own dialer handle formatting/calling. */

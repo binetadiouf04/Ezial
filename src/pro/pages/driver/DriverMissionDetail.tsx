@@ -2,7 +2,8 @@ import { useState } from 'react';
 import { usePro, type Incident } from '../../ProContext';
 import { StatusChip } from '../../components/StatusChip';
 import DeliveryLabel from '../../components/DeliveryLabel';
-import { haversineDistanceKm, formatDistanceKm, openNavigationTo, telHref } from '@/utils/geo';
+import NavigationAppPicker from '@/components/NavigationAppPicker';
+import { haversineDistanceKm, formatDistanceKm, telHref, type GeoPoint } from '@/utils/geo';
 import {
   ArrowLeft, MapPin, Navigation, Phone, CheckCircle2, Package,
   AlertTriangle, X, Camera, Tag,
@@ -38,6 +39,7 @@ export default function DriverMissionDetail({ missionId }: { missionId: string }
   const [incidentPhase, setIncidentPhase] = useState<'collection' | 'delivery'>('collection');
   const [incidentShopId, setIncidentShopId] = useState<string | undefined>(undefined);
   const [deliveryCode, setDeliveryCode] = useState('');
+  const [navTarget, setNavTarget] = useState<{ point: GeoPoint; label?: string } | null>(null);
   const [proofPhoto, setProofPhoto] = useState('');
   const [proofPhotoFile, setProofPhotoFile] = useState<File | null>(null);
   const [codeError, setCodeError] = useState('');
@@ -306,7 +308,7 @@ export default function DriverMissionDetail({ missionId }: { missionId: string }
               </div>
 
               <button
-                onClick={() => currentCollection.latitude != null && currentCollection.longitude != null && openNavigationTo({ latitude: currentCollection.latitude, longitude: currentCollection.longitude }, currentCollection.shopName)}
+                onClick={() => currentCollection.latitude != null && currentCollection.longitude != null && setNavTarget({ point: { latitude: currentCollection.latitude, longitude: currentCollection.longitude }, label: currentCollection.shopName })}
                 disabled={currentCollection.latitude == null || currentCollection.longitude == null}
                 className="btn-outline w-full flex items-center justify-center gap-2 disabled:opacity-40"
               >
@@ -366,7 +368,7 @@ export default function DriverMissionDetail({ missionId }: { missionId: string }
               <Phone size={16} /> Appeler
             </a>
             <button
-              onClick={() => hasDestinationCoords && openNavigationTo({ latitude: mission.destinationLatitude!, longitude: mission.destinationLongitude! }, mission.customerName)}
+              onClick={() => hasDestinationCoords && setNavTarget({ point: { latitude: mission.destinationLatitude!, longitude: mission.destinationLongitude! }, label: mission.customerName })}
               disabled={!hasDestinationCoords}
               className="btn-outline flex-1 flex items-center justify-center gap-2 disabled:opacity-40"
             >
@@ -482,6 +484,8 @@ export default function DriverMissionDetail({ missionId }: { missionId: string }
           />
         );
       })()}
+
+      {navTarget && <NavigationAppPicker point={navTarget.point} label={navTarget.label} onClose={() => setNavTarget(null)} />}
     </div>
   );
 }

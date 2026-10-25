@@ -10,7 +10,7 @@ import {
 import ImageCropModal from '@/components/ImageCropModal';
 import { fetchModerationFlags, latestUnresolvedFlag } from '@/lib/supabaseModeration';
 import { type GeocodeResult } from '@/lib/geocoding';
-import { searchPlaces } from '@/lib/googleMaps';
+import { useAddressSearch } from '@/lib/useAddressSearch';
 import { quartiers } from '@/store/AppContext';
 import { categories } from '@/data/categories';
 import { supabase } from '@/lib/supabaseClient';
@@ -103,11 +103,7 @@ export default function SellerShop() {
   const [manualAdjusted, setManualAdjusted] = useState(false);
   const [manualError, setManualError] = useState('');
   const [manualSaving, setManualSaving] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [searching, setSearching] = useState(false);
-  const [searchError, setSearchError] = useState('');
-  const [searchResults, setSearchResults] = useState<GeocodeResult[] | null>(null);
-  const [searchNotice, setSearchNotice] = useState('');
+  const addressSearch = useAddressSearch();
   const [selectedLabel, setSelectedLabel] = useState<string | null>(null);
 
   useEffect(() => {
@@ -145,46 +141,17 @@ export default function SellerShop() {
     setManualPosition(location ? { lat: location.latitude, lng: location.longitude } : null);
     setManualAdjusted(false);
     setSelectedLabel(null);
-    setSearchQuery('');
-    setSearchResults(null);
-    setSearchError('');
-    setSearchNotice('');
+    addressSearch.reset();
     setManualError('');
     setLocationMode('manual');
   };
 
-  const applySearchResult = (result: GeocodeResult, notice = '') => {
+  const applySearchResult = (result: GeocodeResult) => {
     setManualPosition({ lat: result.lat, lng: result.lng });
     setSelectedLabel(result.label);
     setManualAdjusted(false);
-    setSearchResults(null);
-    setSearchError('');
-    setSearchNotice(notice);
-  };
-
-  const handleSearchAddress = async () => {
-    const query = searchQuery.trim();
-    if (!query || searching) return;
-    setSearching(true);
-    setSearchError('');
-    setSearchResults(null);
-    setSearchNotice('');
-    try {
-      const { results, usedFallback } = await searchPlaces(query);
-      const notice = usedFallback ? 'Lieu exact non trouvé. Voici les résultats les plus proches.' : '';
-      if (results.length === 0) {
-        setSearchError('Adresse introuvable. Essayez avec le quartier, la commune ou un lieu connu à proximité, ou placez le repère directement sur la carte.');
-      } else if (results.length === 1) {
-        applySearchResult(results[0], notice);
-      } else {
-        setSearchResults(results);
-        setSearchNotice(notice);
-      }
-    } catch {
-      setSearchError('La recherche a échoué. Vérifiez votre connexion et réessayez, ou placez le repère directement sur la carte.');
-    } finally {
-      setSearching(false);
-    }
+    addressSearch.clearResults();
+    addressSearch.setQuery('');
   };
 
   const handleMapPick = (lat: number, lng: number) => {
@@ -201,9 +168,17 @@ export default function SellerShop() {
     setManualSaving(false);
     if ('error' in result && result.error) { setManualError(result.error); return; }
     setLocation({ latitude: manualPosition.lat, longitude: manualPosition.lng });
-    setLocationSaved(true);
-    setTimeout(() => setLocationSaved(false), 2000);
   };
+
+  // Derived rather than a timed toast — stays true (and the Save button
+  // stays disabled) for as long as the pin hasn't moved since the last save,
+  // instead of a confirmation that flashes once and leaves the screen
+  // looking exactly like it did before anything was saved.
+  const manualPositionIsSaved =
+    location != null &&
+    manualPosition != null &&
+    Math.abs(location.latitude - manualPosition.lat) < 1e-9 &&
+    Math.abs(location.longitude - manualPosition.lng) < 1e-9;
 
   const handleSave = async () => {
     if (!sellerSupabaseShopId) return;
@@ -463,9 +438,6 @@ export default function SellerShop() {
             ) : (
               <p className="flex items-center gap-1.5 text-sm font-medium text-amber-700"><AlertTriangle size={15} /> Localisation GPS non enregistrée</p>
             )}
-            <p className="text-xs text-ink/45 leading-relaxed">
-              La position enregistrée doit représenter l'emplacement réel de la boutique — pas l'endroit où vous vous trouvez en ce moment. Si vous administrez Ezial Pro loin de votre boutique, utilisez la saisie manuelle plutôt que votre position actuelle.
-            </p>
 
             {/* Mode toggle */}
             <div className="flex flex-wrap gap-2">
@@ -479,7 +451,6 @@ export default function SellerShop() {
 
             {locationMode === 'gps' && (
               <div className="space-y-3 rounded-lg border border-line p-3.5">
-                <p className="text-xs text-ink/50">À utiliser uniquement lorsque vous vous trouvez physiquement dans la boutique.</p>
                 <div className="flex items-center gap-3">
                   <button type="button" onClick={requestShopLocation} disabled={locationStatus === 'requesting'} className="btn-outline">
                     {locationStatus === 'requesting' ? <><Loader2 size={15} className="animate-spin" /> Détection en cours...</> : <><MapPin size={15} /> {location ? 'Mettre à jour avec ma position actuelle' : 'Utiliser ma position actuelle'}</>}
@@ -506,31 +477,28 @@ export default function SellerShop() {
 
                 <div>
                   <label className="block text-xs font-medium text-ink/60 mb-1.5">Rechercher une adresse ou un lieu</label>
-                  <div className="flex gap-2">
+                  <div className="relative">
                     <input
                       type="text"
-                      className="input-field min-w-0 flex-1"
+                      className="input-field min-w-0 w-full pr-10"
                       placeholder="Ex. : Sacré-Cœur 3, Dakar"
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                      onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); void handleSearchAddress(); } }}
+                      value={addressSearch.query}
+                      onChange={(e) => addressSearch.setQuery(e.target.value)}
                     />
-                    <button type="button" onClick={() => void handleSearchAddress()} disabled={searching || !searchQuery.trim()} className="inline-flex flex-shrink-0 items-center justify-center gap-1.5 rounded-full border border-line bg-white px-3.5 py-3 text-sm font-medium text-ink transition-all hover:border-ink/30 active:scale-[0.98] disabled:opacity-40">
-                      {searching ? <Loader2 size={15} className="animate-spin" /> : <Search size={15} />}
-                      Rechercher
-                    </button>
+                    <span className="pointer-events-none absolute right-3.5 top-1/2 -translate-y-1/2 text-ink/30">
+                      {addressSearch.searching ? <Loader2 size={15} className="animate-spin" /> : <Search size={15} />}
+                    </span>
                   </div>
-                  <p className="mt-1.5 text-xs text-ink/40">Exemple : Cité Soprim, Dakar · Sea Plaza Dakar · Sacré-Cœur 3, Dakar</p>
                 </div>
 
-                {searchError && <p className="flex items-start gap-1.5 text-xs text-burgundy"><AlertCircle size={13} className="mt-0.5 flex-shrink-0" /> {searchError}</p>}
+                {addressSearch.error && <p className="flex items-start gap-1.5 text-xs text-burgundy"><AlertCircle size={13} className="mt-0.5 flex-shrink-0" /> {addressSearch.error}</p>}
 
-                {searchResults && searchResults.length > 0 && (
+                {addressSearch.results && addressSearch.results.length > 0 && (
                   <div className="space-y-2">
-                    {searchNotice && <p className="text-xs text-ink/50">{searchNotice}</p>}
+                    {addressSearch.notice && <p className="text-xs text-ink/50">{addressSearch.notice}</p>}
                     <div className="divide-y divide-line overflow-hidden rounded-lg border border-line">
-                      {searchResults.map((r) => (
-                        <button key={r.id} type="button" onClick={() => applySearchResult(r, searchNotice)} className="block w-full px-3 py-2.5 text-left text-sm text-ink/75 hover:bg-cream/60">
+                      {addressSearch.results.map((r) => (
+                        <button key={r.id} type="button" onClick={() => applySearchResult(r)} className="block w-full px-3 py-2.5 text-left text-sm text-ink/75 hover:bg-cream/60">
                           {r.label}
                         </button>
                       ))}
@@ -540,7 +508,6 @@ export default function SellerShop() {
 
                 {(selectedLabel || manualAdjusted) && (
                   <div className="rounded-lg bg-cream/50 p-2.5 space-y-0.5">
-                    {searchNotice && !manualAdjusted && <p className="text-xs text-ink/50">{searchNotice}</p>}
                     {selectedLabel && <p className="flex items-start gap-1.5 text-sm text-ink/75"><MapPin size={14} className="mt-0.5 flex-shrink-0 text-burgundy" /> {selectedLabel}</p>}
                     {manualAdjusted && <p className="text-xs text-ink/45">Position ajustée manuellement sur la carte.</p>}
                   </div>
@@ -550,10 +517,10 @@ export default function SellerShop() {
                 <p className="text-xs text-ink/40">Cliquez sur la carte ou faites glisser le repère pour ajuster précisément l'emplacement réel de la boutique.</p>
                 {manualError && <p className="text-xs text-burgundy">{manualError}</p>}
                 <div className="flex items-center gap-3">
-                  <button type="button" onClick={() => void handleSaveManualLocation()} disabled={manualSaving || !manualPosition} className="btn-primary">
+                  <button type="button" onClick={() => void handleSaveManualLocation()} disabled={manualSaving || !manualPosition || manualPositionIsSaved} className="btn-primary">
                     {manualSaving ? <><Loader2 size={15} className="animate-spin" /> Enregistrement...</> : 'Enregistrer cette position'}
                   </button>
-                  {locationSaved && <span className="flex items-center gap-1 text-sm text-green-600"><Check size={14} /> Position enregistrée</span>}
+                  {manualPositionIsSaved && <span className="flex items-center gap-1 text-sm text-green-600"><Check size={14} /> Position enregistrée</span>}
                 </div>
               </div>
             )}
