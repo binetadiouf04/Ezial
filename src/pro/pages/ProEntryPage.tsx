@@ -1,5 +1,6 @@
 import { useState, Suspense, lazy } from 'react';
 import { usePro } from '../ProContext';
+import { useApp } from '@/store/AppContext';
 import type { Role } from '../data';
 import RoleCard from '../components/RoleCard';
 import LoginForm from '../components/LoginForm';
@@ -23,7 +24,8 @@ function ProRouteFallback() {
 }
 
 export default function ProEntryPage() {
-  const { role, login, verifySellerLogin, signUpSellerAccount, requestSellerPasswordReset, resendSellerConfirmationEmail, verifyAdminLogin, checkDriverUsername, createDriverPin, signInDriverWithPin } = usePro();
+  const { role, login, verifySellerLogin, signUpSellerAccount, continueAsSellerWithCurrentAccount, requestSellerPasswordReset, resendSellerConfirmationEmail, verifyAdminLogin, checkDriverUsername, createDriverPin, signInDriverWithPin } = usePro();
+  const { customerUser } = useApp();
   const [selectedRole, setSelectedRole] = useState<Role | null>(null);
 
   // If seller is logged in, render the seller layout
@@ -51,6 +53,8 @@ export default function ProEntryPage() {
           onLogin={(id, name, shopInfo) => login('seller', id, name, shopInfo)}
           verifySeller={verifySellerLogin}
           signUpSeller={signUpSellerAccount}
+          loggedInCustomer={customerUser ? { label: customerUser.firstName || customerUser.email || customerUser.phone || 'votre compte' } : null}
+          continueWithCurrentAccount={continueAsSellerWithCurrentAccount}
           requestPasswordReset={requestSellerPasswordReset}
           resendConfirmationEmail={resendSellerConfirmationEmail}
         />

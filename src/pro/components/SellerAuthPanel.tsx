@@ -1,11 +1,11 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import type { SellerShopInfo } from '../ProContext';
 import type { SignUpSellerInput } from '@/lib/supabaseSellerAuth';
 import { isValidEmail } from '@/lib/authErrors';
 import PasswordField from '@/components/PasswordField';
-import { ArrowLeft, Lock, KeyRound, Loader2, AlertCircle, Check, MailCheck } from 'lucide-react';
+import { ArrowLeft, Lock, KeyRound, Loader2, AlertCircle, Check, MailCheck, Store, UserCheck } from 'lucide-react';
 
-type View = 'login' | 'signup' | 'forgot' | 'pending_confirmation';
+type View = 'current_account' | 'login' | 'signup' | 'forgot' | 'pending_confirmation';
 
 interface SellerAuthPanelProps {
   onBack: () => void;
@@ -14,10 +14,25 @@ interface SellerAuthPanelProps {
   signUpSeller: (input: SignUpSellerInput) => Promise<{ status: 'confirmed'; shop: { sellerId: string; name: string; supabaseShopId: string; isOfficial: boolean } } | { status: 'pending_confirmation' } | { error: string }>;
   requestPasswordReset: (email: string) => Promise<{ error?: string }>;
   resendConfirmationEmail: (email: string) => Promise<{ error?: string }>;
+  // When the visitor is already signed in as a customer on this device —
+  // "Devenir vendeur" then never has to ask for an email/password again,
+  // the live session is itself the proof of identity.
+  loggedInCustomer?: { label: string } | null;
+  continueWithCurrentAccount?: (input: { shopName: string; username: string }) => Promise<{ status: 'confirmed'; shop: { sellerId: string; name: string; supabaseShopId: string; isOfficial: boolean } } | { error: string }>;
 }
 
-export default function SellerAuthPanel({ onBack, onLogin, verifySeller, signUpSeller, requestPasswordReset, resendConfirmationEmail }: SellerAuthPanelProps) {
-  const [view, setView] = useState<View>('login');
+export default function SellerAuthPanel({ onBack, onLogin, verifySeller, signUpSeller, requestPasswordReset, resendConfirmationEmail, loggedInCustomer, continueWithCurrentAccount }: SellerAuthPanelProps) {
+  const [view, setView] = useState<View>(loggedInCustomer ? 'current_account' : 'login');
+  const [currentShopName, setCurrentShopName] = useState('');
+  const [currentUsername, setCurrentUsername] = useState('');
+
+  // The customer session restore (AppProvider) resolves asynchronously, so
+  // loggedInCustomer can still be null on this panel's very first render —
+  // this catches it switching to truthy a moment later, without ever
+  // overriding a tab the visitor already picked for themselves.
+  useEffect(() => {
+    if (loggedInCustomer && view === 'login') setView('current_account');
+  }, [loggedInCustomer, view]);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
@@ -39,6 +54,17 @@ export default function SellerAuthPanel({ onBack, onLogin, verifySeller, signUpS
     if (!identifier.trim() || !password.trim()) { setError('Veuillez saisir votre identifiant et votre mot de passe.'); return; }
     setError(''); setSubmitting(true);
     const result = await verifySeller(identifier, password);
+    setSubmitting(false);
+    if ('error' in result) { setError(result.error); return; }
+    onLogin(result.shop.sellerId, result.shop.name, { supabaseShopId: result.shop.supabaseShopId, isOfficial: result.shop.isOfficial });
+  };
+
+  const handleContinueWithCurrentAccount = async () => {
+    if (!continueWithCurrentAccount) return;
+    if (!currentShopName.trim() || !currentUsername.trim()) { setError('Tous les champs sont obligatoires.'); return; }
+    if (!/^[a-zA-Z0-9]{4,32}$/.test(currentUsername.trim())) { setError("Le nom d'utilisateur doit contenir 4 à 32 lettres/chiffres, sans espace."); return; }
+    setError(''); setSubmitting(true);
+    const result = await continueWithCurrentAccount({ shopName: currentShopName, username: currentUsername });
     setSubmitting(false);
     if ('error' in result) { setError(result.error); return; }
     onLogin(result.shop.sellerId, result.shop.name, { supabaseShopId: result.shop.supabaseShopId, isOfficial: result.shop.isOfficial });
@@ -82,6 +108,7 @@ export default function SellerAuthPanel({ onBack, onLogin, verifySeller, signUpS
       <div className="card p-8">
         <h2 className="font-display text-2xl font-semibold text-ink">Espace Vendeur</h2>
         <p className="mt-1.5 text-sm text-ink/55">
+          {view === 'current_account' && 'Créez votre boutique avec votre compte Ezial.'}
           {view === 'login' && 'Connectez-vous avec votre identifiant et votre mot de passe.'}
           {view === 'signup' && 'Créez le compte de votre boutique Ezial.'}
           {view === 'pending_confirmation' && 'Vérifiez votre boîte mail.'}
@@ -97,6 +124,25 @@ export default function SellerAuthPanel({ onBack, onLogin, verifySeller, signUpS
 
         {error && <p className="mt-4 flex items-start gap-1.5 text-sm text-burgundy"><AlertCircle size={14} className="mt-0.5 flex-shrink-0" /> {error}</p>}
         {notice && <p className="mt-4 flex items-start gap-1.5 text-sm text-green-700"><Check size={14} className="mt-0.5 flex-shrink-0" /> {notice}</p>}
+
+        {view === 'current_account' && loggedInCustomer && (
+          <div className="mt-5 space-y-4">
+            <div className="flex items-start gap-2 rounded-lg bg-green-50 border border-green-100 p-3">
+              <UserCheck size={16} className="text-green-700 flex-shrink-0 mt-0.5" />
+              <p className="text-xs text-green-800">Vous êtes déjà connecté comme <strong>{loggedInCustomer.label}</strong>. Votre boutique sera créée avec ce compte — vous gardez aussi votre accès client.</p>
+            </div>
+            <div><label className="block text-xs font-medium text-ink/60 mb-1.5">Nom de la boutique</label><input className="input-field" value={currentShopName} onChange={(e) => setCurrentShopName(e.target.value)} /></div>
+            <div>
+              <label className="block text-xs font-medium text-ink/60 mb-1.5">Nom d'utilisateur Ezial</label>
+              <input className="input-field font-mono" placeholder="ex: maisonfatou" value={currentUsername} onChange={(e) => setCurrentUsername(e.target.value)} />
+              <p className="mt-1 text-[11px] text-ink/40">4 à 32 lettres/chiffres, sans espace. Utilisé pour vous connecter à l'espace vendeur.</p>
+            </div>
+            <button onClick={() => void handleContinueWithCurrentAccount()} disabled={submitting} className="btn-primary w-full flex items-center justify-center gap-1.5">
+              {submitting ? <><Loader2 size={16} className="animate-spin" /> Création...</> : <><Store size={16} /> Créer ma boutique</>}
+            </button>
+            <button onClick={() => switchView('login')} className="w-full text-center text-xs font-medium text-ink/50 hover:underline">Ce n'est pas vous ? Utiliser un autre compte</button>
+          </div>
+        )}
 
         {view === 'login' && (
           <div className="mt-5 space-y-4">

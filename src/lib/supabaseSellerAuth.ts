@@ -109,12 +109,11 @@ async function uniqueShopSlug(shopName: string, userId: string): Promise<string>
 // really theirs — never skips authentication) and attach the shop there
 // directly. RLS already allows this (`shops_insert_self`: owner_id =
 // auth.uid()), so no new policy is needed.
-async function linkShopToExistingAccount(input: { email: string; password: string; shopName: string; username: string }): Promise<SignUpSellerResult> {
-  const { error: signInError } = await supabase.auth.signInWithPassword({ email: input.email, password: input.password });
-  if (signInError) {
-    return { error: "Un compte existe déjà avec cet email. Connectez-vous avec son mot de passe pour y associer votre boutique, ou utilisez « Mot de passe oublié » pour le réinitialiser." };
-  }
-
+// Shared by linkShopToExistingAccount (after proving the password) and
+// createShopForLoggedInCustomer (session already live, nothing to prove) —
+// both just attach a 'draft' shop to whichever Supabase Auth user is
+// currently signed in.
+async function createShopRowForCurrentUser(input: { shopName: string; username: string }): Promise<SignUpSellerResult> {
   const existingShop = await shopForCurrentUser();
   if (existingShop) return { error: 'Ce compte possède déjà une boutique.' };
 
@@ -139,6 +138,29 @@ async function linkShopToExistingAccount(input: { email: string; password: strin
   const shop = await shopForCurrentUser();
   if (!shop) return { error: mapAuthErrorMessage(undefined) };
   return { status: 'confirmed', shop };
+}
+
+async function linkShopToExistingAccount(input: { email: string; password: string; shopName: string; username: string }): Promise<SignUpSellerResult> {
+  const { error: signInError } = await supabase.auth.signInWithPassword({ email: input.email, password: input.password });
+  if (signInError) {
+    return { error: "Un compte existe déjà avec cet email. Connectez-vous avec son mot de passe pour y associer votre boutique, ou utilisez « Mot de passe oublié » pour le réinitialiser." };
+  }
+  return createShopRowForCurrentUser(input);
+}
+
+// The "Devenir vendeur" shortcut for a customer already signed in on this
+// device: no email/password is asked again at all — the live customer
+// session itself is the proof of identity (never a signUp()/signInWithPassword()
+// round trip, which is what previously made the seller signup form blind to
+// an existing session and ask the customer to re-authenticate from scratch).
+export async function createShopForLoggedInCustomer(input: { shopName: string; username: string }): Promise<SignUpSellerResult> {
+  const username = normalizeSellerCode(input.username);
+  if (!/^[a-z0-9]{4,32}$/.test(username)) return { error: USERNAME_FORMAT_ERROR };
+
+  const { data: existing } = await supabase.from('shops').select('id').eq('seller_code', username).maybeSingle();
+  if (existing) return { error: USERNAME_TAKEN_ERROR };
+
+  return createShopRowForCurrentUser({ shopName: input.shopName, username });
 }
 
 export interface SignUpSellerInput {

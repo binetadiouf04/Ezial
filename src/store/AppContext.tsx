@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useState, useCallback, type ReactNode } from 'react';
-import { products as allProducts, type Product } from '@/data/products';
-import { shops as mockShops, registerSupabaseShops, type Shop } from '@/data/shops';
+import { type Product } from '@/data/products';
+import { registerSupabaseShops, type Shop } from '@/data/shops';
 import { fetchActiveCatalogFromSupabase } from '@/lib/supabaseCatalog';
 import {
   signUpCustomer, signInCustomer, restoreCustomerSession, signOutCustomer,
@@ -295,18 +295,15 @@ const defaultCustomerInfo: CustomerInfo = {
 const PUBLIC_CATALOG_OFFICIAL_SHOP_ONLY = false;
 
 function publicShopsFrom(supabaseShops: Shop[]): Shop[] {
-  const filtered = PUBLIC_CATALOG_OFFICIAL_SHOP_ONLY ? supabaseShops.filter((s) => s.isOfficial) : supabaseShops;
-  // Never leave the marketplace looking empty if the real fetch came back
-  // thin (e.g. right after a fresh Supabase project, before is_official is
-  // even set on any shop) — falls back to the old demo catalog exactly
-  // like a total fetch failure already does.
-  return filtered.length > 0 ? filtered : mockShops;
+  // Real boutiques only — never falls back to the old demo catalog. A
+  // genuinely empty result renders the existing "Aucun produit trouvé."
+  // empty state (see HomeProductPreview) instead of fake shops.
+  return PUBLIC_CATALOG_OFFICIAL_SHOP_ONLY ? supabaseShops.filter((s) => s.isOfficial) : supabaseShops;
 }
 
 function publicProductsFrom(supabaseProducts: Product[], publicShops: Shop[]): Product[] {
   const publicShopIds = new Set(publicShops.map((s) => s.id));
-  const filtered = supabaseProducts.filter((p) => publicShopIds.has(p.shopId));
-  return filtered.length > 0 ? filtered : allProducts;
+  return supabaseProducts.filter((p) => publicShopIds.has(p.shopId));
 }
 
 // Merges a real Supabase order-history fetch into whatever's already in
@@ -417,11 +414,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       })
       .catch(() => {
         if (cancelled) return;
-        // Fetch itself failed unexpectedly — the demo catalog is a genuine
-        // last-resort fallback here (real data truly unavailable), never
-        // the default a page saw before this point.
-        setCatalogProducts(allProducts);
-        setCatalogShops(mockShops);
+        // Fetch itself failed unexpectedly — stays empty (the existing
+        // "Aucun produit trouvé." empty state) rather than ever painting
+        // the old demo catalog as if it were real marketplace content.
         setCatalogLoading(false);
       });
     return () => { cancelled = true; };

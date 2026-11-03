@@ -3,7 +3,7 @@ import type { Role, DeliveryStep, ShopStatus, ProductStatus, ModerationEntry, Mo
 import { missions as initialMissions, type Mission, type Product, type Shop, type Driver, type DriverTransaction, type Order, type Transaction } from './data';
 import { shops as initialShops, products as initialProducts, transactions as initialTransactions, driverTransactions as initialDriverTransactions, orders as initialOrders, drivers as initialDrivers, moderationHistory as initialModerationHistory, blogPosts as initialBlogPosts } from './data';
 import { assignShopPrefixes, nextReferenceForShop } from '@/utils/reference';
-import { signInSeller, restoreSellerSession, signOutSeller, signUpSeller, requestSellerPasswordReset, resendSellerConfirmation, type SignUpSellerInput, type SignUpSellerResult } from '@/lib/supabaseSellerAuth';
+import { signInSeller, restoreSellerSession, signOutSeller, signUpSeller, requestSellerPasswordReset, resendSellerConfirmation, createShopForLoggedInCustomer, type SignUpSellerInput, type SignUpSellerResult } from '@/lib/supabaseSellerAuth';
 import { deleteMyAccount } from '@/lib/supabaseAccountDeletion';
 import { signInAdmin, restoreAdminSession } from '@/lib/supabaseAdminAuth';
 import { checkDriverUsername, createDriverPin, signInDriverWithPin, restoreDriverSession, type DriverLoginStatus } from '@/lib/supabaseDriverAuth';
@@ -135,6 +135,9 @@ interface ProState extends AuthState {
   // Self-service shop signup (new sellers only) — creates the real
   // Supabase Auth user + a 'draft' shop row in one step.
   signUpSellerAccount: (input: SignUpSellerInput) => Promise<{ status: 'confirmed'; shop: { sellerId: string; name: string; supabaseShopId: string; isOfficial: boolean } } | { status: 'pending_confirmation' } | { error: string }>;
+  // "Devenir vendeur" shortcut for a customer already signed in on this
+  // device — see continueAsSellerWithCurrentAccount below.
+  continueAsSellerWithCurrentAccount: (input: { shopName: string; username: string }) => Promise<{ status: 'confirmed'; shop: { sellerId: string; name: string; supabaseShopId: string; isOfficial: boolean } } | { error: string }>;
   requestSellerPasswordReset: (email: string) => Promise<{ error?: string }>;
   resendSellerConfirmationEmail: (email: string) => Promise<{ error?: string }>;
   deleteSellerAccount: () => Promise<{ error?: string }>;
@@ -536,6 +539,18 @@ export function ProProvider({ children }: { children: ReactNode }) {
     return { status: 'confirmed', shop: { sellerId: input.username.trim().toLowerCase(), name: result.shop.shopName, supabaseShopId: result.shop.shopId, isOfficial: result.shop.isOfficial } };
   }, []);
 
+  // "Devenir vendeur" for a customer already signed in on this device —
+  // no email/password asked again, the live session is itself the proof.
+  const continueAsSellerWithCurrentAccount = useCallback(async (input: { shopName: string; username: string }): Promise<{ status: 'confirmed'; shop: { sellerId: string; name: string; supabaseShopId: string; isOfficial: boolean } } | { error: string }> => {
+    const result: SignUpSellerResult = await createShopForLoggedInCustomer(input);
+    if ('error' in result) return { error: result.error };
+    // createShopForLoggedInCustomer never asks Supabase Auth to create a new
+    // user (the session already exists), so 'pending_confirmation' never
+    // actually happens here — kept only because it shares SignUpSellerResult's type.
+    if (result.status === 'pending_confirmation') return { error: 'Une erreur inattendue est survenue. Réessayez.' };
+    return { status: 'confirmed', shop: { sellerId: input.username.trim().toLowerCase(), name: result.shop.shopName, supabaseShopId: result.shop.shopId, isOfficial: result.shop.isOfficial } };
+  }, []);
+
   const requestSellerPasswordResetAction = useCallback(async (email: string) => requestSellerPasswordReset(email), []);
   const resendSellerConfirmationEmail = useCallback(async (email: string) => resendSellerConfirmation(email), []);
 
@@ -851,6 +866,7 @@ export function ProProvider({ children }: { children: ReactNode }) {
     sellerShopIsOfficial,
     verifySellerLogin,
     signUpSellerAccount,
+    continueAsSellerWithCurrentAccount,
     requestSellerPasswordReset: requestSellerPasswordResetAction,
     resendSellerConfirmationEmail,
     deleteSellerAccount,
