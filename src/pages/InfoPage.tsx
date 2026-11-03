@@ -352,6 +352,47 @@ const infoContent: Record<string, { title: string; body: React.ReactNode }> = {
       </>
     ),
   },
+  'tarifs-vendeurs': {
+    title: 'Tarifs vendeurs',
+    body: (
+      <>
+        <p>Ezial propose deux forfaits pour les boutiques partenaires. Chaque nouvelle boutique bénéficie d'un essai gratuit unique de 30 jours avec tous les avantages d'Ezial Pro.</p>
+
+        <div className="mt-5 grid gap-4 sm:grid-cols-2">
+          <div className="card p-5">
+            <p className="font-display text-lg font-semibold text-ink">Gratuit</p>
+            <p className="mt-1 text-2xl font-display font-semibold text-ink">0 FCFA</p>
+            <ul className="mt-4 space-y-2 text-sm text-ink/70">
+              <li>• Jusqu'à 10 produits actifs</li>
+              <li>• Boutique visible sur la marketplace</li>
+              <li>• Gestion des commandes et livraisons</li>
+            </ul>
+          </div>
+          <div className="card p-5 border-burgundy/30">
+            <p className="font-display text-lg font-semibold text-burgundy">Ezial Pro</p>
+            <p className="mt-1 text-2xl font-display font-semibold text-ink">5 000 FCFA <span className="text-sm font-normal text-ink/50">/ 3 mois</span></p>
+            <ul className="mt-4 space-y-2 text-sm text-ink/70">
+              <li>• Jusqu'à 30 produits actifs</li>
+              <li>• Mise en avant sur la marketplace</li>
+              <li>• Priorité sur les campagnes publicitaires</li>
+            </ul>
+          </div>
+        </div>
+
+        <H2>Essai gratuit</H2>
+        <p>Chaque boutique bénéficie, une seule fois, de 30 jours d'essai gratuit avec les avantages d'Ezial Pro dès son activation sur la plateforme. Aucune carte bancaire n'est requise et l'essai ne se transforme jamais automatiquement en abonnement payant.</p>
+
+        <H2>Activation et renouvellement</H2>
+        <p>Pour activer ou renouveler Ezial Pro, le vendeur règle 5 000 FCFA par Wave ou Orange Money puis transmet sa référence de transaction depuis son espace « Mon abonnement ». Un administrateur Ezial vérifie manuellement le paiement avant d'activer l'abonnement pour 3 mois. Ezial ne débite jamais un vendeur automatiquement.</p>
+
+        <H2>Fin d'abonnement</H2>
+        <p>À l'expiration d'Ezial Pro, la boutique repasse automatiquement au forfait Gratuit. Aucune donnée ni aucun produit n'est supprimé : si plus de 10 produits sont actifs, le vendeur choisit lui-même lesquels rester publiés.</p>
+
+        <H2>Commission Ezial</H2>
+        <p>Une commission de 8 % est appliquée sur chaque vente, réduite à 5 % sur un produit en promotion d'au moins 10 %. Cette commission est identique pour tous les vendeurs, quel que soit leur forfait, et s'applique uniquement sur les ventes réalisées — jamais sur les frais de livraison.</p>
+      </>
+    ),
+  },
 };
 
 export default function InfoPage({ slug }: { slug: string }) {

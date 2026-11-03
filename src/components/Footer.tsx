@@ -21,7 +21,7 @@ const aideLinks = [
 const ezialLinks = [
   { label: 'À propos', route: '/info/a-propos' },
   { label: 'Devenir vendeur', route: '/pro' },
-  { label: 'Ezial Pro', route: '/pro' },
+  { label: 'Tarifs vendeurs', route: '/info/tarifs-vendeurs' },
   { label: 'Conditions générales', route: '/info/conditions-generales' },
 ];
 

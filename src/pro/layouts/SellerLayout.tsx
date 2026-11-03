@@ -1,12 +1,13 @@
 import { useState } from 'react';
 import { usePro } from '../ProContext';
-import { Home, ShoppingBag, Package, Wallet, Store, LogOut, ArrowLeft, Menu, X, AlertTriangle, Star } from 'lucide-react';
+import { Home, ShoppingBag, Package, Wallet, Store, LogOut, ArrowLeft, Menu, X, AlertTriangle, Star, Crown } from 'lucide-react';
 import SellerDashboard from '../pages/seller/SellerDashboard';
 import SellerOrders from '../pages/seller/SellerOrders';
 import SellerOrderDetail from '../pages/seller/SellerOrderDetail';
 import SellerProducts from '../pages/seller/SellerProducts';
 import SellerProductForm from '../pages/seller/SellerProductForm';
 import SellerFinances from '../pages/seller/SellerFinances';
+import SellerSubscription from '../pages/seller/SellerSubscription';
 import SellerShop from '../pages/seller/SellerShop';
 import SellerClaims from '../pages/seller/SellerClaims';
 import SellerClaimDetail from '../pages/seller/SellerClaimDetail';
@@ -21,6 +22,7 @@ const navItems = [
   { route: '/seller/produits', label: 'Produits', icon: Package },
   { route: '/seller/avis', label: 'Avis', icon: Star },
   { route: '/seller/finances', label: 'Finances', icon: Wallet },
+  { route: '/seller/abonnement', label: 'Mon abonnement', icon: Crown },
   { route: '/seller/boutique', label: 'Ma boutique', icon: Store },
 ];
 
@@ -69,6 +71,7 @@ export default function SellerLayout() {
     if (isProductAdd) return <SellerProductForm />;
     if (productEditMatch) return <SellerProductForm productId={productEditMatch[1]} />;
     if (clean === '/seller/finances') return <SellerFinances />;
+    if (clean === '/seller/abonnement') return <SellerSubscription />;
     if (clean === '/seller/boutique') return <SellerShop />;
     return <SellerDashboard />;
   };

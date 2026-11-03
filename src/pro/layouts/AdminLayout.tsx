@@ -1,5 +1,5 @@
 import { usePro } from '../ProContext';
-import { LayoutDashboard, ShoppingBag, Package, Store, Wallet, LogOut, ArrowLeft, Layers, Truck, AlertTriangle, Star, Megaphone } from 'lucide-react';
+import { LayoutDashboard, ShoppingBag, Package, Store, Wallet, LogOut, ArrowLeft, Layers, Truck, AlertTriangle, Star, Megaphone, Crown } from 'lucide-react';
 import AdminDashboard from '../pages/admin/AdminDashboard';
 import AdminContent from '../pages/admin/AdminContent';
 import AdminOrders from '../pages/admin/AdminOrders';
@@ -17,6 +17,7 @@ import AdminDrivers from '../pages/admin/AdminDrivers';
 import AdminDriverDetail from '../pages/admin/AdminDriverDetail';
 import AdminFinances from '../pages/admin/AdminFinances';
 import AdminShopFinanceDetail from '../pages/admin/AdminShopFinanceDetail';
+import AdminSubscriptions from '../pages/admin/AdminSubscriptions';
 import AdminBlog from '../pages/admin/AdminBlog';
 import AdminBlogForm from '../pages/admin/AdminBlogForm';
 import AdminBlogPreview from '../pages/admin/AdminBlogPreview';
@@ -33,6 +34,7 @@ const navItems = [
   { route: '/admin/livreurs', label: 'Livreurs', icon: Truck },
   { route: '/admin/contenu', label: 'Contenu', icon: Layers },
   { route: '/admin/finances', label: 'Finances', icon: Wallet },
+  { route: '/admin/abonnements', label: 'Abonnements', icon: Crown },
 ];
 
 export default function AdminLayout() {
@@ -70,6 +72,7 @@ export default function AdminLayout() {
     if (driverDetailMatch) return <AdminDriverDetail driverId={driverDetailMatch[1]} />;
     if (clean === '/admin/finances') return <AdminFinances />;
     if (financeDetailMatch) return <AdminShopFinanceDetail shopId={financeDetailMatch[1]} />;
+    if (clean === '/admin/abonnements') return <AdminSubscriptions />;
     return <AdminDashboard />;
   };
 

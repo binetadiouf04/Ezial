@@ -40,6 +40,8 @@ export function StatusChip({ status, size = 'sm', label: labelOverride }: { stat
     offline: 'bg-ink/5 text-ink/50 border-line',
     // Payout
     paid: 'bg-green-50 text-green-700 border-green-100',
+    // Subscription payment
+    pending_review: 'bg-amber-50 text-amber-700 border-amber-100',
     // Campaign / Blog
     scheduled: 'bg-blue-50 text-blue-700 border-blue-100',
     ended: 'bg-ink/5 text-ink/50 border-line',
