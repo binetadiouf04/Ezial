@@ -14,7 +14,6 @@ import discover09 from '@/assets/discover/09.webp';
 import discover10 from '@/assets/discover/10.webp';
 import discover11 from '@/assets/discover/11.webp';
 import discover12 from '@/assets/discover/12.webp';
-import discover13 from '@/assets/discover/13.webp';
 import discover14 from '@/assets/discover/14.webp';
 import discover15 from '@/assets/discover/15.webp';
 import discover16 from '@/assets/discover/16.webp';
@@ -34,7 +33,42 @@ export type CategoryId =
   | 'beaute'
   | 'parfums'
   | 'bijoux'
-  | 'lingerie';
+  | 'lingerie'
+  | 'tissus';
+
+// Full fabric-type list for the Tissus category — a dedicated filter
+// dimension (data/filters.ts), not a subcategory: a Tissus product has no
+// subcategory, only a fabric_type (see the Phase 1 migration).
+export const fabricTypes = [
+  'Wax', 'Super Wax', 'Vlisco', 'Bazin', 'Bazin riche', 'Getzner', 'Coton',
+  'Dentelle', 'Dentelle brodée', 'Guipure', 'Soie', 'Satin', 'Mousseline',
+  'Crêpe', 'Lin', 'Tulle', 'Organza', 'Voile', 'Jersey', 'Velours',
+  'Brocart', 'Tissu brodé', 'Denim / Jean', 'Polyester', 'Tissu traditionnel', 'Autre',
+] as const;
+export type FabricType = typeof fabricTypes[number];
+
+export const fabricSaleModes = ['metre', 'kilogramme', 'piece'] as const;
+export type FabricSaleMode = typeof fabricSaleModes[number];
+export const fabricSaleModeLabels: Record<FabricSaleMode, string> = {
+  metre: 'Au mètre', kilogramme: 'Au kilogramme', piece: 'À la pièce',
+};
+export const fabricSaleModeUnit: Record<FabricSaleMode, string> = {
+  metre: 'm', kilogramme: 'kg', piece: 'pièce',
+};
+// min/max/step the customer's quantity selector enforces client-side — the
+// real authority is create_order() itself (see the Phase 1 migration),
+// this only avoids letting the customer type an obviously invalid value.
+export const fabricQuantityRules: Record<FabricSaleMode, { min: number; max: number; step: number }> = {
+  metre: { min: 0.5, max: 10, step: 0.5 },
+  kilogramme: { min: 0.5, max: 10, step: 0.5 },
+  piece: { min: 1, max: 10, step: 1 },
+};
+
+export const fabricAvailabilityStatuses = ['unique', 'limite', 'disponible', 'gros_stock'] as const;
+export type FabricAvailabilityStatus = typeof fabricAvailabilityStatuses[number];
+export const fabricAvailabilityLabels: Record<FabricAvailabilityStatus, string> = {
+  unique: 'Pièce unique', limite: 'Stock limité', disponible: 'Stock disponible', gros_stock: 'Gros stock',
+};
 
 export interface SubCategory { id: string; label: string; }
 export interface Category { id: CategoryId; label: string; subcategories: SubCategory[]; }
@@ -69,6 +103,9 @@ export const categories: Category[] = [
     { id: 'pyjamas', label: 'Pyjamas' }, { id: 'lingerie', label: 'Lingerie' },
     { id: 'sous-vetements', label: 'Sous-vêtements' }, { id: 'vetements-de-nuit', label: 'Vêtements de nuit' },
   ]},
+  // No subcategories — a Tissus product is differentiated by fabric_type
+  // (see fabricTypes above), a dedicated filter, not a subcategory.
+  { id: 'tissus', label: 'Tissus', subcategories: [] },
 ];
 
 export const categoryMap: Record<CategoryId, Category> = categories.reduce(
@@ -83,6 +120,7 @@ export const categoryTiles: { id: CategoryId; label: string; image: string }[] =
   { id: 'sacs', label: 'Sacs', image: 'https://images.pexels.com/photos/7953286/pexels-photo-7953286.jpeg?auto=compress&cs=tinysrgb&h=650&w=940' },
   { id: 'bijoux', label: 'Bijoux', image: 'https://images.pexels.com/photos/8165653/pexels-photo-8165653.jpeg?auto=compress&cs=tinysrgb&h=650&w=940' },
   { id: 'lingerie', label: 'Pyjamas & Lingerie', image: 'https://images.pexels.com/photos/6311392/pexels-photo-6311392.jpeg?auto=compress&cs=tinysrgb&h=650&w=940' },
+  { id: 'tissus', label: 'Tissus', image: 'https://images.pexels.com/photos/3965543/pexels-photo-3965543.jpeg?auto=compress&cs=tinysrgb&h=650&w=940' },
 ];
 
 export interface HomeCircleTile { id: string; label: string; image: string; route: string; highlight?: boolean; }
@@ -116,7 +154,11 @@ export const homeCircleTiles: HomeCircleTile[] = [
   { id: 'maquillage', label: 'Maquillage', image: discover10, route: '/categorie/beaute/maquillage' },
   { id: 'faux-cils', label: 'Faux cils', image: discover11, route: '/recherche?q=faux cils' },
   { id: 'skincare', label: 'Skincare', image: discover12, route: '/categorie/beaute/skincare' },
-  { id: 'press-on-nails', label: 'Press-on nails', image: discover13, route: '/categorie/beaute/mains-et-pieds' },
+  // Placeholder visual (stock photo, not one of the user-provided WebP
+  // crops the other 23 circles use) — swapped in on explicit "mets ce que
+  // tu peux, on corrigera" instruction; replace with a real provided photo
+  // cropped/optimized the same way as discover01-24 when available.
+  { id: 'tissus', label: 'Tissus', image: 'https://images.pexels.com/photos/3965543/pexels-photo-3965543.jpeg?auto=compress&cs=tinysrgb&h=650&w=940', route: '/categorie/tissus' },
   // Streetwear/Voile/Abaya n'ont pas encore de sous-catégorie dédiée dans la
   // taxonomie (comme Robes ou Or plus haut) : ils routent vers une recherche
   // sur leur propre libellé, qui remontera les produits dès qu'un vendeur

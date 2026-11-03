@@ -68,6 +68,7 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 const CATEGORY_LABELS = {
   vetements: 'Vêtements', chaussures: 'Chaussures', sacs: 'Sacs & Maroquinerie',
   beaute: 'Beauté', parfums: 'Parfums & Senteurs', bijoux: 'Bijoux & Accessoires', lingerie: 'Pyjamas & Lingerie',
+  tissus: 'Tissus',
 };
 const SUBCATEGORY_LABELS = {
   femme: 'Femme', homme: 'Homme',

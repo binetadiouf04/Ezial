@@ -1,4 +1,4 @@
-import type { CategoryId } from './categories';
+import { fabricTypes, fabricSaleModeLabels, type CategoryId } from './categories';
 
 export interface FilterGroup { id: string; label: string; options: string[]; collapsible?: boolean }
 
@@ -211,6 +211,13 @@ export const filterConfig: Record<CategoryId, FilterGroup[]> = {
   lingerie: [
     { id: 'type', label: 'Type', options: lingerieTypes },
     { id: 'taille', label: 'Taille', options: clothingSizes },
+    { id: 'couleur', label: 'Couleur', options: commonColors, collapsible: true },
+    { id: 'motif', label: 'Motif / Imprimé', options: commonPrints, collapsible: true },
+    globalPriceFilter,
+  ],
+  tissus: [
+    { id: 'typetissu', label: 'Type de tissu', options: [...fabricTypes] },
+    { id: 'modevente', label: 'Mode de vente', options: Object.values(fabricSaleModeLabels) },
     { id: 'couleur', label: 'Couleur', options: commonColors, collapsible: true },
     { id: 'motif', label: 'Motif / Imprimé', options: commonPrints, collapsible: true },
     globalPriceFilter,
