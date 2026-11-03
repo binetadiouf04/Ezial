@@ -5,7 +5,10 @@ import { getShop, registerSupabaseShops } from '@/data/shops';
 import { fetchProductDetailFromSupabase } from '@/lib/supabaseCatalog';
 import { fetchProductReviews, checkCanReview, submitReview, deleteReview, createReviewReport, type Review, type ReviewReportReason } from '@/lib/supabaseReviews';
 import ReviewReportModal from '@/components/ReviewReportModal';
-import { categoryMap, fabricQuantityRules, fabricSaleModeUnit, fabricAvailabilityLabels, formatFabricQuantity } from '@/data/categories';
+import {
+  categoryMap, fabricQuantityRules, fabricSaleModeUnit, fabricAvailabilityLabels,
+  formatFabricQuantity, parseFabricQuantity, validateFabricQuantity, type FabricSaleMode,
+} from '@/data/categories';
 import { formatFCFA } from '@/data/products';
 import ProductGallery from '@/components/ProductGallery';
 import VariantSelector from '@/components/VariantSelector';
@@ -59,6 +62,12 @@ export default function ProductPage({ productId }: { productId: string }) {
   const product = mockProduct ?? supabaseProduct;
   const [variants, setVariants] = useState<Record<string, string>>({});
   const [qty, setQty] = useState(1);
+  // Tissus only — the quantity field's raw text (so the customer can type
+  // "4," mid-entry without it being reformatted out from under them) and
+  // the validation message for whatever's currently in it. qty itself only
+  // ever holds the last value that passed validateFabricQuantity.
+  const [qtyText, setQtyText] = useState('1');
+  const [qtyError, setQtyError] = useState('');
   const [tab, setTab] = useState<Tab>('Description');
   const [added, setAdded] = useState(false);
   const [error, setError] = useState('');
@@ -125,9 +134,43 @@ export default function ProductPage({ productId }: { productId: string }) {
   // Tissus: quantity starts at the sale mode's own minimum (0.5 m/kg, 1
   // pièce) instead of the generic "1" every other category starts from.
   useEffect(() => {
-    if (product?.saleMode) setQty(fabricQuantityRules[product.saleMode].min);
-    else setQty(1);
+    if (product?.saleMode) {
+      const min = fabricQuantityRules[product.saleMode].min;
+      setQty(min);
+      setQtyText(formatFabricQuantity(min));
+      setQtyError('');
+    } else {
+      setQty(1);
+    }
   }, [product?.id, product?.saleMode]);
+
+  // Tissus only — the +/- buttons and the free-text field both end up here,
+  // the buttons via an already-clamped, already-on-step value (so this
+  // never actually rejects them), the field via whatever the customer typed.
+  const applyFabricQty = (mode: FabricSaleMode, value: number) => {
+    const err = validateFabricQuantity(mode, value);
+    if (err) { setQtyError(err); return; }
+    setQty(value);
+    setQtyText(formatFabricQuantity(value));
+    setQtyError('');
+  };
+
+  // Free typing in the field — never reformats what the customer is
+  // actively typing (that would fight their cursor); only validates and,
+  // once the text parses to a valid value, updates qty (used by the price
+  // preview and "Ajouter au panier").
+  const handleFabricQtyInput = (mode: FabricSaleMode, raw: string) => {
+    setQtyText(raw);
+    const parsed = parseFabricQuantity(raw);
+    if (parsed === null) {
+      setQtyError(raw.trim() === '' ? '' : 'Quantité invalide.');
+      return;
+    }
+    const err = validateFabricQuantity(mode, parsed);
+    if (err) { setQtyError(err); return; }
+    setQty(parsed);
+    setQtyError('');
+  };
 
   // Purchase eligibility needs its own (3-query) check — only worth paying
   // for once the customer actually opens the Avis tab, not on every single
@@ -189,8 +232,14 @@ export default function ProductPage({ productId }: { productId: string }) {
 
   const handleVariant = (name: string, value: string) => { setVariants((prev) => ({ ...prev, [name]: value })); setError(''); };
 
+  // Tissus only — blocks "Ajouter au panier"/"Acheter maintenant" while the
+  // quantity field holds anything that isn't a currently-valid quantity
+  // (empty, or failed validateFabricQuantity).
+  const fabricQtyInvalid = Boolean(product.saleMode) && (qtyText.trim() === '' || qtyError !== '');
+
   const handleAdd = (buyNow = false) => {
     if (!allSelected) { setError('Veuillez sélectionner: ' + requiredVariants.filter((v) => !variants[v]).join(', ')); return; }
+    if (fabricQtyInvalid) return;
     addToCart({ productId: product.id, shopId: product.shopId, quantity: qty, variants, unitPrice: dynamicPrice.price, variantId: dynamicPrice.variantId });
     if (buyNow) navigate('/checkout'); else { setAdded(true); setTimeout(() => setAdded(false), 2000); }
   };
@@ -233,15 +282,25 @@ export default function ProductPage({ productId }: { productId: string }) {
               {product.saleMode ? (
                 <div className="flex items-center border border-line rounded-full">
                   <button
-                    onClick={() => setQty((q) => Math.max(fabricQuantityRules[product.saleMode!].min, +(q - fabricQuantityRules[product.saleMode!].step).toFixed(2)))}
+                    onClick={() => applyFabricQty(product.saleMode!, +(qty - fabricQuantityRules[product.saleMode!].step).toFixed(2))}
                     disabled={qty <= fabricQuantityRules[product.saleMode].min}
-                    className="flex h-9 w-9 items-center justify-center text-ink/60 hover:text-ink disabled:opacity-30"
+                    className="flex h-9 w-9 flex-shrink-0 items-center justify-center text-ink/60 hover:text-ink disabled:opacity-30"
                   ><Minus size={15} /></button>
-                  <span className="w-16 text-center text-sm font-medium">{formatFabricQuantity(qty)} {fabricSaleModeUnit[product.saleMode]}</span>
+                  <span className="flex items-center gap-1 px-0.5">
+                    <input
+                      type="text"
+                      inputMode={product.saleMode === 'piece' ? 'numeric' : 'decimal'}
+                      value={qtyText}
+                      onChange={(e) => handleFabricQtyInput(product.saleMode!, e.target.value)}
+                      onBlur={() => { if (!qtyError && qtyText.trim() !== '') setQtyText(formatFabricQuantity(qty)); }}
+                      className="w-12 border-0 bg-transparent text-center text-sm font-medium text-ink focus:outline-none focus:ring-0"
+                    />
+                    <span className="text-sm font-medium text-ink/60">{fabricSaleModeUnit[product.saleMode]}</span>
+                  </span>
                   <button
-                    onClick={() => setQty((q) => Math.min(fabricQuantityRules[product.saleMode!].max, +(q + fabricQuantityRules[product.saleMode!].step).toFixed(2)))}
+                    onClick={() => applyFabricQty(product.saleMode!, +(qty + fabricQuantityRules[product.saleMode!].step).toFixed(2))}
                     disabled={qty >= fabricQuantityRules[product.saleMode].max}
-                    className="flex h-9 w-9 items-center justify-center text-ink/60 hover:text-ink disabled:opacity-30"
+                    className="flex h-9 w-9 flex-shrink-0 items-center justify-center text-ink/60 hover:text-ink disabled:opacity-30"
                   ><Plus size={15} /></button>
                 </div>
               ) : (
@@ -253,14 +312,17 @@ export default function ProductPage({ productId }: { productId: string }) {
               )}
             </div>
             {/* Live preview only — create_order() recomputes and validates
-                this server-side, exactly like every other price on Ezial. */}
-            {product.saleMode && (
+                this server-side, exactly like every other price on Ezial.
+                Hidden while the typed quantity isn't valid, rather than
+                showing a total that doesn't match what's in the field. */}
+            {product.saleMode && !fabricQtyInvalid && (
               <p className="text-sm font-medium text-ink/70">Total : <span className="text-base font-semibold text-ink">{formatFCFA(dynamicPrice.price * qty)}</span></p>
             )}
+            {product.saleMode && qtyError && <p className="text-sm text-burgundy">{qtyError}</p>}
             {error && <p className="text-sm text-burgundy">{error}</p>}
             <div className="flex flex-col gap-2.5 sm:flex-row">
-              <button onClick={() => handleAdd(false)} disabled={outOfStock} className="btn-outline flex-1">{added ? <><Check size={17} /> Ajouté</> : 'Ajouter au panier'}</button>
-              <button onClick={() => handleAdd(true)} disabled={outOfStock} className="btn-primary flex-1">Acheter maintenant</button>
+              <button onClick={() => handleAdd(false)} disabled={outOfStock || fabricQtyInvalid} className="btn-outline flex-1">{added ? <><Check size={17} /> Ajouté</> : 'Ajouter au panier'}</button>
+              <button onClick={() => handleAdd(true)} disabled={outOfStock || fabricQtyInvalid} className="btn-primary flex-1">Acheter maintenant</button>
             </div>
           </div>
           {product.pickup && (

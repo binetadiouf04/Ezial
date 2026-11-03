@@ -80,6 +80,37 @@ export function formatFabricQuantity(qty: number): string {
   return qty % 1 === 0 ? String(qty) : qty.toFixed(1).replace('.', ',');
 }
 
+// Free-text quantity entry (the product page's quantity field) — accepts
+// both "," and "." as the decimal separator. Returns null for anything
+// that isn't a plain number (including an empty/partial string while the
+// customer is still typing), never throws.
+export function parseFabricQuantity(raw: string): number | null {
+  const normalized = raw.trim().replace(',', '.');
+  if (normalized === '' || !/^\d*\.?\d*$/.test(normalized) || normalized === '.') return null;
+  const n = Number(normalized);
+  return Number.isFinite(n) ? n : null;
+}
+
+// Mirrors create_order()'s own server-side bounds/step check (see the
+// Phase 1 migration) — this is advisory only, to block an obviously
+// invalid "Ajouter au panier" before it ever reaches the server, never the
+// real authority on what's billed.
+export function validateFabricQuantity(mode: FabricSaleMode, value: number): string | null {
+  const { min, max, step } = fabricQuantityRules[mode];
+  if (value < min || value > max) {
+    return mode === 'piece'
+      ? `Quantité invalide : entre ${min} et ${max} pièces.`
+      : `Quantité invalide : entre ${formatFabricQuantity(min)} et ${max}, par paliers de ${formatFabricQuantity(step)}.`;
+  }
+  const steps = value / step;
+  if (Math.abs(Math.round(steps) - steps) > 1e-9) {
+    return mode === 'piece'
+      ? 'Quantité invalide : uniquement des nombres entiers de pièces.'
+      : `Quantité invalide : par paliers de ${formatFabricQuantity(step)}.`;
+  }
+  return null;
+}
+
 export interface SubCategory { id: string; label: string; }
 export interface Category { id: CategoryId; label: string; subcategories: SubCategory[]; }
 
