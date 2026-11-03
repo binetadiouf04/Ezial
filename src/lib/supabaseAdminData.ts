@@ -114,6 +114,9 @@ export interface AdminOrderItem {
   quantity: number;
   unitPrice: number;
   lineTotal: number;
+  // Tissus category only — read from the live products row (order_items
+  // itself never snapshots this), null for every other line.
+  saleMode: string | null;
 }
 
 export interface AdminOrderShopGroup {
@@ -177,6 +180,12 @@ export async function fetchAdminOrderDetail(orderId: string): Promise<AdminOrder
   const shopNameById = new Map<string, string>((shopNameRows ?? []).map((s) => [s.id as string, s.name as string]));
   const items = itemRows ?? [];
 
+  const productIds = [...new Set(items.map((it) => it.product_id as string))];
+  const { data: productRows } = productIds.length > 0
+    ? await supabase.from('products').select('id, sale_mode').in('id', productIds)
+    : { data: [] };
+  const saleModeByProduct = new Map<string, string | null>((productRows ?? []).map((p) => [p.id as string, (p.sale_mode as string | null) ?? null]));
+
   const shopsGrouped: AdminOrderShopGroup[] = orderShopRows.map((sr) => ({
     orderShopId: sr.id as string,
     shopId: sr.shop_id as string,
@@ -193,6 +202,7 @@ export async function fetchAdminOrderDetail(orderId: string): Promise<AdminOrder
         quantity: (it.quantity as number) ?? 0,
         unitPrice: (it.unit_price as number) ?? 0,
         lineTotal: (it.line_total as number) ?? 0,
+        saleMode: saleModeByProduct.get(it.product_id as string) ?? null,
       })),
   }));
 

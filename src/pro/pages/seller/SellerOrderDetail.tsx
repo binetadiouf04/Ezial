@@ -5,6 +5,7 @@ import {
   type SellerOrderDetail as SellerOrderDetailData,
 } from '@/lib/supabaseSellerOrders';
 import { formatFCFA } from '@/data/products';
+import { fabricSaleModeUnit, formatFabricQuantity } from '@/data/categories';
 import { StatusChip } from '../../components/StatusChip';
 import { ArrowLeft, Truck, Store, Phone, Check, Package, Loader2, AlertCircle, Clock, MessageSquare, Gift } from 'lucide-react';
 import SmartImage from '@/components/SmartImage';
@@ -115,7 +116,7 @@ export default function SellerOrderDetail({ orderId }: { orderId: string }) {
                 {Object.entries(item.selectedOptions).length > 0 && (
                   <p className="text-xs text-ink/50 mt-0.5">{Object.entries(item.selectedOptions).map(([k, v]) => `${k} : ${v}`).join(' · ')}</p>
                 )}
-                <p className="text-xs text-ink/50 mt-0.5">Quantité : {item.quantity}</p>
+                <p className="text-xs text-ink/50 mt-0.5">Quantité : {item.saleMode ? `${formatFabricQuantity(item.quantity)} ${fabricSaleModeUnit[item.saleMode as keyof typeof fabricSaleModeUnit]}` : item.quantity}</p>
                 <p className="text-xs text-ink/40 mt-0.5">Prix unitaire : {formatFCFA(item.unitPrice)}</p>
               </div>
               <span className="text-sm font-semibold text-ink flex-shrink-0">{formatFCFA(item.lineTotal)}</span>

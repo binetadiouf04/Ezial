@@ -1,6 +1,11 @@
 import { useState, useMemo, useEffect } from 'react';
 import { usePro } from '../../ProContext';
-import { categories, categoryMap, type CategoryId } from '@/data/categories';
+import {
+  categories, categoryMap, type CategoryId,
+  fabricTypes, fabricSaleModes, fabricSaleModeLabels, fabricSaleModeUnit,
+  fabricAvailabilityStatuses, fabricAvailabilityLabels,
+  type FabricSaleMode, type FabricAvailabilityStatus,
+} from '@/data/categories';
 import { getFilters, type FilterGroup } from '@/data/filters';
 import { discountPercent } from '@/data/products';
 import { getColor } from '@/data/colors';
@@ -99,6 +104,9 @@ const VALIDATION_FIELD_LABELS: Record<string, string> = {
   description: 'Description',
   price: 'Prix',
   images: 'Photos',
+  fabricType: 'Type de tissu',
+  saleMode: 'Mode de vente',
+  availabilityStatus: 'Disponibilité',
 };
 
 // Maquillage: the color/teinte palette depends on the type of product chosen —
@@ -172,6 +180,14 @@ interface OptionSelection {
 function computeOptionGroups(categoryId: string, subId: string, selectedTypeProduit: string | undefined, isMakeup: boolean): FilterGroup[] {
   if (!categoryId) return [];
   let groups = getFilters(categoryId, subId || undefined).filter((g) => g.id !== 'prix');
+
+  // Tissus: fabric_type and sale_mode are their own dedicated, required
+  // fields with their own state (rendered in their own "Tissu" card, saved
+  // to their own products columns) — never generic multi-choice chips under
+  // "Type et caractéristiques" like every other filter group. couleur/motif
+  // stay in the generic groups below unchanged: they're real variant
+  // dimensions here too, same mechanism as every other category.
+  if (categoryId === 'tissus') groups = groups.filter((g) => g.id !== 'typetissu' && g.id !== 'modevente');
 
   if (isMakeup) {
     groups = groups.filter((g) => g.id !== 'couleur');
@@ -350,6 +366,12 @@ export default function SellerProductForm({ productId }: { productId?: string })
   const [promoStart, setPromoStart] = useState('');
   const [promoEnd, setPromoEnd] = useState('');
 
+  // Tissus only (products.fabric_type/sale_mode/availability_status) — see
+  // the Phase 1 migration. Stay empty/unused for every other category.
+  const [fabricType, setFabricType] = useState('');
+  const [saleMode, setSaleMode] = useState<FabricSaleMode | ''>('');
+  const [availabilityStatus, setAvailabilityStatus] = useState<FabricAvailabilityStatus | ''>('');
+
   // Stock + price per combination (used when the product has real variants)
   const [comboData, setComboData] = useState<Record<string, { stock: number; price: number }>>({});
   // Plain stock (used when the product has no variant dimension at all)
@@ -390,6 +412,9 @@ export default function SellerProductForm({ productId }: { productId?: string })
       setPromoPrice(data.promoPrice != null ? String(data.promoPrice) : '');
       setPromoStart(data.promoStart ?? '');
       setPromoEnd(data.promoEnd ?? '');
+      setFabricType(data.fabricType ?? '');
+      setSaleMode((data.saleMode as FabricSaleMode | null) ?? '');
+      setAvailabilityStatus((data.availabilityStatus as FabricAvailabilityStatus | null) ?? '');
       setImages(data.images.map((img) => ({
         key: img.id,
         kind: img.mediaType === 'video' ? 'video' as const : 'image' as const,
@@ -482,6 +507,7 @@ export default function SellerProductForm({ productId }: { productId?: string })
 
   const selectedCategory = categoryId ? categoryMap[categoryId as CategoryId] : null;
   const selectedTypeProduit = selections.typeproduit?.[0];
+  const isTissus = categoryId === 'tissus';
 
   // Used by toggleSingleChoice to know which extra selections to clear when
   // "Type de produit" changes — computeOptionGroups derives the same
@@ -888,6 +914,11 @@ export default function SellerProductForm({ productId }: { productId?: string })
       if (promoStart && promoEnd && promoStart > promoEnd) e.promoEnd = 'La date de fin doit être après la date de début.';
     }
     if (status === 'published' && !images.some((img) => img.kind === 'image')) e.images = 'Ajoutez au moins une photo.';
+    if (isTissus) {
+      if (!fabricType) e.fabricType = 'Le type de tissu est obligatoire';
+      if (!saleMode) e.saleMode = 'Le mode de vente est obligatoire';
+      if (!availabilityStatus) e.availabilityStatus = 'La disponibilité est obligatoire';
+    }
     setErrors(e);
     return e;
   };
@@ -900,6 +931,17 @@ export default function SellerProductForm({ productId }: { productId?: string })
   // {"Taille":"M","Couleur":"Noir"}.
   const buildVariantRows = (): { attributes: Record<string, string>; price: number; stock: number }[] => {
     const basePrice = parseInt(price) || 0;
+    // Tissus never has per-combination stock typed in by the seller (the
+    // "En stock" card is replaced by Disponibilité — see below) — every row
+    // gets the same computed value: a real, hard cap of 1 only for a
+    // single physical piece sold whole (sale_mode 'piece' + 'unique'),
+    // reusing create_order()'s existing generic stock check as the real
+    // enforcement (verified: it already blocks a second purchase). Every
+    // other combination — including 'unique' + mètre/kilogramme, which is
+    // NOT a single indivisible unit — gets a large sentinel: these four
+    // statuses are a displayed badge, never a real depletion counter, per
+    // the client's own explicit instruction.
+    const fabricStock = saleMode === 'piece' && availabilityStatus === 'unique' ? 1 : 99999;
     const selectedMulti = multiChoiceGroups
       .map((g) => ({ group: g, values: effectiveValues(g.id) }))
       .filter((s) => s.values.length > 0);
@@ -907,7 +949,7 @@ export default function SellerProductForm({ productId }: { productId?: string })
     // No variant dimension selected: still one product_variants row, with
     // empty attributes and the base price/stock — never left without a row.
     if (selectedMulti.length === 0) {
-      return [{ attributes: {}, price: basePrice, stock: Math.max(0, parseInt(simpleStock) || 0) }];
+      return [{ attributes: {}, price: basePrice, stock: isTissus ? fabricStock : Math.max(0, parseInt(simpleStock) || 0) }];
     }
 
     let combos: string[][] = selectedMulti[0].values.map((v) => [v]);
@@ -927,8 +969,10 @@ export default function SellerProductForm({ productId }: { productId?: string })
         attributes,
         // "Le prix change selon les options" OFF → every row gets base_price,
         // regardless of any stale per-combo price left from when it was ON.
+        // Always off for Tissus (the toggle itself isn't shown — see below),
+        // so this already falls through to basePrice for every combination.
         price: priceByOption ? (comboData[key]?.price ?? basePrice) : basePrice,
-        stock: comboData[key]?.stock ?? 0,
+        stock: isTissus ? fabricStock : (comboData[key]?.stock ?? 0),
       };
     });
   };
@@ -993,6 +1037,14 @@ export default function SellerProductForm({ productId }: { productId?: string })
         promoEnd: isPromo && promoEnd ? promoEnd : null,
       };
 
+      // null for every non-Tissus category — same pattern as promoPayload
+      // above when isPromo is false.
+      const fabricPayload = {
+        fabricType: isTissus ? (fabricType || null) : null,
+        saleMode: isTissus ? (saleMode || null) : null,
+        availabilityStatus: isTissus ? (availabilityStatus || null) : null,
+      };
+
       if (existingProductId) {
         // === True edit: UPDATE the same products row — same id, same
         // reference, same shop_id, all three left untouched by the update
@@ -1008,6 +1060,7 @@ export default function SellerProductForm({ productId }: { productId?: string })
           descriptiveAttributes: buildDescriptiveAttributes(),
           variants: buildVariantRows(),
           ...promoPayload,
+          ...fabricPayload,
         });
         if (updateResult.error) {
           setSubmitError(updateResult.error);
@@ -1043,6 +1096,7 @@ export default function SellerProductForm({ productId }: { productId?: string })
           variants: buildVariantRows(),
           images: newMediaWithPosition.map((x) => x.media),
           ...promoPayload,
+          ...fabricPayload,
         });
         if ('error' in supabaseResult) {
           setSubmitError(supabaseResult.error);
@@ -1290,6 +1344,39 @@ export default function SellerProductForm({ productId }: { productId?: string })
         )}
       </div>
 
+      {/* 1bis. Tissu — Tissus only. fabric_type/sale_mode are their own
+          required fields/columns, never routed through the generic
+          classificationGroups chip rendering (see computeOptionGroups'
+          tissus exclusion above). */}
+      {isTissus && (
+        <div className="card p-5 space-y-5">
+          <div>
+            <h2 className="text-sm font-semibold text-ink">Tissu</h2>
+            <p className="mt-1 text-xs text-ink/45">Type de tissu et mode de vente — obligatoires.</p>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-ink/60 mb-1.5">Type de tissu</label>
+            <select className="input-field" value={fabricType} onChange={(e) => setFabricType(e.target.value)}>
+              <option value="">Sélectionner…</option>
+              {fabricTypes.map((t) => <option key={t} value={t}>{t}</option>)}
+            </select>
+            {errors.fabricType && <p className="mt-1 text-xs text-burgundy">{errors.fabricType}</p>}
+          </div>
+          <div>
+            <div className="flex items-center justify-between">
+              <label className="text-sm font-medium text-ink">Mode de vente</label>
+              <span className="text-[11px] font-medium px-2 py-0.5 rounded-full bg-blue-50 text-blue-600">Choix unique</span>
+            </div>
+            <div className="mt-2.5 flex flex-wrap gap-2">
+              {fabricSaleModes.map((m) => (
+                <SelectableChip key={m} label={fabricSaleModeLabels[m]} selected={saleMode === m} onClick={() => setSaleMode(m)} />
+              ))}
+            </div>
+            {errors.saleMode && <p className="mt-1 text-xs text-burgundy">{errors.saleMode}</p>}
+          </div>
+        </div>
+      )}
+
       {/* 2. Type / caractéristiques — purely descriptive groups (style,
           type de vêtement, matière...), grouped with category/subcategory
           since they all together determine the product's classification.
@@ -1521,7 +1608,11 @@ export default function SellerProductForm({ productId }: { productId?: string })
         <div className="card p-5 space-y-5">
           <div>
             <h2 className="text-sm font-semibold text-ink">Options du produit</h2>
-            <p className="mt-1 text-xs text-ink/45">Sélectionnez les options disponibles pour ce produit. Ezial génère automatiquement les combinaisons de stock pour les options qui créent une vraie variante (taille, couleur, volume...).</p>
+            <p className="mt-1 text-xs text-ink/45">
+              {isTissus
+                ? 'Sélectionnez les couleurs et imprimés disponibles pour ce tissu — le client choisira une combinaison avant d\'ajouter au panier.'
+                : 'Sélectionnez les options disponibles pour ce produit. Ezial génère automatiquement les combinaisons de stock pour les options qui créent une vraie variante (taille, couleur, volume...).'}
+            </p>
           </div>
 
           {variantGroups.map((group) => {
@@ -1565,20 +1656,27 @@ export default function SellerProductForm({ productId }: { productId?: string })
       <div className="card p-5 space-y-4">
         <h2 className="text-sm font-semibold text-ink">Prix de base</h2>
         <div>
-          <label className="block text-xs font-medium text-ink/60 mb-1.5">Prix (FCFA)</label>
+          <label className="block text-xs font-medium text-ink/60 mb-1.5">
+            {isTissus && saleMode ? `Prix (FCFA/${fabricSaleModeUnit[saleMode]})` : 'Prix (FCFA)'}
+          </label>
           <input className="input-field" type="number" value={price} onChange={(e) => setPrice(e.target.value)} onWheel={blurOnWheel} />
           {errors.price && <p className="mt-1 text-xs text-burgundy">{errors.price}</p>}
         </div>
-        <label className="flex items-center gap-2.5 pt-1">
-          <button
-            type="button"
-            onClick={() => setPriceByOption(!priceByOption)}
-            className={`relative h-6 w-11 rounded-full transition-colors ${priceByOption ? 'bg-burgundy' : 'bg-ink/15'}`}
-          >
-            <span className={`absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-white shadow-sm transition-transform ${priceByOption ? 'translate-x-5' : 'translate-x-0'}`} />
-          </button>
-          <span className="text-sm text-ink/70">Le prix change selon les options</span>
-        </label>
+        {/* "Le prix change selon les options" never applies to Tissus — no
+            per-couleur/imprimé pricing allowed (every combination inherits
+            this same base price, see buildVariantRows). */}
+        {!isTissus && (
+          <label className="flex items-center gap-2.5 pt-1">
+            <button
+              type="button"
+              onClick={() => setPriceByOption(!priceByOption)}
+              className={`relative h-6 w-11 rounded-full transition-colors ${priceByOption ? 'bg-burgundy' : 'bg-ink/15'}`}
+            >
+              <span className={`absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-white shadow-sm transition-transform ${priceByOption ? 'translate-x-5' : 'translate-x-0'}`} />
+            </button>
+            <span className="text-sm text-ink/70">Le prix change selon les options</span>
+          </label>
+        )}
       </div>
 
       {/* 6bis. Promotion */}
@@ -1628,38 +1726,57 @@ export default function SellerProductForm({ productId }: { productId?: string })
         )}
       </div>
 
-      {/* 8. Stock */}
-      <div className="card p-5 space-y-4">
-        <div className="flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-ink">En stock</h2>
-          {combinations.length > 0 && <span className="text-xs text-ink/50">Total : <span className="font-semibold text-ink">{totalStock}</span></span>}
-        </div>
-
-        {combinations.length > 0 ? (
-          <>
-            {priceByOption && (
-              <div className="flex items-center gap-4 text-[11px] text-ink/40 border-b border-line pb-2">
-                <span className="w-24">Prix (FCFA)</span>
-                <span>Stock</span>
-              </div>
-            )}
-            {renderStockMatrix()}
-          </>
-        ) : (
-          <div className="flex items-center gap-3">
-            <label className="text-sm text-ink/60 flex-1">Quantité disponible</label>
-            <input
-              type="number"
-              min="0"
-              className="input-field w-24 text-center"
-              placeholder="0"
-              value={simpleStock}
-              onChange={(e) => setSimpleStock(e.target.value)}
-              onWheel={blurOnWheel}
-            />
+      {/* 8. Stock — Tissus replaces this whole card with Disponibilité (4
+          statuses, no quantity table: see buildVariantRows for how each
+          status maps to the real stock value written). */}
+      {isTissus ? (
+        <div className="card p-5 space-y-4">
+          <h2 className="text-sm font-semibold text-ink">Disponibilité</h2>
+          <div className="flex flex-wrap gap-2">
+            {fabricAvailabilityStatuses.map((s) => (
+              <SelectableChip key={s} label={fabricAvailabilityLabels[s]} selected={availabilityStatus === s} onClick={() => setAvailabilityStatus(s)} />
+            ))}
           </div>
-        )}
-      </div>
+          {errors.availabilityStatus && <p className="mt-1 text-xs text-burgundy">{errors.availabilityStatus}</p>}
+          <p className="text-xs text-ink/45">
+            {saleMode === 'piece' && availabilityStatus === 'unique'
+              ? 'Une seule pièce : la vente d\'un deuxième exemplaire sera automatiquement bloquée.'
+              : 'Statut affiché au client — ne correspond pas à un suivi de quantité précis.'}
+          </p>
+        </div>
+      ) : (
+        <div className="card p-5 space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="text-sm font-semibold text-ink">En stock</h2>
+            {combinations.length > 0 && <span className="text-xs text-ink/50">Total : <span className="font-semibold text-ink">{totalStock}</span></span>}
+          </div>
+
+          {combinations.length > 0 ? (
+            <>
+              {priceByOption && (
+                <div className="flex items-center gap-4 text-[11px] text-ink/40 border-b border-line pb-2">
+                  <span className="w-24">Prix (FCFA)</span>
+                  <span>Stock</span>
+                </div>
+              )}
+              {renderStockMatrix()}
+            </>
+          ) : (
+            <div className="flex items-center gap-3">
+              <label className="text-sm text-ink/60 flex-1">Quantité disponible</label>
+              <input
+                type="number"
+                min="0"
+                className="input-field w-24 text-center"
+                placeholder="0"
+                value={simpleStock}
+                onChange={(e) => setSimpleStock(e.target.value)}
+                onWheel={blurOnWheel}
+              />
+            </div>
+          )}
+        </div>
+      )}
 
       {!sellerSupabaseShopId && (
         <p className="rounded-lg bg-burgundy/5 px-4 py-3 text-sm text-burgundy">

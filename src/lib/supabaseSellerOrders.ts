@@ -139,6 +139,9 @@ export interface SellerOrderItem {
   quantity: number;
   unitPrice: number;
   lineTotal: number;
+  // Tissus category only — read from the live products row (order_items
+  // itself never snapshots this), null for every other line.
+  saleMode: string | null;
 }
 
 export interface SellerOrderDetail {
@@ -194,9 +197,14 @@ export async function fetchSellerOrderDetail(shopId: string, orderShopId: string
   const items = (itemRows ?? []) as OrderItemRow[];
 
   const productIds = [...new Set(items.map((i) => i.product_id))];
-  const { data: imageRows } = productIds.length > 0
-    ? await supabase.from('product_images').select('product_id, storage_path, is_primary, sort_order').in('product_id', productIds)
-    : { data: [] };
+  const [{ data: imageRows }, { data: productRows }] = productIds.length > 0
+    ? await Promise.all([
+        supabase.from('product_images').select('product_id, storage_path, is_primary, sort_order').in('product_id', productIds),
+        supabase.from('products').select('id, sale_mode').in('id', productIds),
+      ])
+    : [{ data: [] }, { data: [] }];
+
+  const saleModeByProduct = new Map<string, string | null>((productRows ?? []).map((p) => [p.id as string, (p.sale_mode as string | null) ?? null]));
 
   const primaryImageByProduct = new Map<string, string>();
   const sortedImages = [...(imageRows ?? [])].sort(
@@ -238,6 +246,7 @@ export async function fetchSellerOrderDetail(shopId: string, orderShopId: string
       quantity: it.quantity ?? 0,
       unitPrice: it.unit_price ?? 0,
       lineTotal: it.line_total ?? 0,
+      saleMode: saleModeByProduct.get(it.product_id) ?? null,
     })),
   };
 }

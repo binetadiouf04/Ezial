@@ -90,6 +90,11 @@ interface ProductRow {
   descriptive_attributes?: Record<string, string[]> | null;
   created_at?: string;
   updated_at?: string;
+  // Tissus category only — see the Phase 1 migration. Null for every other
+  // category's row.
+  fabric_type?: string | null;
+  sale_mode?: string | null;
+  availability_status?: string | null;
 }
 
 interface ProductImageRow {
@@ -292,6 +297,9 @@ function mapProduct(row: ProductRow, imageRows: ProductImageRow[], variantRows: 
     gender: undefined,
     shoeGender: undefined,
     createdAt: row.created_at,
+    fabricType: row.fabric_type ?? undefined,
+    saleMode: (row.sale_mode as Product['saleMode']) ?? undefined,
+    availabilityStatus: (row.availability_status as Product['availabilityStatus']) ?? undefined,
   };
 }
 

@@ -1,6 +1,7 @@
 import { X, ShoppingBag, Plus, Minus, Trash2 } from 'lucide-react';
 import { useApp, type CartItem } from '@/store/AppContext';
 import { formatFCFA, getVariantPrice } from '@/data/products';
+import { fabricQuantityRules, fabricSaleModeUnit, formatFabricQuantity } from '@/data/categories';
 import { getShop } from '@/data/shops';
 import PriceDisplay from './PriceDisplay';
 import SmartImage from './SmartImage';
@@ -40,6 +41,7 @@ export default function CartDrawer() {
                         const unitPrice = item.unitPrice ?? product.price;
                         const { oldPrice: unitOldPrice } = getVariantPrice(product, item.variants);
                         const lineOldTotal = unitOldPrice ? unitOldPrice * item.quantity : undefined;
+                        const rules = product.saleMode ? fabricQuantityRules[product.saleMode] : null;
                         return (
                         <div key={item.index} className="flex gap-3">
                           <SmartImage src={product.images[0]} alt="" className="h-20 w-16 flex-shrink-0 rounded-lg object-cover" />
@@ -48,9 +50,19 @@ export default function CartDrawer() {
                             {Object.entries(item.variants).map(([k, v]) => <p key={k} className="text-xs text-ink/45 mt-0.5">{k}: {v}</p>)}
                             <div className="mt-2 flex items-center justify-between">
                               <div className="flex items-center border border-line rounded-full">
-                                <button onClick={() => updateQuantity(item.index, item.quantity - 1)} className="flex h-7 w-7 items-center justify-center text-ink/60 hover:text-ink"><Minus size={13} /></button>
-                                <span className="w-7 text-center text-xs font-medium">{item.quantity}</span>
-                                <button onClick={() => updateQuantity(item.index, item.quantity + 1)} className="flex h-7 w-7 items-center justify-center text-ink/60 hover:text-ink"><Plus size={13} /></button>
+                                <button
+                                  onClick={() => updateQuantity(item.index, +(item.quantity - (rules?.step ?? 1)).toFixed(2), rules?.min ?? 1)}
+                                  disabled={rules ? item.quantity <= rules.min : false}
+                                  className="flex h-7 w-7 items-center justify-center text-ink/60 hover:text-ink disabled:opacity-30"
+                                ><Minus size={13} /></button>
+                                <span className="px-1 text-center text-xs font-medium whitespace-nowrap">
+                                  {rules ? `${formatFabricQuantity(item.quantity)} ${fabricSaleModeUnit[product.saleMode!]}` : item.quantity}
+                                </span>
+                                <button
+                                  onClick={() => updateQuantity(item.index, +(item.quantity + (rules?.step ?? 1)).toFixed(2), rules?.min ?? 1)}
+                                  disabled={rules ? item.quantity >= rules.max : false}
+                                  className="flex h-7 w-7 items-center justify-center text-ink/60 hover:text-ink disabled:opacity-30"
+                                ><Plus size={13} /></button>
                               </div>
                               <div className="flex items-center gap-3">
                                 <PriceDisplay price={unitPrice * item.quantity} oldPrice={lineOldTotal} size="sm" />

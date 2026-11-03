@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { usePro } from '../../ProContext';
 import { fetchAdminOrderDetail, type AdminOrderDetail as AdminOrderDetailData } from '@/lib/supabaseAdminData';
 import { formatFCFA } from '../../data';
+import { fabricSaleModeUnit, formatFabricQuantity } from '@/data/categories';
 import { paymentLabels } from '@/data/payments';
 import { StatusChip } from '../../components/StatusChip';
 import { ArrowLeft, Store, CreditCard, Phone, Loader2, Truck, Clock, Gift } from 'lucide-react';
@@ -157,7 +158,7 @@ export default function AdminOrderDetail({ orderId }: { orderId: string }) {
                         <p className="text-xs text-ink/40">{Object.entries(item.selectedOptions).map(([k, v]) => `${k} : ${v}`).join(' · ')}</p>
                       )}
                     </div>
-                    <span className="text-xs text-ink/50 flex-shrink-0">x{item.quantity}</span>
+                    <span className="text-xs text-ink/50 flex-shrink-0">x{item.saleMode ? `${formatFabricQuantity(item.quantity)} ${fabricSaleModeUnit[item.saleMode as keyof typeof fabricSaleModeUnit]}` : item.quantity}</span>
                     <span className="text-sm font-medium text-ink flex-shrink-0 w-20 text-right">{formatFCFA(item.lineTotal)}</span>
                   </div>
                 ))}

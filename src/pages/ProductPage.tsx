@@ -5,7 +5,8 @@ import { getShop, registerSupabaseShops } from '@/data/shops';
 import { fetchProductDetailFromSupabase } from '@/lib/supabaseCatalog';
 import { fetchProductReviews, checkCanReview, submitReview, deleteReview, createReviewReport, type Review, type ReviewReportReason } from '@/lib/supabaseReviews';
 import ReviewReportModal from '@/components/ReviewReportModal';
-import { categoryMap } from '@/data/categories';
+import { categoryMap, fabricQuantityRules, fabricSaleModeUnit, fabricAvailabilityLabels, formatFabricQuantity } from '@/data/categories';
+import { formatFCFA } from '@/data/products';
 import ProductGallery from '@/components/ProductGallery';
 import VariantSelector from '@/components/VariantSelector';
 import PriceDisplay from '@/components/PriceDisplay';
@@ -121,6 +122,13 @@ export default function ProductPage({ productId }: { productId: string }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [product?.id]);
 
+  // Tissus: quantity starts at the sale mode's own minimum (0.5 m/kg, 1
+  // pièce) instead of the generic "1" every other category starts from.
+  useEffect(() => {
+    if (product?.saleMode) setQty(fabricQuantityRules[product.saleMode].min);
+    else setQty(1);
+  }, [product?.id, product?.saleMode]);
+
   // Purchase eligibility needs its own (3-query) check — only worth paying
   // for once the customer actually opens the Avis tab, not on every single
   // product-page visit (see checkCanReview's comment in supabaseReviews.ts).
@@ -211,17 +219,44 @@ export default function ProductPage({ productId }: { productId: string }) {
             )}
           </div>
           <PriceDisplay price={dynamicPrice.price} oldPrice={dynamicPrice.oldPrice ?? product.oldPrice} size="lg" />
-          {outOfStock ? <p className="text-sm font-medium text-ink/50">Rupture de stock</p> : lowStock ? <p className="text-sm font-medium text-burgundy">Plus que {product.stock} disponibles</p> : null}
+          {product.saleMode && <p className="text-xs text-ink/45">{formatFCFA(dynamicPrice.price)} / {fabricSaleModeUnit[product.saleMode]}</p>}
+          {product.availabilityStatus && (
+            <span className="inline-flex w-fit items-center gap-1 rounded-full bg-burgundy/10 px-2.5 py-1 text-xs font-semibold text-burgundy">
+              {fabricAvailabilityLabels[product.availabilityStatus]}
+            </span>
+          )}
+          {outOfStock ? <p className="text-sm font-medium text-ink/50">Rupture de stock</p> : (lowStock && !product.saleMode) ? <p className="text-sm font-medium text-burgundy">Plus que {product.stock} disponibles</p> : null}
           {product.variants.length > 0 && <div className="border-t border-line pt-5"><VariantSelector variants={product.variants} selected={variants} onChange={handleVariant} /></div>}
           <div className="space-y-3">
             <div className="flex items-center gap-4">
               <span className="text-sm font-medium text-ink">Quantité</span>
-              <div className="flex items-center border border-line rounded-full">
-                <button onClick={() => setQty((q) => Math.max(1, q - 1))} className="flex h-9 w-9 items-center justify-center text-ink/60 hover:text-ink"><Minus size={15} /></button>
-                <span className="w-10 text-center text-sm font-medium">{qty}</span>
-                <button onClick={() => setQty((q) => q + 1)} className="flex h-9 w-9 items-center justify-center text-ink/60 hover:text-ink"><Plus size={15} /></button>
-              </div>
+              {product.saleMode ? (
+                <div className="flex items-center border border-line rounded-full">
+                  <button
+                    onClick={() => setQty((q) => Math.max(fabricQuantityRules[product.saleMode!].min, +(q - fabricQuantityRules[product.saleMode!].step).toFixed(2)))}
+                    disabled={qty <= fabricQuantityRules[product.saleMode].min}
+                    className="flex h-9 w-9 items-center justify-center text-ink/60 hover:text-ink disabled:opacity-30"
+                  ><Minus size={15} /></button>
+                  <span className="w-16 text-center text-sm font-medium">{formatFabricQuantity(qty)} {fabricSaleModeUnit[product.saleMode]}</span>
+                  <button
+                    onClick={() => setQty((q) => Math.min(fabricQuantityRules[product.saleMode!].max, +(q + fabricQuantityRules[product.saleMode!].step).toFixed(2)))}
+                    disabled={qty >= fabricQuantityRules[product.saleMode].max}
+                    className="flex h-9 w-9 items-center justify-center text-ink/60 hover:text-ink disabled:opacity-30"
+                  ><Plus size={15} /></button>
+                </div>
+              ) : (
+                <div className="flex items-center border border-line rounded-full">
+                  <button onClick={() => setQty((q) => Math.max(1, q - 1))} className="flex h-9 w-9 items-center justify-center text-ink/60 hover:text-ink"><Minus size={15} /></button>
+                  <span className="w-10 text-center text-sm font-medium">{qty}</span>
+                  <button onClick={() => setQty((q) => q + 1)} className="flex h-9 w-9 items-center justify-center text-ink/60 hover:text-ink"><Plus size={15} /></button>
+                </div>
+              )}
             </div>
+            {/* Live preview only — create_order() recomputes and validates
+                this server-side, exactly like every other price on Ezial. */}
+            {product.saleMode && (
+              <p className="text-sm font-medium text-ink/70">Total : <span className="text-base font-semibold text-ink">{formatFCFA(dynamicPrice.price * qty)}</span></p>
+            )}
             {error && <p className="text-sm text-burgundy">{error}</p>}
             <div className="flex flex-col gap-2.5 sm:flex-row">
               <button onClick={() => handleAdd(false)} disabled={outOfStock} className="btn-outline flex-1">{added ? <><Check size={17} /> Ajouté</> : 'Ajouter au panier'}</button>

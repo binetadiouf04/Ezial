@@ -117,7 +117,7 @@ interface AppState {
   catalogLoading: boolean;
   favorites: string[]; toggleFavorite: (productId: string) => void; isFavorite: (productId: string) => boolean;
   cart: CartItem[]; addToCart: (item: CartItem) => void; removeFromCart: (index: number) => void;
-  updateQuantity: (index: number, quantity: number) => void; clearCart: () => void;
+  updateQuantity: (index: number, quantity: number, min?: number) => void; clearCart: () => void;
   saveForLater: (index: number) => void; moveToCart: (index: number) => void; removeFromSaved: (index: number) => void;
   savedItems: SavedItem[];
   cartCount: number; cartSubtotal: number;
@@ -540,8 +540,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const removeFromCart = useCallback((index: number) => setCart((prev) => prev.filter((_, i) => i !== index)), []);
 
-  const updateQuantity = useCallback((index: number, quantity: number) =>
-    setCart((prev) => prev.map((item, i) => i === index ? { ...item, quantity: Math.max(1, quantity) } : item)), []);
+  // min defaults to 1 (every non-Tissus category) — a Tissus cart line sold
+  // au mètre/kilogramme passes 0.5 here (see fabricQuantityRules), the one
+  // case where a quantity below 1 is valid.
+  const updateQuantity = useCallback((index: number, quantity: number, min = 1) =>
+    setCart((prev) => prev.map((item, i) => i === index ? { ...item, quantity: Math.max(min, quantity) } : item)), []);
 
   const clearCart = useCallback(() => setCart([]), []);
 

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useApp, type DeliveryStepStatus, type PickupStepStatus, type Order } from '@/store/AppContext';
 import { formatFCFA } from '@/data/products';
+import { fabricSaleModeUnit, formatFabricQuantity } from '@/data/categories';
 import { getShop } from '@/data/shops';
 import { ensureOrderDeliveryCode, fetchOrderDeliveryMissionStatus } from '@/lib/supabaseOrders';
 import { DeliveryTimeline, PickupTimeline } from '@/components/OrderTimeline';
@@ -110,7 +111,7 @@ export default function OrderDetailPage({ orderId }: { orderId: string }) {
                       {Object.entries(item.variants).length > 0 && (
                         <p className="text-xs text-ink/50 mt-0.5">{Object.entries(item.variants).map(([k, v]) => `${k} : ${v}`).join(' · ')}</p>
                       )}
-                      <p className="text-xs text-ink/50">Quantité : {item.quantity}</p>
+                      <p className="text-xs text-ink/50">Quantité : {p?.saleMode ? `${formatFabricQuantity(item.quantity)} ${fabricSaleModeUnit[p.saleMode]}` : item.quantity}</p>
                       <div className="flex items-center gap-2 mt-0.5">
                         {shop && <p className="text-[11px] text-ink/35">Vendu par {shop.name}</p>}
                         {isPickup && <span className="text-[11px] text-ink/40 flex items-center gap-0.5"><Store size={10} /> Retrait</span>}

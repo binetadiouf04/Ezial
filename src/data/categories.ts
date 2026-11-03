@@ -73,6 +73,13 @@ export const fabricAvailabilityLabels: Record<FabricAvailabilityStatus, string> 
   unique: 'Pièce unique', limite: 'Stock limité', disponible: 'En stock', gros_stock: 'Gros stock',
 };
 
+// "2,5" / "10" / "1" — one decimal only when the value actually has one,
+// French comma — shared by every place a fabric quantity is displayed
+// (product page, cart, checkout, order history) so they never drift.
+export function formatFabricQuantity(qty: number): string {
+  return qty % 1 === 0 ? String(qty) : qty.toFixed(1).replace('.', ',');
+}
+
 export interface SubCategory { id: string; label: string; }
 export interface Category { id: CategoryId; label: string; subcategories: SubCategory[]; }
 

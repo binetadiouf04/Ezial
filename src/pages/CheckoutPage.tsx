@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useApp, type Order, type ShopFulfillment, type DeliveryPreference, type DeliveryStepStatus, quartierToZone, deliveryWindows } from '@/store/AppContext';
 import { formatFCFA, isRealCatalogId, getVariantPrice } from '@/data/products';
+import { fabricSaleModeUnit, formatFabricQuantity } from '@/data/categories';
 import PriceDisplay from '@/components/PriceDisplay';
 import { getShop } from '@/data/shops';
 import { paymentMethods as paymentMethodsData } from '@/data/payments';
@@ -772,7 +773,7 @@ export default function CheckoutPage() {
                           {Object.entries(item.variants).length > 0 && (
                             <p className="text-xs text-ink/50 mt-0.5">{Object.entries(item.variants).map(([k, v]) => `${k} : ${v}`).join(' · ')}</p>
                           )}
-                          <p className="text-xs text-ink/50">Quantité : {item.quantity}</p>
+                          <p className="text-xs text-ink/50">Quantité : {p.saleMode ? `${formatFabricQuantity(item.quantity)} ${fabricSaleModeUnit[p.saleMode]}` : item.quantity}</p>
                           {shop && <p className="text-[11px] text-ink/35 mt-0.5">Vendu par {shop.name}</p>}
                         </div>
                         <div className="flex-shrink-0"><PriceDisplay price={price * item.quantity} oldPrice={unitOldPrice ? unitOldPrice * item.quantity : undefined} size="sm" /></div>

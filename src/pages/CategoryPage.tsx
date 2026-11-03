@@ -3,6 +3,7 @@ import { useApp } from '@/store/AppContext';
 import { categoryMap, type CategoryId } from '@/data/categories';
 import type { Product } from '@/data/products';
 import { getFilters, type FilterGroup } from '@/data/filters';
+import { fabricSaleModeLabels } from '@/data/categories';
 import ProductGrid from '@/components/ProductGrid';
 import CategorySidebar from '@/components/CategorySidebar';
 import { FilterPanel, FilterDrawer, type SelectedFilters } from '@/components/FilterPanel';
@@ -87,8 +88,10 @@ export default function CategoryPage({ categoryId, subId }: { categoryId: string
           const fieldMatch = (gnorm === 'texture' && p.texture && values.includes(p.texture)) ||
             (gnorm === 'matiere' && p.hairMaterial && values.includes(p.hairMaterial)) ||
             (gnorm === 'matiere' && p.details.some((d) => norm(d.label) === 'matiere' && values.some((v) => d.value.toLowerCase().includes(v.toLowerCase()))));
+          const tissusMatch = (gnorm === 'typetissu' && Boolean(p.fabricType) && values.includes(p.fabricType as string)) ||
+            (gnorm === 'modevente' && Boolean(p.saleMode) && values.includes(fabricSaleModeLabels[p.saleMode as keyof typeof fabricSaleModeLabels]));
           const nameMatch = values.some((val) => p.name.toLowerCase().includes(val.toLowerCase()));
-          return variantMatch || detailMatch || fieldMatch || nameMatch;
+          return variantMatch || detailMatch || fieldMatch || tissusMatch || nameMatch;
         });
       }
     });

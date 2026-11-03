@@ -83,6 +83,12 @@ export interface CreateProductInput {
   promoPrice: number | null;
   promoStart: string | null;
   promoEnd: string | null;
+  // Tissus category only (products.fabric_type/sale_mode/availability_status
+  // — see the Phase 1 migration) — null for every other category, exactly
+  // like the promo fields above when isPromo is false.
+  fabricType: string | null;
+  saleMode: string | null;
+  availabilityStatus: string | null;
 }
 
 export interface CreateProductResult {
@@ -289,6 +295,9 @@ export async function createProductInSupabase(
           promo_price: input.isPromo ? input.promoPrice : null,
           promo_start: input.isPromo ? input.promoStart : null,
           promo_end: input.isPromo ? input.promoEnd : null,
+          fabric_type: input.fabricType,
+          sale_mode: input.saleMode,
+          availability_status: input.availabilityStatus,
         })
         .select('id')
         .single();
@@ -628,6 +637,9 @@ export interface EditableProduct {
   promoPrice: number | null;
   promoStart: string | null;
   promoEnd: string | null;
+  fabricType: string | null;
+  saleMode: string | null;
+  availabilityStatus: string | null;
 }
 
 // Scoped to the seller's own shop (like fetchSellerProducts) so editing
@@ -636,7 +648,7 @@ export interface EditableProduct {
 export async function fetchProductForEdit(productId: string, shopId: string): Promise<EditableProduct | null> {
   const { data: row, error } = await supabase
     .from('products')
-    .select('id, shop_id, reference, name, description, category, subcategory, base_price, status, descriptive_attributes, is_promo, promo_price, promo_start, promo_end')
+    .select('id, shop_id, reference, name, description, category, subcategory, base_price, status, descriptive_attributes, is_promo, promo_price, promo_start, promo_end, fabric_type, sale_mode, availability_status')
     .eq('id', productId)
     .eq('shop_id', shopId)
     .maybeSingle();
@@ -669,6 +681,9 @@ export async function fetchProductForEdit(productId: string, shopId: string): Pr
     promoPrice: (row.promo_price as number) ?? null,
     promoStart: (row.promo_start as string | null) ?? null,
     promoEnd: (row.promo_end as string | null) ?? null,
+    fabricType: (row.fabric_type as string | null) ?? null,
+    saleMode: (row.sale_mode as string | null) ?? null,
+    availabilityStatus: (row.availability_status as string | null) ?? null,
   };
 }
 
@@ -685,6 +700,9 @@ export interface UpdateProductInput {
   promoPrice: number | null;
   promoStart: string | null;
   promoEnd: string | null;
+  fabricType: string | null;
+  saleMode: string | null;
+  availabilityStatus: string | null;
 }
 
 // A variant's attributes, as a stable key for matching "the same variant"
@@ -721,6 +739,9 @@ export async function updateProductInSupabase(productId: string, input: UpdatePr
       promo_price: input.isPromo ? input.promoPrice : null,
       promo_start: input.isPromo ? input.promoStart : null,
       promo_end: input.isPromo ? input.promoEnd : null,
+      fabric_type: input.fabricType,
+      sale_mode: input.saleMode,
+      availability_status: input.availabilityStatus,
     })
     .eq('id', productId);
   if (productError) return { error: `Impossible de mettre à jour le produit : ${productError.message}` };

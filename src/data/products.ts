@@ -50,6 +50,12 @@ export interface Product {
   // senegal" search, connecting this flag to that existing section instead
   // of building a second, parallel one.
   handmade?: boolean;
+  // Tissus category only (products.fabric_type/sale_mode/availability_status
+  // — see the Phase 1 migration) — undefined for every other category,
+  // exactly like every other category-specific optional field above.
+  fabricType?: string;
+  saleMode?: 'metre' | 'kilogramme' | 'piece';
+  availabilityStatus?: 'unique' | 'limite' | 'disponible' | 'gros_stock';
 }
 
 const I = {
