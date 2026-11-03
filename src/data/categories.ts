@@ -41,9 +41,12 @@ export type CategoryId =
 // subcategory, only a fabric_type (see the Phase 1 migration).
 export const fabricTypes = [
   'Wax', 'Super Wax', 'Vlisco', 'Bazin', 'Bazin riche', 'Getzner', 'Coton',
-  'Dentelle', 'Dentelle brodée', 'Guipure', 'Soie', 'Satin', 'Mousseline',
-  'Crêpe', 'Lin', 'Tulle', 'Organza', 'Voile', 'Jersey', 'Velours',
-  'Brocart', 'Tissu brodé', 'Denim / Jean', 'Polyester', 'Tissu traditionnel', 'Autre',
+  'Dentelle', 'Dentelle brodée', 'Dentelle guipure', 'Guipure', 'Djipure',
+  'Soie', 'Satin', 'Mousseline', 'Crêpe', 'Lin', 'Tulle', 'Organza',
+  'Voile', 'Voile suisse', 'Jersey', 'Velours', 'Brocart', 'Tissu brodé',
+  'Brodé Pirkha', 'Brodé autriche', 'Brodé Lafaya', 'Perlage',
+  'Super Cent', 'Super Cent fil-à-fil', 'Fil-à-fil', 'Jazz', 'Asli Rubia',
+  'Denim / Jean', 'Polyester', 'Autre tissu',
 ] as const;
 export type FabricType = typeof fabricTypes[number];
 
@@ -67,7 +70,7 @@ export const fabricQuantityRules: Record<FabricSaleMode, { min: number; max: num
 export const fabricAvailabilityStatuses = ['unique', 'limite', 'disponible', 'gros_stock'] as const;
 export type FabricAvailabilityStatus = typeof fabricAvailabilityStatuses[number];
 export const fabricAvailabilityLabels: Record<FabricAvailabilityStatus, string> = {
-  unique: 'Pièce unique', limite: 'Stock limité', disponible: 'Stock disponible', gros_stock: 'Gros stock',
+  unique: 'Pièce unique', limite: 'Stock limité', disponible: 'En stock', gros_stock: 'Gros stock',
 };
 
 export interface SubCategory { id: string; label: string; }
