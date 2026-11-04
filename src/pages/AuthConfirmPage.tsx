@@ -52,7 +52,7 @@ export default function AuthConfirmPage() {
         setDestinationLabel(shop ? `boutique « ${shop.shopName} »` : 'compte Ezial');
         setTimeout(() => {
           if (cancelled) return;
-          goTo(shop ? '/pro' : '/');
+          goToRoute(shop ? '/pro' : '/');
         }, 900);
       } catch {
         // A network blip, an already-consumed token, or a malformed link —
@@ -63,8 +63,14 @@ export default function AuthConfirmPage() {
     return () => { cancelled = true; };
   }, []);
 
-  const goTo = (hash: string) => {
-    window.location.href = `${window.location.origin}${import.meta.env.BASE_URL}${hash}`;
+  // Takes a plain app route ('/pro', '/') and always prepends the '#' itself
+  // — BASE_URL already ends in '/', so concatenating a route without it
+  // produces a literal double slash (https://www.ezial.net//pro), which
+  // GitHub Pages serves as its own 404 instead of letting the SPA's hash
+  // router ever see it. This is exactly the bug a live confirmation link
+  // hit: confirmation and session worked, but this redirect was malformed.
+  const goToRoute = (route: string) => {
+    window.location.href = `${window.location.origin}${import.meta.env.BASE_URL}#${route}`;
   };
 
   const handleResend = async () => {
