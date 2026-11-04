@@ -9,13 +9,14 @@ import { supabase } from './supabaseClient';
 //
 // Sales/commission/net figures are read from order_shops.subtotal /
 // commission_amount / net_amount — computed and stored once, server-side,
-// by create_order() itself (product by product: 8% normally, 5% on any
-// item promoted at 10% off or more, on the amount actually paid after
-// discount, delivery fees never included — see the migration this file
-// ships with). Never recomputed here with a flat rate: a flat client-side
-// 8% on the whole subtotal was exactly wrong the moment an order contained
-// even one promoted item, and trusting a rate computed in the browser at
-// all is not something a real payout amount can be built on. Payouts are
+// by create_order() itself (per shop, at that shop's own plan rate: 10%
+// Free / 8% Premium, trial or paid, read from seller_subscriptions at
+// order time; on the amount actually paid after discount, delivery fees
+// never included — see the migration this file ships with). Never
+// recomputed here with a flat rate: the rate depends on each shop's own
+// plan and can differ shop by shop within the same order, and trusting a
+// rate computed in the browser at all is not something a real payout
+// amount can be built on. Payouts are
 // only ever written through the record_seller_payout() RPC (security
 // definer) — never inserted directly from the client, so the "amount
 // can't exceed what's owed" rule is enforced in the database.

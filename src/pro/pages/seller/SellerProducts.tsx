@@ -57,7 +57,7 @@ export default function SellerProducts() {
     setActionError('');
     const nextStatus = product.status === 'active' ? 'disabled' : 'active';
     if (!sellerShopIsOfficial && nextStatus === 'active' && activeCount >= productLimit) {
-      setActionError(`Vous avez atteint la limite de ${productLimit} produits actifs de votre forfait. Désactivez un produit, ou passez à Ezial Pro pour en activer davantage.`);
+      setActionError(`Vous avez atteint la limite de ${productLimit} produits actifs de votre forfait. Désactivez un produit, ou passez à Ezial Premium pour en activer davantage.`);
       return;
     }
     const result = await setSellerProductStatus(product.id, nextStatus);

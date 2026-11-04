@@ -5,14 +5,17 @@ import {
   fetchSubscriptionPayments,
   confirmSubscriptionPayment,
   rejectSubscriptionPayment,
+  fetchAllSellerSubscriptions,
   type AdminSubscriptionPaymentRow,
+  type AdminSellerSubscriptionRow,
 } from '@/lib/supabaseAdminSubscriptions';
 import { Crown, Loader2, Check, X, AlertCircle } from 'lucide-react';
 
-type Tab = 'pending' | 'history';
+type Tab = 'pending' | 'history' | 'all';
 
 export default function AdminSubscriptions() {
   const [payments, setPayments] = useState<AdminSubscriptionPaymentRow[]>([]);
+  const [subscriptions, setSubscriptions] = useState<AdminSellerSubscriptionRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
   const [tab, setTab] = useState<Tab>('pending');
@@ -25,9 +28,11 @@ export default function AdminSubscriptions() {
     setLoading(true);
     setLoadError('');
     try {
-      setPayments(await fetchSubscriptionPayments());
+      const [pays, subs] = await Promise.all([fetchSubscriptionPayments(), fetchAllSellerSubscriptions()]);
+      setPayments(pays);
+      setSubscriptions(subs);
     } catch {
-      setLoadError('Impossible de charger les demandes. Réessayez.');
+      setLoadError('Impossible de charger les abonnements. Réessayez.');
     } finally {
       setLoading(false);
     }
@@ -73,6 +78,9 @@ export default function AdminSubscriptions() {
         <button onClick={() => setTab('history')} className={`rounded-full px-4 py-1.5 text-sm font-medium transition-colors ${tab === 'history' ? 'bg-burgundy text-white' : 'text-ink/60'}`}>
           Historique
         </button>
+        <button onClick={() => setTab('all')} className={`rounded-full px-4 py-1.5 text-sm font-medium transition-colors ${tab === 'all' ? 'bg-burgundy text-white' : 'text-ink/60'}`}>
+          Toutes les boutiques
+        </button>
       </div>
 
       {loadError && (
@@ -88,6 +96,30 @@ export default function AdminSubscriptions() {
 
       {loading ? (
         <div className="card p-10 text-center"><Loader2 size={20} className="mx-auto animate-spin text-ink/30" /></div>
+      ) : tab === 'all' ? (
+        subscriptions.length === 0 ? (
+          <div className="card p-10 text-center"><p className="text-sm text-ink/45">Aucune boutique active.</p></div>
+        ) : (
+          <div className="card divide-y divide-line">
+            {subscriptions.map((s) => {
+              const label = !s.isProActive ? 'Free' : s.isTrialActive ? 'Essai Premium' : 'Premium';
+              const labelCls = !s.isProActive ? 'bg-ink/5 text-ink/60 border-line' : s.isTrialActive ? 'bg-amber-50 text-amber-700 border-amber-100' : 'bg-burgundy/10 text-burgundy border-burgundy/20';
+              return (
+                <div key={s.shopId} className="flex items-center justify-between gap-3 p-4 flex-wrap">
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold text-ink">{s.shopName}</p>
+                    <p className="text-xs text-ink/45 mt-0.5">
+                      {s.isProActive
+                        ? `Jusqu'au ${formatDate(s.proUntil!)}`
+                        : s.trialUsed ? 'Essai déjà utilisé' : 'Essai disponible'}
+                    </p>
+                  </div>
+                  <span className={`flex-shrink-0 rounded-full border px-3 py-1 text-xs font-medium ${labelCls}`}>{label}</span>
+                </div>
+              );
+            })}
+          </div>
+        )
       ) : visible.length === 0 ? (
         <div className="card p-10 text-center">
           <p className="text-sm text-ink/45">{tab === 'pending' ? 'Aucune demande à vérifier.' : 'Aucun historique.'}</p>
@@ -158,7 +190,7 @@ export default function AdminSubscriptions() {
 
       <div className="card p-4 bg-cream/50">
         <p className="text-xs text-ink/45 text-center">
-          Aucune passerelle de paiement n'est connectée à Ezial : chaque référence doit être vérifiée manuellement sur votre compte Wave / Orange Money avant confirmation. La confirmation active ou prolonge l'abonnement Pro pour 3 mois.
+          Aucune passerelle de paiement n'est connectée à Ezial : chaque référence doit être vérifiée manuellement sur votre compte Wave / Orange Money avant confirmation. La confirmation active ou prolonge l'abonnement Premium pour 3 mois.
         </p>
       </div>
     </div>

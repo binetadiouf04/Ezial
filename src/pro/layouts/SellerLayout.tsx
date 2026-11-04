@@ -8,6 +8,8 @@ import SellerProducts from '../pages/seller/SellerProducts';
 import SellerProductForm from '../pages/seller/SellerProductForm';
 import SellerFinances from '../pages/seller/SellerFinances';
 import SellerSubscription from '../pages/seller/SellerSubscription';
+import SellerTrialActivation from '../pages/seller/SellerTrialActivation';
+import SellerSubscriptionPayment from '../pages/seller/SellerSubscriptionPayment';
 import SellerShop from '../pages/seller/SellerShop';
 import SellerClaims from '../pages/seller/SellerClaims';
 import SellerClaimDetail from '../pages/seller/SellerClaimDetail';
@@ -72,6 +74,8 @@ export default function SellerLayout() {
     if (productEditMatch) return <SellerProductForm productId={productEditMatch[1]} />;
     if (clean === '/seller/finances') return <SellerFinances />;
     if (clean === '/seller/abonnement') return <SellerSubscription />;
+    if (clean === '/seller/abonnement/essai') return <SellerTrialActivation />;
+    if (clean === '/seller/abonnement/paiement') return <SellerSubscriptionPayment />;
     if (clean === '/seller/boutique') return <SellerShop />;
     return <SellerDashboard />;
   };

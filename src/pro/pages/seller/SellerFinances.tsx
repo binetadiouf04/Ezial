@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { usePro } from '../../ProContext';
 import { formatFCFA, formatDate } from '../../data';
 import { fetchSellerFinances, requestSellerPayout, type SellerTransactionRow } from '@/lib/supabaseSellerFinances';
+import { fetchSellerSubscription } from '@/lib/supabaseSellerSubscription';
 import FinanceSummary from '../../components/FinanceSummary';
 import { StatusChip } from '../../components/StatusChip';
 import { Wallet, TrendingUp, Calendar, Check, Loader2 } from 'lucide-react';
@@ -17,6 +18,7 @@ export default function SellerFinances() {
   const [requesting, setRequesting] = useState(false);
   const [requestError, setRequestError] = useState('');
   const [requestSent, setRequestSent] = useState(false);
+  const [commissionRate, setCommissionRate] = useState<number | null>(null);
 
   // Real financial history for the signed-in seller's real Supabase shop —
   // never the mock sellerTransactions array, which only ever matched one
@@ -28,13 +30,17 @@ export default function SellerFinances() {
     }
     let cancelled = false;
     setIsLoading(true);
-    fetchSellerFinances(sellerSupabaseShopId).then((summary) => {
+    Promise.all([
+      fetchSellerFinances(sellerSupabaseShopId),
+      fetchSellerSubscription(sellerSupabaseShopId),
+    ]).then(([summary, sub]) => {
       if (cancelled) return;
       setTransactions(summary.transactions);
       setGrossTotal(summary.grossTotal);
       setCommissionTotal(summary.commissionTotal);
       setNetTotal(summary.netTotal);
       setAvailableBalance(summary.availableBalance);
+      setCommissionRate(sub.isProActive ? 8 : 10);
       setIsLoading(false);
     });
     return () => { cancelled = true; };
@@ -83,7 +89,7 @@ export default function SellerFinances() {
       <FinanceSummary
         rows={[
           { label: 'Ventes brutes', value: grossTotal, hint: `${transactions.length} transaction${transactions.length > 1 ? 's' : ''}` },
-          { label: 'Commission Ezial', value: -commissionTotal, hint: '8% (ou 5% en promotion ≥ 10%) — déduite automatiquement' },
+          { label: 'Commission Ezial', value: -commissionTotal, hint: `${commissionRate ?? 10}% (votre forfait actuel) — déduite automatiquement` },
           { label: 'Montant net', value: netTotal, accent: true },
         ]}
       />
