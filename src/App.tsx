@@ -1,7 +1,6 @@
 import { useEffect, useState, Suspense, lazy } from 'react';
 import { AppProvider, useApp } from '@/store/AppContext';
 import { ProProvider } from '@/pro/ProContext';
-import { supabase } from '@/lib/supabaseClient';
 import { getProduct } from '@/data/products';
 import { getShop } from '@/data/shops';
 import { categoryMap, type CategoryId } from '@/data/categories';
@@ -37,6 +36,7 @@ const ForYouPage = lazy(() => import('@/pages/ForYouPage'));
 const ShopsPage = lazy(() => import('@/pages/ShopsPage'));
 const SimilarProductsPage = lazy(() => import('@/pages/SimilarProductsPage'));
 const ResetPasswordPage = lazy(() => import('@/pages/ResetPasswordPage'));
+const AuthConfirmPage = lazy(() => import('@/pages/AuthConfirmPage'));
 
 function RouteFallback() {
   return (
@@ -55,13 +55,14 @@ function isPasswordRecoveryLink(): boolean {
   return /type=recovery/.test(window.location.hash) || /type=recovery/.test(window.location.search);
 }
 
-// A seller signup-confirmation link (see signUpSeller's emailRedirectTo)
-// carries this marker as a plain query param — never in the hash, since
-// Supabase's own confirmation tokens already live there (detectSessionInUrl)
-// and a second hash fragment would be unreliable to parse. Checked once,
-// synchronously, exactly like isPasswordRecoveryLink above.
-function wantsEzialProAfterConfirm(): boolean {
-  return /[?&]ezial_space=pro(&|$)/.test(window.location.search);
+// A signup-confirmation link (customer or seller) redirects back here with
+// `type=signup` in the URL — Supabase sets this regardless of whether the
+// project's actual token exchange is implicit (#access_token=...) or PKCE
+// (?code=...), exactly like `type=recovery` above. Checked once,
+// synchronously, so AuthConfirmPage renders standalone (no AppProvider/
+// ProProvider race, no premature routing) before any session exists yet.
+function isEmailConfirmationLink(): boolean {
+  return /type=signup/.test(window.location.hash) || /type=signup/.test(window.location.search);
 }
 
 function RouteView() {
@@ -256,26 +257,14 @@ function Layout() {
 
 export default function App() {
   const [isRecovery] = useState(isPasswordRecoveryLink);
-  const [pendingProRedirect] = useState(wantsEzialProAfterConfirm);
-
-  // Once a seller's signup-confirmation link has turned into a real
-  // session (supabase.auth.getSession() awaits the client's own
-  // detectSessionInUrl pass before resolving, so this is never a race),
-  // send them into Ezial Pro instead of leaving them on the plain
-  // marketplace homepage the bare confirmation redirect would otherwise
-  // land on — see ProEntryPage/ProContext for the sessionStorage-independent
-  // seller-session pickup that completes the trip.
-  useEffect(() => {
-    if (!pendingProRedirect) return;
-    const url = new URL(window.location.href);
-    url.searchParams.delete('ezial_space');
-    window.history.replaceState(null, '', `${url.pathname}${url.search}${window.location.hash}`);
-    supabase.auth.getSession().then(({ data }) => {
-      if (data.session) window.location.hash = '/pro';
-    });
-  }, [pendingProRedirect]);
+  const [isEmailConfirm] = useState(isEmailConfirmationLink);
 
   if (isRecovery) return <Suspense fallback={<RouteFallback />}><ResetPasswordPage /></Suspense>;
+  // Standalone, exactly like ResetPasswordPage above — no AppProvider/
+  // ProProvider mounted yet, so nothing (the hash router, the catalog
+  // fetch, a hashchange listener) can race ahead and repaint the plain
+  // homepage before the session is actually established and routed.
+  if (isEmailConfirm) return <Suspense fallback={<RouteFallback />}><AuthConfirmPage /></Suspense>;
 
   return (
     <AppProvider>

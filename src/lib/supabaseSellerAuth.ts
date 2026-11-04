@@ -36,8 +36,11 @@ export interface SellerAuthShop {
 // The one real authorization check for the seller area: the signed-in
 // Supabase Auth user must own a real shop row (shops.owner_id = auth.uid()).
 // Used at both login time and session-restore time — a seller session is
-// never trusted without re-checking this.
-async function shopForCurrentUser(): Promise<SellerAuthShop | null> {
+// never trusted without re-checking this. Also reused by AuthConfirmPage
+// right after a signup-confirmation link establishes a session, to tell a
+// seller signup apart from a customer one (the shop row already exists —
+// created at signUp() time, before confirmation — so this is reliable).
+export async function shopForCurrentUser(): Promise<SellerAuthShop | null> {
   const { data: userData, error: userError } = await supabase.auth.getUser();
   if (userError || !userData.user) return null;
 
@@ -225,11 +228,12 @@ export async function signUpSeller(input: SignUpSellerInput): Promise<SignUpSell
   const { data: existing } = await supabase.from('shops').select('id').eq('seller_code', username).maybeSingle();
   if (existing) return { error: USERNAME_TAKEN_ERROR };
 
-  // `ezial_space=pro` is a plain query param, never put in the hash — the
-  // confirmation link's own tokens already live there (detectSessionInUrl)
-  // and a second hash fragment would be unreliable to parse. See
-  // App.tsx's wantsEzialProAfterConfirm for the matching redirect-on-landing.
-  const redirectTo = `${window.location.origin}${import.meta.env.BASE_URL}?ezial_space=pro`;
+  // Bare URL — AuthConfirmPage (App.tsx) figures out customer vs seller
+  // from the confirmed session itself (shopForCurrentUser), not from a
+  // marker on this redirect, since Supabase silently falls back to the
+  // project's default Site URL whenever emailRedirectTo isn't on the
+  // Redirect URLs allow-list, which would have dropped any such marker.
+  const redirectTo = `${window.location.origin}${import.meta.env.BASE_URL}`;
   const { data, error } = await supabase.auth.signUp({
     email,
     password: input.password,
@@ -297,7 +301,7 @@ export async function signOutSeller(): Promise<void> {
 }
 
 export async function resendSellerConfirmation(email: string): Promise<{ error?: string }> {
-  const redirectTo = `${window.location.origin}${import.meta.env.BASE_URL}?ezial_space=pro`;
+  const redirectTo = `${window.location.origin}${import.meta.env.BASE_URL}`;
   const { error } = await supabase.auth.resend({ type: 'signup', email: email.trim(), options: { emailRedirectTo: redirectTo } });
   return error ? { error: mapAuthErrorMessage(error.message) } : {};
 }
