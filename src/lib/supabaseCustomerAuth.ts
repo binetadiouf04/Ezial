@@ -219,13 +219,13 @@ export async function requestCustomerPasswordReset(email: string): Promise<{ err
   if (!isValidEmail(email)) return { error: 'Adresse email invalide.' };
   const redirectTo = `${window.location.origin}${import.meta.env.BASE_URL}`;
   const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), { redirectTo });
-  return error ? { error: mapAuthErrorMessage(error.message) } : {};
+  return error ? { error: mapAuthErrorMessage(error.message, "Impossible d'envoyer le lien. Réessayez dans quelques instants.") } : {};
 }
 
 export async function resendCustomerConfirmation(email: string): Promise<{ error?: string }> {
   const redirectTo = `${window.location.origin}${import.meta.env.BASE_URL}`;
   const { error } = await supabase.auth.resend({ type: 'signup', email: email.trim(), options: { emailRedirectTo: redirectTo } });
-  return error ? { error: mapAuthErrorMessage(error.message) } : {};
+  return error ? { error: mapAuthErrorMessage(error.message, "Impossible d'envoyer le lien. Réessayez dans quelques instants.") } : {};
 }
 
 // Real, permanent account deletion now lives in supabaseAccountDeletion.ts

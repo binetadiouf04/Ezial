@@ -2,7 +2,14 @@
 // technical — "Unable to validate email address: invalid format", "User
 // already registered") into clean, professional French messages. Never let
 // a raw Supabase error reach the UI directly.
-export function mapAuthErrorMessage(raw: string | undefined | null): string {
+// `fallback` is what's shown when none of the known patterns match below —
+// callers outside signup (resend, password reset…) pass their own, since
+// the default is specifically worded for account creation and was
+// previously shown verbatim after a failed *resend*, which read as if the
+// account itself had failed to create.
+const DEFAULT_FALLBACK = "Impossible de créer le compte. Vérifiez vos informations et réessayez.";
+
+export function mapAuthErrorMessage(raw: string | undefined | null, fallback: string = DEFAULT_FALLBACK): string {
   const msg = (raw ?? '').toLowerCase();
 
   if (msg.includes('already registered') || msg.includes('already exists') || msg.includes('user already')) {
@@ -20,7 +27,7 @@ export function mapAuthErrorMessage(raw: string | undefined | null): string {
   if (msg.includes('network') || msg.includes('fetch')) {
     return 'Connexion impossible. Vérifiez votre connexion internet et réessayez.';
   }
-  return "Impossible de créer le compte. Vérifiez vos informations et réessayez.";
+  return fallback;
 }
 
 // Simple, deliberately permissive client-side check — just enough to catch

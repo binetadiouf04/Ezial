@@ -279,7 +279,7 @@ export async function requestSellerPasswordReset(email: string): Promise<{ error
   if (!isValidEmail(email)) return { error: 'Adresse email invalide.' };
   const redirectTo = `${window.location.origin}${import.meta.env.BASE_URL}`;
   const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), { redirectTo });
-  return error ? { error: mapAuthErrorMessage(error.message) } : {};
+  return error ? { error: mapAuthErrorMessage(error.message, "Impossible d'envoyer le lien. Réessayez dans quelques instants.") } : {};
 }
 
 // Re-validates an existing Supabase session (e.g. on page reload). The
@@ -303,7 +303,7 @@ export async function signOutSeller(): Promise<void> {
 export async function resendSellerConfirmation(email: string): Promise<{ error?: string }> {
   const redirectTo = `${window.location.origin}${import.meta.env.BASE_URL}`;
   const { error } = await supabase.auth.resend({ type: 'signup', email: email.trim(), options: { emailRedirectTo: redirectTo } });
-  return error ? { error: mapAuthErrorMessage(error.message) } : {};
+  return error ? { error: mapAuthErrorMessage(error.message, "Impossible d'envoyer le lien. Réessayez dans quelques instants.") } : {};
 }
 
 // Same as resendSellerConfirmation, but for the login screen, where a
