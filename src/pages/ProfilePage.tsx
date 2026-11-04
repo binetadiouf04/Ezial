@@ -59,6 +59,7 @@ function AuthPanel() {
 
   const [loginId, setLoginId] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
+  const [loginUnconfirmed, setLoginUnconfirmed] = useState(false);
 
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
@@ -68,16 +69,27 @@ function AuthPanel() {
 
   const [resetEmail, setResetEmail] = useState('');
 
-  const switchView = (v: AuthView) => { setView(v); setError(''); setEmailTaken(false); setNotice(''); };
+  const switchView = (v: AuthView) => { setView(v); setError(''); setEmailTaken(false); setLoginUnconfirmed(false); setNotice(''); };
 
   const handleLogin = async () => {
-    setError(''); setNotice('');
+    setError(''); setNotice(''); setLoginUnconfirmed(false);
     if (!loginId.trim() || !loginPassword) { setError('Renseignez votre email et votre mot de passe.'); return; }
     if (!isValidEmail(loginId)) { setError('Adresse email invalide.'); return; }
     setSubmitting(true);
     const result = await signInCustomerAccount(loginId.trim(), loginPassword);
     setSubmitting(false);
+    if (result.error) {
+      setError(result.error);
+      if (result.code === 'unconfirmed') setLoginUnconfirmed(true);
+    }
+  };
+
+  const handleResendFromLogin = async () => {
+    setResending(true);
+    const result = await resendConfirmationEmail(loginId.trim());
+    setResending(false);
     if (result.error) setError(result.error);
+    else setNotice('Un nouveau lien vient de vous être envoyé par email.');
   };
 
   const handleSignup = async () => {
@@ -108,10 +120,11 @@ function AuthPanel() {
   };
 
   const handleResendConfirmation = async () => {
-    setResending(true);
-    await resendConfirmationEmail(email.trim());
+    setResending(true); setError('');
+    const result = await resendConfirmationEmail(email.trim());
     setResending(false);
-    setNotice('Un nouveau lien vient de vous être envoyé par email.');
+    if (result.error) setError(result.error);
+    else setNotice('Un nouveau lien vient de vous être envoyé par email.');
   };
 
   return (
@@ -138,6 +151,13 @@ function AuthPanel() {
             <div className="mt-2.5 flex gap-2 pl-[22px]">
               <button onClick={() => { setLoginId(email); switchView('login'); }} className="rounded-full bg-white px-3 py-1.5 text-xs font-medium text-burgundy border border-burgundy/30 hover:bg-burgundy/5">Se connecter</button>
               <button onClick={() => { setResetEmail(email); switchView('forgot'); }} className="rounded-full bg-white px-3 py-1.5 text-xs font-medium text-ink/60 border border-line hover:bg-cream">Mot de passe oublié</button>
+            </div>
+          )}
+          {loginUnconfirmed && (
+            <div className="mt-2.5 pl-[22px]">
+              <button onClick={() => void handleResendFromLogin()} disabled={resending} className="rounded-full bg-white px-3 py-1.5 text-xs font-medium text-burgundy border border-burgundy/30 hover:bg-burgundy/5">
+                {resending ? 'Envoi...' : 'Renvoyer le lien de confirmation'}
+              </button>
             </div>
           )}
         </div>
@@ -184,7 +204,10 @@ function AuthPanel() {
           <button onClick={() => void handleResendConfirmation()} disabled={resending} className="text-xs font-medium text-burgundy hover:underline">
             {resending ? 'Envoi...' : 'Renvoyer le lien'}
           </button>
-          <button onClick={() => switchView('login')} className="btn-outline w-full">Retour à la connexion</button>
+          <div className="flex flex-col gap-2">
+            <button onClick={() => switchView('signup')} className="btn-outline w-full">Modifier mon adresse e-mail</button>
+            <button onClick={() => switchView('login')} className="w-full text-center text-xs font-medium text-ink/50 hover:underline">Retour à la connexion</button>
+          </div>
         </div>
       )}
 

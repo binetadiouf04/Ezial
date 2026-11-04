@@ -27,6 +27,7 @@ const NO_SHOP_ERROR = "Aucune boutique n'est associée à ce compte. Contactez E
 export interface SellerAuthShop {
   shopId: string;
   shopName: string;
+  sellerCode: string;
   // From shops.is_official — the only signal used anywhere to recognize
   // the official Ezial shop (no hardcoded id/slug/name).
   isOfficial: boolean;
@@ -42,12 +43,17 @@ async function shopForCurrentUser(): Promise<SellerAuthShop | null> {
 
   const { data: shop, error: shopError } = await supabase
     .from('shops')
-    .select('id, name, owner_id, is_official')
+    .select('id, name, owner_id, is_official, seller_code')
     .eq('owner_id', userData.user.id)
     .maybeSingle();
   if (shopError || !shop) return null;
 
-  return { shopId: shop.id as string, shopName: shop.name as string, isOfficial: Boolean(shop.is_official) };
+  return {
+    shopId: shop.id as string,
+    shopName: shop.name as string,
+    sellerCode: (shop.seller_code as string | null) ?? '',
+    isOfficial: Boolean(shop.is_official),
+  };
 }
 
 // New (post-migration) sellers sign up with a real email + a username they
@@ -62,21 +68,30 @@ async function shopForCurrentUser(): Promise<SellerAuthShop | null> {
 // unchanged: for them the RPC just returns the same deterministic
 // <code>@sellers.ezial.internal address signInSeller always computed
 // locally before.
-export async function signInSeller(identifier: string, password: string): Promise<SellerAuthShop | { error: string }> {
+// Shared by signInSeller and resendSellerConfirmationForIdentifier — a
+// seller logs in with either their username or their real email, but
+// Supabase's own APIs (signInWithPassword, resend) always need the real
+// email, so this is the one place that resolution happens.
+async function resolveSellerEmail(identifier: string): Promise<string> {
   const trimmed = identifier.trim();
-  let email: string | null;
-  if (trimmed.includes('@')) {
-    email = trimmed;
-  } else {
-    const { data: resolved } = await supabase.rpc('resolve_seller_login_email', { p_identifier: trimmed });
-    // Falls back to the deterministic synthetic address if the RPC isn't
-    // deployed yet or found nothing — preserves old-pilot-account login
-    // even before the resolver migration is applied.
-    email = (resolved as string | null) ?? sellerEmailForCode(trimmed);
-  }
+  if (trimmed.includes('@')) return trimmed;
+  const { data: resolved } = await supabase.rpc('resolve_seller_login_email', { p_identifier: trimmed });
+  // Falls back to the deterministic synthetic address if the RPC isn't
+  // deployed yet or found nothing — preserves old-pilot-account login
+  // even before the resolver migration is applied.
+  return (resolved as string | null) ?? sellerEmailForCode(trimmed);
+}
+
+const UNCONFIRMED_LOGIN_ERROR = "Confirmez votre adresse email avant de vous connecter (lien envoyé à l'inscription).";
+
+export async function signInSeller(identifier: string, password: string): Promise<SellerAuthShop | { error: string; code?: 'unconfirmed' }> {
+  const email = await resolveSellerEmail(identifier);
 
   const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
-  if (signInError) return { error: GENERIC_LOGIN_ERROR };
+  if (signInError) {
+    if (signInError.message.toLowerCase().includes('confirm')) return { error: UNCONFIRMED_LOGIN_ERROR, code: 'unconfirmed' };
+    return { error: GENERIC_LOGIN_ERROR };
+  }
 
   const shop = await shopForCurrentUser();
   if (!shop) {
@@ -143,7 +158,10 @@ async function createShopRowForCurrentUser(input: { shopName: string; username: 
 async function linkShopToExistingAccount(input: { email: string; password: string; shopName: string; username: string }): Promise<SignUpSellerResult> {
   const { error: signInError } = await supabase.auth.signInWithPassword({ email: input.email, password: input.password });
   if (signInError) {
-    return { error: "Un compte existe déjà avec cet email. Connectez-vous avec son mot de passe pour y associer votre boutique, ou utilisez « Mot de passe oublié » pour le réinitialiser." };
+    return {
+      error: "Un compte existe déjà avec cet email. Connectez-vous avec son mot de passe pour y associer votre boutique, ou utilisez « Mot de passe oublié » pour le réinitialiser.",
+      code: 'email_taken',
+    };
   }
   return createShopRowForCurrentUser(input);
 }
@@ -173,7 +191,7 @@ export interface SignUpSellerInput {
 export type SignUpSellerResult =
   | { status: 'confirmed'; shop: SellerAuthShop }
   | { status: 'pending_confirmation' }
-  | { error: string };
+  | { error: string; code?: 'email_taken' };
 
 const USERNAME_TAKEN_ERROR = 'Ce nom d\'utilisateur est déjà utilisé.';
 const USERNAME_FORMAT_ERROR = "Le nom d'utilisateur doit contenir 4 à 32 lettres/chiffres, sans espace.";
@@ -207,7 +225,11 @@ export async function signUpSeller(input: SignUpSellerInput): Promise<SignUpSell
   const { data: existing } = await supabase.from('shops').select('id').eq('seller_code', username).maybeSingle();
   if (existing) return { error: USERNAME_TAKEN_ERROR };
 
-  const redirectTo = `${window.location.origin}${import.meta.env.BASE_URL}`;
+  // `ezial_space=pro` is a plain query param, never put in the hash — the
+  // confirmation link's own tokens already live there (detectSessionInUrl)
+  // and a second hash fragment would be unreliable to parse. See
+  // App.tsx's wantsEzialProAfterConfirm for the matching redirect-on-landing.
+  const redirectTo = `${window.location.origin}${import.meta.env.BASE_URL}?ezial_space=pro`;
   const { data, error } = await supabase.auth.signUp({
     email,
     password: input.password,
@@ -275,9 +297,17 @@ export async function signOutSeller(): Promise<void> {
 }
 
 export async function resendSellerConfirmation(email: string): Promise<{ error?: string }> {
-  const redirectTo = `${window.location.origin}${import.meta.env.BASE_URL}`;
+  const redirectTo = `${window.location.origin}${import.meta.env.BASE_URL}?ezial_space=pro`;
   const { error } = await supabase.auth.resend({ type: 'signup', email: email.trim(), options: { emailRedirectTo: redirectTo } });
   return error ? { error: mapAuthErrorMessage(error.message) } : {};
+}
+
+// Same as resendSellerConfirmation, but for the login screen, where a
+// seller may have typed their username instead of their real email — the
+// one place this resolution is actually needed outside signInSeller itself.
+export async function resendSellerConfirmationForIdentifier(identifier: string): Promise<{ error?: string }> {
+  const email = await resolveSellerEmail(identifier);
+  return resendSellerConfirmation(email);
 }
 
 // Real, permanent account deletion now lives in supabaseAccountDeletion.ts

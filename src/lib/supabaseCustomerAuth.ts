@@ -126,10 +126,10 @@ async function fetchOwnProfile(): Promise<CustomerProfile | null> {
 const GENERIC_LOGIN_ERROR = 'Adresse email ou mot de passe incorrect.';
 const UNCONFIRMED_LOGIN_ERROR = 'Confirmez votre adresse email avant de vous connecter (lien envoyé à l\'inscription).';
 
-export async function signInCustomer(email: string, password: string): Promise<CustomerProfile | { error: string }> {
+export async function signInCustomer(email: string, password: string): Promise<CustomerProfile | { error: string; code?: 'unconfirmed' }> {
   const { error: signInError } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
   if (signInError) {
-    if (signInError.message.toLowerCase().includes('confirm')) return { error: UNCONFIRMED_LOGIN_ERROR };
+    if (signInError.message.toLowerCase().includes('confirm')) return { error: UNCONFIRMED_LOGIN_ERROR, code: 'unconfirmed' };
     return { error: GENERIC_LOGIN_ERROR };
   }
 

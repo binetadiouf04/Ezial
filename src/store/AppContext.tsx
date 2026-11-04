@@ -137,7 +137,7 @@ interface AppState {
   customerUser: CustomerProfile | null;
   authLoading: boolean;
   signUpCustomerAccount: (input: SignUpCustomerInput) => Promise<{ status: 'confirmed' | 'pending_confirmation' } | { error: string; code?: 'email_taken' }>;
-  signInCustomerAccount: (email: string, password: string) => Promise<{ error?: string }>;
+  signInCustomerAccount: (email: string, password: string) => Promise<{ error?: string; code?: 'unconfirmed' }>;
   signOutCustomerAccount: () => void;
   updateCustomerAccount: (input: UpdateCustomerProfileInput) => Promise<{ error?: string; emailConfirmationSent?: boolean }>;
   requestPasswordReset: (email: string) => Promise<{ error?: string }>;
@@ -472,9 +472,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return { status: 'confirmed' };
   }, [favorites]);
 
-  const signInCustomerAccount = useCallback(async (email: string, password: string): Promise<{ error?: string }> => {
+  const signInCustomerAccount = useCallback(async (email: string, password: string): Promise<{ error?: string; code?: 'unconfirmed' }> => {
     const result = await signInCustomer(email, password);
-    if ('error' in result) return { error: result.error };
+    if ('error' in result) return { error: result.error, code: result.code };
     setCustomerUser(result);
     await mergeLocalFavoritesIntoAccount(result.id, favorites);
     const [favIds, realOrders, realAddresses] = await Promise.all([fetchFavoriteIds(result.id), fetchCustomerOrders(result.id), fetchCustomerAddresses(result.id)]);

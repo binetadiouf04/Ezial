@@ -3,7 +3,7 @@ import type { Role, DeliveryStep, ShopStatus, ProductStatus, ModerationEntry, Mo
 import { missions as initialMissions, type Mission, type Product, type Shop, type Driver, type DriverTransaction, type Order, type Transaction } from './data';
 import { shops as initialShops, products as initialProducts, transactions as initialTransactions, driverTransactions as initialDriverTransactions, orders as initialOrders, drivers as initialDrivers, moderationHistory as initialModerationHistory, blogPosts as initialBlogPosts } from './data';
 import { assignShopPrefixes, nextReferenceForShop } from '@/utils/reference';
-import { signInSeller, restoreSellerSession, signOutSeller, signUpSeller, requestSellerPasswordReset, resendSellerConfirmation, createShopForLoggedInCustomer, type SignUpSellerInput, type SignUpSellerResult } from '@/lib/supabaseSellerAuth';
+import { signInSeller, restoreSellerSession, signOutSeller, signUpSeller, requestSellerPasswordReset, resendSellerConfirmation, resendSellerConfirmationForIdentifier, createShopForLoggedInCustomer, type SignUpSellerInput, type SignUpSellerResult } from '@/lib/supabaseSellerAuth';
 import { deleteMyAccount } from '@/lib/supabaseAccountDeletion';
 import { signInAdmin, restoreAdminSession } from '@/lib/supabaseAdminAuth';
 import { checkDriverUsername, createDriverPin, signInDriverWithPin, restoreDriverSession, type DriverLoginStatus } from '@/lib/supabaseDriverAuth';
@@ -131,15 +131,19 @@ interface ProState extends AuthState {
   // Seller login — authenticates seller_code + password against Supabase
   // Auth, then verifies the account owns a real shop (shops.owner_id =
   // auth.uid()) before granting access.
-  verifySellerLogin: (identifier: string, password: string) => Promise<{ shop: { sellerId: string; name: string; supabaseShopId: string; isOfficial: boolean } } | { error: string }>;
+  verifySellerLogin: (identifier: string, password: string) => Promise<{ shop: { sellerId: string; name: string; supabaseShopId: string; isOfficial: boolean } } | { error: string; code?: 'unconfirmed' }>;
   // Self-service shop signup (new sellers only) — creates the real
   // Supabase Auth user + a 'draft' shop row in one step.
-  signUpSellerAccount: (input: SignUpSellerInput) => Promise<{ status: 'confirmed'; shop: { sellerId: string; name: string; supabaseShopId: string; isOfficial: boolean } } | { status: 'pending_confirmation' } | { error: string }>;
+  signUpSellerAccount: (input: SignUpSellerInput) => Promise<{ status: 'confirmed'; shop: { sellerId: string; name: string; supabaseShopId: string; isOfficial: boolean } } | { status: 'pending_confirmation' } | { error: string; code?: 'email_taken' }>;
   // "Devenir vendeur" shortcut for a customer already signed in on this
   // device — see continueAsSellerWithCurrentAccount below.
   continueAsSellerWithCurrentAccount: (input: { shopName: string; username: string }) => Promise<{ status: 'confirmed'; shop: { sellerId: string; name: string; supabaseShopId: string; isOfficial: boolean } } | { error: string }>;
   requestSellerPasswordReset: (email: string) => Promise<{ error?: string }>;
   resendSellerConfirmationEmail: (email: string) => Promise<{ error?: string }>;
+  // Login-screen resend — the seller may have typed a username instead of
+  // an email, so this resolves it first (verifySellerLogin already does
+  // the same resolution internally, but has no email left over to reuse).
+  resendSellerConfirmationForLogin: (identifier: string) => Promise<{ error?: string }>;
   deleteSellerAccount: () => Promise<{ error?: string }>;
   // Admin login — authenticates a real email + password against Supabase
   // Auth, then verifies the account is listed in public.admins before
@@ -433,6 +437,26 @@ export function ProProvider({ children }: { children: ReactNode }) {
     sessionStorage.setItem('ezial-pro-auth', JSON.stringify({ role: r, identifier: id, name: n }));
   }, [loadDriverMissions]);
 
+  // A seller signup-confirmation link (or a password-reset link) opens in a
+  // brand-new tab with no sessionStorage marker at all — the restore block
+  // above skips entirely in that case (it only ever looks at sessionStorage),
+  // even though a real Supabase session now exists. This picks up exactly
+  // that gap: a real session, no sessionStorage marker, landing on bare
+  // /pro (never a direct deep link to a specific sub-page, which keeps
+  // requiring an explicit login exactly as before).
+  useEffect(() => {
+    if (sessionStorage.getItem('ezial-pro-auth')) return;
+    if (proSubRouteFromHash() !== '/') return;
+    let cancelled = false;
+    (async () => {
+      const shop = await restoreSellerSession();
+      if (cancelled || !shop) return;
+      login('seller', shop.sellerCode || shop.shopId, shop.shopName, { supabaseShopId: shop.shopId, isOfficial: shop.isOfficial });
+    })();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const logout = useCallback(() => {
     setRole(null);
     setIdentifier('');
@@ -525,16 +549,18 @@ export function ProProvider({ children }: { children: ReactNode }) {
     return true;
   }, []);
 
-  const verifySellerLogin = useCallback(async (rawIdentifier: string, password: string): Promise<{ shop: { sellerId: string; name: string; supabaseShopId: string; isOfficial: boolean } } | { error: string }> => {
+  const verifySellerLogin = useCallback(async (rawIdentifier: string, password: string): Promise<{ shop: { sellerId: string; name: string; supabaseShopId: string; isOfficial: boolean } } | { error: string; code?: 'unconfirmed' }> => {
     const id = rawIdentifier.trim();
     const result = await signInSeller(id, password);
-    if ('error' in result) return { error: result.error };
+    if ('error' in result) return { error: result.error, code: result.code };
     return { shop: { sellerId: id.toUpperCase(), name: result.shopName, supabaseShopId: result.shopId, isOfficial: result.isOfficial } };
   }, []);
 
-  const signUpSellerAccount = useCallback(async (input: SignUpSellerInput): Promise<{ status: 'confirmed'; shop: { sellerId: string; name: string; supabaseShopId: string; isOfficial: boolean } } | { status: 'pending_confirmation' } | { error: string }> => {
+  const resendSellerConfirmationForLogin = useCallback(async (identifier: string) => resendSellerConfirmationForIdentifier(identifier), []);
+
+  const signUpSellerAccount = useCallback(async (input: SignUpSellerInput): Promise<{ status: 'confirmed'; shop: { sellerId: string; name: string; supabaseShopId: string; isOfficial: boolean } } | { status: 'pending_confirmation' } | { error: string; code?: 'email_taken' }> => {
     const result: SignUpSellerResult = await signUpSeller(input);
-    if ('error' in result) return { error: result.error };
+    if ('error' in result) return { error: result.error, code: result.code };
     if (result.status === 'pending_confirmation') return { status: 'pending_confirmation' };
     return { status: 'confirmed', shop: { sellerId: input.username.trim().toLowerCase(), name: result.shop.shopName, supabaseShopId: result.shop.shopId, isOfficial: result.shop.isOfficial } };
   }, []);
@@ -865,6 +891,7 @@ export function ProProvider({ children }: { children: ReactNode }) {
     sellerSupabaseShopId,
     sellerShopIsOfficial,
     verifySellerLogin,
+    resendSellerConfirmationForLogin,
     signUpSellerAccount,
     continueAsSellerWithCurrentAccount,
     requestSellerPasswordReset: requestSellerPasswordResetAction,

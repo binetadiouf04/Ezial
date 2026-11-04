@@ -24,7 +24,7 @@ function ProRouteFallback() {
 }
 
 export default function ProEntryPage() {
-  const { role, login, verifySellerLogin, signUpSellerAccount, continueAsSellerWithCurrentAccount, requestSellerPasswordReset, resendSellerConfirmationEmail, verifyAdminLogin, checkDriverUsername, createDriverPin, signInDriverWithPin } = usePro();
+  const { role, login, verifySellerLogin, signUpSellerAccount, continueAsSellerWithCurrentAccount, requestSellerPasswordReset, resendSellerConfirmationEmail, resendSellerConfirmationForLogin, verifyAdminLogin, checkDriverUsername, createDriverPin, signInDriverWithPin } = usePro();
   const { customerUser } = useApp();
   const [selectedRole, setSelectedRole] = useState<Role | null>(null);
 
@@ -57,6 +57,7 @@ export default function ProEntryPage() {
           continueWithCurrentAccount={continueAsSellerWithCurrentAccount}
           requestPasswordReset={requestSellerPasswordReset}
           resendConfirmationEmail={resendSellerConfirmationEmail}
+          resendConfirmationForLogin={resendSellerConfirmationForLogin}
         />
       </div>
     );
