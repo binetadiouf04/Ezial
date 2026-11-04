@@ -10,6 +10,7 @@ import MarketingPushToggle from '@/components/MarketingPushToggle';
 import PasswordField from '@/components/PasswordField';
 import PhoneField from '@/components/PhoneField';
 import { isValidEmail, capitalizeFirst } from '@/lib/authErrors';
+import { fetchOwnShopForDeletionWarning } from '@/lib/supabaseAccountDeletion';
 import { User, Heart, ShoppingBag, LogOut, ChevronRight, Briefcase, Truck, Store, Check, AlertCircle, Loader2, MailCheck, Trash2, MapPin, Plus, Pencil } from 'lucide-react';
 
 const deliveryStatusColors: Record<DeliveryStepStatus, string> = {
@@ -423,6 +424,15 @@ export default function ProfilePage() {
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState('');
+  const [ownedShopName, setOwnedShopName] = useState<string | null>(null);
+
+  const openDeleteConfirm = async () => {
+    setDeleteError('');
+    setOwnedShopName(null);
+    setDeleteConfirmOpen(true);
+    const shop = await fetchOwnShopForDeletionWarning();
+    if (shop) setOwnedShopName(shop.shopName);
+  };
 
   const handleDeleteAccount = async () => {
     setDeleting(true);
@@ -666,7 +676,7 @@ export default function ProfilePage() {
         <button onClick={() => { signOutCustomerAccount(); navigate('/'); }} className="card w-full p-4 text-left flex items-center gap-3 text-sm font-medium text-ink/70 hover:border-ink/20 transition-colors">
           <LogOut size={18} className="text-ink/40" /> Se déconnecter
         </button>
-        <button onClick={() => { setDeleteError(''); setDeleteConfirmOpen(true); }} className="card w-full p-4 text-left flex items-center gap-3 text-sm font-medium text-burgundy hover:border-burgundy/30 transition-colors">
+        <button onClick={() => void openDeleteConfirm()} className="card w-full p-4 text-left flex items-center gap-3 text-sm font-medium text-burgundy hover:border-burgundy/30 transition-colors">
           <Trash2 size={18} /> Supprimer mon compte
         </button>
       </div>
@@ -680,6 +690,12 @@ export default function ProfilePage() {
               Vos commandes passées restent conservées pour la comptabilité, sans y être associées nominativement.
               Cette action est irréversible.
             </p>
+            {ownedShopName && (
+              <p className="mt-3 flex items-start gap-1.5 rounded-lg bg-burgundy/5 p-3 text-sm text-burgundy">
+                <AlertCircle size={14} className="mt-0.5 flex-shrink-0" />
+                Vous gérez aussi la boutique « {ownedShopName} » avec ce compte. La supprimer retirera aussi définitivement votre accès vendeur à cette boutique.
+              </p>
+            )}
             {deleteError && <p className="mt-3 flex items-start gap-1.5 text-sm text-burgundy"><AlertCircle size={14} className="mt-0.5 flex-shrink-0" /> {deleteError}</p>}
             <div className="mt-5 flex gap-3">
               <button onClick={() => setDeleteConfirmOpen(false)} className="btn-outline flex-1">Annuler</button>

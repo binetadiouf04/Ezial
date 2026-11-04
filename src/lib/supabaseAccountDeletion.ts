@@ -13,6 +13,30 @@ import { supabase } from './supabaseClient';
 // this exact slug rather than the function's source file name).
 const DELETE_ACCOUNT_FUNCTION_SLUG = 'bright-api';
 
+// Ezial and Ezial Pro share one Supabase Auth identity when a customer and
+// a shop owner are the same real person (same auth.users row — see the
+// architecture note in supabaseSellerAuth.ts's linkShopToExistingAccount).
+// delete-account anonymizes the shop rather than leaving a dangling
+// owner_id, but that still permanently removes the seller's own login to
+// it — so both "Supprimer mon compte" screens (customer profile, seller
+// settings) check this first and warn explicitly before the real call.
+export async function fetchOwnShopForDeletionWarning(): Promise<{ shopName: string } | null> {
+  const { data: userData } = await supabase.auth.getUser();
+  if (!userData.user) return null;
+  const { data } = await supabase.from('shops').select('name').eq('owner_id', userData.user.id).maybeSingle();
+  return data ? { shopName: data.name as string } : null;
+}
+
+// Same check from the seller side: deleting a seller account whose
+// Supabase identity is also a customer's wipes that customer profile too
+// (customer_profiles/favorites/push_subscriptions — see delete-account).
+export async function ownsCustomerProfileForDeletionWarning(): Promise<boolean> {
+  const { data: userData } = await supabase.auth.getUser();
+  if (!userData.user) return false;
+  const { data } = await supabase.from('customer_profiles').select('id').eq('id', userData.user.id).maybeSingle();
+  return !!data;
+}
+
 export async function deleteMyAccount(): Promise<{ error?: string }> {
   const { data, error } = await supabase.functions.invoke(DELETE_ACCOUNT_FUNCTION_SLUG);
   if (error) {

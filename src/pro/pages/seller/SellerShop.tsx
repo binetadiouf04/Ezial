@@ -14,6 +14,7 @@ import { useAddressSearch } from '@/lib/useAddressSearch';
 import { quartiers } from '@/store/AppContext';
 import { categories } from '@/data/categories';
 import { supabase } from '@/lib/supabaseClient';
+import { ownsCustomerProfileForDeletionWarning } from '@/lib/supabaseAccountDeletion';
 import NotificationOptIn from '@/components/NotificationOptIn';
 import { Check, Image as ImageIcon, Camera, MapPin, Loader2, AlertTriangle, AlertCircle, Navigation, Pencil, Search, Send, Trash2 } from 'lucide-react';
 import SmartImage from '@/components/SmartImage';
@@ -32,6 +33,14 @@ export default function SellerShop() {
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState('');
+  const [hasCustomerProfile, setHasCustomerProfile] = useState(false);
+
+  const openDeleteConfirm = async () => {
+    setDeleteError('');
+    setHasCustomerProfile(false);
+    setDeleteConfirmOpen(true);
+    setHasCustomerProfile(await ownsCustomerProfileForDeletionWarning());
+  };
 
   const handleDeleteAccount = async () => {
     setDeleting(true);
@@ -535,7 +544,7 @@ export default function SellerShop() {
           La suppression anonymise votre boutique et votre compte, et masque immédiatement la boutique du catalogue.
           Vos commandes passées restent conservées pour la comptabilité.
         </p>
-        <button onClick={() => { setDeleteError(''); setDeleteConfirmOpen(true); }} className="inline-flex items-center gap-2 rounded-lg border border-burgundy/30 px-4 py-2.5 text-sm font-medium text-burgundy hover:bg-burgundy/5">
+        <button onClick={() => void openDeleteConfirm()} className="inline-flex items-center gap-2 rounded-lg border border-burgundy/30 px-4 py-2.5 text-sm font-medium text-burgundy hover:bg-burgundy/5">
           <Trash2 size={16} /> Supprimer mon compte vendeur
         </button>
       </div>
@@ -548,6 +557,12 @@ export default function SellerShop() {
               Votre boutique sera immédiatement retirée du catalogue et ses informations anonymisées ; votre compte sera déconnecté.
               Les commandes déjà passées restent conservées pour la comptabilité. Cette action est irréversible.
             </p>
+            {hasCustomerProfile && (
+              <p className="mt-3 flex items-start gap-1.5 rounded-lg bg-burgundy/5 p-3 text-sm text-burgundy">
+                <AlertCircle size={14} className="mt-0.5 flex-shrink-0" />
+                Ce compte a aussi un profil client Ezial (achats, favoris). Il sera supprimé en même temps que votre accès vendeur.
+              </p>
+            )}
             {deleteError && <p className="mt-3 flex items-start gap-1.5 text-sm text-burgundy"><AlertCircle size={14} className="mt-0.5 flex-shrink-0" /> {deleteError}</p>}
             <div className="mt-5 flex gap-3">
               <button onClick={() => setDeleteConfirmOpen(false)} className="btn-outline flex-1">Annuler</button>
