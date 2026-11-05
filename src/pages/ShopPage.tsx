@@ -4,7 +4,7 @@ import { getShop } from '@/data/shops';
 import ProductGrid from '@/components/ProductGrid';
 import Rating from '@/components/Rating';
 import { UserPlus, Check, Package, MapPin, Flag } from 'lucide-react';
-import SmartImage from '@/components/SmartImage';
+import { ShopCover, ShopAvatar } from '@/components/ShopAvatar';
 import ShopReportModal from '@/components/ShopReportModal';
 import { createShopReport, type ShopReportReason } from '@/lib/supabaseShopReports';
 import { isRealCatalogId } from '@/data/products';
@@ -87,12 +87,12 @@ export default function ShopPage({ shopId }: { shopId: string }) {
   return (
     <div className="py-6">
       <div className="relative h-40 w-full overflow-hidden rounded-2xl bg-cream sm:h-56 lg:h-64">
-        <SmartImage src={shop.banner} alt={shop.name} className="h-full w-full object-cover" />
+        <ShopCover src={shop.banner} alt={shop.name} className="h-full w-full object-cover" />
         <div className="absolute inset-0 bg-gradient-to-t from-ink/40 to-transparent" />
       </div>
       <div className="container-pro">
         <div className="relative -mt-10 flex flex-col gap-4 sm:-mt-14 sm:flex-row sm:items-end lg:-mt-16">
-          <SmartImage src={shop.logo} alt={shop.name} className="h-20 w-20 flex-shrink-0 rounded-full border-4 border-white object-cover shadow-sm sm:h-24 sm:w-24 lg:h-28 lg:w-28" />
+          <ShopAvatar src={shop.logo} alt={shop.name} name={shop.name} className="h-20 w-20 flex-shrink-0 rounded-full border-4 border-white object-cover text-2xl shadow-sm sm:h-24 sm:w-24 lg:h-28 lg:w-28" />
           <div className="flex-1 min-w-0 pb-1">
             <div className="flex flex-wrap items-center gap-2">
               <h1 className="font-display text-xl font-semibold text-ink sm:text-2xl lg:text-3xl">{shop.name}</h1>

@@ -5,6 +5,7 @@ import { fetchSellerFinances } from '@/lib/supabaseSellerFinances';
 import { fetchSellerOrders, type SellerOrderSummary } from '@/lib/supabaseSellerOrders';
 import { fetchSellerProducts } from '@/lib/supabaseSellerProducts';
 import { fetchShopOnboarding } from '@/lib/supabaseSellerShop';
+import { fetchSellerSubscription } from '@/lib/supabaseSellerSubscription';
 import { formatFCFA, formatDateTime } from '../../data';
 import SummaryCard from '../../components/SummaryCard';
 import { StatusChip } from '../../components/StatusChip';
@@ -12,13 +13,17 @@ import NotificationOptIn from '@/components/NotificationOptIn';
 import NotificationGateModal from '@/components/NotificationGateModal';
 import { ShoppingBag, Package, Wallet, Clock, ChevronRight, Truck, Store, Loader2, ArrowRight } from 'lucide-react';
 
-const MAX_ACTIVE = 25;
-
 export default function SellerDashboard() {
   const { navigate, sellerSupabaseShopId, sellerShopIsOfficial } = usePro();
   const [loading, setLoading] = useState(true);
   const [orders, setOrders] = useState<SellerOrderSummary[]>([]);
   const [activeProducts, setActiveProducts] = useState(0);
+  // Was hardcoded to 25 here — stale from before the Free(10)/Premium(30)
+  // product-limit redesign, so every seller saw "X / 25" regardless of
+  // their actual plan. Now the same real per-shop limit "Mon abonnement"
+  // already shows (fetchSellerSubscription().productLimit), not a second,
+  // independently-wrong number.
+  const [productLimit, setProductLimit] = useState(10);
   const [availableBalance, setAvailableBalance] = useState(0);
   const [authUserId, setAuthUserId] = useState<string | null>(null);
   const [shopDraft, setShopDraft] = useState(false);
@@ -26,16 +31,18 @@ export default function SellerDashboard() {
 
   const load = useCallback(async (shopId: string) => {
     setLoading(true);
-    const [sellerOrders, products, finances, onboarding] = await Promise.all([
+    const [sellerOrders, products, finances, onboarding, subscription] = await Promise.all([
       fetchSellerOrders(shopId),
       fetchSellerProducts(shopId),
       fetchSellerFinances(shopId),
       fetchShopOnboarding(shopId),
+      fetchSellerSubscription(shopId),
     ]);
     setOrders(sellerOrders);
     setActiveProducts(products.filter((p) => p.status === 'active').length);
     setAvailableBalance(finances.availableBalance);
     setShopDraft(onboarding?.status === 'draft');
+    setProductLimit(subscription.productLimit);
     setLoading(false);
   }, []);
 
@@ -96,7 +103,7 @@ export default function SellerDashboard() {
         <SummaryCard label="Nouvelles commandes" value={newOrders} icon={<ShoppingBag size={16} />} onClick={() => navigate('/seller/commandes')} />
         <SummaryCard label="En préparation" value={preparing} icon={<Clock size={16} />} onClick={() => navigate('/seller/commandes')} />
         <SummaryCard label="Prêtes" value={ready} icon={<Package size={16} />} onClick={() => navigate('/seller/commandes')} />
-        <SummaryCard label="Produits actifs" value={sellerShopIsOfficial ? activeProducts : `${activeProducts} / ${MAX_ACTIVE}`} icon={<Package size={16} />} onClick={() => navigate('/seller/produits')} />
+        <SummaryCard label="Produits actifs" value={sellerShopIsOfficial ? activeProducts : `${activeProducts} / ${productLimit}`} icon={<Package size={16} />} onClick={() => navigate('/seller/produits')} />
       </div>
 
       <SummaryCard label="Solde disponible" value={formatFCFA(availableBalance)} icon={<Wallet size={16} />} accent onClick={() => navigate('/seller/finances')} />

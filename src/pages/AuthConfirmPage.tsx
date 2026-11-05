@@ -8,6 +8,15 @@ import { Check, Loader2, AlertCircle, MailCheck } from 'lucide-react';
 
 type Status = 'checking' | 'success' | 'invalid';
 
+// A real confirmation click on a slow mobile connection (switching from
+// the mail app back to the browser, or just a weak signal) can take a
+// few seconds before getSession() resolves — normal, and already covered
+// by the spinner. Past this, something is actually stuck (a hung
+// request, a malformed/partially-rewritten link) rather than just slow,
+// so the UI should stop pretending it's about to finish any second and
+// offer a real next step instead of a silent, indefinite spinner.
+const SLOW_WARNING_MS = 6000;
+
 // Standalone — rendered by App.tsx OUTSIDE AppProvider/ProProvider the
 // moment a Supabase signup-confirmation link is detected (type=signup),
 // exactly like ResetPasswordPage already does for type=recovery. Keeping
@@ -46,9 +55,14 @@ export default function AuthConfirmPage() {
   const [resending, setResending] = useState(false);
   const [resendNotice, setResendNotice] = useState('');
   const [resendError, setResendError] = useState('');
+  const [slowWarning, setSlowWarning] = useState(false);
+  const [retryCount, setRetryCount] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
+    setStatus('checking');
+    setSlowWarning(false);
+    const slowTimer = window.setTimeout(() => { if (!cancelled) setSlowWarning(true); }, SLOW_WARNING_MS);
     (async () => {
       try {
         const { data } = await supabase.auth.getSession();
@@ -62,8 +76,13 @@ export default function AuthConfirmPage() {
         // before confirmation — see signUpSeller) for a seller signup, never
         // for a customer one — a reliable, server-verified signal for which
         // space to open, independent of whatever emailRedirectTo Supabase
-        // actually honored.
-        const shop = await shopForCurrentUser();
+        // actually honored. The session's own user id is already freshly
+        // server-verified (it just came straight out of the confirmation
+        // link's own token exchange) — passing it through skips a second,
+        // redundant getUser() network round-trip on this exact path, where
+        // every extra round-trip is the most noticeable on a slow mobile
+        // connection switching back from the mail app.
+        const shop = await shopForCurrentUser(data.session.user.id);
         if (cancelled) return;
         setStatus('success');
         setDestinationLabel(shop ? `boutique « ${shop.shopName} »` : 'compte Ezial');
@@ -77,15 +96,17 @@ export default function AuthConfirmPage() {
         setTimeout(() => {
           if (cancelled) return;
           goToRoute(shop ? '/pro' : (resumeRoute || '/'));
-        }, 900);
+        }, 500);
       } catch {
         // A network blip, an already-consumed token, or a malformed link —
         // never leave the visitor stuck on an infinite spinner either way.
         if (!cancelled) setStatus('invalid');
+      } finally {
+        window.clearTimeout(slowTimer);
       }
     })();
-    return () => { cancelled = true; };
-  }, []);
+    return () => { cancelled = true; window.clearTimeout(slowTimer); };
+  }, [retryCount]);
 
   // Takes a plain app route ('/pro', '/') and always prepends the '#' itself
   // — BASE_URL already ends in '/', so concatenating a route without it
@@ -128,6 +149,12 @@ export default function AuthConfirmPage() {
             <Loader2 size={28} className="mx-auto animate-spin text-ink/30" />
             <h1 className="mt-4 font-display text-lg font-semibold text-ink">Confirmation en cours…</h1>
             <p className="mt-1.5 text-sm text-ink/55">Vérification de votre adresse email.</p>
+            {slowWarning && (
+              <div className="mt-5 rounded-lg bg-cream px-3 py-3 text-left">
+                <p className="text-xs text-ink/55">Cela prend plus de temps que prévu — probablement votre connexion. Vous pouvez patienter encore un instant ou réessayer.</p>
+                <button onClick={() => setRetryCount((c) => c + 1)} className="btn-outline mt-2.5 w-full text-sm">Réessayer</button>
+              </div>
+            )}
           </>
         )}
 
