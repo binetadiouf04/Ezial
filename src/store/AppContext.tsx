@@ -158,7 +158,7 @@ export function useApp(): AppState { const ctx = useContext(AppContext); if (!ct
 // first load resolve the same route from the pathname instead of falling
 // through to Home, and it never writes anything back to the URL — the
 // address bar stays exactly as the visitor (or the crawler) landed on it.
-const SEO_PATH_ROUTE = /^\/(produit|boutique|categorie)\/[^/]+(\/[^/]+)?$|^\/info\/[^/]+$/;
+const SEO_PATH_ROUTE = /^\/(produit|boutique|categorie)\/[^/]+(\/[^/]+)?$|^\/info\/[^/]+$|^\/(boutiques|boutiques-premium)$/;
 function getInitialRoute(): string {
   const hash = window.location.hash.replace(/^#/, '');
   if (hash) return hash;
