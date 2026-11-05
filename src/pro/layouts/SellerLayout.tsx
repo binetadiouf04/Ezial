@@ -1,6 +1,8 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { usePro } from '../ProContext';
-import { Home, ShoppingBag, Package, Wallet, Store, LogOut, ArrowLeft, Menu, X, AlertTriangle, Star, Crown } from 'lucide-react';
+import { Home, ShoppingBag, Package, Wallet, Store, LogOut, ArrowLeft, Menu, X, AlertTriangle, Star, Crown, Loader2 } from 'lucide-react';
+import { fetchSellerSubscription } from '@/lib/supabaseSellerSubscription';
+import SellerChoosePlan from '../pages/seller/SellerChoosePlan';
 import SellerDashboard from '../pages/seller/SellerDashboard';
 import SellerOrders from '../pages/seller/SellerOrders';
 import SellerOrderDetail from '../pages/seller/SellerOrderDetail';
@@ -29,10 +31,27 @@ const navItems = [
 ];
 
 export default function SellerLayout() {
-  const { route, navigate, logout, name, identifier, sellerShop } = usePro();
+  const { route, navigate, logout, name, identifier, sellerShop, sellerSupabaseShopId } = usePro();
   const [menuOpen, setMenuOpen] = useState(false);
 
   const clean = route.split('?')[0];
+
+  // Server-persisted, not a client redirect flag — a shop with zero
+  // seller_subscriptions row (a genuinely brand-new signup; every
+  // pre-existing shop was backfilled to true by the migration this
+  // feature shipped with) blocks every seller page behind "Choisissez
+  // votre formule" until a real choice is recorded, except the two
+  // routes that ARE how trial/Premium get chosen in the first place.
+  const [planChosen, setPlanChosen] = useState<boolean | null>(null);
+  useEffect(() => {
+    if (!sellerSupabaseShopId) return;
+    let cancelled = false;
+    fetchSellerSubscription(sellerSupabaseShopId).then((info) => {
+      if (!cancelled) setPlanChosen(info.planChosen);
+    });
+    return () => { cancelled = true; };
+  }, [sellerSupabaseShopId]);
+  const choosingViaTrialOrPayment = clean === '/seller/abonnement/essai' || clean === '/seller/abonnement/paiement';
   const goTo = (r: string) => { setMenuOpen(false); navigate(r); };
 
   // Order detail: /seller/commandes/:id
@@ -74,7 +93,7 @@ export default function SellerLayout() {
     if (productEditMatch) return <SellerProductForm productId={productEditMatch[1]} />;
     if (clean === '/seller/finances') return <SellerFinances />;
     if (clean === '/seller/abonnement') return <SellerSubscription />;
-    if (clean === '/seller/abonnement/essai') return <SellerTrialActivation />;
+    if (clean === '/seller/abonnement/essai') return <SellerTrialActivation onActivated={() => setPlanChosen(true)} />;
     if (clean === '/seller/abonnement/paiement') return <SellerSubscriptionPayment />;
     if (clean === '/seller/boutique') return <SellerShop />;
     return <SellerDashboard />;
@@ -84,6 +103,18 @@ export default function SellerLayout() {
     if (itemRoute === '/seller') return clean === '/seller';
     return clean.startsWith(itemRoute);
   };
+
+  if (planChosen === null) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-cream">
+        <Loader2 size={24} className="animate-spin text-ink/30" />
+      </div>
+    );
+  }
+
+  if (planChosen === false && !choosingViaTrialOrPayment) {
+    return <SellerChoosePlan onChosen={() => setPlanChosen(true)} />;
+  }
 
   return (
     <div className="min-h-screen bg-cream/30 lg:flex">

@@ -40,6 +40,13 @@ export interface SellerSubscriptionInfo {
   // process_subscription_expirations) — this is the distinct "Premium
   // expiré, renouvelez" state, never shown as Free.
   isPremiumExpired: boolean;
+  // False only for a brand-new shop that has never gone through
+  // activate_seller_trial(), confirm_subscription_payment(), or
+  // choose_free_plan() — the one reliable, server-side signal that
+  // "Choisissez votre formule" still needs to be shown, instead of
+  // inferring it from the absence of a row (which also, ambiguously,
+  // described an already-chosen Free shop).
+  planChosen: boolean;
 }
 
 function daysUntil(iso: string | null): number | null {
@@ -55,7 +62,7 @@ function daysUntil(iso: string | null): number | null {
 export async function fetchSellerSubscription(shopId: string): Promise<SellerSubscriptionInfo> {
   const { data } = await supabase
     .from('seller_subscriptions')
-    .select('plan, trial_used, trial_start, trial_end, pro_until, pro_started_at, premium_paid_ever')
+    .select('plan, trial_used, trial_start, trial_end, pro_until, pro_started_at, premium_paid_ever, plan_chosen')
     .eq('shop_id', shopId)
     .maybeSingle();
 
@@ -86,7 +93,17 @@ export async function fetchSellerSubscription(shopId: string): Promise<SellerSub
     proDaysRemaining: isProActive ? daysUntil(proUntil) : null,
     premiumPaidEver,
     isPremiumExpired,
+    planChosen: (data?.plan_chosen as boolean) ?? false,
   };
+}
+
+// Called when the seller picks "Continuer gratuitement" on "Choisissez
+// votre formule" — the only mutation Free itself ever needs (no payment,
+// no validation), but it still has to persist server-side that a real
+// choice was made, not just silently rely on the absence of a row.
+export async function chooseFreePlan(): Promise<{ error?: string }> {
+  const { error } = await supabase.rpc('choose_free_plan');
+  return error ? { error: error.message } : {};
 }
 
 // The seller-initiated trial activation (see Part 4 of the subscription

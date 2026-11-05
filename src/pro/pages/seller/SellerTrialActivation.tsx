@@ -14,7 +14,7 @@ const benefits = [
   'Priorité de sélection pour les réseaux sociaux et publicités collectives Ezial',
 ];
 
-export default function SellerTrialActivation() {
+export default function SellerTrialActivation({ onActivated }: { onActivated?: () => void } = {}) {
   const { sellerSupabaseShopId, navigate } = usePro();
   const [activating, setActivating] = useState(false);
   const [error, setError] = useState('');
@@ -29,6 +29,11 @@ export default function SellerTrialActivation() {
     if (result.error) { setError(result.error); return; }
     if (result.alreadyUsed) { setError('L’essai gratuit a déjà été utilisé pour cette boutique.'); return; }
     setTrialEnd(result.trialEnd ?? null);
+    // activate_seller_trial() also records plan_chosen=true server-side —
+    // this just keeps SellerLayout's own gate in sync immediately, instead
+    // of it re-blocking "/seller" with a stale planChosen=false until the
+    // next full reload.
+    onActivated?.();
   };
 
   if (trialEnd) {
