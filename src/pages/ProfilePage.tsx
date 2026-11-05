@@ -11,7 +11,7 @@ import PasswordField from '@/components/PasswordField';
 import PhoneField from '@/components/PhoneField';
 import { isValidEmail, capitalizeFirst } from '@/lib/authErrors';
 import { fetchOwnShopForDeletionWarning } from '@/lib/supabaseAccountDeletion';
-import { User, Heart, ShoppingBag, LogOut, ChevronRight, Briefcase, Truck, Store, Check, AlertCircle, Loader2, MailCheck, Trash2, MapPin, Plus, Pencil, ArrowLeft } from 'lucide-react';
+import { User, Heart, ShoppingBag, LogOut, ChevronRight, Truck, Store, Check, AlertCircle, Loader2, MailCheck, Trash2, MapPin, Plus, Pencil, ArrowLeft } from 'lucide-react';
 
 const deliveryStatusColors: Record<DeliveryStepStatus, string> = {
   confirmed: 'bg-blue-50 text-blue-700', preparing: 'bg-amber-50 text-amber-700', ready: 'bg-green-50 text-green-700',
@@ -240,7 +240,7 @@ function AuthPanel({ onBack, initialView = 'login' }: { onBack: () => void; init
 // plain "Bienvenue" screen first, the real form only once a choice is
 // made. Never gates product browsing (ProfilePage is only ever reached
 // via "Compte" in the nav, never required to view the catalog).
-function AccountEntryPage({ onChoose, onBackToShop }: { onChoose: (view: 'login' | 'signup') => void; onBackToShop: () => void }) {
+function AccountEntryPage({ onChoose, onAccessPro }: { onChoose: (view: 'login' | 'signup') => void; onAccessPro: () => void }) {
   // No logo here — Header already shows it on this same page, repeating
   // it below would just be visual clutter.
   return (
@@ -253,9 +253,10 @@ function AccountEntryPage({ onChoose, onBackToShop }: { onChoose: (view: 'login'
         <button onClick={() => onChoose('login')} className="btn-outline w-full">Se connecter</button>
         {/* A quiet link, not a third button — same weight as "Mot de passe
             oublié ?" elsewhere in this file, not btn-outline/btn-primary.
-            Goes straight to the marketplace home, signed out — browsing
-            Ezial has never required an account. */}
-        <button onClick={onBackToShop} className="mt-1 text-sm font-medium text-burgundy/80 hover:text-burgundy hover:underline">Accéder à Ezial</button>
+            Opens the Ezial Pro entry screen itself (create a shop or log
+            in there) — never grants any seller/admin/driver role on its
+            own, it's just a route to that space's own login/signup. */}
+        <button onClick={onAccessPro} className="mt-1 text-sm font-medium text-burgundy/80 hover:text-burgundy hover:underline">Accéder à Ezial Pro</button>
       </div>
     </div>
   );
@@ -515,7 +516,7 @@ export default function ProfilePage() {
     return (
       <div className="container-pro">
         {authStep === 'entry' ? (
-          <AccountEntryPage onChoose={setAuthStep} onBackToShop={() => navigate('/')} />
+          <AccountEntryPage onChoose={setAuthStep} onAccessPro={() => navigate('/pro')} />
         ) : (
           <AuthPanel onBack={() => setAuthStep('entry')} initialView={authStep} />
         )}
@@ -702,18 +703,30 @@ export default function ProfilePage() {
           {infoSaved && emailConfirmationNotice && (
             <p className="flex items-start gap-1.5 text-sm text-green-700"><Check size={15} className="mt-0.5 flex-shrink-0" /> Enregistré. Un email de confirmation a été envoyé à votre nouvelle adresse.</p>
           )}
+
+          {/* Discreet, distinct from the dangerous actions below — a link,
+              not a big card, and never grants any role by itself. */}
+          <div className="border-t border-line pt-5">
+            <button onClick={() => navigate('/pro')} className="inline-flex items-center gap-1 text-sm font-medium text-burgundy hover:underline">
+              Accéder à Ezial Pro <ChevronRight size={14} />
+            </button>
+          </div>
+
+          {/* Only here now — logout/delete used to show under every tab,
+              favorites included. */}
+          <div className="border-t border-line pt-5">
+            <h2 className="mb-3 text-xs font-medium uppercase tracking-wider text-ink/40">Gestion du compte</h2>
+            <div className="space-y-3">
+              <button onClick={() => { signOutCustomerAccount(); navigate('/'); }} className="card w-full p-4 text-left flex items-center gap-3 text-sm font-medium text-ink/70 hover:border-ink/20 transition-colors">
+                <LogOut size={18} className="text-ink/40" /> Se déconnecter
+              </button>
+              <button onClick={() => void openDeleteConfirm()} className="card w-full p-4 text-left flex items-center gap-3 text-sm font-medium text-burgundy hover:border-burgundy/30 transition-colors">
+                <Trash2 size={18} /> Supprimer mon compte
+              </button>
+            </div>
+          </div>
         </div>
       )}
-
-      {/* Déconnexion */}
-      <div className="mt-6 space-y-3">
-        <button onClick={() => { signOutCustomerAccount(); navigate('/'); }} className="card w-full p-4 text-left flex items-center gap-3 text-sm font-medium text-ink/70 hover:border-ink/20 transition-colors">
-          <LogOut size={18} className="text-ink/40" /> Se déconnecter
-        </button>
-        <button onClick={() => void openDeleteConfirm()} className="card w-full p-4 text-left flex items-center gap-3 text-sm font-medium text-burgundy hover:border-burgundy/30 transition-colors">
-          <Trash2 size={18} /> Supprimer mon compte
-        </button>
-      </div>
 
       {deleteConfirmOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
@@ -741,17 +754,6 @@ export default function ProfilePage() {
         </div>
       )}
 
-      {/* EZIAL PRO access section */}
-      <div className="mt-10 border-t border-line pt-8">
-        <div className="rounded-xl border border-line bg-cream/40 p-6 text-center sm:p-8">
-          <div className="mx-auto mb-3 flex h-10 w-10 items-center justify-center rounded-lg bg-burgundy/10 text-burgundy"><Briefcase size={20} /></div>
-          <h2 className="font-display text-lg font-semibold text-ink">Vous êtes partenaire Ezial ?</h2>
-          <p className="mx-auto mt-1.5 max-w-sm text-sm text-ink/55">Accédez à votre espace de gestion : administration, boutique vendeur ou missions de livraison.</p>
-          <button onClick={() => navigate('/pro')} className="btn-outline mt-5 inline-flex">
-            <Briefcase size={16} /> Accéder à Ezial Pro
-          </button>
-        </div>
-      </div>
     </div>
   );
 }

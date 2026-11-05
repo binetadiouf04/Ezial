@@ -39,8 +39,14 @@ export default function ResetPasswordPage() {
     setDone(true);
   };
 
+  // Same-document navigation bug as AuthConfirmPage.tsx's goToRoute: a
+  // hash-only URL change never reloads the page, so App.tsx's
+  // once-at-mount useState check never re-runs and this page used to sit
+  // there after a click with nothing visibly happening. See that file's
+  // comment for the full explanation.
   const goTo = (hash: string) => {
     window.location.href = `${window.location.origin}${import.meta.env.BASE_URL}${hash}`;
+    window.location.reload();
   };
 
   return (
