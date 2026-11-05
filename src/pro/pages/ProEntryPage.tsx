@@ -115,24 +115,15 @@ export default function ProEntryPage() {
             >
               Se connecter à Ezial Pro
             </button>
-            {/* Never a modal, never a signup prompt — opens the same public
-                pricing page any visitor can already reach, straight away. */}
-            <button
-              onClick={() => { window.location.hash = '/info/tarifs-vendeurs'; }}
-              className="mt-2 flex w-full items-center justify-between gap-2 rounded-xl border border-burgundy/25 bg-[#FBF7F0] px-4 py-3.5 text-left transition-colors hover:bg-[#F7F0E4]"
-            >
-              <span className="text-sm font-medium text-burgundy">Découvrir les formules Free et Premium</span>
-              <ArrowRight size={16} className="flex-shrink-0 text-burgundy" />
-            </button>
           </div>
         </div>
 
         {/* Staff access — always visible (not a gate), but visually
-            subordinate (smaller, muted label, below a divider) so it never
-            competes with the two seller actions above. No public signup is
-            possible from here: each card opens the exact same
-            admin/driver login screen already reached from the old picker
-            — server-side role checks are untouched. */}
+            subordinate (smaller, muted label) so it never competes with
+            the two seller actions above. No public signup is possible
+            from here: each card opens the exact same admin/driver login
+            screen already reached from the old picker — server-side role
+            checks are untouched. */}
         <div className="mt-12 w-full max-w-sm border-t border-line pt-6 text-center">
           <p className="mb-3 text-xs font-medium uppercase tracking-wider text-ink/35">Autres espaces</p>
           <div className="grid grid-cols-2 gap-3">
@@ -145,6 +136,23 @@ export default function ProEntryPage() {
               <span className="text-sm font-medium text-ink/70">Livreur</span>
             </button>
           </div>
+        </div>
+
+        {/* Never a modal, never a signup prompt — opens the same public
+            pricing page any visitor can already reach, straight away. A
+            plain text link on purpose: visible, but never louder than
+            "Créer ma boutique"/"Se connecter à Ezial Pro" above. */}
+        <div className="mt-6 w-full max-w-sm border-t border-line/60 pt-6 text-center">
+          <button
+            onClick={() => { window.location.hash = '/info/tarifs-vendeurs'; }}
+            className="group inline-flex flex-col items-center gap-1 py-2"
+          >
+            <span className="inline-flex items-center gap-1.5 font-display text-base text-burgundy transition-opacity group-hover:opacity-70">
+              Découvrir nos offres
+              <ArrowRight size={15} className="transition-transform group-hover:translate-x-0.5" />
+            </span>
+            <span className="text-xs text-ink/40">Ezial Free &amp; Premium</span>
+          </button>
         </div>
       </div>
     </div>
