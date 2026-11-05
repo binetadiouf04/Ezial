@@ -29,7 +29,12 @@ export default function ProductCard({ product, priority = false }: { product: Pr
           alt={product.name}
           loading={priority ? 'eager' : 'lazy'}
           fetchPriority={priority ? 'high' : undefined}
-          className={`h-full w-full object-cover transition-transform duration-700 group-hover:scale-105 ${outOfStock ? 'opacity-60 grayscale' : ''}`}
+          // contain, not cover: a cropped top/bottom used to cut off a tall
+          // perfume bottle or a full-length outfit photo whenever its real
+          // proportions didn't match this card's 4:5 box. The product stays
+          // fully visible; bg-cream on the wrapper is the neutral fill for
+          // whatever space that leaves around it.
+          className={`h-full w-full object-contain transition-transform duration-700 group-hover:scale-105 ${outOfStock ? 'opacity-60 grayscale' : ''}`}
         />
         <div className="absolute right-2.5 top-2.5"><FavoriteButton productId={product.id} /></div>
         {product.isNew && !product.isPromo && <span className="absolute left-2.5 top-2.5 rounded-full bg-white/95 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-ink">Nouveau</span>}
