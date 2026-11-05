@@ -11,7 +11,8 @@ import PasswordField from '@/components/PasswordField';
 import PhoneField from '@/components/PhoneField';
 import { isValidEmail, capitalizeFirst } from '@/lib/authErrors';
 import { fetchOwnShopForDeletionWarning } from '@/lib/supabaseAccountDeletion';
-import { User, Heart, ShoppingBag, LogOut, ChevronRight, Briefcase, Truck, Store, Check, AlertCircle, Loader2, MailCheck, Trash2, MapPin, Plus, Pencil } from 'lucide-react';
+import { User, Heart, ShoppingBag, LogOut, ChevronRight, Briefcase, Truck, Store, Check, AlertCircle, Loader2, MailCheck, Trash2, MapPin, Plus, Pencil, ArrowLeft } from 'lucide-react';
+import Logo from '@/components/Logo';
 
 const deliveryStatusColors: Record<DeliveryStepStatus, string> = {
   confirmed: 'bg-blue-50 text-blue-700', preparing: 'bg-amber-50 text-amber-700', ready: 'bg-green-50 text-green-700',
@@ -49,9 +50,9 @@ type AuthView = 'login' | 'signup' | 'forgot' | 'pending_confirmation';
 interface InfoForm { firstName: string; lastName: string; phone: string; email: string; quartier: string; landmark: string }
 
 // === Signed-out: login / signup / forgot password ===
-function AuthPanel() {
+function AuthPanel({ onBack, initialView = 'login' }: { onBack: () => void; initialView?: 'login' | 'signup' }) {
   const { signInCustomerAccount, signUpCustomerAccount, requestPasswordReset, resendConfirmationEmail } = useApp();
-  const [view, setView] = useState<AuthView>('login');
+  const [view, setView] = useState<AuthView>(initialView);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [emailTaken, setEmailTaken] = useState(false);
@@ -130,6 +131,10 @@ function AuthPanel() {
 
   return (
     <div className="mx-auto max-w-sm py-10">
+      <button onClick={onBack} className="mb-4 flex items-center gap-1.5 text-sm text-ink/50 hover:text-ink">
+        <ArrowLeft size={16} /> Retour
+      </button>
+
       {view !== 'pending_confirmation' && (
         <div className="mb-6 text-center">
           <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-full bg-burgundy/10 text-burgundy"><User size={26} /></div>
@@ -225,6 +230,27 @@ function AuthPanel() {
           <button onClick={() => switchView('login')} className="w-full text-center text-xs font-medium text-ink/50 hover:underline">Retour à la connexion</button>
         </div>
       )}
+    </div>
+  );
+}
+
+// Minimalist landing shown before the actual login/signup form — same
+// two-step shape as Ezial Pro's own entry page (ProEntryPage.tsx): a
+// plain "Bienvenue" screen first, the real form only once a choice is
+// made. Never gates product browsing (ProfilePage is only ever reached
+// via "Compte" in the nav, never required to view the catalog).
+function AccountEntryPage({ onChoose, onBackToShop }: { onChoose: (view: 'login' | 'signup') => void; onBackToShop: () => void }) {
+  return (
+    <div className="mx-auto max-w-sm py-16 text-center">
+      <Logo className="mx-auto" />
+      <h1 className="mt-6 font-display text-2xl font-semibold text-ink">Bienvenue sur Ezial</h1>
+      <p className="mt-2 text-sm text-ink/55">Suivez vos commandes, vos favoris et vos adresses depuis votre compte.</p>
+
+      <div className="mt-8 flex flex-col gap-2.5">
+        <button onClick={() => onChoose('signup')} className="btn-primary w-full">Créer mon compte</button>
+        <button onClick={() => onChoose('login')} className="btn-outline w-full">Se connecter</button>
+        <button onClick={onBackToShop} className="w-full py-2 text-sm font-medium text-ink/55 hover:text-burgundy">Retour à la boutique</button>
+      </div>
     </div>
   );
 }
@@ -374,6 +400,7 @@ function AddressesTab() {
 export default function ProfilePage() {
   const { orders, favorites, navigate, catalogProducts, customerUser, authLoading, signOutCustomerAccount, updateCustomerAccount, deleteCustomerAccount, changePassword } = useApp();
   const [tab, setTab] = useState<Tab>('orders');
+  const [authStep, setAuthStep] = useState<'entry' | 'login' | 'signup'>('entry');
   // orders.status is never updated after creation (see computeDeliveryStepStatus)
   // — this fetches each order's real delivery_missions.status in one batched
   // RPC call (get_order_delivery_statuses) so the badge in the list reflects
@@ -481,10 +508,11 @@ export default function ProfilePage() {
   if (!customerUser) {
     return (
       <div className="container-pro">
-        <AuthPanel />
-        <div className="mx-auto mb-10 max-w-sm border-t border-line pt-8 text-center">
-          <button onClick={() => navigate('/pro')} className="btn-outline inline-flex"><Briefcase size={16} /> Accéder à Ezial Pro</button>
-        </div>
+        {authStep === 'entry' ? (
+          <AccountEntryPage onChoose={setAuthStep} onBackToShop={() => navigate('/')} />
+        ) : (
+          <AuthPanel onBack={() => setAuthStep('entry')} initialView={authStep} />
+        )}
       </div>
     );
   }

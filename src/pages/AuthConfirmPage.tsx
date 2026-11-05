@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 import { shopForCurrentUser, resendSellerConfirmation, signInSeller } from '@/lib/supabaseSellerAuth';
 import { resendCustomerConfirmation, signInCustomer } from '@/lib/supabaseCustomerAuth';
+import { consumeLastBrowseRoute } from '@/store/AppContext';
 import { isValidEmail } from '@/lib/authErrors';
 import { Check, Loader2, AlertCircle, MailCheck } from 'lucide-react';
 
@@ -66,9 +67,16 @@ export default function AuthConfirmPage() {
         if (cancelled) return;
         setStatus('success');
         setDestinationLabel(shop ? `boutique « ${shop.shopName} »` : 'compte Ezial');
+        // A customer returns to whatever they were actually browsing
+        // before signing up (their cart, already in localStorage, carries
+        // over on its own) — never a seller, who always goes to the
+        // dashboard regardless, matching "jamais rediriger un client vers
+        // Ezial Pro" in the other direction too (a seller never lands on
+        // a stray customer-side route from before their own signup).
+        const resumeRoute = !shop ? consumeLastBrowseRoute() : null;
         setTimeout(() => {
           if (cancelled) return;
-          goToRoute(shop ? '/pro' : '/');
+          goToRoute(shop ? '/pro' : (resumeRoute || '/'));
         }, 900);
       } catch {
         // A network blip, an already-consumed token, or a malformed link —
@@ -109,7 +117,7 @@ export default function AuthConfirmPage() {
       : await signInCustomer(loginEmail.trim(), loginPassword);
     setLoggingIn(false);
     if ('error' in result) { setLoginError(result.error); return; }
-    goToRoute(space === 'seller' ? '/pro' : '/');
+    goToRoute(space === 'seller' ? '/pro' : (consumeLastBrowseRoute() || '/'));
   };
 
   return (

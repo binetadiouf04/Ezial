@@ -172,6 +172,27 @@ function getInitialRoute(): string {
 // means the cart doesn't survive a refresh, not a crash.
 const CART_STORAGE_KEY = 'ezial-cart-v1';
 
+// The route a customer was actually browsing right before going to sign
+// up/log in (never /profil itself, never a checkout/order page — nothing
+// that would be confusing or wrong to land back on with a brand-new
+// session) — read once and cleared by AuthConfirmPage so a confirmed
+// customer returns to what they were looking at instead of always just
+// the homepage. localStorage (not sessionStorage) on purpose: the
+// confirmation link is routinely opened in a new tab from a mail app,
+// which sessionStorage wouldn't carry over to on the same device/browser.
+const LAST_BROWSE_ROUTE_KEY = 'ezial-last-browse-route';
+const NEVER_RESTORE_ROUTE_PREFIXES = ['/profil', '/checkout', '/commande', '/pro'];
+
+export function consumeLastBrowseRoute(): string | null {
+  try {
+    const value = localStorage.getItem(LAST_BROWSE_ROUTE_KEY);
+    localStorage.removeItem(LAST_BROWSE_ROUTE_KEY);
+    return value;
+  } catch {
+    return null;
+  }
+}
+
 function loadStoredCart(): CartItem[] {
   try {
     const raw = localStorage.getItem(CART_STORAGE_KEY);
@@ -344,6 +365,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
     window.addEventListener('hashchange', onHash);
     return () => window.removeEventListener('hashchange', onHash);
   }, []);
+
+  useEffect(() => {
+    if (NEVER_RESTORE_ROUTE_PREFIXES.some((p) => route.startsWith(p))) return;
+    try { localStorage.setItem(LAST_BROWSE_ROUTE_KEY, route); } catch { /* best-effort */ }
+  }, [route]);
 
   useEffect(() => { persistCart(cart); }, [cart]);
 
