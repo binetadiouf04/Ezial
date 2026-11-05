@@ -34,4 +34,11 @@ export function registerSupabaseShops(fetchedShops: Shop[]): void {
   for (const shop of fetchedShops) supabaseShopMap[shop.id] = shop;
 }
 
-export const getShop = (id: string): Shop | undefined => shopMap[id] ?? supabaseShopMap[id];
+// Never falls back to the static mock `shops` above — a real shop id is
+// always a Supabase UUID, so that map could only ever match one of the
+// handful of legacy demo slugs ('maison-fatou', 'dakar-beauty'...), and
+// ShopPage resolves its shop directly from the URL's id with no other
+// check. Falling back to it used to mean an old bookmarked/indexed link
+// using one of those slugs rendered a fully convincing fake shop profile
+// forever, with no network call and no way to tell it isn't real.
+export const getShop = (id: string): Shop | undefined => supabaseShopMap[id];

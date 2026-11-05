@@ -324,7 +324,7 @@ export interface SearchProductsResult {
   shops: Shop[];
 }
 
-export function searchProducts(query: string, pool: Product[] = products): SearchProductsResult {
+export function searchProducts(query: string, pool: Product[] = products, shopsPool: Shop[] = allShops): SearchProductsResult {
   const terms = tokenize(query);
   if (terms.length === 0) return { exact: [], similar: [], shops: [] };
   const q = normalizeText(query.trim());
@@ -342,7 +342,7 @@ export function searchProducts(query: string, pool: Product[] = products): Searc
   // or requiring a second, parallel discovery system.
   const isMadeInSenegalQuery = q.includes('senegal');
 
-  const matchedShops = allShops.filter((s) => normalizeText(s.name).includes(q) || normalizeText(s.description).includes(q));
+  const matchedShops = shopsPool.filter((s) => normalizeText(s.name).includes(q) || normalizeText(s.description).includes(q));
 
   const scored = pool.map((p) => {
     const fields = buildSearchFields(p);

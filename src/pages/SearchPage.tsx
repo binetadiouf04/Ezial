@@ -19,12 +19,12 @@ const sortOptions: { id: SortId; label: string }[] = [
 ];
 
 export default function SearchPage({ query }: { query: string }) {
-  const { navigate, catalogProducts, catalogLoading } = useApp();
+  const { navigate, catalogProducts, catalogShops, catalogLoading } = useApp();
   const [input, setInput] = useState(query);
   const [sort, setSort] = useState<SortId>('pertinence');
   const [enStock, setEnStock] = useState(false);
   const [enPromotion, setEnPromotion] = useState(false);
-  const { exact: exactRaw, similar, shops } = searchProducts(query, catalogProducts);
+  const { exact: exactRaw, similar, shops } = searchProducts(query, catalogProducts, catalogShops);
 
   const exact = useMemo(() => {
     let result = [...exactRaw];

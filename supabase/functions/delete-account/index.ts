@@ -68,6 +68,14 @@ Deno.serve(async (req) => {
 
   const { data: shop } = await admin.from('shops').select('id').eq('owner_id', userId).maybeSingle();
   if (shop) {
+    // seller_code has a DB-level unique constraint and is otherwise never
+    // touched on deletion — left as the seller's chosen username, it stays
+    // permanently squatted on this now-orphaned row forever. A deleted
+    // seller recreating their shop with the SAME username (the natural
+    // thing to do) then hits "Ce nom d'utilisateur est déjà utilisé" on a
+    // brand new account, which looks identical to "I can't re-register."
+    // Reassigned here to a value derived from the shop's own id so the
+    // original username is immediately free to reuse.
     await admin.from('shops').update({
       name: 'Boutique supprimée',
       description: null,
@@ -79,6 +87,7 @@ Deno.serve(async (req) => {
       latitude: null,
       longitude: null,
       status: 'deleted',
+      seller_code: `supprime-${shop.id.slice(0, 8)}`,
     }).eq('id', shop.id);
   }
 

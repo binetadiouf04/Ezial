@@ -8,7 +8,7 @@ import SmartImage from './SmartImage';
 import NotificationBell from './NotificationBell';
 
 export default function Header() {
-  const { navigate, cartCount, setCategoryDrawerOpen, catalogProducts, customerUser } = useApp();
+  const { navigate, cartCount, setCategoryDrawerOpen, catalogProducts, catalogShops, customerUser } = useApp();
   const [query, setQuery] = useState('');
   const [focused, setFocused] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -16,7 +16,7 @@ export default function Header() {
 
   useEffect(() => () => { if (blurTimer.current) window.clearTimeout(blurTimer.current); }, []);
 
-  const { exact, similar, shops: shopMatches } = query.trim().length >= 2 ? searchProducts(query, catalogProducts) : { exact: [], similar: [], shops: [] };
+  const { exact, similar, shops: shopMatches } = query.trim().length >= 2 ? searchProducts(query, catalogProducts, catalogShops) : { exact: [], similar: [], shops: [] };
   // A quick preview only has room for one product list — real matches when
   // there are any, otherwise a few close alternatives (still visually
   // distinct via the "Suggestions" label below, never called "Produits").

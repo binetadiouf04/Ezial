@@ -28,17 +28,12 @@ const SIMILAR_PREVIEW_LIMIT = 9;
 
 export default function ProductPage({ productId }: { productId: string }) {
   const { navigate, addToCart, catalogProducts, customerUser } = useApp();
-  // The static mock catalog resolves synchronously and stays the fallback
-  // for its own ids; a real Supabase product is never in it, so its id
-  // falls through to the fetch below instead of an immediate "not found".
-  const mockProduct = getProduct(productId);
   const [supabaseProduct, setSupabaseProduct] = useState<ReturnType<typeof getProduct>>(undefined);
   const [supabaseShop, setSupabaseShop] = useState<ReturnType<typeof getShop>>(undefined);
-  const [loading, setLoading] = useState(!mockProduct);
+  const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
 
   useEffect(() => {
-    if (mockProduct) return; // resolved synchronously — nothing to fetch
     let cancelled = false;
     setLoading(true);
     setLoadError('');
@@ -57,9 +52,9 @@ export default function ProductPage({ productId }: { productId: string }) {
       setLoading(false);
     });
     return () => { cancelled = true; };
-  }, [productId, mockProduct]);
+  }, [productId]);
 
-  const product = mockProduct ?? supabaseProduct;
+  const product = supabaseProduct;
   const [variants, setVariants] = useState<Record<string, string>>({});
   const [qty, setQty] = useState(1);
   // Tissus only — the quantity field's raw text (so the customer can type
@@ -220,7 +215,7 @@ export default function ProductPage({ productId }: { productId: string }) {
   if (loadError) return <div className="container-pro py-20 text-center text-ink/50">Une erreur est survenue lors du chargement du produit.</div>;
   if (!product) return <div className="container-pro py-20 text-center text-ink/50">Produit introuvable.</div>;
 
-  const shop = mockProduct ? getShop(product.shopId) : (supabaseShop ?? getShop(product.shopId));
+  const shop = supabaseShop ?? getShop(product.shopId);
   const cat = categoryMap[product.category];
   const outOfStock = product.stock === 0;
   const lowStock = product.stock > 0 && product.stock <= 3;
