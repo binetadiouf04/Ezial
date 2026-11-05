@@ -40,14 +40,24 @@ export interface SellerAuthShop {
 // right after a signup-confirmation link establishes a session, to tell a
 // seller signup apart from a customer one (the shop row already exists —
 // created at signUp() time, before confirmation — so this is reliable).
-export async function shopForCurrentUser(): Promise<SellerAuthShop | null> {
-  const { data: userData, error: userError } = await supabase.auth.getUser();
-  if (userError || !userData.user) return null;
+// knownUserId skips the getUser() round-trip entirely when the caller
+// already has a freshly, server-verified id in hand (e.g. the session
+// AuthConfirmPage just established directly from the confirmation link's
+// own token exchange) — one fewer sequential network call on the slowest,
+// most latency-sensitive path in the app (a mobile connection switching
+// from the mail app back to the browser right after tapping the link).
+export async function shopForCurrentUser(knownUserId?: string): Promise<SellerAuthShop | null> {
+  let userId = knownUserId;
+  if (!userId) {
+    const { data: userData, error: userError } = await supabase.auth.getUser();
+    if (userError || !userData.user) return null;
+    userId = userData.user.id;
+  }
 
   const { data: shop, error: shopError } = await supabase
     .from('shops')
     .select('id, name, owner_id, is_official, seller_code')
-    .eq('owner_id', userData.user.id)
+    .eq('owner_id', userId)
     .maybeSingle();
   if (shopError || !shop) return null;
 

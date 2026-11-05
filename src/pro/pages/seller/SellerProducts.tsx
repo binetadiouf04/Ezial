@@ -149,7 +149,10 @@ export default function SellerProducts() {
         ) : products.length === 0 ? (
           <div className="p-10 text-center">
             <Package size={36} className="mx-auto text-ink/20" />
-            <p className="mt-3 text-sm text-ink/55">Aucun produit</p>
+            <p className="mt-3 text-sm text-ink/55">Vous n'avez pas encore ajouté de produits.</p>
+            <button onClick={() => navigate('/seller/produits/ajouter')} className="btn-primary mt-4 inline-flex items-center gap-2">
+              <Plus size={16} /> Ajouter un produit
+            </button>
           </div>
         ) : (
           products.map((product) => {

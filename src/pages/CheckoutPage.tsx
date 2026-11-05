@@ -14,10 +14,10 @@ import { fetchDeliveryFeeQuote, type DeliveryFeeQuote } from '@/lib/supabaseDeli
 import CheckoutSteps from '@/components/CheckoutSteps';
 import GoogleLocationPickerMap from '@/components/GoogleLocationPickerMap';
 import PhoneField from '@/components/PhoneField';
-import { Check, Truck, Store, Smartphone, Wallet, Clock, Loader2, AlertCircle, AlertTriangle, MapPin, Navigation, Search, ArrowLeft, Gift } from 'lucide-react';
+import { Check, Truck, Store, Smartphone, Clock, Loader2, AlertCircle, AlertTriangle, MapPin, Navigation, Search, ArrowLeft, Gift } from 'lucide-react';
 import SmartImage from '@/components/SmartImage';
 
-const paymentIcons: Record<string, typeof Smartphone> = { wave: Smartphone, orange: Smartphone, paypal: Wallet };
+const paymentIcons: Record<string, typeof Smartphone> = { wave: Smartphone, orange: Smartphone };
 const paymentMethods = paymentMethodsData.map((p) => ({ ...p, icon: paymentIcons[p.id] ?? Smartphone }));
 
 // Mirrors create_order()'s own fixed amount — for display only. The real

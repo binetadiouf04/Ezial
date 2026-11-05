@@ -27,7 +27,7 @@ const infoContent: Record<string, { title: string; body: React.ReactNode }> = {
         <p>1. Parcourez les boutiques et produits sur Ezial.</p>
         <p>2. Ajoutez vos articles au panier. Vous pouvez commander chez plusieurs boutiques en une seule commande.</p>
         <p>3. Choisissez la livraison Ezial ou le retrait en boutique.</p>
-        <p>4. Payez avec Wave, Orange Money ou PayPal.</p>
+        <p>4. Payez avec Wave ou Orange Money.</p>
         <p>5. Suivez votre commande en temps réel jusqu'à la réception.</p>
       </>
     ),

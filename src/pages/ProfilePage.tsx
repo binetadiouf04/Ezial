@@ -12,7 +12,6 @@ import PhoneField from '@/components/PhoneField';
 import { isValidEmail, capitalizeFirst } from '@/lib/authErrors';
 import { fetchOwnShopForDeletionWarning } from '@/lib/supabaseAccountDeletion';
 import { User, Heart, ShoppingBag, LogOut, ChevronRight, Briefcase, Truck, Store, Check, AlertCircle, Loader2, MailCheck, Trash2, MapPin, Plus, Pencil, ArrowLeft } from 'lucide-react';
-import Logo from '@/components/Logo';
 
 const deliveryStatusColors: Record<DeliveryStepStatus, string> = {
   confirmed: 'bg-blue-50 text-blue-700', preparing: 'bg-amber-50 text-amber-700', ready: 'bg-green-50 text-green-700',
@@ -138,17 +137,19 @@ function AuthPanel({ onBack, initialView = 'login' }: { onBack: () => void; init
       {view !== 'pending_confirmation' && (
         <div className="mb-6 text-center">
           <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-full bg-burgundy/10 text-burgundy"><User size={26} /></div>
-          <h1 className="font-display text-xl font-semibold text-ink">Mon compte</h1>
-          <p className="mt-1 text-sm text-ink/55">Connectez-vous ou créez un compte pour suivre vos commandes.</p>
+          <h1 className="font-display text-xl font-semibold text-ink">
+            {view === 'login' ? 'Se connecter' : view === 'signup' ? 'Créer mon compte' : 'Mon compte'}
+          </h1>
+          <p className="mt-1 text-sm text-ink/55">
+            {view === 'login' ? 'Accédez à votre compte Ezial.' : view === 'signup' ? 'Suivez vos commandes, vos favoris et vos adresses.' : 'Réinitialisez votre mot de passe.'}
+          </p>
         </div>
       )}
 
-      {(view === 'login' || view === 'signup') && (
-        <div className="mb-5 flex rounded-full border border-line p-1">
-          <button onClick={() => switchView('login')} className={`flex-1 rounded-full py-2 text-sm font-medium transition-colors ${view === 'login' ? 'bg-burgundy text-white' : 'text-ink/60'}`}>Se connecter</button>
-          <button onClick={() => switchView('signup')} className={`flex-1 rounded-full py-2 text-sm font-medium transition-colors ${view === 'signup' ? 'bg-burgundy text-white' : 'text-ink/60'}`}>S'inscrire</button>
-        </div>
-      )}
+      {/* No login/signup tab switcher — AccountEntryPage ("Créer mon
+          compte" vs "Se connecter") is the only place that choice is
+          made, each opening this panel directly on the right view via
+          initialView. */}
 
       {error && (
         <div className="mb-4 rounded-lg bg-burgundy/5 p-3">
@@ -240,16 +241,21 @@ function AuthPanel({ onBack, initialView = 'login' }: { onBack: () => void; init
 // made. Never gates product browsing (ProfilePage is only ever reached
 // via "Compte" in the nav, never required to view the catalog).
 function AccountEntryPage({ onChoose, onBackToShop }: { onChoose: (view: 'login' | 'signup') => void; onBackToShop: () => void }) {
+  // No logo here — Header already shows it on this same page, repeating
+  // it below would just be visual clutter.
   return (
-    <div className="mx-auto max-w-sm py-16 text-center">
-      <Logo className="mx-auto" />
-      <h1 className="mt-6 font-display text-2xl font-semibold text-ink">Bienvenue sur Ezial</h1>
+    <div className="mx-auto max-w-sm py-10 text-center">
+      <h1 className="font-display text-2xl font-semibold text-ink">Bienvenue sur Ezial</h1>
       <p className="mt-2 text-sm text-ink/55">Suivez vos commandes, vos favoris et vos adresses depuis votre compte.</p>
 
       <div className="mt-8 flex flex-col gap-2.5">
         <button onClick={() => onChoose('signup')} className="btn-primary w-full">Créer mon compte</button>
         <button onClick={() => onChoose('login')} className="btn-outline w-full">Se connecter</button>
-        <button onClick={onBackToShop} className="w-full py-2 text-sm font-medium text-ink/55 hover:text-burgundy">Retour à la boutique</button>
+        {/* A quiet link, not a third button — same weight as "Mot de passe
+            oublié ?" elsewhere in this file, not btn-outline/btn-primary.
+            Goes straight to the marketplace home, signed out — browsing
+            Ezial has never required an account. */}
+        <button onClick={onBackToShop} className="mt-1 text-sm font-medium text-burgundy/80 hover:text-burgundy hover:underline">Accéder à Ezial</button>
       </div>
     </div>
   );
