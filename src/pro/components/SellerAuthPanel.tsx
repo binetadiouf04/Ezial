@@ -132,7 +132,9 @@ export default function SellerAuthPanel({ onBack, onLogin, verifySeller, signUpS
       </button>
 
       <div className="card p-8">
-        <h2 className="font-display text-2xl font-semibold text-ink">Espace Vendeur</h2>
+        <h2 className="font-display text-2xl font-semibold text-ink">
+          {view === 'login' ? 'Se connecter à Ezial Pro' : view === 'signup' ? 'Créer ma boutique' : 'Espace Vendeur'}
+        </h2>
         <p className="mt-1.5 text-sm text-ink/55">
           {view === 'current_account' && 'Créez votre boutique avec votre compte Ezial.'}
           {view === 'login' && 'Connectez-vous avec votre identifiant et votre mot de passe.'}
@@ -141,12 +143,10 @@ export default function SellerAuthPanel({ onBack, onLogin, verifySeller, signUpS
           {view === 'forgot' && 'Réinitialisez votre mot de passe.'}
         </p>
 
-        {(view === 'login' || view === 'signup') && (
-          <div className="mt-5 flex rounded-full border border-line p-1">
-            <button onClick={() => switchView('login')} className={`flex-1 rounded-full py-2 text-sm font-medium transition-colors ${view === 'login' ? 'bg-burgundy text-white' : 'text-ink/60'}`}>Se connecter</button>
-            <button onClick={() => switchView('signup')} className={`flex-1 rounded-full py-2 text-sm font-medium transition-colors ${view === 'signup' ? 'bg-burgundy text-white' : 'text-ink/60'}`}>Inscrire ma boutique</button>
-          </div>
-        )}
+        {/* No login/signup tab switcher any more — the entry page
+            (ProEntryPage: "Créer ma boutique" vs "Se connecter à Ezial
+            Pro") is the only place that choice is made now, each opening
+            this panel directly on the right view via initialView. */}
 
         {error && (
           <div className="mt-4">

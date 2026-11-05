@@ -2,11 +2,10 @@ import { useState, Suspense, lazy } from 'react';
 import { usePro } from '../ProContext';
 import { useApp } from '@/store/AppContext';
 import type { Role } from '../data';
-import RoleCard from '../components/RoleCard';
 import LoginForm from '../components/LoginForm';
 import SellerAuthPanel from '../components/SellerAuthPanel';
 import DriverLoginPanel from '../components/DriverLoginPanel';
-import { Loader2, ArrowLeft } from 'lucide-react';
+import { Loader2, ArrowLeft, ArrowRight, ShieldCheck, Bike } from 'lucide-react';
 
 // Each role's layout (and every page it pulls in) is its own chunk — a
 // seller logging in never has to download the admin dashboard's code, or
@@ -28,7 +27,6 @@ export default function ProEntryPage() {
   const { customerUser } = useApp();
   const [selectedRole, setSelectedRole] = useState<Role | null>(null);
   const [sellerInitialView, setSellerInitialView] = useState<'login' | 'signup'>('login');
-  const [showStaffAccess, setShowStaffAccess] = useState(false);
 
   // If seller is logged in, render the seller layout
   if (role === 'seller') {
@@ -117,26 +115,36 @@ export default function ProEntryPage() {
             >
               Se connecter à Ezial Pro
             </button>
+            {/* Never a modal, never a signup prompt — opens the same public
+                pricing page any visitor can already reach, straight away. */}
             <button
               onClick={() => { window.location.hash = '/info/tarifs-vendeurs'; }}
-              className="w-full py-2 text-sm font-medium text-ink/55 hover:text-burgundy"
+              className="mt-2 flex w-full items-center justify-between gap-2 rounded-xl border border-burgundy/25 bg-[#FBF7F0] px-4 py-3.5 text-left transition-colors hover:bg-[#F7F0E4]"
             >
-              Découvrir les formules Free et Premium
+              <span className="text-sm font-medium text-burgundy">Découvrir les formules Free et Premium</span>
+              <ArrowRight size={16} className="flex-shrink-0 text-burgundy" />
             </button>
           </div>
         </div>
 
-        <div className="mt-12 text-center">
-          {showStaffAccess ? (
-            <div className="grid w-full max-w-md gap-3 sm:grid-cols-2">
-              <RoleCard role="admin" title="Administration" description="Gérez la marketplace, les boutiques, les commandes et les opérations." onSelect={() => setSelectedRole('admin')} />
-              <RoleCard role="driver" title="Livreur" description="Consultez et acceptez vos missions de livraison." onSelect={() => setSelectedRole('driver')} />
-            </div>
-          ) : (
-            <button onClick={() => setShowStaffAccess(true)} className="text-xs font-medium text-ink/40 hover:text-ink/60 hover:underline">
-              Administration ou livraison Ezial
+        {/* Staff access — always visible (not a gate), but visually
+            subordinate (smaller, muted label, below a divider) so it never
+            competes with the two seller actions above. No public signup is
+            possible from here: each card opens the exact same
+            admin/driver login screen already reached from the old picker
+            — server-side role checks are untouched. */}
+        <div className="mt-12 w-full max-w-sm border-t border-line pt-6 text-center">
+          <p className="mb-3 text-xs font-medium uppercase tracking-wider text-ink/35">Autres espaces</p>
+          <div className="grid grid-cols-2 gap-3">
+            <button onClick={() => setSelectedRole('admin')} className="flex flex-col items-center gap-2 rounded-xl border border-line bg-white px-3 py-4 text-center transition-colors hover:border-burgundy/30 hover:bg-cream">
+              <ShieldCheck size={20} className="text-ink/60" />
+              <span className="text-sm font-medium text-ink/70">Administrateur</span>
             </button>
-          )}
+            <button onClick={() => setSelectedRole('driver')} className="flex flex-col items-center gap-2 rounded-xl border border-line bg-white px-3 py-4 text-center transition-colors hover:border-burgundy/30 hover:bg-cream">
+              <Bike size={20} className="text-ink/60" />
+              <span className="text-sm font-medium text-ink/70">Livreur</span>
+            </button>
+          </div>
         </div>
       </div>
     </div>
