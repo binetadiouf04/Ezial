@@ -2,6 +2,7 @@ import type { Shop } from '@/data/shops';
 import { useApp } from '@/store/AppContext';
 import Rating from './Rating';
 import SmartImage from './SmartImage';
+import PremiumBadge from './PremiumBadge';
 
 export default function ShopCard({ shop }: { shop: Shop }) {
   const { navigate } = useApp();
@@ -15,7 +16,10 @@ export default function ShopCard({ shop }: { shop: Shop }) {
       <div className="flex items-center gap-3 p-4">
         <SmartImage src={shop.logo} alt={shop.name} className="h-12 w-12 rounded-full border-2 border-white object-cover -mt-8 shadow-sm" />
         <div className="min-w-0 flex-1">
-          <h3 className="truncate text-sm font-semibold text-ink group-hover:text-burgundy transition-colors">{shop.name}</h3>
+          <div className="flex items-center gap-1.5">
+            <h3 className="truncate text-sm font-semibold text-ink group-hover:text-burgundy transition-colors">{shop.name}</h3>
+            {shop.isPremium && <PremiumBadge />}
+          </div>
           <p className="text-xs text-ink/50">{shop.followers.toLocaleString('fr-FR')} abonnés</p>
         </div>
         {shop.rating && <Rating rating={shop.rating} count={shop.reviewCount} showCount={false} />}

@@ -5,6 +5,7 @@ import { getShop } from '@/data/shops';
 import { homeCircleTiles, type HomeCircleTile } from '@/data/categories';
 import ProductCard from '@/components/ProductCard';
 import ShopCard from '@/components/ShopCard';
+import ShopCarousel from '@/components/ShopCarousel';
 import HeroCarousel, { type HeroSlide } from '@/components/HeroCarousel';
 import DiscoverMarquee from '@/components/DiscoverMarquee';
 import { rankProducts, rankForTrending, diversifyBySubcategory } from '@/lib/productRanking';
@@ -165,6 +166,12 @@ export default function HomePage() {
   // shuffleOnce's comment above.
   const pourVous = useMemo(() => rankProducts(shuffleOnce(products), { isOfficialShop }), [products]);
   const featuredShops = displayShops.slice(0, HOME_SHOPS_LIMIT);
+  // Real Premium shops only (isPremium is computed server-side from
+  // seller_subscriptions, never a seller-editable field) — shuffled once
+  // per catalogShops identity so no shop holds a fixed position, and the
+  // whole section simply doesn't render when there are none yet (never
+  // backfilled with demo content).
+  const premiumShops = useMemo(() => shuffleOnce(displayShops.filter((s) => s.isPremium)), [displayShops]);
 
   return (
     <div>
@@ -205,6 +212,16 @@ export default function HomePage() {
               <HomeProductPreview eyebrow="Tendances du moment" title="Le plus aimé maintenant" products={trending} seeAllRoute="/tendances" onNavigate={navigate} />
             </section>
           </>
+        )}
+
+        {premiumShops.length > 0 && (
+          <section>
+            <div className="mb-6 flex items-end justify-between">
+              <div><p className="eyebrow mb-1.5">Sélection Premium</p><h2 className="section-title">Boutiques Premium</h2></div>
+              <button onClick={() => navigate('/boutiques-premium')} className="flex items-center gap-1 text-sm font-medium text-burgundy hover:underline whitespace-nowrap">Voir toutes les boutiques Premium <ChevronRight size={15} /></button>
+            </div>
+            <ShopCarousel shops={premiumShops} />
+          </section>
         )}
 
         <section>

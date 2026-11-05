@@ -6,6 +6,12 @@ export interface Shop {
   // below (always falsy there). Drives which shop's products are
   // prioritized on the Home (see src/lib/productRanking.ts).
   isOfficial?: boolean;
+  // Computed server-side from seller_subscriptions (plan='pro' and
+  // pro_until > now()) via active_premium_shop_ids() — never a plain
+  // column a seller could set themselves, and never set on the static
+  // mock shops below. Drives the Premium badge everywhere a shop is shown
+  // and membership in the "Boutiques Premium" section.
+  isPremium?: boolean;
   // From Supabase shops.latitude/longitude — undefined for every static
   // mock shop below (they have no real-world coordinates) and for any
   // real shop that hasn't set its location yet in Ezial Pro. Used only to

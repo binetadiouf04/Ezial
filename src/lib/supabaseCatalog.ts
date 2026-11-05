@@ -132,7 +132,7 @@ export interface SupabaseCatalogResult {
   errors: string[];
 }
 
-function mapShop(row: ShopRow): Shop {
+function mapShop(row: ShopRow, premiumShopIds?: Set<string>): Shop {
   return {
     id: row.id,
     name: row.name,
@@ -156,6 +156,7 @@ function mapShop(row: ShopRow): Shop {
     pickupEnabled: Boolean(row.pickup_enabled),
     pickupEta: '',
     isOfficial: Boolean(row.is_official),
+    isPremium: premiumShopIds?.has(row.id) ?? false,
     latitude: row.latitude ?? undefined,
     longitude: row.longitude ?? undefined,
   };
@@ -325,13 +326,19 @@ function mapProduct(row: ProductRow, imageRows: ProductImageRow[], variantRows: 
 export async function fetchActiveCatalogFromSupabase(): Promise<SupabaseCatalogResult> {
   const errors: string[] = [];
 
-  const [shopsRes, productsRes] = await Promise.all([
+  const [shopsRes, productsRes, premiumRes] = await Promise.all([
     supabase.from('shops').select('*').eq('status', 'active'),
     supabase.from('products').select('*').eq('status', 'active'),
+    // Non-fatal on its own: a seller_subscriptions row or a stale deploy
+    // of this RPC never blocks the rest of the catalog — every shop just
+    // falls back to isPremium = false until it resolves.
+    supabase.rpc('active_premium_shop_ids'),
   ]);
 
   if (shopsRes.error) errors.push(`shops: ${shopsRes.error.message}`);
   if (productsRes.error) errors.push(`products: ${productsRes.error.message}`);
+  if (premiumRes.error) errors.push(`active_premium_shop_ids: ${premiumRes.error.message}`);
+  const premiumShopIds = new Set((premiumRes.data ?? []) as string[]);
 
   const shopRows = (shopsRes.data ?? []) as ShopRow[];
   const activeShopIds = new Set(shopRows.map((s) => s.id));
@@ -370,7 +377,7 @@ export async function fetchActiveCatalogFromSupabase(): Promise<SupabaseCatalogR
   }
 
   return {
-    shops: shopRows.map(mapShop),
+    shops: shopRows.map((row) => mapShop(row, premiumShopIds)),
     products: productRows.map((row) => mapProduct(row, imageRows, variantRows, reviewStats)),
     errors,
   };
@@ -408,10 +415,11 @@ export async function fetchProductDetailFromSupabase(productId: string): Promise
 
   const row = productRow as ProductRow;
 
-  const [imagesRes, variantsRes, shopRes] = await Promise.all([
+  const [imagesRes, variantsRes, shopRes, premiumRes] = await Promise.all([
     supabase.from('product_images').select('*').eq('product_id', row.id),
     supabase.from('product_variants').select('*').eq('product_id', row.id),
     supabase.from('shops').select('*').eq('id', row.shop_id).maybeSingle(),
+    supabase.rpc('active_premium_shop_ids'),
   ]);
 
   // Images/variants/shop failures are non-fatal — the product itself was
@@ -420,6 +428,7 @@ export async function fetchProductDetailFromSupabase(productId: string): Promise
   const imageRows = (imagesRes.data ?? []) as ProductImageRow[];
   const variantRows = (variantsRes.data ?? []) as ProductVariantRow[];
   const shopRow = (shopRes.data ?? null) as ShopRow | null;
+  const premiumShopIds = new Set((premiumRes.data ?? []) as string[]);
 
   // A product can be 'active' while its own shop is still in onboarding,
   // suspended or rejected — never reachable directly by id in that case
@@ -428,6 +437,6 @@ export async function fetchProductDetailFromSupabase(productId: string): Promise
 
   return {
     product: mapProduct(row, imageRows, variantRows),
-    shop: mapShop(shopRow),
+    shop: mapShop(shopRow, premiumShopIds),
   };
 }

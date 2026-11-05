@@ -8,6 +8,7 @@ import SmartImage from '@/components/SmartImage';
 import ShopReportModal from '@/components/ShopReportModal';
 import { createShopReport, type ShopReportReason } from '@/lib/supabaseShopReports';
 import { isRealCatalogId } from '@/data/products';
+import PremiumBadge from '@/components/PremiumBadge';
 
 const tabs = ['Accueil', 'Produits', 'Avis'] as const;
 type Tab = (typeof tabs)[number];
@@ -93,7 +94,10 @@ export default function ShopPage({ shopId }: { shopId: string }) {
         <div className="relative -mt-10 flex flex-col gap-4 sm:-mt-14 sm:flex-row sm:items-end lg:-mt-16">
           <SmartImage src={shop.logo} alt={shop.name} className="h-20 w-20 flex-shrink-0 rounded-full border-4 border-white object-cover shadow-sm sm:h-24 sm:w-24 lg:h-28 lg:w-28" />
           <div className="flex-1 min-w-0 pb-1">
-            <h1 className="font-display text-xl font-semibold text-ink sm:text-2xl lg:text-3xl">{shop.name}</h1>
+            <div className="flex flex-wrap items-center gap-2">
+              <h1 className="font-display text-xl font-semibold text-ink sm:text-2xl lg:text-3xl">{shop.name}</h1>
+              {shop.isPremium && <PremiumBadge size="md" />}
+            </div>
             <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-ink/55">
               {shop.followers > 0 && <span>{shop.followers.toLocaleString('fr-FR')} abonnés</span>}
               {shop.rating > 0 && <Rating rating={shop.rating} count={shop.reviewCount} />}
