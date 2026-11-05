@@ -22,10 +22,14 @@ interface SellerAuthPanelProps {
   // the live session is itself the proof of identity.
   loggedInCustomer?: { label: string } | null;
   continueWithCurrentAccount?: (input: { shopName: string; username: string }) => Promise<{ status: 'confirmed'; shop: { sellerId: string; name: string; supabaseShopId: string; isOfficial: boolean } } | { error: string }>;
+  // Lets the entry page open this straight on the signup tab ("Créer ma
+  // boutique") instead of always defaulting to login — ignored once a
+  // logged-in customer is detected, which still always wins (current_account).
+  initialView?: 'login' | 'signup';
 }
 
-export default function SellerAuthPanel({ onBack, onLogin, verifySeller, signUpSeller, requestPasswordReset, resendConfirmationEmail, resendConfirmationForLogin, loggedInCustomer, continueWithCurrentAccount }: SellerAuthPanelProps) {
-  const [view, setView] = useState<View>(loggedInCustomer ? 'current_account' : 'login');
+export default function SellerAuthPanel({ onBack, onLogin, verifySeller, signUpSeller, requestPasswordReset, resendConfirmationEmail, resendConfirmationForLogin, loggedInCustomer, continueWithCurrentAccount, initialView = 'login' }: SellerAuthPanelProps) {
+  const [view, setView] = useState<View>(loggedInCustomer ? 'current_account' : initialView);
   const [currentShopName, setCurrentShopName] = useState('');
   const [currentUsername, setCurrentUsername] = useState('');
 

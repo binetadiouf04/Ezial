@@ -27,6 +27,8 @@ export default function ProEntryPage() {
   const { role, login, verifySellerLogin, signUpSellerAccount, continueAsSellerWithCurrentAccount, requestSellerPasswordReset, resendSellerConfirmationEmail, resendSellerConfirmationForLogin, verifyAdminLogin, checkDriverUsername, createDriverPin, signInDriverWithPin } = usePro();
   const { customerUser } = useApp();
   const [selectedRole, setSelectedRole] = useState<Role | null>(null);
+  const [sellerInitialView, setSellerInitialView] = useState<'login' | 'signup'>('login');
+  const [showStaffAccess, setShowStaffAccess] = useState(false);
 
   // If seller is logged in, render the seller layout
   if (role === 'seller') {
@@ -58,6 +60,7 @@ export default function ProEntryPage() {
           requestPasswordReset={requestSellerPasswordReset}
           resendConfirmationEmail={resendSellerConfirmationEmail}
           resendConfirmationForLogin={resendSellerConfirmationForLogin}
+          initialView={sellerInitialView}
         />
       </div>
     );
@@ -85,7 +88,10 @@ export default function ProEntryPage() {
     );
   }
 
-  // Role selection
+  // Entry screen — Ezial Pro's primary audience is sellers, so this is a
+  // seller-focused landing, not a three-way role picker. Admin/driver
+  // access (staff, not public signup) stays one tap away below, instead
+  // of sharing top billing with "Créer ma boutique".
   return (
     <div className="min-h-screen bg-cream flex flex-col">
       <div className="container-pro flex-1 flex flex-col items-center justify-center py-12">
@@ -93,16 +99,44 @@ export default function ProEntryPage() {
           <ArrowLeft size={16} /> Marketplace
         </button>
 
-        <div className="text-center mb-10 slide-up">
+        <div className="w-full max-w-sm text-center slide-up">
           <p className="eyebrow mb-3">Ezial Pro</p>
-          <h1 className="font-display text-3xl font-semibold text-ink sm:text-4xl">Bienvenue sur Ezial Pro</h1>
-          <p className="mt-3 max-w-md text-sm text-ink/55">Gérez votre activité depuis un espace simple et sécurisé.</p>
+          <h1 className="font-display text-3xl font-semibold text-ink sm:text-4xl">Votre boutique commence ici.</h1>
+          <p className="mt-3 text-sm text-ink/55">Présentez vos produits, gérez vos commandes et développez votre visibilité avec Ezial.</p>
+
+          <div className="mt-8 flex flex-col gap-2.5">
+            <button
+              onClick={() => { setSellerInitialView('signup'); setSelectedRole('seller'); }}
+              className="btn-primary w-full"
+            >
+              Créer ma boutique
+            </button>
+            <button
+              onClick={() => { setSellerInitialView('login'); setSelectedRole('seller'); }}
+              className="btn-outline w-full"
+            >
+              Se connecter à Ezial Pro
+            </button>
+            <button
+              onClick={() => { window.location.hash = '/info/tarifs-vendeurs'; }}
+              className="w-full py-2 text-sm font-medium text-ink/55 hover:text-burgundy"
+            >
+              Découvrir les formules Free et Premium
+            </button>
+          </div>
         </div>
 
-        <div className="grid w-full max-w-3xl gap-4 sm:grid-cols-3">
-          <RoleCard role="admin" title="Administration" description="Gérez la marketplace, les boutiques, les commandes et les opérations." onSelect={() => setSelectedRole('admin')} />
-          <RoleCard role="seller" title="Vendeur" description="Gérez vos produits, commandes, stocks et revenus." onSelect={() => setSelectedRole('seller')} />
-          <RoleCard role="driver" title="Livreur" description="Consultez et acceptez vos missions de livraison." onSelect={() => setSelectedRole('driver')} />
+        <div className="mt-12 text-center">
+          {showStaffAccess ? (
+            <div className="grid w-full max-w-md gap-3 sm:grid-cols-2">
+              <RoleCard role="admin" title="Administration" description="Gérez la marketplace, les boutiques, les commandes et les opérations." onSelect={() => setSelectedRole('admin')} />
+              <RoleCard role="driver" title="Livreur" description="Consultez et acceptez vos missions de livraison." onSelect={() => setSelectedRole('driver')} />
+            </div>
+          ) : (
+            <button onClick={() => setShowStaffAccess(true)} className="text-xs font-medium text-ink/40 hover:text-ink/60 hover:underline">
+              Administration ou livraison Ezial
+            </button>
+          )}
         </div>
       </div>
     </div>
