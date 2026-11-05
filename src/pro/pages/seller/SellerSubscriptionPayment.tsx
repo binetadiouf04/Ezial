@@ -1,45 +1,28 @@
 import { useState } from 'react';
 import { usePro } from '../../ProContext';
-import { submitSubscriptionPayment, type SubscriptionPaymentMethod } from '@/lib/supabaseSellerSubscription';
+import type { SubscriptionPaymentMethod } from '@/lib/supabaseSellerSubscription';
 import { PREMIUM_PRICE_FCFA } from '@/data/subscriptionPlans';
-import { ArrowLeft, Check, Loader2, AlertCircle, Smartphone, Info } from 'lucide-react';
+import { ArrowLeft, Smartphone, AlertCircle } from 'lucide-react';
 
-// A real Wave/Orange Money API integration isn't available yet (no
-// merchant credentials) — see supabaseSellerSubscription.ts. Until then
-// this stays declarative, exactly like a customer order's own payment
-// reference step: the seller sends the money themselves, then gives Ezial
-// the transaction reference to verify, rather than paying through an
-// embedded checkout. Never claims a payment succeeded on its own.
+// Ezial no longer validates subscription payments manually: a payment must
+// be confirmed automatically, server-side, by an authenticated Wave/Orange
+// Money webhook — there is no "send the manual reference, wait for an
+// admin to check it" step any more (that path, and confirmSubscriptionPayment/
+// rejectSubscriptionPayment's manual-admin role in it, are retired for any
+// NEW payment; see supabaseAdminSubscriptions.ts, kept only to let an admin
+// resolve whatever was already pending_review before this change).
+//
+// Real Wave/Orange Money merchant credentials are not available yet, so
+// there is nothing to wire this récapitulatif's "Payer" action to — rather
+// than inventing a successful transaction or falling back to the old manual
+// flow, this page says plainly that online payment is temporarily
+// unavailable. Free and the 30-day trial stay fully available in the
+// meantime (see SellerSubscription.tsx). The moment real credentials exist,
+// this page's payment method choice + webhook verification is exactly what
+// gets wired up — no rebuild needed.
 export default function SellerSubscriptionPayment() {
-  const { sellerSupabaseShopId, navigate } = usePro();
+  const { navigate } = usePro();
   const [method, setMethod] = useState<SubscriptionPaymentMethod>('wave');
-  const [reference, setReference] = useState('');
-  const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState('');
-  const [submitted, setSubmitted] = useState(false);
-
-  const handleSubmit = async () => {
-    if (!sellerSupabaseShopId || !reference.trim()) return;
-    setSubmitting(true);
-    setError('');
-    const result = await submitSubscriptionPayment(sellerSupabaseShopId, method, reference);
-    setSubmitting(false);
-    if (result.error) { setError(result.error); return; }
-    setSubmitted(true);
-  };
-
-  if (submitted) {
-    return (
-      <div className="mx-auto max-w-md space-y-5 py-6 text-center">
-        <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-green-50 text-green-700"><Check size={26} /></div>
-        <div>
-          <h1 className="font-display text-xl font-semibold text-ink">Référence envoyée</h1>
-          <p className="mt-1.5 text-sm text-ink/60">Un administrateur Ezial va vérifier votre paiement. Votre abonnement Premium sera activé dès confirmation — vous serez notifié.</p>
-        </div>
-        <button onClick={() => navigate('/seller/abonnement')} className="btn-primary w-full">Retour à Mon abonnement</button>
-      </div>
-    );
-  }
 
   return (
     <div className="mx-auto max-w-md space-y-6 py-2">
@@ -62,7 +45,7 @@ export default function SellerSubscriptionPayment() {
       {/* Moyen de paiement */}
       <div className="card p-5">
         <p className="text-sm font-semibold text-ink mb-3">Moyen de paiement</p>
-        <div className="flex gap-2 mb-4">
+        <div className="flex gap-2">
           <button
             onClick={() => setMethod('wave')}
             className={`flex-1 flex items-center justify-center gap-1.5 rounded-lg border px-3 py-2.5 text-sm font-medium transition-colors ${method === 'wave' ? 'border-burgundy bg-burgundy/5 text-burgundy' : 'border-line text-ink/60'}`}
@@ -76,36 +59,21 @@ export default function SellerSubscriptionPayment() {
             <Smartphone size={15} /> Orange Money
           </button>
         </div>
-
-        <div className="flex items-start gap-2 rounded-lg bg-cream p-3 mb-4">
-          <Info size={14} className="mt-0.5 flex-shrink-0 text-ink/40" />
-          <p className="text-xs text-ink/60">
-            Envoyez {PREMIUM_PRICE_FCFA.toLocaleString('fr-FR')} FCFA par {method === 'wave' ? 'Wave' : 'Orange Money'} vers le contact Ezial, puis indiquez ci-dessous la référence de votre transaction. Le paiement en ligne direct sera bientôt disponible.
-          </p>
-        </div>
-
-        <label className="block text-xs font-medium text-ink/60 mb-1.5">Référence de la transaction</label>
-        <input
-          type="text"
-          value={reference}
-          onChange={(e) => setReference(e.target.value)}
-          placeholder="Ex. WAVE-7F3K2P ou référence Orange Money"
-          className="w-full rounded-lg border border-line px-3 py-2.5 text-sm text-ink focus:border-burgundy focus:outline-none"
-        />
-        {error && <p className="mt-2 flex items-start gap-1.5 text-sm text-burgundy"><AlertCircle size={14} className="mt-0.5 flex-shrink-0" /> {error}</p>}
       </div>
 
-      <button
-        onClick={() => void handleSubmit()}
-        disabled={submitting || !reference.trim()}
-        className="btn-primary w-full flex items-center justify-center gap-1.5"
-      >
-        {submitting ? <Loader2 size={16} className="animate-spin" /> : null}
+      <div className="flex items-start gap-2.5 rounded-xl border border-amber-200 bg-amber-50 p-4">
+        <AlertCircle size={16} className="mt-0.5 flex-shrink-0 text-amber-700" />
+        <p className="text-sm text-amber-800">
+          Le paiement en ligne Ezial Premium est temporairement indisponible : la connexion sécurisée à {method === 'wave' ? 'Wave' : 'Orange Money'} n'est pas encore activée. Revenez bientôt — votre forfait Free et votre essai Premium gratuit de 30 jours restent accessibles dès maintenant.
+        </p>
+      </div>
+
+      <button disabled className="btn-primary w-full opacity-50">
         Payer {PREMIUM_PRICE_FCFA.toLocaleString('fr-FR')} FCFA
       </button>
 
       <p className="text-xs text-ink/45 text-center">
-        L'abonnement est activé uniquement après vérification du paiement par un administrateur Ezial — jamais automatiquement.
+        Important : une fois un abonnement Premium payé, cette boutique ne pourra plus revenir au forfait Free — seul le renouvellement restera possible en cas d'expiration. L'abonnement n'est activé qu'après une confirmation authentifiée du paiement, jamais sur une simple déclaration.
       </p>
     </div>
   );

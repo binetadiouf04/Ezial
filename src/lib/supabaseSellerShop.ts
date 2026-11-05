@@ -111,6 +111,17 @@ export async function submitShopForReview(): Promise<{ error?: string }> {
   return error ? { error: error.message } : {};
 }
 
+// Replaces submitShopForReview() for a normal first-time signup — no more
+// admin approval step. activate_shop_if_ready() (server-side) checks the
+// shop's own required fields itself and only activates when they're
+// genuinely complete; `ready: false` means the seller still has fields to
+// fill in, not an error. See the migration this feature ships with.
+export async function activateShopIfReady(): Promise<{ ready: boolean; alreadyActive?: boolean; error?: string }> {
+  const { data, error } = await supabase.rpc('activate_shop_if_ready');
+  if (error) return { ready: false, error: error.message };
+  return { ready: Boolean(data?.ready), alreadyActive: data?.alreadyActive };
+}
+
 const SHOP_ASSETS_BUCKET = 'product-images';
 
 // A logo is only ever shown small (avatar-sized); a cover spans the shop

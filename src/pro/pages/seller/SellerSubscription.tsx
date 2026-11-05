@@ -64,7 +64,9 @@ export default function SellerSubscription() {
     return <div className="p-10 text-center"><p className="text-sm text-ink/50">Chargement…</p></div>;
   }
 
-  const planLabel = !info.isProActive ? 'Ezial Free' : info.isTrialActive ? 'Essai Ezial Premium' : 'Ezial Premium';
+  const planLabel = info.isProActive
+    ? (info.isTrialActive ? 'Essai Ezial Premium' : 'Ezial Premium')
+    : (info.isPremiumExpired ? 'Ezial Premium expiré' : 'Ezial Free');
   const startedAt = info.isTrialActive ? info.trialStart : info.proStartedAt;
 
   return (
@@ -87,6 +89,12 @@ export default function SellerSubscription() {
           </p>
         )}
 
+        {info.isPremiumExpired && (
+          <p className="mt-3 rounded-lg bg-burgundy/5 border border-burgundy/20 px-3 py-2 text-xs text-burgundy">
+            Votre abonnement Premium a expiré. Vos données et commandes restent accessibles ; renouvelez pour retrouver vos 30 produits, votre badge et la commission à 8 %. Cette boutique ne peut plus revenir au forfait Free.
+          </p>
+        )}
+
         <div className="mt-4 grid grid-cols-2 gap-3">
           <div className="rounded-lg bg-cream p-3">
             <p className="text-xs font-medium text-ink/50 flex items-center gap-1.5"><Package size={13} /> Produits publiés</p>
@@ -102,10 +110,10 @@ export default function SellerSubscription() {
               <p className="mt-1 text-lg font-semibold text-ink">{formatDate(startedAt)}</p>
             </div>
           )}
-          {info.isProActive && (
+          {(info.isProActive || info.isPremiumExpired) && info.proUntil && (
             <div className="rounded-lg bg-cream p-3">
-              <p className="text-xs font-medium text-ink/50 flex items-center gap-1.5"><Calendar size={13} /> Date d'expiration</p>
-              <p className="mt-1 text-lg font-semibold text-ink">{formatDate(info.proUntil!)}</p>
+              <p className="text-xs font-medium text-ink/50 flex items-center gap-1.5"><Calendar size={13} /> {info.isProActive ? "Date d'expiration" : 'Expiré le'}</p>
+              <p className="mt-1 text-lg font-semibold text-ink">{formatDate(info.proUntil)}</p>
             </div>
           )}
           {info.isTrialActive && info.trialDaysRemaining !== null && (
@@ -119,12 +127,13 @@ export default function SellerSubscription() {
 
       {/* Same Free / Premium cards as the signup flow */}
       <PricingCards
-        freeIsCurrent={!info.isProActive}
-        premiumStatus={info.isProActive ? (info.isTrialActive ? 'trial' : 'paid') : null}
-        trialEligible={!info.trialUsed}
+        freeIsCurrent={!info.isProActive && !info.isPremiumExpired}
+        freeOfferDisallowed={info.premiumPaidEver}
+        premiumStatus={info.isProActive ? (info.isTrialActive ? 'trial' : 'paid') : (info.isPremiumExpired ? 'expired' : null)}
+        trialEligible={!info.trialUsed && !info.premiumPaidEver}
         onStartTrial={() => navigate('/seller/abonnement/essai')}
         onSubscribe={() => navigate('/seller/abonnement/paiement')}
-        subscribeButtonLabel={info.isProActive && !info.isTrialActive ? 'Renouveler Premium' : 'S’abonner à Premium'}
+        subscribeButtonLabel={info.isProActive && !info.isTrialActive ? 'Renouveler Premium' : info.isPremiumExpired ? 'Renouveler Premium' : 'S’abonner à Premium'}
       />
 
       {/* Payment history */}

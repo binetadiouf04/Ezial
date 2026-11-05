@@ -48,9 +48,13 @@ export interface PricingCardsProps {
   onContinueFree?: () => void;
   freeButtonLabel?: string;
   freeButtonDisabled?: boolean;
+  /** Once a seller has paid for Premium even once, Free is never offered
+   * to them again — not disabled, replaced outright by an explanatory
+   * message, regardless of freeIsCurrent/onContinueFree. */
+  freeOfferDisallowed?: boolean;
 
-  /** Premium state: null = not subscribed, 'trial' = trial active, 'paid' = paid Premium active */
-  premiumStatus?: 'trial' | 'paid' | null;
+  /** Premium state: null = not subscribed, 'trial' = trial active, 'paid' = paid Premium active, 'expired' = paid before, lapsed, never offered Free again */
+  premiumStatus?: 'trial' | 'paid' | 'expired' | null;
   /** Hide the trial button entirely (already used) */
   trialEligible?: boolean;
   onStartTrial?: () => void;
@@ -59,7 +63,7 @@ export interface PricingCardsProps {
 }
 
 export default function PricingCards({
-  freeIsCurrent, onContinueFree, freeButtonLabel = 'Continuer gratuitement', freeButtonDisabled,
+  freeIsCurrent, onContinueFree, freeButtonLabel = 'Continuer gratuitement', freeButtonDisabled, freeOfferDisallowed,
   premiumStatus = null, trialEligible = true, onStartTrial, onSubscribe, subscribeButtonLabel,
 }: PricingCardsProps) {
   return (
@@ -78,7 +82,9 @@ export default function PricingCards({
         <BenefitList items={freeBenefits} />
 
         <div className="mt-7">
-          {freeIsCurrent ? (
+          {freeOfferDisallowed ? (
+            <div className="rounded-full border border-line bg-cream px-5 py-3 text-center text-xs text-ink/50">Non disponible : un abonnement Premium a déjà été payé sur cette boutique.</div>
+          ) : freeIsCurrent ? (
             <div className="rounded-full border border-line px-5 py-3 text-center text-sm font-medium text-ink/50">Forfait actuel</div>
           ) : (
             <button
@@ -115,6 +121,8 @@ export default function PricingCards({
             <div className="rounded-full bg-white/15 px-5 py-3 text-center text-sm font-medium text-white">Premium actif</div>
           ) : premiumStatus === 'trial' ? (
             <div className="rounded-full bg-white/15 px-5 py-3 text-center text-sm font-medium text-white">Essai Premium en cours</div>
+          ) : premiumStatus === 'expired' ? (
+            <div className="rounded-full bg-white/15 px-5 py-3 text-center text-sm font-medium text-white">Premium expiré</div>
           ) : trialEligible ? (
             <button onClick={onStartTrial} className="w-full rounded-full bg-white px-5 py-3 text-sm font-semibold text-burgundy transition-opacity hover:opacity-90">
               Essayer gratuitement 30 jours
@@ -122,9 +130,9 @@ export default function PricingCards({
           ) : null}
           <button
             onClick={onSubscribe}
-            className={`w-full rounded-full border-2 border-white px-5 py-3 text-sm font-semibold text-white transition-colors hover:bg-white/10 ${premiumStatus === 'paid' ? '' : ''}`}
+            className="w-full rounded-full border-2 border-white px-5 py-3 text-sm font-semibold text-white transition-colors hover:bg-white/10"
           >
-            {subscribeButtonLabel ?? (premiumStatus === 'paid' ? 'Renouveler Premium' : 'S’abonner à Premium')}
+            {subscribeButtonLabel ?? (premiumStatus === 'paid' || premiumStatus === 'expired' ? 'Renouveler Premium' : 'S’abonner à Premium')}
           </button>
         </div>
       </div>

@@ -5,7 +5,7 @@ import GoogleLocationPickerMap from '@/components/GoogleLocationPickerMap';
 import { StatusChip } from '../../components/StatusChip';
 import {
   fetchShopLocation, updateShopLocation, fetchShopOnboarding, updateShopOnboarding,
-  submitShopForReview, uploadShopAsset, removeShopAsset, type ShopOnboardingData,
+  submitShopForReview, activateShopIfReady, uploadShopAsset, removeShopAsset, type ShopOnboardingData,
 } from '@/lib/supabaseSellerShop';
 import ImageCropModal from '@/components/ImageCropModal';
 import { fetchModerationFlags, latestUnresolvedFlag } from '@/lib/supabaseModeration';
@@ -198,6 +198,16 @@ export default function SellerShop() {
     if (result.error) { setSaveError(result.error); return; }
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
+
+    // No more manual admin review for a normal signup: the moment the
+    // required fields are genuinely complete, the shop activates itself —
+    // activate_shop_if_ready() re-checks them server-side and simply
+    // returns ready:false (silently, not an error) if something's still
+    // missing, so this is safe to call after every save.
+    if (form.status === 'draft') {
+      const activation = await activateShopIfReady();
+      if (activation.ready) setForm((f) => ({ ...f, status: 'active' }));
+    }
   };
 
   const handleSubmitForReview = async () => {
@@ -266,9 +276,14 @@ export default function SellerShop() {
 
       {authUserId && <NotificationOptIn userId={authUserId} label="Notifications de nouvelles commandes" />}
 
-      {/* Onboarding status — the seller can prepare/edit their shop while
-          waiting, but only submitShopForReview() (draft → pending) is
-          reachable from here; 'active' is admin-only. */}
+      {/* Onboarding status — a normal signup never goes through admin
+          review any more: saving the required fields (ci-dessous) active
+          la boutique automatiquement via activate_shop_if_ready() (see
+          handleSave). 'rejected' is now only reachable if Ezial flags an
+          existing shop for another reason afterward — submitShopForReview()
+          (draft/rejected → pending) stays for that one case. 'active' is
+          otherwise never reachable from the client (admin + safety trigger
+          enforce that server-side). */}
       {formLoaded && (
         <div className="card p-4 space-y-3">
           <div className="flex items-center justify-between gap-3">
@@ -276,15 +291,15 @@ export default function SellerShop() {
               <p className="text-xs font-medium text-ink/50">Statut de la boutique</p>
               <div className="mt-1.5"><StatusChip status={form.status} size="md" /></div>
             </div>
-            {(form.status === 'draft' || form.status === 'rejected') && (
+            {form.status === 'rejected' && (
               <button onClick={() => void handleSubmitForReview()} disabled={submitting} className="btn-primary flex-shrink-0">
                 {submitting ? <><Loader2 size={15} className="animate-spin" /> Envoi...</> : <><Send size={15} /> Soumettre pour validation</>}
               </button>
             )}
           </div>
-          {form.status === 'draft' && <p className="text-xs text-ink/45">Complétez les informations ci-dessous puis soumettez votre boutique à l'équipe Ezial. Vous pouvez continuer à la préparer (produits inclus) en attendant.</p>}
+          {form.status === 'draft' && <p className="text-xs text-ink/45">Complétez les informations obligatoires ci-dessous (description, téléphone, quartier ou adresse) : votre boutique s'active automatiquement dès qu'elles sont enregistrées, sans validation à attendre.</p>}
           {form.status === 'pending' && <p className="text-xs text-ink/45">Votre demande est en cours d'examen par l'équipe Ezial. Vous pouvez continuer à préparer vos produits.</p>}
-          {form.status === 'rejected' && <p className="text-xs text-burgundy">Votre demande précédente n'a pas été approuvée. Mettez à jour les informations puis soumettez à nouveau.</p>}
+          {form.status === 'rejected' && <p className="text-xs text-burgundy">Ezial a signalé un problème sur votre boutique. Mettez à jour les informations puis soumettez à nouveau.</p>}
           {form.status === 'suspended' && (
             <p className="text-xs text-burgundy">
               Votre boutique est actuellement désactivée par Ezial.

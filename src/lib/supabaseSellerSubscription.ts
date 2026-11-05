@@ -32,6 +32,14 @@ export interface SellerSubscriptionInfo {
   commissionPercent: number;
   trialDaysRemaining: number | null;
   proDaysRemaining: number | null;
+  // Set once, forever, by confirm_subscription_payment() on the first real
+  // payment — never cleared by an expiry or a plan read. Once true, this
+  // seller can never be offered "Continuer gratuitement" again.
+  premiumPaidEver: boolean;
+  // plan stays 'pro' forever once premiumPaidEver is true (see
+  // process_subscription_expirations) — this is the distinct "Premium
+  // expiré, renouvelez" state, never shown as Free.
+  isPremiumExpired: boolean;
 }
 
 function daysUntil(iso: string | null): number | null {
@@ -47,21 +55,24 @@ function daysUntil(iso: string | null): number | null {
 export async function fetchSellerSubscription(shopId: string): Promise<SellerSubscriptionInfo> {
   const { data } = await supabase
     .from('seller_subscriptions')
-    .select('plan, trial_used, trial_start, trial_end, pro_until, pro_started_at')
+    .select('plan, trial_used, trial_start, trial_end, pro_until, pro_started_at, premium_paid_ever')
     .eq('shop_id', shopId)
     .maybeSingle();
 
   const proUntil = (data?.pro_until as string | null) ?? null;
   const trialEnd = (data?.trial_end as string | null) ?? null;
+  const plan = (data?.plan as SubscriptionPlan) ?? 'free';
+  const premiumPaidEver = (data?.premium_paid_ever as boolean) ?? false;
   const isProActive = !!proUntil && new Date(proUntil) > new Date();
   // A trial is "active" specifically when the current pro_until is the
   // trial's own end date — once a real payment is confirmed, pro_until
   // moves past trial_end (see confirm_subscription_payment), so this
   // naturally stops being true the moment a paid period takes over.
   const isTrialActive = isProActive && !!trialEnd && proUntil === trialEnd;
+  const isPremiumExpired = plan === 'pro' && !isProActive && premiumPaidEver;
 
   return {
-    plan: (data?.plan as SubscriptionPlan) ?? 'free',
+    plan,
     trialUsed: (data?.trial_used as boolean) ?? false,
     trialStart: (data?.trial_start as string | null) ?? null,
     trialEnd,
@@ -73,6 +84,8 @@ export async function fetchSellerSubscription(shopId: string): Promise<SellerSub
     commissionPercent: isProActive ? PREMIUM_COMMISSION_PERCENT : FREE_COMMISSION_PERCENT,
     trialDaysRemaining: isTrialActive ? daysUntil(proUntil) : null,
     proDaysRemaining: isProActive ? daysUntil(proUntil) : null,
+    premiumPaidEver,
+    isPremiumExpired,
   };
 }
 
@@ -129,24 +142,9 @@ export async function fetchSubscriptionPayments(shopId: string): Promise<Subscri
   }));
 }
 
-// Never activates anything itself — just records the seller's declared
-// payment reference as "pending_review". A migration-side trigger notifies
-// admins on insert; an admin manually verifies the reference against their
-// own Wave/Orange Money account and confirms or rejects via RPC.
-export async function submitSubscriptionPayment(
-  shopId: string,
-  method: SubscriptionPaymentMethod,
-  reference: string
-): Promise<{ error?: string }> {
-  const { data: userData } = await supabase.auth.getUser();
-  const userId = userData.user?.id;
-  if (!userId) return { error: 'Session expirée. Reconnectez-vous.' };
-
-  const { error } = await supabase.from('subscription_payments').insert({
-    shop_id: shopId,
-    payment_method: method,
-    reference: reference.trim(),
-    requested_by: userId,
-  });
-  return error ? { error: error.message } : {};
-}
+// submitSubscriptionPayment() (the seller-declared-reference, manual-admin-
+// review submission) is retired: SellerSubscriptionPayment.tsx now shows
+// "paiement en ligne temporairement indisponible" instead of taking a
+// reference. fetchSubscriptionPayments()/confirmSubscriptionPayment() below
+// still let an admin see and resolve whatever was already pending_review
+// before this change.
