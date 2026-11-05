@@ -4,12 +4,13 @@ import { supabase } from '@/lib/supabaseClient';
 import { fetchSellerFinances } from '@/lib/supabaseSellerFinances';
 import { fetchSellerOrders, type SellerOrderSummary } from '@/lib/supabaseSellerOrders';
 import { fetchSellerProducts } from '@/lib/supabaseSellerProducts';
+import { fetchShopOnboarding } from '@/lib/supabaseSellerShop';
 import { formatFCFA, formatDateTime } from '../../data';
 import SummaryCard from '../../components/SummaryCard';
 import { StatusChip } from '../../components/StatusChip';
 import NotificationOptIn from '@/components/NotificationOptIn';
 import NotificationGateModal from '@/components/NotificationGateModal';
-import { ShoppingBag, Package, Wallet, Clock, ChevronRight, Truck, Store, Loader2 } from 'lucide-react';
+import { ShoppingBag, Package, Wallet, Clock, ChevronRight, Truck, Store, Loader2, ArrowRight } from 'lucide-react';
 
 const MAX_ACTIVE = 25;
 
@@ -20,18 +21,21 @@ export default function SellerDashboard() {
   const [activeProducts, setActiveProducts] = useState(0);
   const [availableBalance, setAvailableBalance] = useState(0);
   const [authUserId, setAuthUserId] = useState<string | null>(null);
+  const [shopDraft, setShopDraft] = useState(false);
   useEffect(() => { void supabase.auth.getUser().then(({ data }) => setAuthUserId(data.user?.id ?? null)); }, []);
 
   const load = useCallback(async (shopId: string) => {
     setLoading(true);
-    const [sellerOrders, products, finances] = await Promise.all([
+    const [sellerOrders, products, finances, onboarding] = await Promise.all([
       fetchSellerOrders(shopId),
       fetchSellerProducts(shopId),
       fetchSellerFinances(shopId),
+      fetchShopOnboarding(shopId),
     ]);
     setOrders(sellerOrders);
     setActiveProducts(products.filter((p) => p.status === 'active').length);
     setAvailableBalance(finances.availableBalance);
+    setShopDraft(onboarding?.status === 'draft');
     setLoading(false);
   }, []);
 
@@ -62,6 +66,23 @@ export default function SellerDashboard() {
         <h1 className="font-display text-2xl font-semibold text-ink">Accueil</h1>
         <p className="mt-1 text-sm text-ink/55">Vue d'ensemble de votre activité</p>
       </div>
+
+      {/* No admin approval gates a new signup any more — this is the one
+          real blocker left before the shop goes live on its own
+          (activate_shop_if_ready() checks these exact fields), so it's
+          the single most useful thing to surface right here. */}
+      {shopDraft && (
+        <button onClick={() => navigate('/seller/boutique')} className="flex w-full items-center justify-between gap-3 rounded-xl border border-burgundy/20 bg-burgundy/5 p-4 text-left transition-colors hover:bg-burgundy/10">
+          <div className="flex items-center gap-3">
+            <Store size={20} className="flex-shrink-0 text-burgundy" />
+            <div>
+              <p className="text-sm font-semibold text-ink">Complétez votre boutique pour passer en ligne</p>
+              <p className="mt-0.5 text-xs text-ink/55">Description, téléphone et quartier ou adresse — votre boutique s'active automatiquement dès que c'est fait.</p>
+            </div>
+          </div>
+          <ArrowRight size={16} className="flex-shrink-0 text-burgundy" />
+        </button>
+      )}
 
       {authUserId && (
         <>
