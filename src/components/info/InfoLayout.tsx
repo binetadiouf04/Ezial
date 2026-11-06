@@ -32,7 +32,7 @@ function PageHeader({ page }: { page: InfoPageDef }) {
     <div className="border-b border-line bg-cream">
       <div className={`container-pro py-7 sm:py-10 lg:py-12 ${centered ? 'text-center' : ''}`}>
         <Breadcrumb label={page.breadcrumb ?? page.title} centered={centered} />
-        <h1 className={`mt-4 max-w-3xl font-display text-3xl font-semibold leading-tight tracking-tightish text-ink sm:text-4xl lg:text-[2.75rem] ${centered ? 'mx-auto' : ''}`}>
+        <h1 className={`mt-4 max-w-3xl font-display text-3xl font-semibold leading-tight lining-nums tracking-tightish text-ink sm:text-4xl lg:text-[2.75rem] ${centered ? 'mx-auto' : ''}`}>
           {page.title}
         </h1>
         {page.intro && (

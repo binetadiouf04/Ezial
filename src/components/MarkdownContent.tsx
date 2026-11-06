@@ -45,7 +45,7 @@ function Block({ block }: { block: MarkdownBlock }): ReactNode {
   switch (block.type) {
     case 'heading':
       return block.level === 2 ? (
-        <h2 id={block.id} className="scroll-mt-24 lg:scroll-mt-36 font-display text-2xl font-semibold leading-tight text-ink sm:text-[1.75rem] mt-12 mb-4 first:mt-0"><Inline nodes={block.children} /></h2>
+        <h2 id={block.id} className="scroll-mt-24 lg:scroll-mt-36 font-display text-2xl font-semibold leading-tight lining-nums text-ink sm:text-[1.75rem] mt-12 mb-4 first:mt-0"><Inline nodes={block.children} /></h2>
       ) : (
         <h3 id={block.id} className="scroll-mt-24 lg:scroll-mt-36 text-[17px] font-semibold leading-snug text-ink sm:text-lg mt-8 mb-2 first:mt-0 [h2+&]:mt-5"><Inline nodes={block.children} /></h3>
       );
