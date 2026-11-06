@@ -65,8 +65,7 @@ export default function BlogImageUpload({
           type="button"
           onClick={pick}
           disabled={uploading}
-          className="flex w-full flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-line bg-cream/40 px-4 py-8 text-sm text-ink/55 transition-colors hover:border-burgundy/40 hover:text-burgundy"
-          style={{ aspectRatio: String(aspect) }}
+          className="flex w-full flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-line bg-cream/40 px-4 py-10 text-sm text-ink/55 transition-colors hover:border-burgundy/40 hover:text-burgundy"
         >
           {uploading ? <Loader2 size={22} className="animate-spin" /> : <ImagePlus size={22} />}
           {uploading ? 'Envoi en cours…' : emptyLabel}
