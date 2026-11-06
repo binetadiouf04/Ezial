@@ -39,14 +39,10 @@ export default function ResetPasswordPage() {
     setDone(true);
   };
 
-  // Same-document navigation bug as AuthConfirmPage.tsx's goToRoute: a
-  // hash-only URL change never reloads the page, so App.tsx's
-  // once-at-mount useState check never re-runs and this page used to sit
-  // there after a click with nothing visibly happening. See that file's
-  // comment for the full explanation.
-  const goTo = (hash: string) => {
-    window.location.href = `${window.location.origin}${import.meta.env.BASE_URL}${hash}`;
-    window.location.reload();
+  // A real app route ('/profil', '/pro') — a different pathname is a
+  // genuine cross-document navigation, so the browser reloads on its own.
+  const goTo = (route: string) => {
+    window.location.href = `${window.location.origin}${route}`;
   };
 
   return (
@@ -59,16 +55,16 @@ export default function ResetPasswordPage() {
           <div className="mt-5 space-y-4">
             <p className="flex items-center gap-2 text-sm font-medium text-green-700"><Check size={16} /> Mot de passe mis à jour.</p>
             <div className="flex flex-col gap-2">
-              <button onClick={() => goTo('#/profil')} className="btn-primary w-full">Aller à Mon compte</button>
-              <button onClick={() => goTo('#/pro')} className="btn-outline w-full">Aller à Ezial Pro</button>
+              <button onClick={() => goTo('/profil')} className="btn-primary w-full">Aller à Mon compte</button>
+              <button onClick={() => goTo('/pro')} className="btn-outline w-full">Aller à Ezial Pro</button>
             </div>
           </div>
         ) : linkValid === 'invalid' ? (
           <div className="mt-5 space-y-4">
             <p className="flex items-start gap-1.5 text-sm text-burgundy"><AlertCircle size={15} className="mt-0.5 flex-shrink-0" /> {EXPIRED_OR_USED_ERROR}</p>
             <div className="flex flex-col gap-2">
-              <button onClick={() => goTo('#/profil')} className="btn-primary w-full">Demander un nouveau lien (client)</button>
-              <button onClick={() => goTo('#/pro')} className="btn-outline w-full">Demander un nouveau lien (vendeur)</button>
+              <button onClick={() => goTo('/profil')} className="btn-primary w-full">Demander un nouveau lien (client)</button>
+              <button onClick={() => goTo('/pro')} className="btn-outline w-full">Demander un nouveau lien (vendeur)</button>
             </div>
           </div>
         ) : (

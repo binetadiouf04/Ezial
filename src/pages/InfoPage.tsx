@@ -1,4 +1,4 @@
-import { useApp } from '@/store/AppContext';
+import { useApp, navigateTo } from '@/store/AppContext';
 import { paymentMethods } from '@/data/payments';
 import PricingCards from '@/components/PricingCards';
 import { FREE_COMMISSION_PERCENT, PREMIUM_COMMISSION_PERCENT, PREMIUM_PRICE_FCFA, FREE_PRODUCT_LIMIT } from '@/data/subscriptionPlans';
@@ -122,7 +122,7 @@ const infoContent: Record<string, { title: string; body: React.ReactNode }> = {
         <p>Lorsqu'une commande comprend plusieurs boutiques, Ezial coordonne la collecte des articles et organise leur livraison selon les modalités annoncées au client.</p>
 
         <H2>Retours et remboursements</H2>
-        <p>Les conditions applicables sont détaillées dans la <button onClick={() => window.location.hash = '/info/retours'} className="text-burgundy hover:underline">politique de retour et de remboursement</button> d'Ezial, accessible avant l'achat.</p>
+        <p>Les conditions applicables sont détaillées dans la <button onClick={() => navigateTo('/info/retours')} className="text-burgundy hover:underline">politique de retour et de remboursement</button> d'Ezial, accessible avant l'achat.</p>
         <p>Les droits légaux du consommateur prévalent sur toute condition commerciale contraire.</p>
 
         <H2>Comptes et utilisation</H2>
@@ -251,7 +251,7 @@ const infoContent: Record<string, { title: string; body: React.ReactNode }> = {
         <p>Toute demande concernant le site peut être adressée à : contact@ezial.net.</p>
 
         <H2>3. Hébergement et infrastructure technique</H2>
-        <p>Le site Ezial est hébergé et publié à l'aide du service GitHub Pages, fourni par GitHub, Inc.</p>
+        <p>Le site Ezial est hébergé et publié à l'aide du service Cloudflare Pages, fourni par Cloudflare, Inc.</p>
         <p>Le fonctionnement de la plateforme repose également sur des services techniques tiers, notamment Supabase pour la gestion de certaines données et fonctionnalités applicatives.</p>
         <p>Les coordonnées légales complètes des prestataires d'hébergement et les informations relatives à la localisation des données sont précisées conformément aux obligations légales applicables.</p>
 
@@ -314,7 +314,7 @@ const infoContent: Record<string, { title: string; body: React.ReactNode }> = {
         <p>Certaines informations peuvent être transmises aux vendeurs, livreurs ou prestataires techniques lorsque cela est nécessaire à l'exécution des services concernés.</p>
         <p>Les utilisateurs disposent des droits prévus par la législation applicable.</p>
         <p>Pour toute question ou demande concernant leurs données personnelles, ils peuvent contacter : contact@ezial.net.</p>
-        <p>Les informations détaillées relatives aux traitements de données figurent dans la <button onClick={() => window.location.hash = '/info/confidentialite'} className="text-burgundy hover:underline">Politique de confidentialité</button> d'Ezial.</p>
+        <p>Les informations détaillées relatives aux traitements de données figurent dans la <button onClick={() => navigateTo('/info/confidentialite')} className="text-burgundy hover:underline">Politique de confidentialité</button> d'Ezial.</p>
 
         <H2>10. Cookies et technologies similaires</H2>
         <p>Ezial peut utiliser des cookies ou des technologies similaires afin d'assurer le fonctionnement de la plateforme, de maintenir les sessions des utilisateurs et d'améliorer les services proposés.</p>

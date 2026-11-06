@@ -2,24 +2,25 @@
 // Generates real, static, crawlable HTML files — one per active product,
 // shop and category(/subcategory) — plus the sitemap, directly from
 // Supabase at build time. Runs AFTER `vite build` (needs the final hashed
-// asset filenames from dist/index.html) and BEFORE the GitHub Pages
-// upload step.
+// asset filenames from dist/index.html) and is now wired into npm's own
+// "build" script (package.json), so every build system that runs
+// `npm run build` — Cloudflare Pages included — produces this output, not
+// just the GitHub Actions workflow that originally called it as a
+// separate step.
 //
-// Why this exists: the live app is a 100% client-rendered SPA using hash
-// routing (#/produit/123). A hash fragment is never a distinct URL to a
-// search engine — every one of those "pages" collapses to the same
-// https://www.ezial.net/, so nothing but the homepage was ever indexable.
-//
-// This script does NOT change that app. It adds real files at real paths
-// (dist/produit/<id>/index.html, etc.) containing the actual product/shop/
-// category content as plain HTML (readable with zero JavaScript), correct
-// per-page <title>/meta description/canonical/Open Graph/JSON-LD, and the
-// exact same <script>/<link> tags as the built app — so once a browser (or
-// a crawler that executes JS) loads that same file, the normal React app
+// Why this exists: a 100%-client-rendered SPA has no real HTML for a
+// crawler to read at /produit/123 — only a client-side JS mount. This
+// script adds real files at real paths (dist/produit/<id>/index.html,
+// etc.) containing the actual product/shop/category content as plain
+// HTML (readable with zero JavaScript), correct per-page <title>/meta
+// description/canonical/Open Graph/JSON-LD, and the exact same
+// <script>/<link> tags as the built app — so once a browser (or a
+// crawler that executes JS) loads that same file, the normal React app
 // mounts right over it and becomes fully interactive. Nothing redirects:
-// the URL a visitor or a crawler lands on is the URL that stays in the bar.
-// See src/store/AppContext.tsx's getInitialRoute() for the one small
-// router change that lets the app recognize that initial path.
+// the URL a visitor or a crawler lands on is the URL that stays in the
+// bar, and it's the same real path the live app's own History-API router
+// (src/store/AppContext.tsx) now navigates to directly — no "#" involved
+// on either side.
 //
 // Usage: node scripts/prerender-seo.mjs   (after `vite build`)
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
@@ -378,7 +379,7 @@ const INFO_PAGES = [
       "Le site internet www.ezial.net est une plateforme de commerce électronique exploitée par une entreprise individuelle immatriculée au Sénégal.",
       "Plateforme : Ezial. Exploitante : Bineta DIOUF. Forme juridique : Entreprise individuelle. Numéro RCCM : SN.DKR.2026.A.40238. Numéro NINEA : 013246576. Adresse professionnelle : Grand Yoff, quartier Sicap Foire, villa n° 48, Dakar, Sénégal. Adresse électronique : contact@ezial.net. Téléphone : +221 71 105 52 52.",
       "La responsable de la publication du site est Bineta DIOUF, en sa qualité d'exploitante de l'entreprise individuelle. Toute demande concernant le site peut être adressée à contact@ezial.net.",
-      "Le site Ezial est hébergé et publié à l'aide du service GitHub Pages, fourni par GitHub, Inc. Le fonctionnement de la plateforme repose également sur des services techniques tiers, notamment Supabase.",
+      "Le site Ezial est hébergé et publié à l'aide du service Cloudflare Pages, fourni par Cloudflare, Inc. Le fonctionnement de la plateforme repose également sur des services techniques tiers, notamment Supabase.",
       "Ezial est une marketplace multivendeur facilitant la mise en relation entre les consommateurs et des boutiques partenaires indépendantes au Sénégal.",
     ],
   },

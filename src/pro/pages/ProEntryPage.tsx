@@ -24,7 +24,7 @@ function ProRouteFallback() {
 
 export default function ProEntryPage() {
   const { role, login, verifySellerLogin, signUpSellerAccount, continueAsSellerWithCurrentAccount, requestSellerPasswordReset, resendSellerConfirmationEmail, resendSellerConfirmationForLogin, verifyAdminLogin, checkDriverUsername, createDriverPin, signInDriverWithPin } = usePro();
-  const { customerUser } = useApp();
+  const { customerUser, navigate: navigateApp } = useApp();
   const [selectedRole, setSelectedRole] = useState<Role | null>(null);
   const [sellerInitialView, setSellerInitialView] = useState<'login' | 'signup'>('login');
 
@@ -93,7 +93,7 @@ export default function ProEntryPage() {
   return (
     <div className="min-h-screen bg-cream flex flex-col">
       <div className="container-pro flex-1 flex flex-col items-center justify-center py-12">
-        <button onClick={() => { window.location.hash = '/'; }} className="absolute top-6 left-6 flex items-center gap-1.5 text-sm text-ink/60 hover:text-ink">
+        <button onClick={() => navigateApp('/')} className="absolute top-6 left-6 flex items-center gap-1.5 text-sm text-ink/60 hover:text-ink">
           <ArrowLeft size={16} /> Marketplace
         </button>
 
@@ -144,7 +144,7 @@ export default function ProEntryPage() {
             "Créer ma boutique"/"Se connecter à Ezial Pro" above. */}
         <div className="mt-6 w-full max-w-sm border-t border-line/60 pt-6 text-center">
           <button
-            onClick={() => { window.location.hash = '/info/tarifs-vendeurs'; }}
+            onClick={() => navigateApp('/info/tarifs-vendeurs')}
             className="group inline-flex flex-col items-center gap-1 py-2"
           >
             <span className="inline-flex items-center gap-1.5 font-display text-base text-burgundy transition-opacity group-hover:opacity-70">

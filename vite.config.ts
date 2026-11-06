@@ -4,7 +4,7 @@ import { fileURLToPath, URL } from 'node:url';
 
 // https://vitejs.dev/config/
 export default defineConfig({
-  // Served from https://www.ezial.net (GitHub Pages custom domain, at root)
+  // Served from https://www.ezial.net (Cloudflare Pages custom domain, at root)
   base: '/',
   plugins: [react()],
   resolve: {

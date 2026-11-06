@@ -1,4 +1,5 @@
 import { usePro } from '../ProContext';
+import { navigateTo } from '@/store/AppContext';
 import { LayoutDashboard, ShoppingBag, Package, Store, Wallet, LogOut, ArrowLeft, Layers, Truck, AlertTriangle, Star, Megaphone, Crown } from 'lucide-react';
 import AdminDashboard from '../pages/admin/AdminDashboard';
 import AdminContent from '../pages/admin/AdminContent';
@@ -114,7 +115,7 @@ export default function AdminLayout() {
           })}
         </nav>
         <div className="p-3 border-t border-line space-y-1">
-          <button onClick={() => { window.location.hash = '/'; }} className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-ink/50 hover:bg-cream hover:text-ink transition-colors">
+          <button onClick={() => { navigateTo('/'); }} className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-ink/50 hover:bg-cream hover:text-ink transition-colors">
             <ArrowLeft size={18} /> Retourner sur Ezial Marketplace
           </button>
           <button onClick={logout} className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-ink/50 hover:bg-burgundy/5 hover:text-burgundy transition-colors">
@@ -131,7 +132,7 @@ export default function AdminLayout() {
         <div className="flex flex-shrink-0 items-center gap-1.5">
           <AdminNotificationBell onNavigate={(url) => navigate(url.replace(/^\/pro/, ''))} />
           <button
-            onClick={() => { window.location.hash = '/'; }}
+            onClick={() => { navigateTo('/'); }}
             className="flex items-center gap-1.5 rounded-lg border border-line px-2.5 py-1.5 text-xs font-medium text-ink/60 hover:border-burgundy/30 hover:text-burgundy transition-colors"
           >
             <ArrowLeft size={14} />
