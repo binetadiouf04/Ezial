@@ -428,7 +428,7 @@ const INFO_PAGES = [
     description: "Éditeur, hébergement et informations légales de la plateforme Ezial.",
     heading: 'Mentions légales',
     paragraphs: [
-      "Le site internet www.ezial.net est une plateforme de commerce électronique exploitée par une entreprise individuelle immatriculée au Sénégal.",
+      "Le site internet ezial.net est une plateforme de commerce électronique exploitée par une entreprise individuelle immatriculée au Sénégal.",
       "Plateforme : Ezial. Exploitante : Bineta DIOUF. Forme juridique : Entreprise individuelle. Numéro RCCM : SN.DKR.2026.A.40238. Numéro NINEA : 013246576. Adresse professionnelle : Grand Yoff, quartier Sicap Foire, villa n° 48, Dakar, Sénégal. Adresse électronique : contact@ezial.net. Téléphone : +221 71 105 52 52.",
       "La responsable de la publication du site est Bineta DIOUF, en sa qualité d'exploitante de l'entreprise individuelle. Toute demande concernant le site peut être adressée à contact@ezial.net.",
       "Le site Ezial est hébergé et publié à l'aide du service Cloudflare Pages, fourni par Cloudflare, Inc. Le fonctionnement de la plateforme repose également sur des services techniques tiers, notamment Supabase.",

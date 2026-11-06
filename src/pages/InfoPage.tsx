@@ -233,7 +233,7 @@ const infoContent: Record<string, { title: string; body: React.ReactNode }> = {
         <p className="text-xs text-ink/45">Dernière mise à jour : 23 octobre 2026</p>
 
         <H2>1. Éditeur du site</H2>
-        <p>Le site internet www.ezial.net est une plateforme de commerce électronique exploitée par une entreprise individuelle immatriculée au Sénégal.</p>
+        <p>Le site internet ezial.net est une plateforme de commerce électronique exploitée par une entreprise individuelle immatriculée au Sénégal.</p>
         <p>Les informations relatives à l'entreprise exploitante sont les suivantes :</p>
         <p>• <strong>Plateforme</strong> : Ezial</p>
         <p>• <strong>Exploitante</strong> : Bineta DIOUF</p>

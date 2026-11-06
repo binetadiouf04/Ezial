@@ -3,6 +3,8 @@ import { useApp } from '@/store/AppContext';
 import { getProduct, getVariantPrice, getProductsFromSameShop, getSimilarProducts, isRealCatalogId } from '@/data/products';
 import { getShop, registerSupabaseShops } from '@/data/shops';
 import { fetchProductDetailFromSupabase } from '@/lib/supabaseCatalog';
+import { useNoIndex } from '@/lib/seoHead';
+import { isProductUuid, productPath } from '@/lib/productUrl';
 import { fetchProductReviews, checkCanReview, submitReview, deleteReview, createReviewReport, type Review, type ReviewReportReason } from '@/lib/supabaseReviews';
 import ReviewReportModal from '@/components/ReviewReportModal';
 import {
@@ -55,6 +57,14 @@ export default function ProductPage({ productId }: { productId: string }) {
   }, [productId]);
 
   const product = supabaseProduct;
+
+  // An old id-based link (/produit/<uuid>) shows the product's descriptive
+  // URL in the address bar once it is known — same page, no new history
+  // entry. Search engines get the real 301 from Cloudflare's _redirects.
+  useEffect(() => {
+    if (!product?.slug || !isProductUuid(productId)) return;
+    window.history.replaceState(window.history.state, '', `${productPath(product)}${window.location.search}`);
+  }, [product, productId]);
   const [variants, setVariants] = useState<Record<string, string>>({});
   const [qty, setQty] = useState(1);
   // Tissus only — the quantity field's raw text (so the customer can type
@@ -210,6 +220,10 @@ export default function ProductPage({ productId }: { productId: string }) {
     if (!product) return { price: 0, oldPrice: undefined };
     return getVariantPrice(product, variants);
   }, [product, variants]);
+
+  // Only once loading has really finished and the product is confirmed
+  // missing — never while it loads, never on a network error.
+  useNoIndex(!loading && !loadError && !product);
 
   if (loading) return <div className="container-pro py-20 text-center text-ink/50">Chargement du produit…</div>;
   if (loadError) return <div className="container-pro py-20 text-center text-ink/50">Une erreur est survenue lors du chargement du produit.</div>;
@@ -455,7 +469,7 @@ export default function ProductPage({ productId }: { productId: string }) {
         <section className="mt-16">
           <div className="mb-5 flex items-center justify-between">
             <h2 className="section-title">Vous aimerez aussi</h2>
-            <button onClick={() => navigate(`/produit/${product.id}/similaires`)} className="flex items-center gap-1 text-sm font-medium text-burgundy hover:underline whitespace-nowrap">Voir tout <ChevronRight size={15} /></button>
+            <button onClick={() => navigate(`${productPath(product)}/similaires`)} className="flex items-center gap-1 text-sm font-medium text-burgundy hover:underline whitespace-nowrap">Voir tout <ChevronRight size={15} /></button>
           </div>
           <ProductCarousel products={similarProducts} />
         </section>
