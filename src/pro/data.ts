@@ -707,18 +707,10 @@ export function formatDateTime(iso: string): string {
   return new Date(iso).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
 }
 
-export function commissionAmount(gross: number): number {
-  return Math.round(gross * 0.08);
-}
-
 export function driverEarning(deliveryFee: number): number {
   return Math.round(deliveryFee * 0.9);
 }
 
 export function ezialDeliveryCommission(deliveryFee: number): number {
   return Math.round(deliveryFee * 0.1);
-}
-
-export function netAmount(gross: number): number {
-  return gross - commissionAmount(gross);
 }

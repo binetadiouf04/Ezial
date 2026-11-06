@@ -7,6 +7,10 @@
 //
 // The paid plan is shown to users as "Ezial Plus"; its technical id stays
 // 'pro' in the database and PREMIUM_* in code, unchanged for compatibility.
+//
+// Commission: one flat rate per plan on every sale — 10 % Free, 8 % Ezial
+// Plus (trial or paid) — identical when the seller runs a promotion. There
+// is no other rate (the old 5 % "promotion > 10 %" rule is gone for good).
 export const FREE_PRODUCT_LIMIT = 10;
 export const PREMIUM_PRODUCT_LIMIT = 30;
 export const FREE_COMMISSION_PERCENT = 10;

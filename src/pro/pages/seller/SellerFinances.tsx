@@ -3,6 +3,7 @@ import { usePro } from '../../ProContext';
 import { formatFCFA, formatDate } from '../../data';
 import { fetchSellerFinances, requestSellerPayout, type SellerTransactionRow } from '@/lib/supabaseSellerFinances';
 import { fetchSellerSubscription } from '@/lib/supabaseSellerSubscription';
+import { FREE_COMMISSION_PERCENT, PREMIUM_COMMISSION_PERCENT } from '@/data/subscriptionPlans';
 import FinanceSummary from '../../components/FinanceSummary';
 import { StatusChip } from '../../components/StatusChip';
 import { Wallet, TrendingUp, Calendar, Check, Loader2 } from 'lucide-react';
@@ -40,7 +41,7 @@ export default function SellerFinances() {
       setCommissionTotal(summary.commissionTotal);
       setNetTotal(summary.netTotal);
       setAvailableBalance(summary.availableBalance);
-      setCommissionRate(sub.isProActive ? 8 : 10);
+      setCommissionRate(sub.isProActive ? PREMIUM_COMMISSION_PERCENT : FREE_COMMISSION_PERCENT);
       setIsLoading(false);
     });
     return () => { cancelled = true; };
@@ -89,7 +90,7 @@ export default function SellerFinances() {
       <FinanceSummary
         rows={[
           { label: 'Ventes brutes', value: grossTotal, hint: `${transactions.length} transaction${transactions.length > 1 ? 's' : ''}` },
-          { label: 'Commission Ezial', value: -commissionTotal, hint: `${commissionRate ?? 10}% (votre forfait actuel) — déduite automatiquement` },
+          { label: 'Commission Ezial', value: -commissionTotal, hint: `${commissionRate ?? FREE_COMMISSION_PERCENT} % (votre forfait actuel, promotions comprises) — déduite automatiquement` },
           { label: 'Montant net', value: netTotal, accent: true },
         ]}
       />

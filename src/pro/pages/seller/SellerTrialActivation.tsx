@@ -2,12 +2,12 @@ import { useState } from 'react';
 import { usePro } from '../../ProContext';
 import { formatDate } from '../../data';
 import { activateSellerTrial } from '@/lib/supabaseSellerSubscription';
-import { PREMIUM_PRODUCT_LIMIT, PREMIUM_COMMISSION_PERCENT } from '@/data/subscriptionPlans';
+import { PREMIUM_PRODUCT_LIMIT, PREMIUM_COMMISSION_PERCENT, FREE_COMMISSION_PERCENT } from '@/data/subscriptionPlans';
 import { ArrowLeft, Check, Crown, Loader2, AlertCircle, Smartphone, Calendar, ShieldCheck } from 'lucide-react';
 
 const benefits = [
   `Jusqu'à ${PREMIUM_PRODUCT_LIMIT} produits publiés`,
-  `Commission réduite à ${PREMIUM_COMMISSION_PERCENT} %`,
+  `Commission de ${PREMIUM_COMMISSION_PERCENT} % au lieu de ${FREE_COMMISSION_PERCENT} % sur chaque vente`,
   'Badge Ezial Plus sur la boutique',
 ];
 

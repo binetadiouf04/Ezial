@@ -25,7 +25,6 @@ const freeBenefits = [
 const premiumBenefits = [
   'Tous les avantages de Free',
   `Jusqu’à ${PREMIUM_PRODUCT_LIMIT} produits publiés`,
-  `Commission réduite de ${FREE_COMMISSION_PERCENT} % à ${PREMIUM_COMMISSION_PERCENT} %`,
   'Badge Ezial Plus sur la boutique',
   'Essai Ezial Plus gratuit pendant 30 jours',
 ];
@@ -84,7 +83,7 @@ export default function PricingCards({
         <div className="mt-5">
           <span className="font-display text-3xl font-semibold text-ink">0 FCFA</span>
         </div>
-        <p className="mt-1.5 text-xs text-ink/45">Commission Ezial : {FREE_COMMISSION_PERCENT} % sur chaque vente.</p>
+        <p className="mt-1.5 text-xs text-ink/45">Commission Ezial : {FREE_COMMISSION_PERCENT} % sur chaque vente, promotions comprises.</p>
 
         <BenefitList items={freeBenefits} />
 
@@ -109,7 +108,7 @@ export default function PricingCards({
       <div className="flex flex-col rounded-2xl bg-burgundy p-7 text-white shadow-xl shadow-burgundy/20 sm:p-8">
         <div>
           <p className="font-display text-xl font-semibold text-white">{PLUS_PLAN_NAME}</p>
-          <p className="mt-1 text-sm text-white/70">Plus de produits, une commission réduite.</p>
+          <p className="mt-1 text-sm text-white/70">{PREMIUM_PRODUCT_LIMIT} produits et seulement {PREMIUM_COMMISSION_PERCENT} % de commission.</p>
         </div>
 
         <div className="mt-5">
@@ -133,7 +132,14 @@ export default function PricingCards({
               : 'Payé tous les 3 mois.'}
           </p>
         </div>
-        <p className="mt-1.5 text-xs text-white/60">Commission Ezial : {PREMIUM_COMMISSION_PERCENT} % sur chaque vente.</p>
+        {/* Commission — the headline advantage over Free, set apart visually */}
+        <div className="mt-5 flex items-center gap-4 rounded-xl bg-white/10 px-4 py-3.5 ring-1 ring-white/20">
+          <span className="flex-shrink-0 whitespace-nowrap font-display text-4xl font-semibold leading-none text-white">{PREMIUM_COMMISSION_PERCENT}&nbsp;%</span>
+          <span className="text-sm leading-snug text-white/85">
+            de commission sur chaque vente, <span className="whitespace-nowrap">au lieu de <span className="line-through decoration-white/60">{FREE_COMMISSION_PERCENT} %</span> en Free</span>
+            <span className="mt-0.5 block text-xs text-white/60">Même taux lorsque vous faites une promotion.</span>
+          </span>
+        </div>
 
         <BenefitList items={premiumBenefits} muted />
 

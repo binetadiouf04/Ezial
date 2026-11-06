@@ -1,7 +1,7 @@
 import { useApp, navigateTo } from '@/store/AppContext';
 import { paymentMethods } from '@/data/payments';
 import PricingCards from '@/components/PricingCards';
-import { FREE_COMMISSION_PERCENT, PREMIUM_COMMISSION_PERCENT, FREE_PRODUCT_LIMIT, PLUS_BILLING, PLUS_ANNUAL_REFERENCE_PRICE_FCFA, PLUS_ANNUAL_DISCOUNT_PERCENT, formatFcfa } from '@/data/subscriptionPlans';
+import { FREE_COMMISSION_PERCENT, PREMIUM_COMMISSION_PERCENT, FREE_PRODUCT_LIMIT, PREMIUM_PRODUCT_LIMIT, PLUS_BILLING, PLUS_ANNUAL_REFERENCE_PRICE_FCFA, PLUS_ANNUAL_DISCOUNT_PERCENT, formatFcfa } from '@/data/subscriptionPlans';
 import { ArrowLeft } from 'lucide-react';
 
 function H2({ children }: { children: React.ReactNode }) {
@@ -366,7 +366,7 @@ function TarifsVendeursPage({ navigate }: { navigate: (route: string) => void })
 
       <div className="mx-auto max-w-2xl text-center">
         <h1 className="font-display text-3xl font-semibold text-ink sm:text-4xl">Votre boutique mérite d'être vue.</h1>
-        <p className="mt-3 text-base text-ink/60">Commencez gratuitement, puis passez à Ezial Plus pour publier plus de produits avec une commission réduite.</p>
+        <p className="mt-3 text-base text-ink/60">Commencez gratuitement, puis passez à Ezial Plus pour publier jusqu'à {PREMIUM_PRODUCT_LIMIT} produits et ne payer que {PREMIUM_COMMISSION_PERCENT} % de commission au lieu de {FREE_COMMISSION_PERCENT} %.</p>
       </div>
 
       <div className="mt-10">
@@ -390,7 +390,8 @@ function TarifsVendeursPage({ navigate }: { navigate: (route: string) => void })
         <p>À l'expiration d'Ezial Plus, la boutique repasse automatiquement au forfait Free. Aucune donnée ni aucun produit n'est supprimé : si plus de {FREE_PRODUCT_LIMIT} produits sont actifs, le vendeur choisit lui-même lesquels rester publiés.</p>
 
         <H2>Commission Ezial</H2>
-        <p>La commission Ezial dépend du forfait : {FREE_COMMISSION_PERCENT} % sur chaque vente en Free, {PREMIUM_COMMISSION_PERCENT} % en Ezial Plus (essai ou payant, trimestriel ou annuel). Elle s'applique uniquement sur le montant réellement vendu, après réduction éventuelle — jamais sur les frais de livraison.</p>
+        <p>La commission Ezial dépend uniquement du forfait : <strong>{FREE_COMMISSION_PERCENT} % sur chaque vente en Free</strong>, <strong>{PREMIUM_COMMISSION_PERCENT} % sur chaque vente en Ezial Plus</strong> (essai ou payant, trimestriel ou annuel). C'est l'un des principaux avantages d'Ezial Plus : sur une vente de 50 000 FCFA, la commission est de {formatFcfa(50000 * PREMIUM_COMMISSION_PERCENT / 100)} au lieu de {formatFcfa(50000 * FREE_COMMISSION_PERCENT / 100)}.</p>
+        <p className="mt-3">Le taux reste le même lorsque vous appliquez une promotion. La commission est calculée sur le prix de vente de vos produits, après la réduction que vous avez appliquée, et jamais sur les frais de livraison.</p>
 
         <H2>Questions fréquentes</H2>
         <p><strong>Est-ce obligatoire de payer pour vendre sur Ezial ?</strong><br />Non. Ezial Free permet de vendre gratuitement avec jusqu'à {FREE_PRODUCT_LIMIT} produits publiés. Une commission de {FREE_COMMISSION_PERCENT} % s'applique aux ventes.</p>

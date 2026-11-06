@@ -44,7 +44,8 @@ livraison consolidée et retrait en boutique.
   collectée/livrée).
 - Gestion des produits : ajout, modification, activation/désactivation, gestion
   du stock, limite de 25 produits actifs.
-- Finances : ventes, commission Ezial (8 %), net vendeur, transactions.
+- Finances : ventes, commission Ezial (10 % en Free, 8 % en Ezial Plus, même
+  en cas de promotion), net vendeur, transactions.
 - Paramètres de boutique : logo, bannière, description, adresse, horaires,
   options de livraison/retrait.
 

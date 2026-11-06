@@ -13,7 +13,7 @@ import {
   type SellerSubscriptionInfo,
   type SubscriptionPaymentRow,
 } from '@/lib/supabaseSellerSubscription';
-import { BILLING_PERIOD_LABEL, formatFcfa } from '@/data/subscriptionPlans';
+import { BILLING_PERIOD_LABEL, FREE_COMMISSION_PERCENT, PREMIUM_COMMISSION_PERCENT, formatFcfa } from '@/data/subscriptionPlans';
 import { Crown, Package, Calendar, Percent, Hourglass, Wallet, Repeat } from 'lucide-react';
 
 export default function SellerSubscription() {
@@ -117,6 +117,11 @@ export default function SellerSubscription() {
           <div className="rounded-lg bg-cream p-3">
             <p className="text-xs font-medium text-ink/50 flex items-center gap-1.5"><Percent size={13} /> Commission applicable</p>
             <p className="mt-1 text-lg font-semibold text-ink">{info.commissionPercent} %</p>
+            <p className="mt-0.5 text-[11px] leading-snug text-ink/50">
+              {info.isProActive
+                ? `Au lieu de ${FREE_COMMISSION_PERCENT} % en Free, promotions comprises`
+                : `${PREMIUM_COMMISSION_PERCENT} % avec Ezial Plus`}
+            </p>
           </div>
           {startedAt && (
             <div className="rounded-lg bg-cream p-3">
