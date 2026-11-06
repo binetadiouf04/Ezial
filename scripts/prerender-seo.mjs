@@ -48,11 +48,41 @@ function loadEnvLocal() {
 }
 
 const fileEnv = loadEnvLocal();
+// Read straight from process.env — the real, OS-level environment variables
+// of THIS Node process, which is the one and only place a build platform
+// (Cloudflare Pages, GitHub Actions, a local shell) can hand variables to a
+// plain `node` invocation. This is a different, unrelated mechanism from
+// Vite's own import.meta.env.VITE_* (used by vite build for the browser
+// bundle): Vite merges the SAME process.env with whatever it finds in
+// .env/.env.production/.env.local files via its own loadEnv(), but this
+// plain Node script has no Vite runtime at all — it only ever sees real
+// process.env (what the platform actually injected into this build step)
+// plus .env.local (loadEnvLocal() above, for a local dev machine; .env.local
+// is git-ignored and never exists in CI). If vite build sees these vars
+// (the live app works) but this script doesn't, the vars reached Vite's
+// bundling step but never reached this process.env — almost always because
+// the build platform scopes "Preview" vs "Production" separately, or
+// because this specific build ran before a just-saved variable change was
+// applied to it (Cloudflare Pages: a deployment resolves its env vars once,
+// at the time it's queued — saving a new variable afterwards never
+// retroactively updates an already-running or already-finished build; only
+// a brand-new deployment picks up the current configuration).
 const SUPABASE_URL = process.env.VITE_SUPABASE_URL ?? fileEnv.VITE_SUPABASE_URL;
 const SUPABASE_ANON_KEY = process.env.VITE_SUPABASE_ANON_KEY ?? fileEnv.VITE_SUPABASE_ANON_KEY;
 
 if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
-  console.error('prerender-seo: missing VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY — cannot fetch catalog data.');
+  const missing = [!SUPABASE_URL && 'VITE_SUPABASE_URL', !SUPABASE_ANON_KEY && 'VITE_SUPABASE_ANON_KEY'].filter(Boolean);
+  console.error(`prerender-seo: missing ${missing.join(' / ')} — cannot fetch catalog data.`);
+  // Names only, never values — enough to tell whether ANY VITE_ variable
+  // reached this process (ruling out "no env vars reach the build at all")
+  // and, just as tellingly, whether a build platform's own marker (e.g.
+  // Cloudflare Pages' CF_PAGES/CF_PAGES_BRANCH) is present, confirming
+  // which platform/branch actually ran this build.
+  const viteKeys = Object.keys(process.env).filter((k) => k.startsWith('VITE_')).sort();
+  console.error(`prerender-seo: VITE_* variables visible to this process: ${viteKeys.length > 0 ? viteKeys.join(', ') : '(none)'}`);
+  const platformKeys = ['CF_PAGES', 'CF_PAGES_BRANCH', 'CF_PAGES_COMMIT_SHA', 'CF_PAGES_URL', 'GITHUB_ACTIONS'];
+  const platformInfo = platformKeys.filter((k) => process.env[k] !== undefined).map((k) => `${k}=${process.env[k]}`);
+  console.error(`prerender-seo: build platform markers: ${platformInfo.length > 0 ? platformInfo.join(', ') : '(none found — not Cloudflare Pages or GitHub Actions?)'}`);
   process.exit(1);
 }
 if (!existsSync(`${DIST}/index.html`)) {
