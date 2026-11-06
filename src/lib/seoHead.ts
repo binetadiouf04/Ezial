@@ -19,7 +19,7 @@ export interface HeadTags {
   ogTitle: string;
   ogDescription: string;
   ogImage: string;
-  ogType: 'website' | 'product';
+  ogType: 'website' | 'product' | 'article';
 }
 
 function upsertMeta(attr: 'name' | 'property', key: string, content: string) {

@@ -1,7 +1,7 @@
 import { createContext, useContext, useState, useCallback, useEffect, useMemo, type ReactNode } from 'react';
-import type { Role, DeliveryStep, ShopStatus, ProductStatus, ModerationEntry, ModerationTargetType, ModerationAction, BlogPost, BlogStatus } from './data';
+import type { Role, DeliveryStep, ShopStatus, ProductStatus, ModerationEntry, ModerationTargetType, ModerationAction } from './data';
 import { missions as initialMissions, type Mission, type Product, type Shop, type Driver, type DriverTransaction, type Order, type Transaction } from './data';
-import { shops as initialShops, products as initialProducts, transactions as initialTransactions, driverTransactions as initialDriverTransactions, orders as initialOrders, drivers as initialDrivers, moderationHistory as initialModerationHistory, blogPosts as initialBlogPosts } from './data';
+import { shops as initialShops, products as initialProducts, transactions as initialTransactions, driverTransactions as initialDriverTransactions, orders as initialOrders, drivers as initialDrivers, moderationHistory as initialModerationHistory } from './data';
 import { assignShopPrefixes, nextReferenceForShop } from '@/utils/reference';
 import { signInSeller, restoreSellerSession, signOutSeller, signUpSeller, requestSellerPasswordReset, resendSellerConfirmation, resendSellerConfirmationForIdentifier, createShopForLoggedInCustomer, type SignUpSellerInput, type SignUpSellerResult } from '@/lib/supabaseSellerAuth';
 import { deleteMyAccount } from '@/lib/supabaseAccountDeletion';
@@ -219,14 +219,6 @@ interface ProState extends AuthState {
   createShop: (input: NewShopInput) => Shop;
   createDriver: (input: NewDriverInput) => Driver;
   toggleDriverStatus: (driverId: string, status: 'active' | 'suspended') => void;
-  // Blog
-  blogPosts: BlogPost[];
-  createBlogPost: (post: Omit<BlogPost, 'id'>) => BlogPost;
-  updateBlogPost: (id: string, post: Omit<BlogPost, 'id'>) => void;
-  deleteBlogPost: (id: string) => void;
-  publishBlogPost: (id: string) => void;
-  unpublishBlogPost: (id: string) => void;
-  scheduleBlogPost: (id: string, publishDate: string) => void;
 }
 
 const ProContext = createContext<ProState | null>(null);
@@ -289,7 +281,6 @@ export function ProProvider({ children }: { children: ReactNode }) {
     [allShops],
   );
   const [moderationHistory, setModerationHistory] = useState<ModerationEntry[]>(initialModerationHistory);
-  const [blogPosts, setBlogPosts] = useState<BlogPost[]>(initialBlogPosts);
   const [cancelledOrders, setCancelledOrders] = useState<string[]>([]);
   const [refundedOrders, setRefundedOrders] = useState<string[]>([]);
   const [resolvedIncidents, setResolvedIncidents] = useState<string[]>([]);
@@ -726,38 +717,6 @@ export function ProProvider({ children }: { children: ReactNode }) {
     setAllShops((prev) => prev.map((s) => (s.id === shopId ? { ...s, ...edit } : s)));
   }, []);
 
-  // --- Blog ---
-
-  const createBlogPost = useCallback((post: Omit<BlogPost, 'id'>): BlogPost => {
-    const newPost: BlogPost = { ...post, id: `b-${Date.now()}` };
-    setBlogPosts((prev) => [newPost, ...prev]);
-    return newPost;
-  }, []);
-
-  const updateBlogPost = useCallback((id: string, post: Omit<BlogPost, 'id'>) => {
-    setBlogPosts((prev) => prev.map((p) => (p.id === id ? { ...post, id } : p)));
-  }, []);
-
-  const deleteBlogPost = useCallback((id: string) => {
-    setBlogPosts((prev) => prev.filter((p) => p.id !== id));
-  }, []);
-
-  const setBlogStatus = useCallback((id: string, status: BlogStatus, publishDate?: string) => {
-    setBlogPosts((prev) => prev.map((p) => (p.id === id ? { ...p, status, ...(publishDate ? { publishDate } : {}), updatedDate: new Date().toISOString().split('T')[0] } : p)));
-  }, []);
-
-  const publishBlogPost = useCallback((id: string) => {
-    setBlogStatus(id, 'published', new Date().toISOString().split('T')[0]);
-  }, [setBlogStatus]);
-
-  const unpublishBlogPost = useCallback((id: string) => {
-    setBlogStatus(id, 'unpublished');
-  }, [setBlogStatus]);
-
-  const scheduleBlogPost = useCallback((id: string, publishDate: string) => {
-    setBlogStatus(id, 'scheduled', publishDate);
-  }, [setBlogStatus]);
-
   const cancelOrder = useCallback((orderId: string) => {
     setCancelledOrders((prev) => [...prev, orderId]);
   }, []);
@@ -947,13 +906,6 @@ export function ProProvider({ children }: { children: ReactNode }) {
     createShop,
     createDriver,
     toggleDriverStatus,
-    blogPosts,
-    createBlogPost,
-    updateBlogPost,
-    deleteBlogPost,
-    publishBlogPost,
-    unpublishBlogPost,
-    scheduleBlogPost,
   };
 
   return <ProContext.Provider value={value}>{children}</ProContext.Provider>;

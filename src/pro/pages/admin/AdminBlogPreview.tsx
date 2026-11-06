@@ -1,70 +1,95 @@
+import { useEffect, useState } from 'react';
+import { ArrowLeft, Pencil, Loader2, AlertCircle, ExternalLink } from 'lucide-react';
 import { usePro } from '../../ProContext';
-import { formatDate } from '../../data';
 import { StatusChip } from '../../components/StatusChip';
-import { ArrowLeft, Pencil } from 'lucide-react';
-import SmartImage from '@/components/SmartImage';
+import { fetchAdminBlogPost, fetchAdminBlogCategories, BLOG_STATUS_LABELS, type AdminBlogPost, type AdminBlogCategory } from '@/lib/supabaseAdminBlog';
+import { blogPostDescription, blogPostPath, blogPostTitle, truncateText } from '@/components/blog/blogShared';
+import BlogArticleView from '@/components/blog/BlogArticleView';
 
-const blogStatusLabels: Record<string, string> = { draft: 'Brouillon', scheduled: 'Programmé', published: 'Publié', unpublished: 'Dépublié' };
-
+// Preview of the saved version of an article, rendered by the same component
+// as the public page (/blog/<slug>), drafts included.
 export default function AdminBlogPreview({ postId }: { postId: string }) {
-  const { navigate, blogPosts } = usePro();
-  const post = blogPosts.find((p) => p.id === postId);
+  const { navigate } = usePro();
+  const [post, setPost] = useState<AdminBlogPost | null>(null);
+  const [category, setCategory] = useState<AdminBlogCategory | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
-  if (!post) {
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    void Promise.all([fetchAdminBlogPost(postId), fetchAdminBlogCategories()]).then(([postRes, catRes]) => {
+      if (cancelled) return;
+      setPost(postRes.post);
+      setCategory(catRes.categories.find((c) => c.id === postRes.post?.categoryId) ?? null);
+      setError(postRes.error ?? '');
+      setLoading(false);
+    });
+    return () => { cancelled = true; };
+  }, [postId]);
+
+  if (loading) return <div className="card p-10 text-center"><Loader2 size={20} className="mx-auto animate-spin text-ink/30" /></div>;
+
+  if (error || !post) {
     return (
-      <div className="text-center py-16">
-        <p className="text-sm text-ink/55">Article introuvable</p>
-        <button onClick={() => navigate('/admin/blog')} className="btn-outline mt-4">Retour</button>
+      <div className="space-y-4 py-10 text-center">
+        {error ? (
+          <p className="mx-auto flex max-w-lg items-start gap-2 rounded-lg bg-burgundy/5 p-4 text-left text-sm text-burgundy"><AlertCircle size={16} className="mt-0.5 flex-shrink-0" /> {error}</p>
+        ) : (
+          <p className="text-sm text-ink/55">Article introuvable.</p>
+        )}
+        <button onClick={() => navigate('/admin/blog')} className="btn-outline">Retour au blog</button>
       </div>
     );
   }
 
   return (
     <div className="space-y-5">
-      <div className="flex items-center justify-between gap-3 flex-wrap">
-        <button onClick={() => navigate('/admin/blog')} className="flex items-center gap-1.5 text-sm text-ink/50 hover:text-ink transition-colors">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <button onClick={() => navigate('/admin/blog')} className="flex items-center gap-1.5 text-sm text-ink/50 transition-colors hover:text-ink">
           <ArrowLeft size={16} /> Blog
         </button>
-        <div className="flex items-center gap-2">
-          <StatusChip status={post.status} size="md" label={blogStatusLabels[post.status]} />
+        <div className="flex flex-wrap items-center gap-3">
+          <StatusChip status={post.status} size="md" label={BLOG_STATUS_LABELS[post.status]} />
+          {post.status === 'published' && (
+            <a href={blogPostPath(post.slug)} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 text-sm font-medium text-burgundy hover:underline">
+              <ExternalLink size={15} /> Voir en ligne
+            </a>
+          )}
           <button onClick={() => navigate(`/admin/blog/modifier/${post.id}`)} className="flex items-center gap-1.5 text-sm font-medium text-burgundy hover:underline">
             <Pencil size={15} /> Modifier
           </button>
         </div>
       </div>
 
-      <div className="rounded-2xl overflow-hidden bg-cream h-56 sm:h-80">
-        <SmartImage src={post.coverImage} alt={post.title} className="h-full w-full object-cover" />
+      <p className="rounded-lg bg-cream p-3 text-xs text-ink/60">
+        {post.status === 'published'
+          ? 'Aperçu de la version enregistrée, telle qu’elle est en ligne.'
+          : 'Aperçu de la version enregistrée. Cet article n’est pas visible du public.'}
+      </p>
+
+      <div className="rounded-xl border border-line bg-white p-4">
+        <p className="mb-1 text-xs font-semibold uppercase tracking-wider text-ink/40">Aperçu dans Google</p>
+        <p className="truncate text-xs text-ink/55">ezial.net › blog › {post.slug}</p>
+        <p className="mt-1 line-clamp-2 text-lg leading-snug text-[#1a0dab]">{truncateText(blogPostTitle(post.seoTitle, post.title), 65)}</p>
+        <p className="mt-1 line-clamp-2 text-sm text-ink/60">{blogPostDescription(post.metaDescription, post.excerpt) || 'Aucune description.'}</p>
       </div>
 
-      <div className="max-w-2xl mx-auto space-y-4">
-        <div>
-          <p className="eyebrow mb-2">{post.category}</p>
-          <h1 className="font-display text-2xl sm:text-3xl font-semibold text-ink leading-tight">{post.title}</h1>
-          <p className="mt-2 text-sm text-ink/45">
-            Par {post.author} · {formatDate(post.publishDate)}
-            {post.updatedDate && post.updatedDate !== post.publishDate && ` · mis à jour le ${formatDate(post.updatedDate)}`}
-          </p>
-        </div>
-
-        <p className="text-base text-ink/70 font-medium italic border-l-2 border-burgundy pl-4">{post.excerpt}</p>
-
-        <div className="text-sm text-ink/75 leading-relaxed whitespace-pre-wrap">{post.content}</div>
-
-        {post.sources && (
-          <div className="pt-4 border-t border-line">
-            <p className="text-xs font-semibold uppercase tracking-wider text-ink/40 mb-1.5">Sources</p>
-            <p className="text-xs text-ink/50 whitespace-pre-wrap">{post.sources}</p>
-          </div>
-        )}
-
-        {(post.seoTitle || post.metaDescription) && (
-          <div className="pt-4 border-t border-line space-y-1.5">
-            <p className="text-xs font-semibold uppercase tracking-wider text-ink/40">Aperçu SEO</p>
-            <p className="text-sm text-blue-700">{post.seoTitle || post.title}</p>
-            <p className="text-xs text-ink/50">{post.metaDescription || post.excerpt}</p>
-          </div>
-        )}
+      <div className="-mx-4 overflow-hidden rounded-xl border border-line bg-white sm:mx-0">
+        <BlogArticleView
+          post={{
+            title: post.title,
+            excerpt: post.excerpt || null,
+            content: post.content,
+            coverImageUrl: post.coverImageUrl || null,
+            coverImageAlt: post.coverImageAlt || null,
+            publishedAt: post.publishedAt,
+            updatedAt: post.updatedAt,
+            category: category ? { id: category.id, name: category.name, slug: category.slug } : null,
+            marketplaceLinks: post.marketplaceLinks,
+            sources: post.sources || null,
+          }}
+        />
       </div>
     </div>
   );

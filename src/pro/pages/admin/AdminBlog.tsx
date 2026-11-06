@@ -1,133 +1,244 @@
-import { useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Search, Plus, Eye, Pencil, Trash2, Send, EyeOff, Loader2, AlertCircle, FolderCog, ExternalLink, ImageOff } from 'lucide-react';
 import { usePro } from '../../ProContext';
-import { formatDate } from '../../data';
 import { StatusChip } from '../../components/StatusChip';
-import { Search, Plus, Eye, Pencil, Trash2, Send, EyeOff, CalendarClock, X } from 'lucide-react';
 import SmartImage from '@/components/SmartImage';
+import {
+  fetchAdminBlogPosts, fetchAdminBlogCategories, setAdminBlogPostStatus, deleteAdminBlogPost, missingForPublication,
+  BLOG_STATUS_LABELS, type AdminBlogPost, type AdminBlogCategory, type BlogPostStatus,
+} from '@/lib/supabaseAdminBlog';
+import { blogPostPath, formatBlogDate } from '@/components/blog/blogShared';
+import SiteUpdateNotice from '../../components/blog/SiteUpdateNotice';
+import ConfirmDialog from '../../components/blog/ConfirmDialog';
 
-type Tab = 'all' | 'draft' | 'published' | 'scheduled';
+type Tab = 'all' | BlogPostStatus;
 
-const tabLabels: Record<Tab, string> = { all: 'Tous les articles', draft: 'Brouillons', published: 'Publiés', scheduled: 'Programmés' };
+const tabLabels: Record<Tab, string> = { all: 'Tous', draft: 'Brouillons', published: 'Publiés', unpublished: 'Dépubliés' };
 
-const blogStatusLabels: Record<string, string> = { draft: 'Brouillon', scheduled: 'Programmé', published: 'Publié', unpublished: 'Dépublié' };
+function dateLine(post: AdminBlogPost): string {
+  if (post.status === 'published' && post.publishedAt) return `Publié le ${formatBlogDate(post.publishedAt)}`;
+  if (post.status === 'unpublished') return `Dépublié · modifié le ${formatBlogDate(post.updatedAt)}`;
+  return `Modifié le ${formatBlogDate(post.updatedAt)}`;
+}
 
 export default function AdminBlog() {
-  const { blogPosts, navigate, deleteBlogPost, publishBlogPost, unpublishBlogPost, scheduleBlogPost } = usePro();
+  const { navigate } = usePro();
+  const [posts, setPosts] = useState<AdminBlogPost[]>([]);
+  const [categories, setCategories] = useState<AdminBlogCategory[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
   const [tab, setTab] = useState<Tab>('all');
   const [search, setSearch] = useState('');
-  const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
-  const [scheduling, setScheduling] = useState<string | null>(null);
-  const [scheduleDate, setScheduleDate] = useState('');
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const [actionError, setActionError] = useState('');
+  const [notice, setNotice] = useState<{ title: string; detail?: string } | null>(null);
+  const [warning, setWarning] = useState('');
+  const [confirm, setConfirm] = useState<{ kind: 'delete' | 'unpublish'; post: AdminBlogPost } | null>(null);
 
-  const filtered = blogPosts
-    .filter((p) => {
-      if (tab === 'draft') return p.status === 'draft';
-      if (tab === 'published') return p.status === 'published';
-      if (tab === 'scheduled') return p.status === 'scheduled';
-      return true;
-    })
-    .filter((p) => !search.trim() || p.title.toLowerCase().includes(search.toLowerCase()))
-    .sort((a, b) => (a.publishDate < b.publishDate ? 1 : -1));
+  const load = useCallback(async () => {
+    setLoading(true);
+    setLoadError('');
+    const [postsRes, categoriesRes] = await Promise.all([fetchAdminBlogPosts(), fetchAdminBlogCategories()]);
+    setPosts(postsRes.posts);
+    setCategories(categoriesRes.categories);
+    setLoadError(postsRes.error ?? categoriesRes.error ?? '');
+    setLoading(false);
+  }, []);
 
-  const openSchedule = (id: string) => {
-    setScheduling(id);
-    setScheduleDate(new Date().toISOString().split('T')[0]);
+  useEffect(() => { void load(); }, [load]);
+
+  const categoryName = useMemo(() => new Map(categories.map((c) => [c.id, c.name])), [categories]);
+  const counts = useMemo(() => ({
+    all: posts.length,
+    draft: posts.filter((p) => p.status === 'draft').length,
+    published: posts.filter((p) => p.status === 'published').length,
+    unpublished: posts.filter((p) => p.status === 'unpublished').length,
+  }), [posts]);
+
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return posts
+      .filter((p) => tab === 'all' || p.status === tab)
+      .filter((p) => !q || p.title.toLowerCase().includes(q) || p.slug.includes(q));
+  }, [posts, tab, search]);
+
+  const replacePost = (updated: AdminBlogPost) => setPosts((prev) => prev.map((p) => (p.id === updated.id ? updated : p)));
+
+  const publish = async (post: AdminBlogPost) => {
+    setActionError('');
+    setNotice(null);
+    setWarning('');
+    const missing = missingForPublication(post);
+    if (missing.length > 0) {
+      setActionError(`Pour publier « ${post.title} », il manque : ${missing.join(', ')}. Ouvrez l'article pour le compléter.`);
+      return;
+    }
+    setBusyId(post.id);
+    const res = await setAdminBlogPostStatus(post.id, 'published');
+    setBusyId(null);
+    if (res.error || !res.post) { setActionError(res.error ?? 'Une erreur est survenue. Réessayez.'); return; }
+    replacePost(res.post);
+    setNotice({ title: `« ${res.post.title} » est publié.` });
   };
 
-  const confirmSchedule = () => {
-    if (!scheduling || !scheduleDate) return;
-    scheduleBlogPost(scheduling, scheduleDate);
-    setScheduling(null);
+  const unpublish = async (post: AdminBlogPost) => {
+    setBusyId(post.id);
+    setActionError('');
+    setWarning('');
+    const res = await setAdminBlogPostStatus(post.id, 'unpublished');
+    setBusyId(null);
+    setConfirm(null);
+    if (res.error || !res.post) { setActionError(res.error ?? 'Une erreur est survenue. Réessayez.'); return; }
+    replacePost(res.post);
+    setNotice({
+      title: `« ${res.post.title} » est dépublié.`,
+      detail: "Il n'est plus visible sur le site. La page optimisée pour les moteurs de recherche et le sitemap seront mis à jour dans l'heure.",
+    });
   };
+
+  const remove = async (post: AdminBlogPost) => {
+    setBusyId(post.id);
+    setActionError('');
+    setNotice(null);
+    const res = await deleteAdminBlogPost(post.id);
+    setBusyId(null);
+    setConfirm(null);
+    if (res.error) { setActionError(res.error); return; }
+    setPosts((prev) => prev.filter((p) => p.id !== post.id));
+    setWarning(res.warning ?? '');
+  };
+
+  const iconButton = 'flex items-center gap-1.5 rounded-lg p-2 text-sm transition-colors disabled:opacity-40';
 
   return (
     <div className="space-y-5">
-      <div className="flex items-center justify-between gap-3 flex-wrap">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="font-display text-2xl font-semibold text-ink">Blog</h1>
-        <button onClick={() => navigate('/admin/blog/nouveau')} className="btn-primary flex items-center gap-1.5 text-sm">
-          <Plus size={16} /> <span className="hidden sm:inline">Nouvel article</span>
-        </button>
-      </div>
-
-      <div className="relative">
-        <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink/30" />
-        <input className="input-field pl-9" placeholder="Rechercher un article" value={search} onChange={(e) => setSearch(e.target.value)} />
-      </div>
-
-      <div className="flex gap-2 overflow-x-auto no-scrollbar">
-        {(Object.keys(tabLabels) as Tab[]).map((t) => (
-          <button key={t} onClick={() => setTab(t)} className={`flex-shrink-0 whitespace-nowrap rounded-lg px-4 py-2 text-sm font-medium transition-colors ${tab === t ? 'bg-burgundy text-white' : 'bg-white border border-line text-ink/60'}`}>
-            {tabLabels[t]}
+        <div className="flex flex-wrap items-center gap-2">
+          <button onClick={() => navigate('/admin/blog/categories')} className="btn-outline px-4 py-2.5">
+            <FolderCog size={16} /> Catégories
           </button>
-        ))}
+          <button onClick={() => navigate('/admin/blog/nouveau')} disabled={Boolean(loadError)} className="btn-primary px-4 py-2.5">
+            <Plus size={16} /> Nouvel article
+          </button>
+        </div>
       </div>
 
-      <div className="space-y-3">
-        {filtered.length === 0 ? (
-          <div className="card p-8 text-center">
-            <p className="text-sm text-ink/45">Aucun article.</p>
-          </div>
-        ) : (
-          filtered.map((post) => (
-            <div key={post.id} className="card p-4 flex flex-col sm:flex-row gap-3 sm:items-center">
-              <SmartImage src={post.coverImage} alt="" className="h-16 w-full sm:w-24 rounded-lg object-cover flex-shrink-0" />
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-ink truncate">{post.title}</p>
-                <p className="text-xs text-ink/45 mt-0.5">{post.category} · {post.author} · {formatDate(post.publishDate)}</p>
-                <div className="mt-1.5"><StatusChip status={post.status} label={blogStatusLabels[post.status]} /></div>
-              </div>
-              <div className="flex items-center gap-1 flex-wrap flex-shrink-0">
-                <button onClick={() => navigate(`/admin/blog/apercu/${post.id}`)} className="rounded-lg p-2 text-ink/40 hover:bg-cream hover:text-ink transition-colors" title="Prévisualiser"><Eye size={16} /></button>
-                <button onClick={() => navigate(`/admin/blog/modifier/${post.id}`)} className="rounded-lg p-2 text-ink/40 hover:bg-cream hover:text-ink transition-colors" title="Modifier"><Pencil size={16} /></button>
-                {post.status !== 'published' && (
-                  <button onClick={() => publishBlogPost(post.id)} className="rounded-lg p-2 text-green-600 hover:bg-green-50 transition-colors" title="Publier"><Send size={16} /></button>
-                )}
-                {post.status === 'published' && (
-                  <button onClick={() => unpublishBlogPost(post.id)} className="rounded-lg p-2 text-orange-600 hover:bg-orange-50 transition-colors" title="Dépublier"><EyeOff size={16} /></button>
-                )}
-                {post.status !== 'scheduled' && (
-                  <button onClick={() => openSchedule(post.id)} className="rounded-lg p-2 text-ink/40 hover:bg-cream hover:text-ink transition-colors" title="Programmer une publication"><CalendarClock size={16} /></button>
-                )}
-                <button onClick={() => setConfirmDelete(post.id)} className="rounded-lg p-2 text-red-500 hover:bg-red-50 transition-colors" title="Supprimer"><Trash2 size={16} /></button>
-              </div>
-            </div>
-          ))
-        )}
-      </div>
+      {loadError && (
+        <p className="flex items-start gap-2 rounded-lg bg-burgundy/5 p-4 text-sm text-burgundy"><AlertCircle size={16} className="mt-0.5 flex-shrink-0" /> {loadError}</p>
+      )}
+      {notice && <SiteUpdateNotice title={notice.title} detail={notice.detail} onClose={() => setNotice(null)} />}
+      {actionError && (
+        <p className="flex items-start gap-2 rounded-lg bg-burgundy/5 p-3 text-sm text-burgundy"><AlertCircle size={16} className="mt-0.5 flex-shrink-0" /> {actionError}</p>
+      )}
+      {warning && <p className="rounded-lg bg-amber-50 p-3 text-sm text-amber-800">{warning}</p>}
 
-      {/* Schedule modal */}
-      {scheduling && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/40 p-4" onClick={() => setScheduling(null)}>
-          <div className="card max-w-sm w-full p-6" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="font-display text-lg font-semibold text-ink">Programmer la publication</h3>
-              <button onClick={() => setScheduling(null)}><X size={18} className="text-ink/40" /></button>
-            </div>
-            <label className="block text-xs font-medium text-ink/60 mb-1.5">Date de publication</label>
-            <input type="date" className="input-field" value={scheduleDate} onChange={(e) => setScheduleDate(e.target.value)} />
-            <div className="flex gap-3 mt-5">
-              <button onClick={() => setScheduling(null)} className="btn-outline flex-1">Annuler</button>
-              <button onClick={confirmSchedule} disabled={!scheduleDate} className="btn-primary flex-1 disabled:opacity-40">Programmer</button>
-            </div>
+      {!loadError && (
+        <>
+          <div className="relative">
+            <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-ink/30" />
+            <input className="input-field pl-10" placeholder="Rechercher un article" value={search} onChange={(e) => setSearch(e.target.value)} />
           </div>
+
+          <div className="no-scrollbar flex gap-2 overflow-x-auto" role="tablist" aria-label="Filtrer par statut">
+            {(Object.keys(tabLabels) as Tab[]).map((t) => (
+              <button
+                key={t}
+                role="tab"
+                aria-selected={tab === t}
+                onClick={() => setTab(t)}
+                className={`flex-shrink-0 whitespace-nowrap rounded-lg px-4 py-2 text-sm font-medium transition-colors ${tab === t ? 'bg-burgundy text-white' : 'border border-line bg-white text-ink/60'}`}
+              >
+                {tabLabels[t]} <span className={tab === t ? 'text-white/70' : 'text-ink/35'}>({counts[t]})</span>
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+
+      {loading ? (
+        <div className="card p-10 text-center"><Loader2 size={20} className="mx-auto animate-spin text-ink/30" /></div>
+      ) : loadError ? null : filtered.length === 0 ? (
+        <div className="card p-8 text-center">
+          <p className="text-sm text-ink/45">{posts.length === 0 ? 'Aucun article pour le moment.' : 'Aucun article ne correspond.'}</p>
+          {posts.length === 0 && categories.length === 0 && (
+            <p className="mt-2 text-xs text-ink/40">Commencez par créer une catégorie : elle est nécessaire pour publier un article.</p>
+          )}
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {filtered.map((post) => {
+            const busy = busyId === post.id;
+            return (
+              <div key={post.id} className="card flex flex-col gap-3 p-4 sm:flex-row sm:items-center">
+                <div className="aspect-[16/9] w-full flex-shrink-0 overflow-hidden rounded-lg bg-cream sm:w-32">
+                  {post.coverImageUrl ? (
+                    <SmartImage src={post.coverImageUrl} alt="" className="h-full w-full object-cover" />
+                  ) : (
+                    <div className="flex h-full w-full items-center justify-center text-ink/25"><ImageOff size={20} /></div>
+                  )}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-medium text-ink line-clamp-2">{post.title}</p>
+                  <p className="mt-0.5 text-xs text-ink/45">
+                    {post.categoryId ? (categoryName.get(post.categoryId) ?? 'Catégorie supprimée') : 'Sans catégorie'} · {dateLine(post)}
+                  </p>
+                  <p className="mt-0.5 truncate font-mono text-[11px] text-ink/35">/blog/{post.slug}/</p>
+                  <div className="mt-1.5"><StatusChip status={post.status} label={BLOG_STATUS_LABELS[post.status]} /></div>
+                </div>
+                <div className="flex flex-shrink-0 flex-wrap items-center gap-1">
+                  <button onClick={() => navigate(`/admin/blog/apercu/${post.id}`)} className={`${iconButton} text-ink/50 hover:bg-cream hover:text-ink`} title="Aperçu" aria-label="Aperçu">
+                    <Eye size={16} /><span className="hidden md:inline">Aperçu</span>
+                  </button>
+                  <button onClick={() => navigate(`/admin/blog/modifier/${post.id}`)} className={`${iconButton} text-ink/50 hover:bg-cream hover:text-ink`} title="Modifier" aria-label="Modifier">
+                    <Pencil size={16} /><span className="hidden md:inline">Modifier</span>
+                  </button>
+                  {post.status === 'published' && (
+                    <a href={blogPostPath(post.slug)} target="_blank" rel="noopener noreferrer" className={`${iconButton} text-ink/50 hover:bg-cream hover:text-ink`} title="Voir en ligne" aria-label="Voir en ligne">
+                      <ExternalLink size={16} />
+                    </a>
+                  )}
+                  {post.status !== 'published' ? (
+                    <button onClick={() => void publish(post)} disabled={busy} className={`${iconButton} text-green-700 hover:bg-green-50`} title="Publier" aria-label="Publier">
+                      {busy ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}<span className="hidden md:inline">{post.status === 'unpublished' ? 'Republier' : 'Publier'}</span>
+                    </button>
+                  ) : (
+                    <button onClick={() => setConfirm({ kind: 'unpublish', post })} disabled={busy} className={`${iconButton} text-orange-700 hover:bg-orange-50`} title="Dépublier" aria-label="Dépublier">
+                      {busy ? <Loader2 size={16} className="animate-spin" /> : <EyeOff size={16} />}<span className="hidden md:inline">Dépublier</span>
+                    </button>
+                  )}
+                  {!post.publishedAt && (
+                    <button onClick={() => setConfirm({ kind: 'delete', post })} disabled={busy} className={`${iconButton} text-red-600 hover:bg-red-50`} title="Supprimer" aria-label="Supprimer">
+                      <Trash2 size={16} />
+                    </button>
+                  )}
+                </div>
+              </div>
+            );
+          })}
         </div>
       )}
 
-      {/* Delete confirmation */}
-      {confirmDelete && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/40 p-4" onClick={() => setConfirmDelete(null)}>
-          <div className="card max-w-sm w-full p-6" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="font-display text-lg font-semibold text-ink">Supprimer l'article</h3>
-              <button onClick={() => setConfirmDelete(null)}><X size={18} className="text-ink/40" /></button>
-            </div>
-            <p className="text-sm text-ink/55 mb-5">Cette action est définitive. Voulez-vous continuer ?</p>
-            <div className="flex gap-3">
-              <button onClick={() => setConfirmDelete(null)} className="btn-outline flex-1">Retour</button>
-              <button onClick={() => { deleteBlogPost(confirmDelete); setConfirmDelete(null); }} className="flex-1 rounded-lg bg-red-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-red-700 transition-colors">Supprimer</button>
-            </div>
-          </div>
-        </div>
+      {confirm?.kind === 'delete' && (
+        <ConfirmDialog
+          title="Supprimer le brouillon"
+          message={`« ${confirm.post.title} » et ses images seront supprimés définitivement. Cette action est irréversible.`}
+          confirmLabel="Supprimer"
+          danger
+          busy={busyId === confirm.post.id}
+          onConfirm={() => void remove(confirm.post)}
+          onCancel={() => setConfirm(null)}
+        />
+      )}
+      {confirm?.kind === 'unpublish' && (
+        <ConfirmDialog
+          title="Dépublier l'article"
+          message={`« ${confirm.post.title} » ne sera plus visible sur le site. Vous pourrez le republier à tout moment ; son adresse et sa date de publication seront conservées.`}
+          confirmLabel="Dépublier"
+          busy={busyId === confirm.post.id}
+          onConfirm={() => void unpublish(confirm.post)}
+          onCancel={() => setConfirm(null)}
+        />
       )}
     </div>
   );

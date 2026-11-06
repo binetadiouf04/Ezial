@@ -45,22 +45,22 @@ function Block({ block }: { block: MarkdownBlock }): ReactNode {
   switch (block.type) {
     case 'heading':
       return block.level === 2 ? (
-        <h2 id={block.id} className="scroll-mt-28 font-display text-xl font-semibold text-ink sm:text-2xl mt-10 mb-3 first:mt-0"><Inline nodes={block.children} /></h2>
+        <h2 id={block.id} className="scroll-mt-24 lg:scroll-mt-36 font-display text-2xl font-semibold leading-tight text-ink sm:text-[1.75rem] mt-12 mb-4 first:mt-0"><Inline nodes={block.children} /></h2>
       ) : (
-        <h3 id={block.id} className="scroll-mt-28 text-base font-semibold text-ink sm:text-lg mt-7 mb-2"><Inline nodes={block.children} /></h3>
+        <h3 id={block.id} className="scroll-mt-24 lg:scroll-mt-36 text-[17px] font-semibold leading-snug text-ink sm:text-lg mt-8 mb-2 first:mt-0 [h2+&]:mt-5"><Inline nodes={block.children} /></h3>
       );
     case 'paragraph':
-      return <p className="mt-3 first:mt-0 text-[15px] leading-relaxed text-ink/75 sm:text-base"><Inline nodes={block.children} /></p>;
+      return <p className="mt-4 first:mt-0 [h3+&]:mt-1 text-[15px] leading-7 text-ink/75 sm:text-base sm:leading-7"><Inline nodes={block.children} /></p>;
     case 'list': {
       const Tag = block.ordered ? 'ol' : 'ul';
       return (
-        <Tag className={`mt-3 space-y-1.5 pl-5 text-[15px] leading-relaxed text-ink/75 sm:text-base ${block.ordered ? 'list-decimal' : 'list-disc'} marker:text-burgundy/60`}>
+        <Tag className={`mt-4 first:mt-0 [h3+&]:mt-2 space-y-2 pl-6 text-[15px] leading-7 text-ink/75 sm:text-base ${block.ordered ? 'list-decimal marker:font-semibold' : 'list-disc'} marker:text-burgundy/70`}>
           {block.items.map((item, i) => <li key={i} className="pl-1"><Inline nodes={item} /></li>)}
         </Tag>
       );
     }
     case 'quote':
-      return <blockquote className="mt-4 border-l-4 border-burgundy/30 bg-cream/60 py-2 pl-4 pr-3 text-[15px] italic leading-relaxed text-ink/70 sm:text-base"><Inline nodes={block.children} /></blockquote>;
+      return <blockquote className="mt-5 rounded-r-xl border-l-4 border-burgundy/40 bg-cream py-3 pl-4 pr-4 text-[15px] leading-7 text-ink/75 sm:pl-5 sm:text-base"><Inline nodes={block.children} /></blockquote>;
     case 'image':
       return (
         <figure className="mt-6">

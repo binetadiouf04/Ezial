@@ -91,28 +91,6 @@ export interface ModerationEntry {
   date: string; // ISO datetime
 }
 
-// ---- Blog ----
-export type BlogStatus = 'draft' | 'scheduled' | 'published' | 'unpublished';
-
-export const blogCategories = ['Mode', 'Beauté', 'Cheveux', 'Actualités Ezial', 'Conseils'];
-
-export interface BlogPost {
-  id: string;
-  title: string;
-  slug: string;
-  coverImage: string;
-  category: string;
-  excerpt: string;
-  content: string;
-  sources?: string;
-  author: string;
-  publishDate: string; // ISO date, may be in the future when scheduled
-  updatedDate?: string; // ISO date
-  seoTitle?: string;
-  metaDescription?: string;
-  status: BlogStatus;
-}
-
 export interface Shop {
   id: string;
   name: string;
@@ -588,80 +566,6 @@ export const moderationHistory: ModerationEntry[] = [
     adminName: 'Admin EZIAL', date: '2026-08-29T10:00:00',
   },
 ];
-
-// ---- Mock blog posts ----
-export const blogPosts: BlogPost[] = [
-  {
-    id: 'b1',
-    title: 'Comment bien choisir sa perruque lace',
-    slug: 'comment-bien-choisir-sa-perruque-lace',
-    coverImage: 'https://images.pexels.com/photos/6923241/pexels-photo-6923241.jpeg?auto=compress&cs=tinysrgb&h=700&w=1200',
-    category: 'Cheveux',
-    excerpt: 'Texture, densité, matière : les critères essentiels pour un rendu naturel et durable.',
-    content: 'Choisir une perruque lace ne se résume pas à la couleur. La texture doit correspondre à vos cheveux naturels si vous voulez un effet indétectable, la densité change complètement le volume perçu, et la matière (cheveux naturels, Raw Hair, Romance...) détermine la durée de vie et l\'entretien. Dans cet article, on décortique chaque critère pour vous aider à choisir sereinement sur Ezial.',
-    sources: 'Entretiens avec les vendeuses Hair Studio Dakar, guide interne Ezial.',
-    author: 'Équipe Ezial',
-    publishDate: '2026-08-18',
-    updatedDate: '2026-08-20',
-    seoTitle: 'Comment choisir sa perruque lace | Guide Ezial',
-    metaDescription: 'Le guide complet pour choisir la perruque lace idéale : texture, densité, matière et entretien.',
-    status: 'published',
-  },
-  {
-    id: 'b2',
-    title: '5 essentiels beauté pour la saison sèche',
-    slug: '5-essentiels-beaute-saison-seche',
-    coverImage: 'https://images.pexels.com/photos/8101511/pexels-photo-8101511.jpeg?auto=compress&cs=tinysrgb&h=700&w=1200',
-    category: 'Beauté',
-    excerpt: 'Sérum, crème riche, brume hydratante : la routine qui sauve votre peau pendant l\'harmattan.',
-    content: 'La saison sèche met la peau à rude épreuve. Voici 5 produits disponibles sur Ezial pour garder une peau souple et éclatante : un sérum à l\'acide hyaluronique, une crème riche en fin de routine, une brume hydratante à réappliquer dans la journée, un baume à lèvres nourrissant et une huile corporelle pour sceller l\'hydratation.',
-    author: 'Équipe Ezial',
-    publishDate: '2026-08-10',
-    status: 'published',
-  },
-  {
-    id: 'b3',
-    title: 'Tendances mode Korité 2026',
-    slug: 'tendances-mode-korite-2026',
-    coverImage: 'https://images.pexels.com/photos/38277759/pexels-photo-38277759.jpeg?auto=compress&cs=tinysrgb&h=700&w=1200',
-    category: 'Mode',
-    excerpt: 'Wax revisité, coupes corporate et ensembles modestes : ce qui se portera pour la Korité.',
-    content: 'Cette année, nos boutiques partenaires misent sur un wax revisité aux coupes modernes, des ensembles corporate pour les femmes actives et des tenues modestes travaillées dans des matières nobles. Tour d\'horizon des pièces à shopper avant la fête.',
-    author: 'Équipe Ezial',
-    publishDate: '2026-09-05',
-    seoTitle: 'Tendances mode Korité 2026 | Ezial',
-    metaDescription: 'Les tendances mode à shopper pour la Korité 2026 sur Ezial : wax, corporate et modeste.',
-    status: 'scheduled',
-  },
-  {
-    id: 'b4',
-    title: 'Portrait : Maison Fatou, l\'atelier qui monte',
-    slug: 'portrait-maison-fatou',
-    coverImage: 'https://images.pexels.com/photos/19816456/pexels-photo-19816456.jpeg?auto=compress&cs=tinysrgb&h=700&w=1200',
-    category: 'Actualités Ezial',
-    excerpt: 'Rencontre avec la boutique qui a conquis des milliers de clientes sur Ezial.',
-    content: 'Brouillon — interview à finaliser avec la fondatrice de Maison Fatou.',
-    author: 'Équipe Ezial',
-    publishDate: '2026-09-15',
-    status: 'draft',
-  },
-  {
-    id: 'b5',
-    title: 'Offre de lancement Ezial — bilan',
-    slug: 'offre-de-lancement-ezial-bilan',
-    coverImage: 'https://images.pexels.com/photos/7953286/pexels-photo-7953286.jpeg?auto=compress&cs=tinysrgb&h=700&w=1200',
-    category: 'Actualités Ezial',
-    excerpt: 'Retour sur notre première campagne de lancement à Dakar.',
-    content: 'Article retiré car l\'offre promotionnelle qu\'il décrivait n\'est plus disponible.',
-    author: 'Équipe Ezial',
-    publishDate: '2026-07-01',
-    updatedDate: '2026-08-05',
-    status: 'unpublished',
-  },
-];
-
-export const blogPostMap = blogPosts.reduce((acc, b) => ({ ...acc, [b.id]: b }), {} as Record<string, BlogPost>);
-export const getBlogPost = (id: string) => blogPostMap[id];
 
 // ---- Admin summary data ----
 export const adminSummary = {
