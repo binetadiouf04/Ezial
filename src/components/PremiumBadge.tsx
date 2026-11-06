@@ -16,8 +16,8 @@ export default function PremiumBadge({ size = 'sm' }: { size?: 'sm' | 'md' }) {
   return (
     <span
       role="img"
-      aria-label="Boutique Premium"
-      title="Boutique Premium"
+      aria-label="Boutique Ezial Plus"
+      title="Boutique Ezial Plus"
       className="inline-flex flex-shrink-0 items-center justify-center rounded-full bg-burgundy"
       style={{ width: px, height: px }}
     >

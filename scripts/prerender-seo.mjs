@@ -312,53 +312,26 @@ for (const shop of shops) {
   sitemapUrls.push(canonical);
 }
 
-// --- Shop listing + Boutiques Premium ------------------------------------
-// Both existed only as client-rendered SPA views (#/boutiques,
-// #/boutiques-premium) with no real HTML a crawler could see — real,
-// indexable pages here, linking to the already-generated /boutique/<id>/
-// pages above. Premium membership comes from the same real, server-side
-// signal the live badge uses (seller_subscriptions via
-// active_premium_shop_ids()), never a seller-editable field — a shop
-// that loses Premium simply stops appearing here on the next build/daily
-// regeneration, same as it already does in the live app.
+// --- Shop listing -----------------------------------------------------------
+// /boutiques existed only as a client-rendered SPA view with no real HTML a
+// crawler could see — a real, indexable page here, linking to the
+// already-generated /boutique/<id>/ pages above.
 {
-  const { data: premiumIds, error: premiumError } = await supabase.rpc('active_premium_shop_ids');
-  if (premiumError) console.warn('prerender-seo: active_premium_shop_ids() failed —', premiumError.message);
-  const premiumShopIds = new Set(premiumError ? [] : (premiumIds ?? []));
-  const premiumShops = shops.filter((s) => premiumShopIds.has(s.id));
-
-  const buildShopListPage = (slug, title, description, scopedShops, extraParagraph) => {
-    const canonical = `${SITE_URL}/${slug}/`;
-    const breadcrumbItems = [{ name: 'Accueil', url: `${SITE_URL}/` }, { name: title, url: canonical }];
-    const bodyHtml = `
-      ${breadcrumbNav(breadcrumbItems)}
-      <main>
-        <h1>${esc(title)}</h1>
-        ${extraParagraph ? `<p>${esc(extraParagraph)}</p>` : ''}
-        <ul>${scopedShops.map((s) => `<li><a href="${esc(`${SITE_URL}/boutique/${s.id}/`)}">${esc(s.name)}</a>${s.description ? ` — ${esc(s.description)}` : ''}</li>`).join('')}</ul>
-      </main>`;
-    writeFile(`/${slug}/index.html`, renderPage({
-      title: `${title} | Ezial`, description, canonical, bodyHtml, jsonLd: [breadcrumbJsonLd(breadcrumbItems)],
-    }));
-    sitemapUrls.push(canonical);
-  };
-
-  buildShopListPage('boutiques', 'Toutes les boutiques', 'Toutes les boutiques actives sur Ezial, la marketplace mode, beauté et accessoires au Sénégal.', shops);
-  // Only published when at least one shop genuinely qualifies — an empty
-  // Premium page would be indexable content with nothing real to show.
-  if (premiumShops.length > 0) {
-    buildShopListPage(
-      'boutiques-premium',
-      'Boutiques Premium',
-      'Les boutiques Ezial Premium, sélection renforcée de vendeurs au Sénégal.',
-      premiumShops,
-      // The badge/this page mean an active subscription, not an
-      // independent certification — said plainly here too, not just in
-      // the live app's own copy, since this is the version search
-      // engines (and anything summarizing it) actually read.
-      'Premium signale un abonnement Ezial actif, pas une certification indépendante.',
-    );
-  }
+  const canonical = `${SITE_URL}/boutiques/`;
+  const title = 'Toutes les boutiques';
+  const breadcrumbItems = [{ name: 'Accueil', url: `${SITE_URL}/` }, { name: title, url: canonical }];
+  const bodyHtml = `
+    ${breadcrumbNav(breadcrumbItems)}
+    <main>
+      <h1>${esc(title)}</h1>
+      <ul>${shops.map((s) => `<li><a href="${esc(`${SITE_URL}/boutique/${s.id}/`)}">${esc(s.name)}</a>${s.description ? ` — ${esc(s.description)}` : ''}</li>`).join('')}</ul>
+    </main>`;
+  writeFile('/boutiques/index.html', renderPage({
+    title: `${title} | Ezial`,
+    description: 'Toutes les boutiques actives sur Ezial, la marketplace mode, beauté et accessoires au Sénégal.',
+    canonical, bodyHtml, jsonLd: [breadcrumbJsonLd(breadcrumbItems)],
+  }));
+  sitemapUrls.push(canonical);
 }
 
 // --- Categories + subcategories ------------------------------------------

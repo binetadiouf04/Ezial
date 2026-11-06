@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { usePro } from '../../ProContext';
 import PricingCards from '@/components/PricingCards';
-import { chooseFreePlan } from '@/lib/supabaseSellerSubscription';
+import { chooseFreePlan, subscriptionPaymentRoute } from '@/lib/supabaseSellerSubscription';
 import { AlertCircle, Loader2 } from 'lucide-react';
 
 // Shown once, right after a new seller's email is confirmed and their
@@ -42,7 +42,7 @@ export default function SellerChoosePlan({ onChosen }: { onChosen: () => void })
           freeButtonDisabled={submitting}
           onContinueFree={() => void handleContinueFree()}
           onStartTrial={() => navigate('/seller/abonnement/essai')}
-          onSubscribe={() => navigate('/seller/abonnement/paiement')}
+          onSubscribe={(period) => navigate(subscriptionPaymentRoute(period))}
         />
 
         {submitting && (

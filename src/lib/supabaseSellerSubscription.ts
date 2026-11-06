@@ -1,13 +1,14 @@
 import { supabase } from './supabaseClient';
-import { FREE_PRODUCT_LIMIT, PREMIUM_PRODUCT_LIMIT, PREMIUM_PRICE_FCFA, FREE_COMMISSION_PERCENT, PREMIUM_COMMISSION_PERCENT } from '@/data/subscriptionPlans';
+import {
+  FREE_PRODUCT_LIMIT, PREMIUM_PRODUCT_LIMIT, FREE_COMMISSION_PERCENT, PREMIUM_COMMISSION_PERCENT,
+  PLUS_PLAN_NAME, PLUS_BILLING, BILLING_PERIOD_LABEL, formatFcfa, type BillingPeriod,
+} from '@/data/subscriptionPlans';
 
 // Real seller subscription state, backed by the seller_subscriptions /
-// subscription_payments tables. No payment gateway exists anywhere in
-// Ezial yet, so activation/renewal is declarative: the seller submits
-// their own Wave/Orange Money reference, an admin manually verifies it
-// against their own account and confirms via the
-// confirm_subscription_payment() RPC.
-export { FREE_PRODUCT_LIMIT, PREMIUM_PRODUCT_LIMIT, PREMIUM_PRICE_FCFA, FREE_COMMISSION_PERCENT, PREMIUM_COMMISSION_PERCENT };
+// subscription_payments tables. Paid activation only ever happens through
+// confirm_subscription_payment(), server-side; no payment gateway is wired
+// yet (see SellerSubscriptionPayment.tsx).
+export { FREE_PRODUCT_LIMIT, PREMIUM_PRODUCT_LIMIT, FREE_COMMISSION_PERCENT, PREMIUM_COMMISSION_PERCENT };
 
 export type SubscriptionPlan = 'free' | 'pro';
 export type SubscriptionPaymentMethod = 'wave' | 'orange_money';
@@ -157,6 +158,62 @@ export async function fetchSubscriptionPayments(shopId: string): Promise<Subscri
     periodStart: (r.period_start as string | null) ?? null,
     periodEnd: (r.period_end as string | null) ?? null,
   }));
+}
+
+// The amount charged is fixed server-side per billing period, so it alone
+// identifies the period; the confirmed period's length is the fallback for
+// a row whose amount predates the current prices (the 5 000 FCFA quarterly
+// rows from before Ezial Plus).
+export function billingPeriodOfPayment(p: Pick<SubscriptionPaymentRow, 'amount' | 'periodStart' | 'periodEnd'>): BillingPeriod {
+  if (p.amount === PLUS_BILLING.annual.priceFcfa) return 'annual';
+  if (p.periodStart && p.periodEnd) {
+    const days = (new Date(p.periodEnd).getTime() - new Date(p.periodStart).getTime()) / (24 * 60 * 60 * 1000);
+    if (days > 200) return 'annual';
+  }
+  return 'quarterly';
+}
+
+// The chosen period travels in the Ezial Pro route's query string
+// (?periode=trimestriel|annuel), so a refresh of the payment page keeps it.
+export function subscriptionPaymentRoute(period: BillingPeriod): string {
+  return `/seller/abonnement/paiement?periode=${period === 'annual' ? 'annuel' : 'trimestriel'}`;
+}
+
+export function billingPeriodFromQuery(search: string): BillingPeriod {
+  return new URLSearchParams(search).get('periode') === 'annuel' ? 'annual' : 'quarterly';
+}
+
+export interface CurrentPlanSummary {
+  name: string;
+  amountLabel: string | null;
+  periodLabel: string | null;
+  // Billing period of the last paid subscription — the default offered for a renewal.
+  billingPeriod: BillingPeriod | null;
+  expiresAt: string | null;
+  isExpired: boolean;
+}
+
+// Formule / montant / périodicité / expiration, as shown on the seller's
+// dashboard and "Mon abonnement" — derived from the real subscription row
+// and the last confirmed payment.
+export function summarizeCurrentPlan(info: SellerSubscriptionInfo, payments: SubscriptionPaymentRow[]): CurrentPlanSummary {
+  const lastConfirmed = payments.find((p) => p.status === 'confirmed') ?? null;
+  const billingPeriod = lastConfirmed ? billingPeriodOfPayment(lastConfirmed) : null;
+
+  if (info.isTrialActive) {
+    return { name: `Essai ${PLUS_PLAN_NAME}`, amountLabel: 'Gratuit', periodLabel: 'Essai de 30 jours', billingPeriod, expiresAt: info.proUntil, isExpired: false };
+  }
+  if (info.isProActive || info.isPremiumExpired) {
+    return {
+      name: info.isPremiumExpired ? `${PLUS_PLAN_NAME} expiré` : PLUS_PLAN_NAME,
+      amountLabel: lastConfirmed ? formatFcfa(lastConfirmed.amount) : null,
+      periodLabel: billingPeriod ? `${BILLING_PERIOD_LABEL[billingPeriod]} (${PLUS_BILLING[billingPeriod].months} mois)` : null,
+      billingPeriod,
+      expiresAt: info.proUntil,
+      isExpired: info.isPremiumExpired,
+    };
+  }
+  return { name: 'Ezial Free', amountLabel: 'Gratuit', periodLabel: 'Sans limite de durée', billingPeriod, expiresAt: null, isExpired: false };
 }
 
 // submitSubscriptionPayment() (the seller-declared-reference, manual-admin-

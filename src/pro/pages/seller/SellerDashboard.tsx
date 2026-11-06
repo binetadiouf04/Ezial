@@ -5,13 +5,13 @@ import { fetchSellerFinances } from '@/lib/supabaseSellerFinances';
 import { fetchSellerOrders, type SellerOrderSummary } from '@/lib/supabaseSellerOrders';
 import { fetchSellerProducts } from '@/lib/supabaseSellerProducts';
 import { fetchShopOnboarding } from '@/lib/supabaseSellerShop';
-import { fetchSellerSubscription } from '@/lib/supabaseSellerSubscription';
-import { formatFCFA, formatDateTime } from '../../data';
+import { fetchSellerSubscription, fetchSubscriptionPayments, summarizeCurrentPlan, type CurrentPlanSummary } from '@/lib/supabaseSellerSubscription';
+import { formatFCFA, formatDateTime, formatDate } from '../../data';
 import SummaryCard from '../../components/SummaryCard';
 import { StatusChip } from '../../components/StatusChip';
 import NotificationOptIn from '@/components/NotificationOptIn';
 import NotificationGateModal from '@/components/NotificationGateModal';
-import { ShoppingBag, Package, Wallet, Clock, ChevronRight, Truck, Store, Loader2, ArrowRight } from 'lucide-react';
+import { ShoppingBag, Package, Wallet, Clock, ChevronRight, Truck, Store, Loader2, ArrowRight, Crown } from 'lucide-react';
 
 export default function SellerDashboard() {
   const { navigate, sellerSupabaseShopId, sellerShopIsOfficial } = usePro();
@@ -24,6 +24,7 @@ export default function SellerDashboard() {
   // already shows (fetchSellerSubscription().productLimit), not a second,
   // independently-wrong number.
   const [productLimit, setProductLimit] = useState(10);
+  const [planSummary, setPlanSummary] = useState<CurrentPlanSummary | null>(null);
   const [availableBalance, setAvailableBalance] = useState(0);
   const [authUserId, setAuthUserId] = useState<string | null>(null);
   const [shopDraft, setShopDraft] = useState(false);
@@ -31,18 +32,20 @@ export default function SellerDashboard() {
 
   const load = useCallback(async (shopId: string) => {
     setLoading(true);
-    const [sellerOrders, products, finances, onboarding, subscription] = await Promise.all([
+    const [sellerOrders, products, finances, onboarding, subscription, subscriptionPayments] = await Promise.all([
       fetchSellerOrders(shopId),
       fetchSellerProducts(shopId),
       fetchSellerFinances(shopId),
       fetchShopOnboarding(shopId),
       fetchSellerSubscription(shopId),
+      fetchSubscriptionPayments(shopId),
     ]);
     setOrders(sellerOrders);
     setActiveProducts(products.filter((p) => p.status === 'active').length);
     setAvailableBalance(finances.availableBalance);
     setShopDraft(onboarding?.status === 'draft');
     setProductLimit(subscription.productLimit);
+    setPlanSummary(summarizeCurrentPlan(subscription, subscriptionPayments));
     setLoading(false);
   }, []);
 
@@ -107,6 +110,22 @@ export default function SellerDashboard() {
       </div>
 
       <SummaryCard label="Solde disponible" value={formatFCFA(availableBalance)} icon={<Wallet size={16} />} accent onClick={() => navigate('/seller/finances')} />
+
+      {!sellerShopIsOfficial && planSummary && (
+        <button onClick={() => navigate('/seller/abonnement')} className="card flex w-full items-center justify-between gap-3 p-4 text-left transition-colors hover:bg-cream/30">
+          <div className="flex min-w-0 items-start gap-3">
+            <Crown size={18} className={`mt-0.5 flex-shrink-0 ${planSummary.name === 'Ezial Free' ? 'text-ink/30' : 'text-burgundy'}`} />
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-ink">{planSummary.name}</p>
+              <p className="mt-0.5 text-xs text-ink/55">
+                {[planSummary.amountLabel, planSummary.periodLabel].filter(Boolean).join(' · ')}
+                {planSummary.expiresAt && ` · ${planSummary.isExpired ? 'expiré le' : 'jusqu’au'} ${formatDate(planSummary.expiresAt)}`}
+              </p>
+            </div>
+          </div>
+          <ChevronRight size={16} className="flex-shrink-0 text-ink/30" />
+        </button>
+      )}
 
       {/* Recent orders */}
       <div>

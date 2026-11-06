@@ -7,10 +7,14 @@ import {
   fetchSellerSubscription,
   fetchActiveProductCount,
   fetchSubscriptionPayments,
+  summarizeCurrentPlan,
+  billingPeriodOfPayment,
+  subscriptionPaymentRoute,
   type SellerSubscriptionInfo,
   type SubscriptionPaymentRow,
 } from '@/lib/supabaseSellerSubscription';
-import { Crown, Package, Calendar, Percent, Hourglass } from 'lucide-react';
+import { BILLING_PERIOD_LABEL, formatFcfa } from '@/data/subscriptionPlans';
+import { Crown, Package, Calendar, Percent, Hourglass, Wallet, Repeat } from 'lucide-react';
 
 export default function SellerSubscription() {
   const { sellerSupabaseShopId, sellerShopIsOfficial, navigate } = usePro();
@@ -64,9 +68,7 @@ export default function SellerSubscription() {
     return <div className="p-10 text-center"><p className="text-sm text-ink/50">Chargement…</p></div>;
   }
 
-  const planLabel = info.isProActive
-    ? (info.isTrialActive ? 'Essai Ezial Premium' : 'Ezial Premium')
-    : (info.isPremiumExpired ? 'Ezial Premium expiré' : 'Ezial Free');
+  const summary = summarizeCurrentPlan(info, payments);
   const startedAt = info.isTrialActive ? info.trialStart : info.proStartedAt;
 
   return (
@@ -80,7 +82,7 @@ export default function SellerSubscription() {
       <div className="card p-5">
         <div className="flex items-center gap-2">
           <Crown size={18} className={info.isProActive ? 'text-burgundy' : 'text-ink/30'} />
-          <p className="font-display text-lg font-semibold text-ink">{planLabel}</p>
+          <p className="font-display text-lg font-semibold text-ink">{summary.name}</p>
         </div>
 
         {hasPendingPayment && (
@@ -91,11 +93,23 @@ export default function SellerSubscription() {
 
         {info.isPremiumExpired && (
           <p className="mt-3 rounded-lg bg-burgundy/5 border border-burgundy/20 px-3 py-2 text-xs text-burgundy">
-            Votre abonnement Premium a expiré. Vos données et commandes restent accessibles ; renouvelez pour retrouver vos 30 produits, votre badge et la commission à 8 %. Cette boutique ne peut plus revenir au forfait Free.
+            Votre abonnement Ezial Plus a expiré. Vos données et commandes restent accessibles ; renouvelez pour retrouver vos 30 produits, votre badge et la commission à 8 %. Cette boutique ne peut plus revenir au forfait Free.
           </p>
         )}
 
         <div className="mt-4 grid grid-cols-2 gap-3">
+          {summary.amountLabel && (
+            <div className="rounded-lg bg-cream p-3">
+              <p className="text-xs font-medium text-ink/50 flex items-center gap-1.5"><Wallet size={13} /> Montant</p>
+              <p className="mt-1 text-lg font-semibold text-ink">{summary.amountLabel}</p>
+            </div>
+          )}
+          {summary.periodLabel && (
+            <div className="rounded-lg bg-cream p-3">
+              <p className="text-xs font-medium text-ink/50 flex items-center gap-1.5"><Repeat size={13} /> Périodicité</p>
+              <p className="mt-1 text-lg font-semibold text-ink">{summary.periodLabel}</p>
+            </div>
+          )}
           <div className="rounded-lg bg-cream p-3">
             <p className="text-xs font-medium text-ink/50 flex items-center gap-1.5"><Package size={13} /> Produits publiés</p>
             <p className="mt-1 text-lg font-semibold text-ink">{activeCount} / {info.productLimit}</p>
@@ -125,15 +139,17 @@ export default function SellerSubscription() {
         </div>
       </div>
 
-      {/* Same Free / Premium cards as the signup flow */}
+      {/* Same Free / Ezial Plus cards as the signup flow; a renewal starts
+          on the seller's last paid billing period. */}
       <PricingCards
         freeIsCurrent={!info.isProActive && !info.isPremiumExpired}
         freeOfferDisallowed={info.premiumPaidEver}
         premiumStatus={info.isProActive ? (info.isTrialActive ? 'trial' : 'paid') : (info.isPremiumExpired ? 'expired' : null)}
         trialEligible={!info.trialUsed && !info.premiumPaidEver}
+        initialPeriod={summary.billingPeriod ?? 'quarterly'}
         onStartTrial={() => navigate('/seller/abonnement/essai')}
-        onSubscribe={() => navigate('/seller/abonnement/paiement')}
-        subscribeButtonLabel={info.isProActive && !info.isTrialActive ? 'Renouveler Premium' : info.isPremiumExpired ? 'Renouveler Premium' : 'S’abonner à Premium'}
+        onSubscribe={(period) => navigate(subscriptionPaymentRoute(period))}
+        subscribeButtonLabel={(info.isProActive && !info.isTrialActive) || info.isPremiumExpired ? 'Renouveler Ezial Plus' : 'S’abonner à Ezial Plus'}
       />
 
       {/* Payment history */}
@@ -144,7 +160,7 @@ export default function SellerSubscription() {
             {payments.map((p) => (
               <div key={p.id} className="flex items-center justify-between gap-3 p-4">
                 <div className="min-w-0">
-                  <p className="text-sm font-medium text-ink">{p.amount.toLocaleString('fr-FR')} FCFA — {p.method === 'wave' ? 'Wave' : 'Orange Money'}</p>
+                  <p className="text-sm font-medium text-ink">{formatFcfa(p.amount)} · {BILLING_PERIOD_LABEL[billingPeriodOfPayment(p)]} — {p.method === 'wave' ? 'Wave' : 'Orange Money'}</p>
                   <p className="text-xs text-ink/45 mt-0.5 font-mono">{p.reference}</p>
                   <p className="text-xs text-ink/40 mt-0.5">{formatDate(p.requestedAt)}</p>
                 </div>

@@ -1,7 +1,7 @@
 import { useApp, navigateTo } from '@/store/AppContext';
 import { paymentMethods } from '@/data/payments';
 import PricingCards from '@/components/PricingCards';
-import { FREE_COMMISSION_PERCENT, PREMIUM_COMMISSION_PERCENT, PREMIUM_PRICE_FCFA, FREE_PRODUCT_LIMIT } from '@/data/subscriptionPlans';
+import { FREE_COMMISSION_PERCENT, PREMIUM_COMMISSION_PERCENT, FREE_PRODUCT_LIMIT, PLUS_BILLING, PLUS_ANNUAL_REFERENCE_PRICE_FCFA, PLUS_ANNUAL_DISCOUNT_PERCENT, formatFcfa } from '@/data/subscriptionPlans';
 import { ArrowLeft } from 'lucide-react';
 
 function H2({ children }: { children: React.ReactNode }) {
@@ -366,7 +366,7 @@ function TarifsVendeursPage({ navigate }: { navigate: (route: string) => void })
 
       <div className="mx-auto max-w-2xl text-center">
         <h1 className="font-display text-3xl font-semibold text-ink sm:text-4xl">Votre boutique mérite d'être vue.</h1>
-        <p className="mt-3 text-base text-ink/60">Commencez gratuitement et donnez plus de visibilité à vos produits avec Ezial Premium.</p>
+        <p className="mt-3 text-base text-ink/60">Commencez gratuitement, puis passez à Ezial Plus pour publier plus de produits avec une commission réduite.</p>
       </div>
 
       <div className="mt-10">
@@ -381,24 +381,24 @@ function TarifsVendeursPage({ navigate }: { navigate: (route: string) => void })
 
       <div className="mx-auto mt-14 max-w-2xl text-sm text-ink/70 leading-relaxed">
         <H2>Essai gratuit</H2>
-        <p>Chaque boutique bénéficie, une seule fois, de 30 jours d'essai gratuit avec les avantages d'Ezial Premium. Aucune carte bancaire, aucun numéro Wave ou Orange Money n'est demandé, et l'essai ne se transforme jamais automatiquement en abonnement payant.</p>
+        <p>Chaque boutique bénéficie, une seule fois, de 30 jours d'essai gratuit avec les avantages d'Ezial Plus. Aucune carte bancaire, aucun numéro Wave ou Orange Money n'est demandé, et l'essai ne se transforme jamais automatiquement en abonnement payant.</p>
 
         <H2>Activation et renouvellement</H2>
-        <p>Pour s'abonner ou renouveler Ezial Premium, le vendeur règle {PREMIUM_PRICE_FCFA.toLocaleString('fr-FR')} FCFA par Wave ou Orange Money puis transmet sa référence de transaction depuis son espace « Mon abonnement ». Un administrateur Ezial vérifie manuellement le paiement avant d'activer l'abonnement pour 3 mois. Ezial ne débite jamais un vendeur automatiquement.</p>
+        <p>Ezial Plus se règle par Wave ou Orange Money depuis l'espace « Mon abonnement », au choix tous les 3 mois ({formatFcfa(PLUS_BILLING.quarterly.priceFcfa)}) ou une fois par an ({formatFcfa(PLUS_BILLING.annual.priceFcfa)} au lieu de {formatFcfa(PLUS_ANNUAL_REFERENCE_PRICE_FCFA)}). L'abonnement est activé pour la durée payée uniquement après confirmation du paiement par l'opérateur. Le renouvellement se fait à l'initiative du vendeur : Ezial ne débite jamais un vendeur automatiquement. Le paiement en ligne est en cours d'activation.</p>
 
         <H2>Fin d'abonnement</H2>
-        <p>À l'expiration d'Ezial Premium, la boutique repasse automatiquement au forfait Free. Aucune donnée ni aucun produit n'est supprimé : si plus de {FREE_PRODUCT_LIMIT} produits sont actifs, le vendeur choisit lui-même lesquels rester publiés.</p>
+        <p>À l'expiration d'Ezial Plus, la boutique repasse automatiquement au forfait Free. Aucune donnée ni aucun produit n'est supprimé : si plus de {FREE_PRODUCT_LIMIT} produits sont actifs, le vendeur choisit lui-même lesquels rester publiés.</p>
 
         <H2>Commission Ezial</H2>
-        <p>La commission Ezial dépend du forfait : {FREE_COMMISSION_PERCENT} % sur chaque vente en Free, {PREMIUM_COMMISSION_PERCENT} % en Premium (essai ou payant). Elle s'applique uniquement sur le montant réellement vendu, après réduction éventuelle — jamais sur les frais de livraison.</p>
+        <p>La commission Ezial dépend du forfait : {FREE_COMMISSION_PERCENT} % sur chaque vente en Free, {PREMIUM_COMMISSION_PERCENT} % en Ezial Plus (essai ou payant, trimestriel ou annuel). Elle s'applique uniquement sur le montant réellement vendu, après réduction éventuelle — jamais sur les frais de livraison.</p>
 
         <H2>Questions fréquentes</H2>
         <p><strong>Est-ce obligatoire de payer pour vendre sur Ezial ?</strong><br />Non. Ezial Free permet de vendre gratuitement avec jusqu'à {FREE_PRODUCT_LIMIT} produits publiés. Une commission de {FREE_COMMISSION_PERCENT} % s'applique aux ventes.</p>
-        <p className="mt-3"><strong>Combien coûte Premium ?</strong><br />{PREMIUM_PRICE_FCFA.toLocaleString('fr-FR')} FCFA pour trois mois.</p>
-        <p className="mt-3"><strong>Puis-je essayer Premium gratuitement ?</strong><br />Oui, une fois par boutique, pendant 30 jours.</p>
-        <p className="mt-3"><strong>Que se passe-t-il après l'essai ?</strong><br />Vous pouvez payer pour conserver Premium, ou continuer gratuitement avec Free.</p>
-        <p className="mt-3"><strong>Vais-je perdre mes produits si Premium expire ?</strong><br />Non. Vos produits sont conservés. Seuls {FREE_PRODUCT_LIMIT} peuvent rester publiés avec Free.</p>
-        <p className="mt-3"><strong>Comment payer Premium ?</strong><br />Par Wave ou Orange Money, depuis votre espace « Mon abonnement ».</p>
+        <p className="mt-3"><strong>Combien coûte Ezial Plus ?</strong><br />{formatFcfa(PLUS_BILLING.quarterly.priceFcfa)} tous les 3 mois, ou {formatFcfa(PLUS_BILLING.annual.priceFcfa)} par an au lieu de {formatFcfa(PLUS_ANNUAL_REFERENCE_PRICE_FCFA)} (−{PLUS_ANNUAL_DISCOUNT_PERCENT} %). Les avantages sont identiques dans les deux cas.</p>
+        <p className="mt-3"><strong>Puis-je essayer Ezial Plus gratuitement ?</strong><br />Oui, une fois par boutique, pendant 30 jours.</p>
+        <p className="mt-3"><strong>Que se passe-t-il après l'essai ?</strong><br />Vous pouvez payer pour conserver Ezial Plus, ou continuer gratuitement avec Free.</p>
+        <p className="mt-3"><strong>Vais-je perdre mes produits si Ezial Plus expire ?</strong><br />Non. Vos produits sont conservés. Seuls {FREE_PRODUCT_LIMIT} peuvent rester publiés avec Free.</p>
+        <p className="mt-3"><strong>Comment payer Ezial Plus ?</strong><br />Par Wave ou Orange Money, depuis votre espace « Mon abonnement ».</p>
       </div>
     </div>
   );

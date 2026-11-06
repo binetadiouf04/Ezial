@@ -8,10 +8,7 @@ import { ArrowLeft, Check, Crown, Loader2, AlertCircle, Smartphone, Calendar, Sh
 const benefits = [
   `Jusqu'à ${PREMIUM_PRODUCT_LIMIT} produits publiés`,
   `Commission réduite à ${PREMIUM_COMMISSION_PERCENT} %`,
-  'Possibilité de mise en avant sur l’accueil Ezial',
-  'Priorité de sélection dans « Tendances du moment »',
-  'Badge Ezial Premium sur la boutique',
-  'Priorité de sélection pour les réseaux sociaux et publicités collectives Ezial',
+  'Badge Ezial Plus sur la boutique',
 ];
 
 export default function SellerTrialActivation({ onActivated }: { onActivated?: () => void } = {}) {
@@ -41,8 +38,8 @@ export default function SellerTrialActivation({ onActivated }: { onActivated?: (
       <div className="mx-auto max-w-md space-y-5 py-6 text-center">
         <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-green-50 text-green-700"><Check size={26} /></div>
         <div>
-          <h1 className="font-display text-xl font-semibold text-ink">Essai Premium activé !</h1>
-          <p className="mt-1.5 text-sm text-ink/60">Vos avantages Ezial Premium sont actifs jusqu'au <strong>{formatDate(trialEnd)}</strong>.</p>
+          <h1 className="font-display text-xl font-semibold text-ink">Essai Ezial Plus activé !</h1>
+          <p className="mt-1.5 text-sm text-ink/60">Vos avantages Ezial Plus sont actifs jusqu'au <strong>{formatDate(trialEnd)}</strong>.</p>
         </div>
         <button onClick={() => navigate('/seller')} className="btn-primary w-full">Aller à mon tableau de bord</button>
       </div>
@@ -57,7 +54,7 @@ export default function SellerTrialActivation({ onActivated }: { onActivated?: (
 
       <div className="text-center">
         <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-burgundy/10 text-burgundy"><Crown size={26} /></div>
-        <h1 className="mt-4 font-display text-xl font-semibold text-ink">Essayez Ezial Premium gratuitement</h1>
+        <h1 className="mt-4 font-display text-xl font-semibold text-ink">Essayez Ezial Plus gratuitement</h1>
         <p className="mt-1.5 text-sm text-ink/60">30 jours, tous les avantages inclus, sans aucun engagement.</p>
       </div>
 
@@ -89,7 +86,7 @@ export default function SellerTrialActivation({ onActivated }: { onActivated?: (
       </div>
 
       <p className="text-xs text-ink/50 text-center">
-        À l'expiration, vous pourrez payer pour conserver Premium. Sans paiement, votre boutique repasse automatiquement en Free — aucune donnée ni produit n'est supprimé.
+        À l'expiration, vous pourrez payer pour conserver Ezial Plus. Sans paiement, votre boutique repasse automatiquement en Free — aucune donnée ni produit n'est supprimé.
       </p>
 
       {error && <p className="flex items-start gap-1.5 text-sm text-burgundy"><AlertCircle size={14} className="mt-0.5 flex-shrink-0" /> {error}</p>}

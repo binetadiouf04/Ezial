@@ -120,9 +120,9 @@ function RouteView() {
     if (shopId) return <ShopPage shopId={shopId} />;
   }
 
-  // Shops listing: /boutiques
-  if (clean === '/boutiques') return <ShopsPage />;
-  if (clean === '/boutiques-premium') return <ShopsPage premiumOnly />;
+  // Shops listing: /boutiques — the former /boutiques-premium page is
+  // gone; old links to it land on the regular listing.
+  if (clean === '/boutiques' || clean === '/boutiques-premium') return <ShopsPage />;
 
   // Static pages
   if (clean === '/favoris') return <FavoritesPage />;
@@ -197,11 +197,10 @@ function pageMetaFor(route: string): { title: string; description: string } {
   if (clean === '/promos') return { title: `Promotions — ${SITE_TITLE}`, description: 'Toutes les offres et promotions en cours sur Ezial.' };
   if (clean === '/tendances') return { title: `Tendances — ${SITE_TITLE}`, description: 'Les produits tendances du moment sur Ezial.' };
   if (clean === '/pour-vous') return { title: `Sélection pour vous — ${SITE_TITLE}`, description: 'Notre sélection de produits personnalisée sur Ezial.' };
-  if (clean === '/boutiques') return { title: `Boutiques — ${SITE_TITLE}`, description: 'Toutes les boutiques actives sur Ezial.' };
-  if (clean === '/boutiques-premium') return { title: `Boutiques Premium — ${SITE_TITLE}`, description: 'Les boutiques Ezial Premium, sélection renforcée et avantages exclusifs.' };
+  if (clean === '/boutiques' || clean === '/boutiques-premium') return { title: `Boutiques — ${SITE_TITLE}`, description: 'Toutes les boutiques actives sur Ezial.' };
   if (clean.startsWith('/recherche')) return { title: `Recherche — ${SITE_TITLE}`, description: DEFAULT_DESCRIPTION };
   if (clean === '/info/mentions-legales') return { title: `Mentions légales — ${SITE_TITLE}`, description: "Éditeur, hébergement et informations légales de la plateforme Ezial." };
-  if (clean === '/info/tarifs-vendeurs') return { title: `Tarifs vendeurs — ${SITE_TITLE}`, description: "Les forfaits Ezial pour les vendeurs : Gratuit et Ezial Pro, commissions et conditions." };
+  if (clean === '/info/tarifs-vendeurs') return { title: `Tarifs vendeurs — ${SITE_TITLE}`, description: "Les forfaits Ezial pour les vendeurs : Free et Ezial Plus, commissions et conditions." };
   return { title: `${SITE_TITLE} — Mode, beauté & lifestyle à Dakar`, description: DEFAULT_DESCRIPTION };
 }
 

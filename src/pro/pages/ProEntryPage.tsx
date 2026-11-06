@@ -151,7 +151,7 @@ export default function ProEntryPage() {
               Découvrir nos offres
               <ArrowRight size={15} className="transition-transform group-hover:translate-x-0.5" />
             </span>
-            <span className="text-xs text-ink/40">Ezial Free &amp; Premium</span>
+            <span className="text-xs text-ink/40">Ezial Free &amp; Plus</span>
           </button>
         </div>
       </div>

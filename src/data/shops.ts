@@ -9,8 +9,8 @@ export interface Shop {
   // Computed server-side from seller_subscriptions (plan='pro' and
   // pro_until > now()) via active_premium_shop_ids() — never a plain
   // column a seller could set themselves, and never set on the static
-  // mock shops below. Drives the Premium badge everywhere a shop is shown
-  // and membership in the "Boutiques Premium" section.
+  // mock shops below. Drives the Ezial Plus badge everywhere a shop is
+  // shown and the "Ezial Plus uniquement" filter of the shops listing.
   isPremium?: boolean;
   // From Supabase shops.latitude/longitude — undefined for every static
   // mock shop below (they have no real-world coordinates) and for any
