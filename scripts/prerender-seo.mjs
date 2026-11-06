@@ -26,6 +26,8 @@
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { createClient } from '@supabase/supabase-js';
+import { buildInfoPages } from './seo/info.mjs';
+import { buildBlogPages } from './seo/blog.mjs';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const DIST = `${ROOT}dist`;
@@ -242,7 +244,7 @@ const BASE_TEMPLATE = readFileSync(`${DIST}/index.html`, 'utf8');
  * untouched, so the moment this file is loaded in a browser the normal
  * React app mounts over this content and takes over, unchanged.
  */
-function renderPage({ title, description, canonical, ogImage, jsonLd, bodyHtml, ogType }) {
+function renderPage({ title, description, canonical, ogImage, jsonLd, bodyHtml, ogType, extraHead = '' }) {
   let html = BASE_TEMPLATE;
   html = html.replace(/<title>.*?<\/title>/s, `<title>${esc(title)}</title>`);
   if (ogType) html = html.replace(/<meta property="og:type"[^>]*>/, `<meta property="og:type" content="${esc(ogType)}" />`);
@@ -255,7 +257,7 @@ function renderPage({ title, description, canonical, ogImage, jsonLd, bodyHtml, 
     html = html.replace(/<meta property="og:image"[^>]*>/, `<meta property="og:image" content="${esc(ogImage)}" />`);
     html = html.replace(/<meta name="twitter:image"[^>]*>/, `<meta name="twitter:image" content="${esc(ogImage)}" />`);
   }
-  const jsonLdTag = `<script type="application/ld+json">${JSON.stringify(jsonLd)}</script>\n  </head>`;
+  const jsonLdTag = `${extraHead}<script type="application/ld+json">${JSON.stringify(jsonLd)}</script>\n  </head>`;
   html = html.replace('</head>', jsonLdTag);
   html = html.replace('<div id="root"></div>', `<div id="root">${bodyHtml}</div>`);
   return html;
@@ -415,40 +417,17 @@ for (const [categoryId, categoryLabel] of Object.entries(CATEGORY_LABELS)) {
   for (const subId of subIds) buildCategoryPage(subId);
 }
 
-// --- Static info pages (no Supabase dependency) --------------------------
-// Content mirrors src/pages/InfoPage.tsx's infoContent['mentions-legales']
-// exactly — kept here too (not imported) for the same reason as
-// CATEGORY_LABELS above: this plain Node script has no access to the
-// Vite/TSX module graph. Only mentions-legales so far; add an entry here
-// whenever another static info page needs its own indexable URL.
-const INFO_PAGES = [
-  {
-    slug: 'mentions-legales',
-    title: 'Mentions légales — Ezial',
-    description: "Éditeur, hébergement et informations légales de la plateforme Ezial.",
-    heading: 'Mentions légales',
-    paragraphs: [
-      "Le site internet ezial.net est une plateforme de commerce électronique exploitée par une entreprise individuelle immatriculée au Sénégal.",
-      "Plateforme : Ezial. Exploitante : Bineta DIOUF. Forme juridique : Entreprise individuelle. Numéro RCCM : SN.DKR.2026.A.40238. Numéro NINEA : 013246576. Adresse professionnelle : Grand Yoff, quartier Sicap Foire, villa n° 48, Dakar, Sénégal. Adresse électronique : contact@ezial.net. Téléphone : +221 71 105 52 52.",
-      "La responsable de la publication du site est Bineta DIOUF, en sa qualité d'exploitante de l'entreprise individuelle. Toute demande concernant le site peut être adressée à contact@ezial.net.",
-      "Le site Ezial est hébergé et publié à l'aide du service Cloudflare Pages, fourni par Cloudflare, Inc. Le fonctionnement de la plateforme repose également sur des services techniques tiers, notamment Supabase.",
-      "Ezial est une marketplace multivendeur facilitant la mise en relation entre les consommateurs et des boutiques partenaires indépendantes au Sénégal.",
-    ],
-  },
-];
-
-for (const info of INFO_PAGES) {
-  const canonical = `${SITE_URL}/info/${info.slug}/`;
-  const bodyHtml = `
-    <main>
-      <h1>${esc(info.heading)}</h1>
-      ${info.paragraphs.map((p) => `<p>${esc(p)}</p>`).join('')}
-    </main>`;
-  writeFile(`/info/${info.slug}/index.html`, renderPage({
-    title: info.title, description: info.description, canonical, bodyHtml, jsonLd: [],
-  }));
-  sitemapUrls.push({ loc: canonical });
-}
+// --- Info pages and blog (scripts/seo/*.mjs) -------------------------------
+// Each module receives the shared helpers and adds its own pages and sitemap
+// entries. A module whose Supabase table does not exist yet skips itself
+// with a warning, so the build never depends on a pending migration.
+const seoContext = {
+  supabase, SITE_URL, DIST, esc, isoDate, renderPage, writeFile, breadcrumbNav, breadcrumbJsonLd,
+  addSitemapUrl: (entry) => sitemapUrls.push(entry),
+  products, shops, productPath, CATEGORY_LABELS, SUBCATEGORY_LABELS,
+};
+await buildInfoPages(seoContext);
+await buildBlogPages(seoContext);
 
 // --- Organization + WebSite JSON-LD on the homepage itself --------------
 {

@@ -5,6 +5,7 @@ import type { Product } from '@/data/products';
 import type { Shop } from '@/data/shops';
 import { categoryMap, type CategoryId } from '@/data/categories';
 import { findProductByKey, productPublicPath } from '@/lib/productUrl';
+import { getInfoPage } from '@/shared/infoPages';
 import {
   applyHeadTags, absoluteUrl, SITE_URL as SEO_SITE_URL, DEFAULT_OG_TITLE, DEFAULT_OG_DESCRIPTION, DEFAULT_OG_IMAGE, type HeadTags,
 } from '@/lib/seoHead';
@@ -41,6 +42,9 @@ const ShopsPage = lazy(() => import('@/pages/ShopsPage'));
 const SimilarProductsPage = lazy(() => import('@/pages/SimilarProductsPage'));
 const ResetPasswordPage = lazy(() => import('@/pages/ResetPasswordPage'));
 const AuthConfirmPage = lazy(() => import('@/pages/AuthConfirmPage'));
+const BlogIndexPage = lazy(() => import('@/pages/blog/BlogIndexPage'));
+const BlogPostPage = lazy(() => import('@/pages/blog/BlogPostPage'));
+const BlogCategoryPage = lazy(() => import('@/pages/blog/BlogCategoryPage'));
 
 function RouteFallback() {
   return (
@@ -159,6 +163,17 @@ function RouteView() {
     if (slug) return <InfoPage slug={slug} />;
   }
 
+  // Blog: /blog, /blog/categorie/:slug, /blog/:slug
+  if (clean === '/blog') return <BlogIndexPage />;
+  if (clean.startsWith('/blog/categorie/')) {
+    const slug = clean.split('/')[3];
+    if (slug) return <BlogCategoryPage slug={slug} />;
+  }
+  if (clean.startsWith('/blog/')) {
+    const slug = clean.split('/')[2];
+    if (slug) return <BlogPostPage slug={slug} />;
+  }
+
   // Fallback
   return <HomePage />;
 }
@@ -198,6 +213,9 @@ function headTagsFor(route: string, { catalogProducts, catalogShops }: CatalogFo
     return plainTags(DEFAULT_TITLE, DEFAULT_DESCRIPTION);
   }
   if (clean === '/pro' || clean.startsWith('/pro/')) return plainTags(`Ezial Pro — Espace de gestion`, "L'espace privé pour les administrateurs, vendeurs et livreurs de la marketplace Ezial.");
+
+  // Blog pages set their own tags once their article / category is loaded.
+  if (clean === '/blog' || clean.startsWith('/blog/')) return null;
 
   // /produit/:slug (or a legacy /produit/:id) — not /produit/:key/similaires,
   // which has no page of its own.
@@ -239,9 +257,10 @@ function headTagsFor(route: string, { catalogProducts, catalogShops }: CatalogFo
 
   if (parts[1] === 'info' && parts[2]) {
     const slug = parts[2];
-    if (slug === 'mentions-legales') return pageTags(`Mentions légales — ${SITE_TITLE}`, "Éditeur, hébergement et informations légales de la plateforme Ezial.", `/info/${slug}/`);
-    if (slug === 'tarifs-vendeurs') return pageTags(`Tarifs vendeurs — ${SITE_TITLE}`, "Les forfaits Ezial pour les vendeurs : Free et Ezial Plus, commissions et conditions.", `/info/${slug}/`);
-    return pageTags(DEFAULT_TITLE, DEFAULT_DESCRIPTION, `/info/${slug}/`);
+    const info = getInfoPage(slug);
+    // Canonical on the page's main slug (an alias like /info/faq/ points to it).
+    if (info) return pageTags(info.metaTitle, info.description, `/info/${info.slug}/`);
+    return plainTags(DEFAULT_TITLE, DEFAULT_DESCRIPTION);
   }
 
   if (clean === '/panier') return plainTags(`Panier — ${SITE_TITLE}`, DEFAULT_DESCRIPTION);
