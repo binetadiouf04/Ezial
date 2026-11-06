@@ -5,7 +5,6 @@ import type { Product } from '@/data/products';
 import type { Shop } from '@/data/shops';
 import { categoryMap, type CategoryId } from '@/data/categories';
 import { findProductByKey, productPublicPath } from '@/lib/productUrl';
-import { getInfoPage } from '@/shared/infoPages';
 import {
   applyHeadTags, absoluteUrl, SITE_URL as SEO_SITE_URL, DEFAULT_OG_TITLE, DEFAULT_OG_DESCRIPTION, DEFAULT_OG_IMAGE, type HeadTags,
 } from '@/lib/seoHead';
@@ -255,13 +254,9 @@ function headTagsFor(route: string, { catalogProducts, catalogShops }: CatalogFo
     return pageTags(`Toutes les boutiques | ${SITE_TITLE}`, 'Toutes les boutiques actives sur Ezial, la marketplace mode, beauté et accessoires au Sénégal.', '/boutiques/');
   }
 
-  if (parts[1] === 'info' && parts[2]) {
-    const slug = parts[2];
-    const info = getInfoPage(slug);
-    // Canonical on the page's main slug (an alias like /info/faq/ points to it).
-    if (info) return pageTags(info.metaTitle, info.description, `/info/${info.slug}/`);
-    return plainTags(DEFAULT_TITLE, DEFAULT_DESCRIPTION);
-  }
+  // Info pages set their own tags (InfoPage), like the blog — their texts
+  // stay out of the main bundle.
+  if (parts[1] === 'info') return null;
 
   if (clean === '/panier') return plainTags(`Panier — ${SITE_TITLE}`, DEFAULT_DESCRIPTION);
   if (clean === '/checkout') return plainTags(`Commande — ${SITE_TITLE}`, DEFAULT_DESCRIPTION);

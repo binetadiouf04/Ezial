@@ -257,7 +257,8 @@ function renderPage({ title, description, canonical, ogImage, jsonLd, bodyHtml, 
     html = html.replace(/<meta property="og:image"[^>]*>/, `<meta property="og:image" content="${esc(ogImage)}" />`);
     html = html.replace(/<meta name="twitter:image"[^>]*>/, `<meta name="twitter:image" content="${esc(ogImage)}" />`);
   }
-  const jsonLdTag = `${extraHead}<script type="application/ld+json">${JSON.stringify(jsonLd)}</script>\n  </head>`;
+  // \u003c keeps any "</script>" inside a value from closing the tag early.
+  const jsonLdTag = `${extraHead}<script type="application/ld+json">${JSON.stringify(jsonLd).replace(/</g, '\\u003c')}</script>\n  </head>`;
   html = html.replace('</head>', jsonLdTag);
   html = html.replace('<div id="root"></div>', `<div id="root">${bodyHtml}</div>`);
   return html;

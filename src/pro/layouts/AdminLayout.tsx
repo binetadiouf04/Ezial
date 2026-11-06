@@ -22,6 +22,7 @@ import AdminSubscriptions from '../pages/admin/AdminSubscriptions';
 import AdminBlog from '../pages/admin/AdminBlog';
 import AdminBlogForm from '../pages/admin/AdminBlogForm';
 import AdminBlogPreview from '../pages/admin/AdminBlogPreview';
+import AdminBlogCategories from '../pages/admin/AdminBlogCategories';
 import AdminEditorialSelection from '../pages/admin/AdminEditorialSelection';
 import AdminNotificationBell from '../components/AdminNotificationBell';
 
@@ -67,6 +68,7 @@ export default function AdminLayout() {
     if (clean === '/admin/contenu') return <AdminContent />;
     if (clean === '/admin/selection') return <AdminEditorialSelection />;
     if (clean === '/admin/blog') return <AdminBlog />;
+    if (clean === '/admin/blog/categories') return <AdminBlogCategories />;
     if (clean === '/admin/blog/nouveau') return <AdminBlogForm />;
     if (blogEditMatch) return <AdminBlogForm postId={blogEditMatch[1]} />;
     if (blogPreviewMatch) return <AdminBlogPreview postId={blogPreviewMatch[1]} />;
@@ -82,6 +84,8 @@ export default function AdminLayout() {
 
   const isActive = (itemRoute: string) => {
     if (itemRoute === '/admin') return clean === '/admin';
+    // The blog screens belong to « Contenu ».
+    if (itemRoute === '/admin/contenu' && clean.startsWith('/admin/blog')) return true;
     return clean.startsWith(itemRoute);
   };
 

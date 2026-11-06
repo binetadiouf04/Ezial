@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { Suspense, lazy, useEffect, useMemo, useState } from 'react';
 import { useApp } from '@/store/AppContext';
 import { searchProducts, type Product } from '@/data/products';
 import { getShop, type Shop } from '@/data/shops';
@@ -9,11 +9,14 @@ import ShopCard from '@/components/ShopCard';
 import HeroCarousel, { type HeroSlide } from '@/components/HeroCarousel';
 import DiscoverMarquee from '@/components/DiscoverMarquee';
 import EditorialSelection from '@/components/EditorialSelection';
-import BlogHighlights from '@/components/BlogHighlights';
 import { rankProducts, rankForTrending, diversifyBySubcategory } from '@/lib/productRanking';
 import { fetchHeroSlides, fetchDiscoverTiles } from '@/lib/supabaseHomeContent';
 import { ChevronRight, Truck, Store, Smartphone } from 'lucide-react';
 
+
+// Loaded on demand: renders nothing until an article is published, so its
+// code stays out of the main bundle.
+const BlogHighlights = lazy(() => import('@/components/BlogHighlights'));
 // Phase 1: resolves "official shop" purely from Supabase shops.is_official
 // (via getShop's registry) — never a hardcoded id/slug/name. Phase 2 will
 // extend RankingContext with buyer-behavior signals; this function itself
@@ -273,7 +276,7 @@ export default function HomePage() {
         )}
 
         {/* Renders nothing while no article is published. */}
-        <BlogHighlights />
+        <Suspense fallback={null}><BlogHighlights /></Suspense>
 
         <section className="border-t border-line pt-12" aria-label="Nos engagements">
           <div className="grid grid-cols-1 gap-6 sm:grid-cols-3 sm:gap-8">

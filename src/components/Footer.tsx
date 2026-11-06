@@ -2,6 +2,7 @@ import { useState, type MouseEvent, type ReactNode } from 'react';
 import { useApp } from '@/store/AppContext';
 import { paymentMethods } from '@/data/payments';
 import { CONTACT, SOCIAL_LINKS } from '@/shared/siteInfo';
+import { useHasPublishedBlogPosts } from '@/lib/supabaseBlog';
 import { Instagram, Facebook, Plus, Mail, MapPin, Phone } from 'lucide-react';
 
 function TikTokIcon({ size = 18, className = '' }: { size?: number; className?: string }) {
@@ -42,7 +43,7 @@ const legalLinks: FooterLinkDef[] = [
 ];
 
 function hrefFor(route: string): string {
-  return route.startsWith('/info/') ? `${route}/` : route;
+  return route.startsWith('/info/') || route === '/blog' ? `${route}/` : route;
 }
 
 const linkBase = 'text-sm text-white/75 hover:text-white hover:underline transition-colors';
@@ -159,6 +160,11 @@ function BrandLink() {
 }
 
 export default function Footer() {
+  // « Blog » appears only once at least one article is published.
+  const hasBlog = useHasPublishedBlogPosts();
+  const ezialColumn = hasBlog
+    ? [ezialLinks[0], { label: 'Blog', route: '/blog' }, ...ezialLinks.slice(1)]
+    : ezialLinks;
   return (
     <footer className="mt-auto" style={{ backgroundColor: '#4A1223' }}>
       {/* Main footer content */}
@@ -176,7 +182,7 @@ export default function Footer() {
             </div>
 
             <FooterColumn title="Aide" links={aideLinks} />
-            <FooterColumn title="Ezial" links={ezialLinks} />
+            <FooterColumn title="Ezial" links={ezialColumn} />
 
             {/* Column 4 — Contact */}
             <div>
@@ -201,7 +207,7 @@ export default function Footer() {
             </div>
 
             <MobileAccordion title="Aide" links={aideLinks} />
-            <MobileAccordion title="Ezial" links={ezialLinks} />
+            <MobileAccordion title="Ezial" links={ezialColumn} />
           </div>
 
           {/* Payment methods */}

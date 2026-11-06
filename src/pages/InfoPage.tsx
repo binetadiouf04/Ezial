@@ -1,12 +1,13 @@
 import { useApp } from '@/store/AppContext';
-import { useNoIndex } from '@/lib/seoHead';
+import { useEffect } from 'react';
+import { applyHeadTags, useNoIndex, DEFAULT_OG_IMAGE, SITE_URL } from '@/lib/seoHead';
 import { getInfoPage } from '@/shared/infoPages';
 import InfoLayout from '@/components/info/InfoLayout';
 
 // Institutional pages /info/<slug>. Texts and structure live in
 // src/shared/infoPages.js (also read by the static SEO build,
-// scripts/seo/info.mjs); the <head> tags are set by App.tsx from the same
-// definition. An alias (/info/faq) shows its main page.
+// scripts/seo/info.mjs); the <head> tags are set here from the same
+// definition (canonical on the main slug: /info/faq points to centre-aide).
 
 function sectionFromRoute(route: string): string | null {
   const query = route.split('?')[1];
@@ -19,6 +20,12 @@ export default function InfoPage({ slug }: { slug: string }) {
   const { navigate, route } = useApp();
   const page = getInfoPage(slug);
   useNoIndex(!page);
+  useEffect(() => {
+    const title = page ? page.metaTitle : 'Page introuvable — Ezial';
+    const description = page ? page.description : 'Cette page n’existe pas ou a été déplacée.';
+    const canonical = page ? `${SITE_URL}/info/${page.slug}/` : `${SITE_URL}/`;
+    applyHeadTags({ title, description, canonical, ogTitle: title, ogDescription: description, ogImage: DEFAULT_OG_IMAGE, ogType: 'website' });
+  }, [page]);
 
   if (!page) {
     return (
