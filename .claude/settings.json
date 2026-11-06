@@ -24,7 +24,15 @@
       "mcp__Supabase__search_docs",
       "mcp__Supabase__generate_typescript_types",
       "mcp__Supabase__execute_sql",
-      "mcp__Supabase__apply_migration"
+      "mcp__Supabase__apply_migration",
+      "Bash(rm -r /tmp/*)",
+      "Bash(rm -r /opt/node-tools/*)",
+      "Agent",
+      "SendMessage",
+      "ToolSearch",
+      "TaskCreate",
+      "TaskUpdate",
+      "Skill"
     ],
     "deny": [
       "Bash(git push origin main)",
