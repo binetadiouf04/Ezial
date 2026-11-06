@@ -1,0 +1,8 @@
+# Les adresses techniques Cloudflare (ezial.pages.dev et les previews
+# xxxx.ezial.pages.dev) servent le même contenu que ezial.net : elles ne
+# doivent jamais être indexées, pour éviter tout contenu dupliqué.
+https://:project.pages.dev/*
+  X-Robots-Tag: noindex
+
+https://:version.:project.pages.dev/*
+  X-Robots-Tag: noindex

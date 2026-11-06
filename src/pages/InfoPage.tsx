@@ -243,7 +243,7 @@ const infoContent: Record<string, { title: string; body: React.ReactNode }> = {
         <p>• <strong>Adresse professionnelle</strong> : Grand Yoff, quartier Sicap Foire, villa n° 48, Dakar, Sénégal</p>
         <p>• <strong>Adresse électronique</strong> : contact@ezial.net</p>
         <p>• <strong>Téléphone</strong> : +221 71 105 52 52</p>
-        <p>• <strong>Site internet</strong> : https://www.ezial.net</p>
+        <p>• <strong>Site internet</strong> : https://ezial.net</p>
         <p>Ezial est une plateforme de vente en ligne permettant à des boutiques et vendeurs partenaires de proposer leurs produits aux consommateurs, principalement au Sénégal.</p>
 
         <H2>2. Responsable de la publication</H2>

@@ -2,4 +2,4 @@ User-agent: *
 Allow: /
 Disallow: /pro
 
-Sitemap: https://www.ezial.net/sitemap.xml
+Sitemap: https://ezial.net/sitemap.xml

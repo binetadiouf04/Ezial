@@ -1,4 +1,5 @@
 import { supabase } from './supabaseClient';
+import { isProductUuid } from './productUrl';
 import type { Product, VariantOption, VariantPrice } from '@/data/products';
 import type { Shop } from '@/data/shops';
 import type { CategoryId } from '@/data/categories';
@@ -75,6 +76,7 @@ interface ShopRow {
 
 interface ProductRow {
   id: string;
+  slug?: string | null;
   shop_id: string;
   reference?: string | null;
   name: string;
@@ -261,6 +263,7 @@ function mapProduct(row: ProductRow, imageRows: ProductImageRow[], variantRows: 
 
   return {
     id: row.id,
+    slug: row.slug ?? undefined,
     reference: row.reference ?? '',
     name: row.name,
     shopId: row.shop_id,
@@ -392,7 +395,7 @@ export interface SupabaseProductDetailResult {
 }
 
 /**
- * Resolves a single product by id straight from Supabase — used by
+ * Resolves a single product by id or slug straight from Supabase — used by
  * ProductPage so a real product's own detail page doesn't depend on the
  * static mock catalog at all. Mirrors fetchActiveCatalogFromSupabase's
  * shape/mapping exactly (same row types, same mapProduct/mapShop), just
@@ -402,11 +405,11 @@ export interface SupabaseProductDetailResult {
  * above — a draft/flagged/disabled product must never be reachable by
  * guessing or sharing its URL, on top of whatever RLS already enforces.
  */
-export async function fetchProductDetailFromSupabase(productId: string): Promise<SupabaseProductDetailResult> {
+export async function fetchProductDetailFromSupabase(productKey: string): Promise<SupabaseProductDetailResult> {
   const { data: productRow, error: productError } = await supabase
     .from('products')
     .select('*')
-    .eq('id', productId)
+    .eq(isProductUuid(productKey) ? 'id' : 'slug', productKey)
     .eq('status', 'active')
     .maybeSingle();
 

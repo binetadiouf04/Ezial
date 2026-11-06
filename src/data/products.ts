@@ -14,6 +14,8 @@ export interface VariantPrice {
   id?: string;
 }
 export interface Product {
+  // Stable public URL key (products.slug) — see src/lib/productUrl.ts.
+  slug?: string;
   id: string; reference: string; name: string; shopId: string; category: CategoryId; subcategory: string;
   price: number; oldPrice?: number; images: string[];
   rating?: number; reviewCount?: number; stock: number;
