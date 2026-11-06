@@ -13,8 +13,16 @@ import {
   type SellerSubscriptionInfo,
   type SubscriptionPaymentRow,
 } from '@/lib/supabaseSellerSubscription';
-import { BILLING_PERIOD_LABEL, FREE_COMMISSION_PERCENT, PREMIUM_COMMISSION_PERCENT, formatFcfa } from '@/data/subscriptionPlans';
-import { Crown, Package, Calendar, Percent, Hourglass, Wallet, Repeat } from 'lucide-react';
+import {
+  BILLING_PERIOD_LABEL, FREE_COMMISSION_PERCENT, PREMIUM_COMMISSION_PERCENT, PREMIUM_PRODUCT_LIMIT, PLAN_END_RULES, TRIAL_DAYS, formatFcfa,
+} from '@/data/subscriptionPlans';
+import { Crown, Package, Calendar, Percent, Hourglass, Wallet, Repeat, Sparkles, Info } from 'lucide-react';
+
+// "12 décembre 2026" — the long form, for the sentences explaining a trial
+// that starts on launch day.
+function formatLongDate(iso: string): string {
+  return new Date(iso).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Africa/Dakar' });
+}
 
 export default function SellerSubscription() {
   const { sellerSupabaseShopId, sellerShopIsOfficial, navigate } = usePro();
@@ -70,6 +78,9 @@ export default function SellerSubscription() {
 
   const summary = summarizeCurrentPlan(info, payments);
   const startedAt = info.isTrialActive ? info.trialStart : info.proStartedAt;
+  // Trial activated before the official launch: its 30 days start on
+  // launch day, while the Ezial Plus advantages are already active.
+  const trialStartsLater = info.trialStartsLater && !!info.trialStart;
 
   return (
     <div className="space-y-6">
@@ -91,9 +102,21 @@ export default function SellerSubscription() {
           </p>
         )}
 
+        {trialStartsLater && (
+          <div className="mt-3 flex items-start gap-2.5 rounded-xl bg-burgundy px-4 py-3.5 text-white">
+            <Sparkles size={16} className="mt-0.5 flex-shrink-0 text-champagne" aria-hidden="true" />
+            <p className="text-sm leading-snug">
+              <span className="font-semibold">Votre essai démarre le {formatLongDate(info.trialStart!)} ; vos avantages Ezial Plus sont déjà actifs.</span>
+              <span className="mt-1 block text-xs text-white/75">
+                Vous publiez dès maintenant jusqu’à {PREMIUM_PRODUCT_LIMIT} produits, avec {PREMIUM_COMMISSION_PERCENT} % de commission. Vos {TRIAL_DAYS} jours d’essai se terminent le {formatLongDate(info.proUntil!)}.
+              </span>
+            </p>
+          </div>
+        )}
+
         {info.isPremiumExpired && (
           <p className="mt-3 rounded-lg bg-burgundy/5 border border-burgundy/20 px-3 py-2 text-xs text-burgundy">
-            Votre abonnement Ezial Plus a expiré. Vos données et commandes restent accessibles ; renouvelez pour retrouver vos 30 produits, votre badge et la commission à 8 %. Cette boutique ne peut plus revenir au forfait Free.
+            Votre abonnement Ezial Plus a expiré. Vos données et vos produits sont conservés ; renouvelez pour retrouver vos {PREMIUM_PRODUCT_LIMIT} produits publiés, la commission à {PREMIUM_COMMISSION_PERCENT} %, votre badge et l’accès à la Sélection Ezial. Cette boutique ne repasse pas au forfait Free.
           </p>
         )}
 
@@ -125,23 +148,35 @@ export default function SellerSubscription() {
           </div>
           {startedAt && (
             <div className="rounded-lg bg-cream p-3">
-              <p className="text-xs font-medium text-ink/50 flex items-center gap-1.5"><Calendar size={13} /> Début de l'abonnement</p>
+              <p className="text-xs font-medium text-ink/50 flex items-center gap-1.5"><Calendar size={13} /> {info.isTrialActive ? (trialStartsLater ? "L'essai démarre le" : "Début de l'essai") : "Début de l'abonnement"}</p>
               <p className="mt-1 text-lg font-semibold text-ink">{formatDate(startedAt)}</p>
             </div>
           )}
           {(info.isProActive || info.isPremiumExpired) && info.proUntil && (
             <div className="rounded-lg bg-cream p-3">
-              <p className="text-xs font-medium text-ink/50 flex items-center gap-1.5"><Calendar size={13} /> {info.isProActive ? "Date d'expiration" : 'Expiré le'}</p>
+              <p className="text-xs font-medium text-ink/50 flex items-center gap-1.5"><Calendar size={13} /> {info.isProActive ? (info.isTrialActive ? "Fin de l'essai" : "Date d'expiration") : 'Expiré le'}</p>
               <p className="mt-1 text-lg font-semibold text-ink">{formatDate(info.proUntil)}</p>
             </div>
           )}
-          {info.isTrialActive && info.trialDaysRemaining !== null && (
+          {info.isTrialActive && (trialStartsLater ? (
+            <div className="rounded-lg bg-cream p-3 col-span-2">
+              <p className="text-xs font-medium text-ink/50 flex items-center gap-1.5"><Hourglass size={13} /> Durée de l'essai</p>
+              <p className="mt-1 text-lg font-semibold text-ink">{TRIAL_DAYS} jours à partir du {formatLongDate(info.trialStart!)}</p>
+            </div>
+          ) : info.trialDaysRemaining !== null && (
             <div className="rounded-lg bg-cream p-3 col-span-2">
               <p className="text-xs font-medium text-ink/50 flex items-center gap-1.5"><Hourglass size={13} /> Jours restants de l'essai</p>
               <p className="mt-1 text-lg font-semibold text-ink">{info.trialDaysRemaining} jour{info.trialDaysRemaining > 1 ? 's' : ''}</p>
             </div>
-          )}
+          ))}
         </div>
+
+        {(info.isProActive || info.isPremiumExpired) && (
+          <p className="mt-4 flex items-start gap-2 border-t border-line pt-4 text-xs leading-relaxed text-ink/55">
+            <Info size={14} className="mt-0.5 flex-shrink-0 text-ink/35" aria-hidden="true" />
+            <span><span className="font-medium text-ink/70">Fin d’Ezial Plus : </span>{PLAN_END_RULES}</span>
+          </p>
+        )}
       </div>
 
       {/* Same Free / Ezial Plus cards as the signup flow; a renewal starts

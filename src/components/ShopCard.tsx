@@ -22,7 +22,7 @@ export default function ShopCard({ shop }: { shop: Shop }) {
           </div>
           {shop.followers > 0 && <p className="text-xs text-ink/50">{shop.followers.toLocaleString('fr-FR')} abonnés</p>}
         </div>
-        {shop.rating && <Rating rating={shop.rating} count={shop.reviewCount} showCount={false} />}
+        {shop.rating > 0 && <Rating rating={shop.rating} count={shop.reviewCount} showCount={false} />}
       </div>
     </a>
   );

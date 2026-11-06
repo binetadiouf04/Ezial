@@ -1,6 +1,6 @@
 import { usePro } from '../ProContext';
 import { navigateTo } from '@/store/AppContext';
-import { LayoutDashboard, ShoppingBag, Package, Store, Wallet, LogOut, ArrowLeft, Layers, Truck, AlertTriangle, Star, Megaphone, Crown } from 'lucide-react';
+import { LayoutDashboard, ShoppingBag, Package, Store, Wallet, LogOut, ArrowLeft, Layers, Truck, AlertTriangle, Star, Megaphone, Crown, Sparkles } from 'lucide-react';
 import AdminDashboard from '../pages/admin/AdminDashboard';
 import AdminContent from '../pages/admin/AdminContent';
 import AdminOrders from '../pages/admin/AdminOrders';
@@ -22,6 +22,7 @@ import AdminSubscriptions from '../pages/admin/AdminSubscriptions';
 import AdminBlog from '../pages/admin/AdminBlog';
 import AdminBlogForm from '../pages/admin/AdminBlogForm';
 import AdminBlogPreview from '../pages/admin/AdminBlogPreview';
+import AdminEditorialSelection from '../pages/admin/AdminEditorialSelection';
 import AdminNotificationBell from '../components/AdminNotificationBell';
 
 const navItems = [
@@ -34,6 +35,7 @@ const navItems = [
   { route: '/admin/boutiques', label: 'Boutiques', icon: Store },
   { route: '/admin/livreurs', label: 'Livreurs', icon: Truck },
   { route: '/admin/contenu', label: 'Contenu', icon: Layers },
+  { route: '/admin/selection', label: 'Sélection Ezial', icon: Sparkles },
   { route: '/admin/finances', label: 'Finances', icon: Wallet },
   { route: '/admin/abonnements', label: 'Abonnements', icon: Crown },
 ];
@@ -63,6 +65,7 @@ export default function AdminLayout() {
     if (clean === '/admin/boutiques') return <AdminShops />;
     if (shopDetailMatch) return <AdminShopDetail shopId={shopDetailMatch[1]} />;
     if (clean === '/admin/contenu') return <AdminContent />;
+    if (clean === '/admin/selection') return <AdminEditorialSelection />;
     if (clean === '/admin/blog') return <AdminBlog />;
     if (clean === '/admin/blog/nouveau') return <AdminBlogForm />;
     if (blogEditMatch) return <AdminBlogForm postId={blogEditMatch[1]} />;

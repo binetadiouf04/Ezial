@@ -29,6 +29,11 @@ export interface SellerSubscriptionInfo {
   // isProActive true, but the UI (and eligibility for a fresh trial)
   // needs to tell them apart.
   isTrialActive: boolean;
+  // Trial activated before the official launch: activate_seller_trial()
+  // sets trial_start to launch day, so its 30 days haven't started
+  // counting yet — while the Ezial Plus advantages are already active
+  // (pro_until = trial_end). Derived only, nothing stored.
+  trialStartsLater: boolean;
   productLimit: number;
   commissionPercent: number;
   trialDaysRemaining: number | null;
@@ -78,16 +83,19 @@ export async function fetchSellerSubscription(shopId: string): Promise<SellerSub
   // naturally stops being true the moment a paid period takes over.
   const isTrialActive = isProActive && !!trialEnd && proUntil === trialEnd;
   const isPremiumExpired = plan === 'pro' && !isProActive && premiumPaidEver;
+  const trialStart = (data?.trial_start as string | null) ?? null;
+  const trialStartsLater = isTrialActive && !!trialStart && new Date(trialStart) > new Date();
 
   return {
     plan,
     trialUsed: (data?.trial_used as boolean) ?? false,
-    trialStart: (data?.trial_start as string | null) ?? null,
+    trialStart,
     trialEnd,
     proUntil,
     proStartedAt: (data?.pro_started_at as string | null) ?? null,
     isProActive,
     isTrialActive,
+    trialStartsLater,
     productLimit: isProActive ? PREMIUM_PRODUCT_LIMIT : FREE_PRODUCT_LIMIT,
     commissionPercent: isProActive ? PREMIUM_COMMISSION_PERCENT : FREE_COMMISSION_PERCENT,
     trialDaysRemaining: isTrialActive ? daysUntil(proUntil) : null,

@@ -3,7 +3,7 @@ import { usePro } from '../../ProContext';
 import { billingPeriodFromQuery, type SubscriptionPaymentMethod } from '@/lib/supabaseSellerSubscription';
 import {
   PLUS_PLAN_NAME, PLUS_BILLING, PLUS_ANNUAL_REFERENCE_PRICE_FCFA, PLUS_ANNUAL_SAVINGS_FCFA, BILLING_PERIOD_LABEL,
-  formatFcfa, type BillingPeriod,
+  FREE_PRODUCT_LIMIT, FREE_COMMISSION_PERCENT, PLUS_SAME_BENEFITS_NOTE, TRIAL_DAYS, formatFcfa, type BillingPeriod,
 } from '@/data/subscriptionPlans';
 import BillingPeriodToggle from '@/components/BillingPeriodToggle';
 import { ArrowLeft, Smartphone, AlertCircle } from 'lucide-react';
@@ -40,6 +40,7 @@ export default function SellerSubscriptionPayment() {
       <h1 className="font-display text-xl font-semibold text-ink">S'abonner à {PLUS_PLAN_NAME}</h1>
 
       <BillingPeriodToggle value={period} onChange={setPeriod} />
+      <p className="-mt-3 text-center text-xs text-ink/45">{PLUS_SAME_BENEFITS_NOTE}</p>
 
       {/* Récapitulatif */}
       <div className="card p-5">
@@ -80,7 +81,7 @@ export default function SellerSubscriptionPayment() {
       <div className="flex items-start gap-2.5 rounded-xl border border-amber-200 bg-amber-50 p-4">
         <AlertCircle size={16} className="mt-0.5 flex-shrink-0 text-amber-700" />
         <p className="text-sm text-amber-800">
-          Le paiement en ligne {PLUS_PLAN_NAME} est temporairement indisponible : la connexion sécurisée à {method === 'wave' ? 'Wave' : 'Orange Money'} n'est pas encore activée. Revenez bientôt — votre forfait Free et votre essai {PLUS_PLAN_NAME} gratuit de 30 jours restent accessibles dès maintenant.
+          Le paiement en ligne {PLUS_PLAN_NAME} est en cours d’activation : la connexion sécurisée à {method === 'wave' ? 'Wave' : 'Orange Money'} n’est pas encore ouverte. En attendant, le forfait Free et l’essai gratuit de {TRIAL_DAYS} jours d’{PLUS_PLAN_NAME} (une fois par boutique) sont disponibles.
         </p>
       </div>
 
@@ -89,7 +90,7 @@ export default function SellerSubscriptionPayment() {
       </button>
 
       <p className="text-xs text-ink/45 text-center">
-        Important : une fois un abonnement {PLUS_PLAN_NAME} payé, cette boutique ne pourra plus revenir au forfait Free — seul le renouvellement restera possible en cas d'expiration. L'abonnement n'est activé qu'après une confirmation authentifiée du paiement, jamais sur une simple déclaration.
+        Important : après un premier abonnement {PLUS_PLAN_NAME} payé, cette boutique ne revient plus au forfait Free. À l’expiration, elle conserve ses données et ses produits ; jusqu’au renouvellement, elle est soumise aux limites de Free ({FREE_PRODUCT_LIMIT} produits publiés, commission de {FREE_COMMISSION_PERCENT} %). L’abonnement est activé uniquement après la confirmation authentifiée du paiement par l’opérateur.
       </p>
     </div>
   );

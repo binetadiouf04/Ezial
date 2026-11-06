@@ -19,7 +19,8 @@ import Rating from '@/components/Rating';
 import FavoriteButton from '@/components/FavoriteButton';
 import ProductCarousel from '@/components/ProductCarousel';
 import SmartImage from '@/components/SmartImage';
-import { ChevronRight, Store, Plus, Minus, Check, Star, Camera, X, ShieldCheck, Loader2 } from 'lucide-react';
+import { DELIVERY } from '@/shared/siteInfo';
+import { ChevronRight, Store, Plus, Minus, Check, Star, Camera, X, ShieldCheck, Loader2, Truck } from 'lucide-react';
 
 const tabs = ['Description', 'Avis'] as const;
 type Tab = (typeof tabs)[number];
@@ -333,6 +334,14 @@ export default function ProductPage({ productId }: { productId: string }) {
               <button onClick={() => handleAdd(false)} disabled={outOfStock || fabricQtyInvalid} className="btn-outline flex-1">{added ? <><Check size={17} /> Ajouté</> : 'Ajouter au panier'}</button>
               <button onClick={() => handleAdd(true)} disabled={outOfStock || fabricQtyInvalid} className="btn-primary flex-1">Acheter maintenant</button>
             </div>
+          </div>
+          {/* Delivery promise (src/shared/siteInfo.js) — information only,
+              the order flow and delivery fee are unchanged. */}
+          <div className="flex items-center gap-3 rounded-xl bg-cream px-4 py-3">
+            <span className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-burgundy text-white"><Truck size={17} aria-hidden="true" /></span>
+            <p className="text-sm leading-snug text-ink/70">
+              <span className="font-semibold text-ink">Livraison en {DELIVERY.delay}</span> à {DELIVERY.area}
+            </p>
           </div>
           {product.pickup && (
             <div className="space-y-2.5 rounded-xl border border-line p-4">
