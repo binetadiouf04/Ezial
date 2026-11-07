@@ -9,7 +9,7 @@ import { StatusChip } from '../../components/StatusChip';
 import { Wallet, TrendingUp, Calendar, Check, Loader2 } from 'lucide-react';
 
 export default function SellerFinances() {
-  const { sellerSupabaseShopId } = usePro();
+  const { sellerSupabaseShopId, sellerShopIsOfficial } = usePro();
   const [transactions, setTransactions] = useState<SellerTransactionRow[]>([]);
   const [grossTotal, setGrossTotal] = useState(0);
   const [commissionTotal, setCommissionTotal] = useState(0);
@@ -41,11 +41,12 @@ export default function SellerFinances() {
       setCommissionTotal(summary.commissionTotal);
       setNetTotal(summary.netTotal);
       setAvailableBalance(summary.availableBalance);
-      setCommissionRate(sub.isProActive ? PREMIUM_COMMISSION_PERCENT : FREE_COMMISSION_PERCENT);
+      // The official Ezial shop pays no commission (create_order records 0).
+      setCommissionRate(sellerShopIsOfficial ? 0 : sub.isProActive ? PREMIUM_COMMISSION_PERCENT : FREE_COMMISSION_PERCENT);
       setIsLoading(false);
     });
     return () => { cancelled = true; };
-  }, [sellerSupabaseShopId]);
+  }, [sellerSupabaseShopId, sellerShopIsOfficial]);
 
   const handleRequestPayout = async () => {
     if (!sellerSupabaseShopId) return;
@@ -90,7 +91,7 @@ export default function SellerFinances() {
       <FinanceSummary
         rows={[
           { label: 'Ventes brutes', value: grossTotal, hint: `${transactions.length} transaction${transactions.length > 1 ? 's' : ''}` },
-          { label: 'Commission Ezial', value: -commissionTotal, hint: `${commissionRate ?? FREE_COMMISSION_PERCENT} % (votre forfait actuel) — déduite automatiquement` },
+          { label: 'Commission Ezial', value: -commissionTotal, hint: commissionRate === 0 ? 'Aucune commission sur les ventes de la boutique Ezial' : `${commissionRate ?? FREE_COMMISSION_PERCENT} % (votre forfait actuel) — déduite automatiquement` },
           { label: 'Montant net', value: netTotal, accent: true },
         ]}
       />
