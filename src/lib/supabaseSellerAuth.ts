@@ -1,22 +1,18 @@
 import { supabase } from './supabaseClient';
 import { mapAuthErrorMessage, isValidEmail } from './authErrors';
 
-// Sellers log in with `seller_code` + a real password — never an email
-// address. Supabase Auth itself only knows email + password, so each shop
-// is backed by a real Supabase Auth user whose email is a deterministic,
-// internal-only address derived from seller_code and never shown to
-// anyone. `.internal` is an IANA-reserved special-use TLD (RFC 6761) — it
-// will never resolve as a real, mail-deliverable domain.
-const SELLER_EMAIL_DOMAIN = 'sellers.ezial.internal';
+// Sellers log in with their username (`seller_code`) or their email, plus
+// a password. Supabase Auth itself only knows email + password; the email
+// behind a username is resolved server-side (see resolveSellerEmail) and
+// only once the password has been checked — a username alone never reveals
+// it. The first pilot accounts are backed by an internal-only address
+// (<code>@sellers.ezial.internal, `.internal` being an IANA-reserved TLD
+// that never delivers mail).
 
-// seller_code must always normalize the same way before becoming part of
-// the technical email, regardless of how the seller types it.
+// seller_code must always normalize the same way, regardless of how the
+// seller types it.
 function normalizeSellerCode(sellerCode: string): string {
   return sellerCode.trim().toLowerCase();
-}
-
-function sellerEmailForCode(sellerCode: string): string {
-  return `${normalizeSellerCode(sellerCode)}@${SELLER_EMAIL_DOMAIN}`;
 }
 
 // Deliberately generic and identical for "unknown seller_code" and "wrong
@@ -69,36 +65,32 @@ export async function shopForCurrentUser(knownUserId?: string): Promise<SellerAu
   };
 }
 
-// New (post-migration) sellers sign up with a real email + a username they
-// choose (stored in shops.seller_code, exactly the same column the old
-// pilot accounts already use for their generated code — one unified
-// identifier column, two ways of populating it). Login accepts either the
-// username/seller_code OR the real email, resolved server-side to whatever
-// email is actually registered for that account via the
-// resolve_seller_login_email() RPC (security definer — it may read
-// auth.users, which anon/authenticated can't query directly). This keeps
-// every existing pilot account (seller_code + synthetic email) working
-// unchanged: for them the RPC just returns the same deterministic
-// <code>@sellers.ezial.internal address signInSeller always computed
-// locally before.
-// Shared by signInSeller and resendSellerConfirmationForIdentifier — a
-// seller logs in with either their username or their real email, but
-// Supabase's own APIs (signInWithPassword, resend) always need the real
-// email, so this is the one place that resolution happens.
-async function resolveSellerEmail(identifier: string): Promise<string> {
+// Sellers sign up with a real email + a username they choose (stored in
+// shops.seller_code, the same column the pilot accounts use for their
+// generated code). Login accepts either. Supabase's own APIs
+// (signInWithPassword, resend) always need the email, so a username is
+// resolved by the resolve_seller_login_email() RPC (security definer — it
+// reads auth.users), which only returns the email when the password is
+// right, and locks the username for 15 minutes after 10 failures (login by
+// email still works then). Shared by signInSeller and
+// resendSellerConfirmationForIdentifier.
+async function resolveSellerEmail(identifier: string, password: string): Promise<{ email: string } | { error: string }> {
   const trimmed = identifier.trim();
-  if (trimmed.includes('@')) return trimmed;
-  const { data: resolved } = await supabase.rpc('resolve_seller_login_email', { p_identifier: trimmed });
-  // Falls back to the deterministic synthetic address if the RPC isn't
-  // deployed yet or found nothing — preserves old-pilot-account login
-  // even before the resolver migration is applied.
-  return (resolved as string | null) ?? sellerEmailForCode(trimmed);
+  if (trimmed.includes('@')) return { email: trimmed };
+  const { data, error } = await supabase.rpc('resolve_seller_login_email', { p_identifier: trimmed, p_password: password });
+  if (error) {
+    // P0001 = the lockout message written for the seller in the RPC itself.
+    return { error: error.code === 'P0001' ? error.message : GENERIC_LOGIN_ERROR };
+  }
+  return typeof data === 'string' && data ? { email: data } : { error: GENERIC_LOGIN_ERROR };
 }
 
 const UNCONFIRMED_LOGIN_ERROR = "Confirmez votre adresse email avant de vous connecter (lien envoyé à l'inscription).";
 
 export async function signInSeller(identifier: string, password: string): Promise<SellerAuthShop | { error: string; code?: 'unconfirmed' }> {
-  const email = await resolveSellerEmail(identifier);
+  const resolved = await resolveSellerEmail(identifier, password);
+  if ('error' in resolved) return { error: resolved.error };
+  const { email } = resolved;
 
   const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
   if (signInError) {
@@ -317,11 +309,13 @@ export async function resendSellerConfirmation(email: string): Promise<{ error?:
 }
 
 // Same as resendSellerConfirmation, but for the login screen, where a
-// seller may have typed their username instead of their real email — the
-// one place this resolution is actually needed outside signInSeller itself.
-export async function resendSellerConfirmationForIdentifier(identifier: string): Promise<{ error?: string }> {
-  const email = await resolveSellerEmail(identifier);
-  return resendSellerConfirmation(email);
+// seller may have typed their username instead of their real email. Offered
+// only after a login attempt whose password was right (Supabase answers
+// "email not confirmed" only then), so that same password resolves it.
+export async function resendSellerConfirmationForIdentifier(identifier: string, password: string): Promise<{ error?: string }> {
+  const resolved = await resolveSellerEmail(identifier, password);
+  if ('error' in resolved) return { error: resolved.error };
+  return resendSellerConfirmation(resolved.email);
 }
 
 // Real, permanent account deletion now lives in supabaseAccountDeletion.ts

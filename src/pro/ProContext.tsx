@@ -144,7 +144,7 @@ interface ProState extends AuthState {
   // Login-screen resend — the seller may have typed a username instead of
   // an email, so this resolves it first (verifySellerLogin already does
   // the same resolution internally, but has no email left over to reuse).
-  resendSellerConfirmationForLogin: (identifier: string) => Promise<{ error?: string }>;
+  resendSellerConfirmationForLogin: (identifier: string, password: string) => Promise<{ error?: string }>;
   deleteSellerAccount: () => Promise<{ error?: string }>;
   // Admin login — authenticates a real email + password against Supabase
   // Auth, then verifies the account is listed in public.admins before
@@ -156,7 +156,7 @@ interface ProState extends AuthState {
   // "create your PIN" or "enter your PIN"; the other two each establish a
   // real Supabase Auth session on success (see supabaseDriverAuth.ts).
   checkDriverUsername: (username: string) => Promise<DriverLoginStatus | { error: string }>;
-  createDriverPin: (username: string, pin: string) => Promise<{ id: string; username: string; name: string } | { error: string }>;
+  createDriverPin: (username: string, pin: string, setupCode: string) => Promise<{ id: string; username: string; name: string } | { error: string }>;
   signInDriverWithPin: (username: string, pin: string) => Promise<{ id: string; username: string; name: string } | { error: string }>;
   // Seller transactions
   sellerTransactions: typeof initialTransactions;
@@ -545,7 +545,7 @@ export function ProProvider({ children }: { children: ReactNode }) {
     return { shop: { sellerId: id.toUpperCase(), name: result.shopName, supabaseShopId: result.shopId, isOfficial: result.isOfficial } };
   }, []);
 
-  const resendSellerConfirmationForLogin = useCallback(async (identifier: string) => resendSellerConfirmationForIdentifier(identifier), []);
+  const resendSellerConfirmationForLogin = useCallback(async (identifier: string, password: string) => resendSellerConfirmationForIdentifier(identifier, password), []);
 
   const signUpSellerAccount = useCallback(async (input: SignUpSellerInput): Promise<{ status: 'confirmed'; shop: { sellerId: string; name: string; supabaseShopId: string; isOfficial: boolean } } | { status: 'pending_confirmation' } | { error: string; code?: 'email_taken' }> => {
     const result: SignUpSellerResult = await signUpSeller(input);
@@ -584,7 +584,7 @@ export function ProProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const checkDriverUsernameAction = useCallback((username: string) => checkDriverUsername(username), []);
-  const createDriverPinAction = useCallback((username: string, pin: string) => createDriverPin(username, pin), []);
+  const createDriverPinAction = useCallback((username: string, pin: string, setupCode: string) => createDriverPin(username, pin, setupCode), []);
   const signInDriverWithPinAction = useCallback((username: string, pin: string) => signInDriverWithPin(username, pin), []);
 
   // === Driver actions — every mutation writes to Supabase first, then

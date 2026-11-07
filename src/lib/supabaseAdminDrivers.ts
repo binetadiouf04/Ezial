@@ -80,14 +80,14 @@ export interface CreateDriverInput {
   phone?: string;
 }
 
-export async function createAdminDriver(input: CreateDriverInput): Promise<{ username: string; firstName: string; lastName: string } | { error: string }> {
+export async function createAdminDriver(input: CreateDriverInput): Promise<{ id: string; username: string; firstName: string; lastName: string } | { error: string }> {
   const { data, error } = await supabase.functions.invoke<{ id: string; username: string; firstName: string; lastName: string }>(
     CREATE_DRIVER_FUNCTION_SLUG,
     { body: input },
   );
   if (error) return { error: await readFunctionError(error, 'Impossible de créer le livreur.') };
   if (!data) return { error: 'Impossible de créer le livreur.' };
-  return { username: data.username, firstName: data.firstName, lastName: data.lastName };
+  return { id: data.id, username: data.username, firstName: data.firstName, lastName: data.lastName };
 }
 
 export async function setAdminDriverSuspended(driverId: string, suspended: boolean): Promise<{ error?: string }> {
@@ -95,7 +95,23 @@ export async function setAdminDriverSuspended(driverId: string, suspended: boole
   return error ? { error: error.message } : {};
 }
 
-export async function resetAdminDriverPin(driverId: string): Promise<{ error?: string }> {
-  const { error } = await supabase.rpc('admin_reset_driver_pin', { p_driver_id: driverId });
-  return error ? { error: error.message } : {};
+export interface DriverActivationCode {
+  /** 8 characters, shown once — only its hash is stored. */
+  code: string;
+  expiresAt: string;
+}
+
+// One-time activation code the driver needs to create their PIN (first
+// login, or after a reset). Generating one invalidates the current PIN and
+// any previous code. Admins only (checked server-side).
+export async function issueDriverActivationCode(driverId: string): Promise<DriverActivationCode | { error: string }> {
+  const { data, error } = await supabase.rpc('admin_issue_driver_activation_code', { p_driver_id: driverId });
+  if (error) return { error: error.message };
+  const row = data as { code?: string; expiresAt?: string } | null;
+  if (!row?.code || !row.expiresAt) return { error: "Impossible de générer le code d'activation." };
+  return { code: row.code, expiresAt: row.expiresAt };
+}
+
+export function formatActivationCode(code: string): string {
+  return code.length === 8 ? `${code.slice(0, 4)}-${code.slice(4)}` : code;
 }

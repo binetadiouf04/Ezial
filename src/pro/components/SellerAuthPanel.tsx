@@ -16,7 +16,7 @@ interface SellerAuthPanelProps {
   resendConfirmationEmail: (email: string) => Promise<{ error?: string }>;
   // Login-screen resend — the seller may have typed a username, not an
   // email, so this resolves it server-side before resending.
-  resendConfirmationForLogin: (identifier: string) => Promise<{ error?: string }>;
+  resendConfirmationForLogin: (identifier: string, password: string) => Promise<{ error?: string }>;
   // When the visitor is already signed in as a customer on this device —
   // "Devenir vendeur" then never has to ask for an email/password again,
   // the live session is itself the proof of identity.
@@ -74,7 +74,7 @@ export default function SellerAuthPanel({ onBack, onLogin, verifySeller, signUpS
 
   const handleResendFromLogin = async () => {
     setResending(true);
-    const result = await resendConfirmationForLogin(identifier.trim());
+    const result = await resendConfirmationForLogin(identifier.trim(), password);
     setResending(false);
     if (result.error) setError(result.error);
     else setNotice('Un nouveau lien vient de vous être envoyé par email.');
