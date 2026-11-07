@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
-import { getPushSupportStatus, subscribeToPush, unsubscribeFromPush, isIosOutsideInstalledApp, type PushSupportStatus } from '@/lib/supabasePush';
-import { Bell, Check, AlertCircle, Loader2, Share } from 'lucide-react';
+import { getPushSupportStatus, subscribeToPush, unsubscribeFromPush, type PushSupportStatus } from '@/lib/supabasePush';
+import { Bell, Check, AlertCircle, Loader2 } from 'lucide-react';
 
 // Explicit opt-in only — Web Push never subscribes silently. Reused for
 // the customer account page, the seller "Ma boutique" page, the driver
@@ -29,27 +29,7 @@ export default function NotificationOptIn({ userId, label }: { userId: string; l
     setStatus('default');
   };
 
-  // iOS/iPadOS: Web Push only exists inside an installed (Home Screen) app —
-  // a plain Safari tab can never show it. Rather than silently hide the
-  // feature (which would look broken, not absent), this shows the one
-  // concrete step that unlocks it, instead of promising push on a bare tab.
-  if (status === 'unsupported' && isIosOutsideInstalledApp()) {
-    return (
-      <div className="card p-4 flex items-start gap-3">
-        <span className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-burgundy/10 text-burgundy"><Bell size={16} /></span>
-        <div className="flex-1 min-w-0">
-          <p className="text-sm font-medium text-ink">{label}</p>
-          <p className="mt-1 text-xs text-ink/55">Pour les recevoir sur iPhone/iPad, ajoutez d'abord Ezial à votre écran d'accueil :</p>
-          <ol className="mt-1 list-inside list-decimal space-y-0.5 text-xs text-ink/55">
-            <li>Appuyez sur <Share size={12} className="inline-block align-text-bottom" /> (Partager)</li>
-            <li>Choisissez « Sur l'écran d'accueil »</li>
-          </ol>
-        </div>
-      </div>
-    );
-  }
-
-  if (status === 'unsupported') return null; // not supported at all on this browser/device
+  if (status === 'unsupported') return null; // no browser notifications on this browser/device
 
   // Undecided (status === 'default') gets a deliberately bolder treatment —
   // this is the one state a seller/driver might otherwise never notice or

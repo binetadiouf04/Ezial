@@ -8,11 +8,10 @@ import { supabase } from './supabaseClient';
 // send-push/index.ts) can look up "who to notify" for a given order/shop
 // without ever touching the frontend again.
 //
-// iOS/Safari note: Web Push notifications only work once Ezial has been
-// added to the Home Screen (installed as a PWA) AND the user explicitly
-// grants permission from within that installed app — Safari in a regular
-// browser tab cannot show push notifications on iOS. This is an Apple
-// platform limitation, not a bug here.
+// Ezial is a website, not an installable app: a browser that has no Push
+// API in a regular tab (e.g. Safari on iPhone/iPad) is simply reported as
+// 'unsupported' and the opt-in is not shown there — installing anything is
+// never presented as a condition for receiving notifications.
 
 const VAPID_PUBLIC_KEY = import.meta.env.VITE_VAPID_PUBLIC_KEY as string | undefined;
 
@@ -24,20 +23,6 @@ function urlBase64ToUint8Array(base64String: string): Uint8Array {
 }
 
 export type PushSupportStatus = 'unsupported' | 'default' | 'granted' | 'denied';
-
-// iOS/iPadOS only exposes the Push API inside an installed (Home Screen)
-// PWA — a plain Safari tab has no 'PushManager' at all, which getPushSupportStatus
-// below already reports as 'unsupported'. This distinguishes that specific
-// case so the UI can show "add to Home Screen first" instead of silently
-// hiding the feature, per Apple's own requirement — never promising push
-// on a bare Safari tab.
-export function isIosOutsideInstalledApp(): boolean {
-  const isIos = /iPad|iPhone|iPod/.test(navigator.userAgent) && !('MSStream' in window);
-  if (!isIos) return false;
-  const isStandalone = (navigator as { standalone?: boolean }).standalone === true
-    || window.matchMedia('(display-mode: standalone)').matches;
-  return !isStandalone;
-}
 
 export function getPushSupportStatus(): PushSupportStatus {
   if (!('serviceWorker' in navigator) || !('PushManager' in window) || !VAPID_PUBLIC_KEY) return 'unsupported';

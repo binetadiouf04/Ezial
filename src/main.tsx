@@ -9,23 +9,30 @@ createRoot(document.getElementById('root')!).render(
   </StrictMode>
 );
 
-// PWA install support — registered after load so it never delays first
-// paint. Safe no-op on browsers without support (older iOS Safari, etc).
+// Service worker for browser notifications only (see public/sw.js) — Ezial
+// is a classic website, not an installable app. Registered after load so it
+// never delays first paint. Safe no-op on browsers without support.
 if ('serviceWorker' in navigator) {
-  // Hash routing never re-fetches index.html, so a tab or installed PWA
-  // left open across a deploy can keep running the previous build's JS
-  // indefinitely even though the server is already fully up to date —
-  // only a fresh navigation (sw.js's own network-first strategy) picks up
-  // a new version. `controller` is already set here only on a RETURNING
-  // visit already controlled by a previously-installed worker; for that
-  // case alone, reload once the moment a newer worker takes over, so an
-  // already-open instance can't keep showing stale content forever. A
-  // brand-new visitor (no prior controller) is unaffected.
+  // In-app navigation never re-fetches index.html, so a tab left open
+  // across a deploy can keep running the previous build's JS. `controller`
+  // is already set here only on a RETURNING visit controlled by a
+  // previously registered worker; for that case alone, reload once the
+  // moment a newer worker takes over, so an already-open tab can't keep
+  // showing stale content forever. A brand-new visitor (no prior
+  // controller) is unaffected.
   const hadController = Boolean(navigator.serviceWorker.controller);
   window.addEventListener('load', () => {
     navigator.serviceWorker.register(`${import.meta.env.BASE_URL}sw.js`).catch(() => {
-      // Non-fatal — the app works identically without an installed SW.
+      // Non-fatal — the site works identically without it (no browser notifications).
     });
+    // Copies of build assets kept by the earlier version of sw.js. The new
+    // worker deletes them when it activates; this also removes a copy the
+    // old worker was still writing at that very moment.
+    if ('caches' in window) {
+      caches.keys()
+        .then((keys) => Promise.all(keys.filter((k) => k.startsWith('ezial-static-')).map((k) => caches.delete(k))))
+        .catch(() => {});
+    }
   });
   if (hadController) {
     navigator.serviceWorker.addEventListener('controllerchange', () => {

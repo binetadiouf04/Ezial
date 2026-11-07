@@ -6,3 +6,10 @@ https://:project.pages.dev/*
 
 https://:version.:project.pages.dev/*
   X-Robots-Tag: noindex
+
+# Fichiers JS/CSS du build : leur nom contient l'empreinte de leur contenu
+# (ex. index-DkrLOtgS.js), ils ne changent donc jamais. Le navigateur peut les
+# garder un an sans redemander au serveur ; un nouveau déploiement produit de
+# nouveaux noms de fichiers.
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable
