@@ -23,11 +23,12 @@ export interface HeroSlide {
 const AUTOPLAY_MS = 5500;
 const FALLBACK_IMAGE = `${import.meta.env.BASE_URL}ezial-fallback.webp`;
 
-// Canonical href (static pages of categories end with a slash), so search
+// Canonical href (static pages of categories and info pages end with a slash), so search
 // engines follow the same URL the app navigates to.
 function hrefFor(route: string): string {
   const [path, query] = route.split('?');
-  const withSlash = path.startsWith('/categorie/') && !path.endsWith('/') ? `${path}/` : path;
+  const hasStaticPage = path.startsWith('/categorie/') || path.startsWith('/info/');
+  const withSlash = hasStaticPage && !path.endsWith('/') ? `${path}/` : path;
   return query ? `${withSlash}?${new URLSearchParams(query).toString()}` : withSlash;
 }
 

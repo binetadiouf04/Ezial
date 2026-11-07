@@ -140,9 +140,10 @@ const staticHeroSlides: HeroSlide[] = [
     images: heroFormats('banniere-2-mode-homme'),
   },
   {
-    id: 'tendances',
+    // Delivery visual → the delivery page.
+    id: 'livraison',
     alt: 'Livraison à Dakar en 4 h à 48 h',
-    route: '/tendances',
+    route: '/info/livraison',
     images: heroFormats('banniere-3-livraison'),
   },
   {
