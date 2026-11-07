@@ -21,6 +21,8 @@ Quand une option, un menu ou un bouton attendu n'apparaît pas sur une capture d
 
 Avancer sans attendre de validation sur tout ce qui est réversible et à portée (lecture, code, build, tests, commits et push sur la branche de travail). S'arrêter uniquement pour ce qui exige vraiment la personne : actions dans un dashboard externe auquel on n'a pas accès, décisions qui changent une règle établie, actions irréversibles.
 
+Utiliser des sous-agents pour aller plus vite dès qu'une tâche se découpe en parties indépendantes (fichiers distincts), en parallèle. Garder la coordination : consignes précises, aucun commit par les sous-agents, relecture et tests de leur travail avant de l'annoncer.
+
 ## Règles permanentes
 
 - Travailler sur la branche de développement ; ne jamais pousser ni fusionner dans `main` sans accord explicite.

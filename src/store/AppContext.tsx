@@ -149,21 +149,23 @@ interface AppState {
 const AppContext = createContext<AppState | null>(null);
 export function useApp(): AppState { const ctx = useContext(AppContext); if (!ctx) throw new Error('useApp must be used within AppProvider'); return ctx; }
 
-// A visitor can land directly on a clean, path-based URL (no "#") —
-// /produit/:id/, /boutique/:id/, /categorie/:id(/:sub)/, /info/:slug/ —
-// because those are the only routes with a real static file generated at
-// build time (see scripts/prerender-seo.mjs) for search engines to crawl
-// and index. Reading the hash stays the normal case (every in-app
-// navigate() call only ever touches the hash); this just lets that one
-// first load resolve the same route from the pathname instead of falling
-// through to Home, and it never writes anything back to the URL — the
-// address bar stays exactly as the visitor (or the crawler) landed on it.
-const SEO_PATH_ROUTE = /^\/(produit|boutique|categorie)\/[^/]+(\/[^/]+)?$|^\/info\/[^/]+$|^\/(boutiques|boutiques-premium)$/;
+// In-app navigation now uses the real path (History API — see navigate()
+// below), not a "#" hash, so the pathname itself IS the route on every
+// load: a visitor landing directly on /produit/:id/, /boutique/:id/, a
+// search-engine crawler following a link, or a plain refresh, all resolve
+// the same way. An old "#/produit/xxx"-style link (a bookmark or a link
+// shared before this migration) is rewritten once, in place, to its real
+// path via replaceState — so it still works, and never leaves a stray
+// hash in the address bar going forward.
 function getInitialRoute(): string {
-  const hash = window.location.hash.replace(/^#/, '');
-  if (hash) return hash;
-  const path = window.location.pathname.replace(/\/+$/, '');
-  return SEO_PATH_ROUTE.test(path) ? path : '/';
+  const legacyHash = window.location.hash.replace(/^#/, '');
+  if (legacyHash) {
+    const clean = legacyHash.startsWith('/') ? legacyHash : `/${legacyHash}`;
+    window.history.replaceState(null, '', clean);
+    return clean;
+  }
+  const path = window.location.pathname.replace(/\/+$/, '') || '/';
+  return path + window.location.search;
 }
 
 // Anonymous cart persistence — survives refresh/tab close so a visitor
@@ -182,6 +184,16 @@ const CART_STORAGE_KEY = 'ezial-cart-v1';
 // which sessionStorage wouldn't carry over to on the same device/browser.
 const LAST_BROWSE_ROUTE_KEY = 'ezial-last-browse-route';
 const NEVER_RESTORE_ROUTE_PREFIXES = ['/profil', '/checkout', '/commande', '/pro'];
+
+// Generic escape hatch for a plain click handler with no access to
+// useApp()'s navigate (e.g. "retour au marketplace" buttons rendered deep
+// inside Ezial Pro's own tree) — mirrors exactly what the browser's own
+// Back/Forward buttons do, which the popstate listener above (and
+// ProContext's own) already picks up, so `route` state stays in sync.
+export function navigateTo(route: string): void {
+  window.history.pushState(null, '', route);
+  window.dispatchEvent(new PopStateEvent('popstate'));
+}
 
 export function consumeLastBrowseRoute(): string | null {
   try {
@@ -361,9 +373,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [authLoading, setAuthLoading] = useState(true);
 
   useEffect(() => {
-    const onHash = () => setRoute(window.location.hash.replace(/^#/, '') || '/');
-    window.addEventListener('hashchange', onHash);
-    return () => window.removeEventListener('hashchange', onHash);
+    const onPop = () => setRoute((window.location.pathname.replace(/\/+$/, '') || '/') + window.location.search);
+    window.addEventListener('popstate', onPop);
+    return () => window.removeEventListener('popstate', onPop);
   }, []);
 
   useEffect(() => {
@@ -464,7 +476,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [catalogLoading, catalogProducts]);
 
   const navigate = useCallback((r: string) => {
-    window.location.hash = r; setRoute(r);
+    window.history.pushState(null, '', r);
+    setRoute(r);
     setCategoryDrawerOpen(false);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }, []);

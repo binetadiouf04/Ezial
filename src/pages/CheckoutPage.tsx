@@ -294,7 +294,6 @@ export default function CheckoutPage() {
     // human-readable label for it, never changes the coordinates.
     setLocation({ lat, lng });
     setManualAdjusted(true);
-    setSearchError('');
     setSelectedLabel(null);
     setResolvingAddress(true);
     reverseGeocode(lat, lng).then((label) => {

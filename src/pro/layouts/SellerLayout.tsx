@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { usePro } from '../ProContext';
+import { navigateTo } from '@/store/AppContext';
 import { Home, ShoppingBag, Package, Wallet, Store, LogOut, ArrowLeft, Menu, X, AlertTriangle, Star, Crown, Loader2 } from 'lucide-react';
 import { fetchSellerSubscription } from '@/lib/supabaseSellerSubscription';
 import SellerChoosePlan from '../pages/seller/SellerChoosePlan';
@@ -79,7 +80,7 @@ export default function SellerLayout() {
   // separate hash-based router in AppContext) requires actually changing
   // the hash, exactly like the role-selection screen and the Admin/Driver
   // layouts already do.
-  const goToMarketplace = () => { window.location.hash = '/'; };
+  const goToMarketplace = () => { navigateTo('/'); };
 
   const renderPage = () => {
     if (clean === '/seller') return <SellerDashboard />;

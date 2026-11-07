@@ -6,7 +6,7 @@
 // Deploy: supabase functions deploy send-push --no-verify-jwt
 // Secrets required (supabase secrets set ...):
 //   VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY   — from this feature's report
-//   VAPID_SUBJECT                          — e.g. mailto:contact@ezial.sn
+//   VAPID_SUBJECT                          — e.g. mailto:contact@ezial.net
 //   PUSH_WEBHOOK_SECRET                    — shared secret checked below;
 //                                             must match the value baked
 //                                             into the trigger SQL
@@ -18,7 +18,7 @@ import webpush from 'npm:web-push@3.6.7';
 
 const VAPID_PUBLIC_KEY = Deno.env.get('VAPID_PUBLIC_KEY') ?? '';
 const VAPID_PRIVATE_KEY = Deno.env.get('VAPID_PRIVATE_KEY') ?? '';
-const VAPID_SUBJECT = Deno.env.get('VAPID_SUBJECT') ?? 'mailto:contact@ezial.sn';
+const VAPID_SUBJECT = Deno.env.get('VAPID_SUBJECT') ?? 'mailto:contact@ezial.net';
 const PUSH_WEBHOOK_SECRET = Deno.env.get('PUSH_WEBHOOK_SECRET') ?? '';
 
 webpush.setVapidDetails(VAPID_SUBJECT, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);

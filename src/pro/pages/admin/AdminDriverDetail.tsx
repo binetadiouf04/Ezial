@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { usePro } from '../../ProContext';
-import { fetchAdminDrivers, setAdminDriverSuspended, resetAdminDriverPin, type AdminDriverSummary } from '@/lib/supabaseAdminDrivers';
+import { fetchAdminDrivers, setAdminDriverSuspended, issueDriverActivationCode, type AdminDriverSummary, type DriverActivationCode } from '@/lib/supabaseAdminDrivers';
+import DriverActivationCodeCard from '../../components/DriverActivationCodeCard';
 import { ArrowLeft, Phone, IdCard, Calendar, AlertTriangle, X, Loader2, KeyRound, ShieldOff, ShieldCheck } from 'lucide-react';
 
 function formatDate(iso: string): string {
@@ -18,7 +19,7 @@ export default function AdminDriverDetail({ driverId }: { driverId: string }) {
   const [acting, setActing] = useState(false);
   const [showSuspend, setShowSuspend] = useState(false);
   const [showResetPin, setShowResetPin] = useState(false);
-  const [pinResetDone, setPinResetDone] = useState(false);
+  const [issuedCode, setIssuedCode] = useState<DriverActivationCode | null>(null);
 
   // Reuses the list fetch and finds the one row — this screen doesn't need
   // its own dedicated single-driver query, and it keeps the exact same
@@ -55,16 +56,21 @@ export default function AdminDriverDetail({ driverId }: { driverId: string }) {
     void load();
   };
 
+  // Resets the PIN (if any) and generates the one-time activation code the
+  // driver needs to create a new one — also used for a driver whose first
+  // code was lost or expired.
   const handleResetPin = async () => {
     setActing(true);
     setActionError('');
-    const result = await resetAdminDriverPin(driver.id);
+    const result = await issueDriverActivationCode(driver.id);
     setActing(false);
-    if (result.error) { setActionError(result.error); return; }
+    if ('error' in result) { setActionError(result.error); return; }
     setShowResetPin(false);
-    setPinResetDone(true);
+    setIssuedCode(result);
     void load();
   };
+
+  const resetLabel = driver.hasPinConfigured ? 'Réinitialiser le NIP' : "Générer un code d'activation";
 
   return (
     <div className="space-y-5">
@@ -94,10 +100,13 @@ export default function AdminDriverDetail({ driverId }: { driverId: string }) {
         </p>
       )}
 
-      {pinResetDone && (
-        <p className="flex items-start gap-1.5 rounded-lg bg-green-50 p-3 text-sm text-green-700">
-          <ShieldCheck size={15} className="mt-0.5 flex-shrink-0" /> NIP réinitialisé — le livreur devra en créer un nouveau à sa prochaine connexion.
-        </p>
+      {issuedCode && (
+        <div className="space-y-2">
+          <p className="flex items-start gap-1.5 rounded-lg bg-green-50 p-3 text-sm text-green-700">
+            <ShieldCheck size={15} className="mt-0.5 flex-shrink-0" /> Code d'activation généré — le livreur créera son NIP avec ce code à sa prochaine connexion.
+          </p>
+          <DriverActivationCodeCard username={driver.username} activation={issuedCode} />
+        </div>
       )}
 
       {/* Info */}
@@ -127,7 +136,7 @@ export default function AdminDriverDetail({ driverId }: { driverId: string }) {
       {/* Actions */}
       <div className="space-y-2 pt-2">
         <button onClick={() => setShowResetPin(true)} className="btn-outline w-full flex items-center justify-center gap-2">
-          <KeyRound size={16} /> Réinitialiser le NIP
+          <KeyRound size={16} /> {resetLabel}
         </button>
         {driver.isSuspended ? (
           <button onClick={() => void handleToggleSuspend()} disabled={acting} className="btn-primary w-full flex items-center justify-center gap-2 disabled:opacity-60">
@@ -167,17 +176,20 @@ export default function AdminDriverDetail({ driverId }: { driverId: string }) {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/40 p-4" onClick={() => setShowResetPin(false)}>
           <div className="card max-w-sm w-full p-6" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-3">
-              <h3 className="font-display text-lg font-semibold text-ink">Réinitialiser le NIP</h3>
+              <h3 className="font-display text-lg font-semibold text-ink">{resetLabel}</h3>
               <button onClick={() => setShowResetPin(false)}><X size={18} className="text-ink/40" /></button>
             </div>
             <div className="flex items-start gap-2 mb-5">
               <AlertTriangle size={18} className="text-orange-500 flex-shrink-0 mt-0.5" />
-              <p className="text-sm text-ink/55">L'ancien NIP sera invalidé. Le livreur devra en créer un nouveau à sa prochaine connexion avec son nom d'utilisateur.</p>
+              <p className="text-sm text-ink/55">
+                {driver.hasPinConfigured ? "L'ancien NIP sera invalidé. " : "Tout code d'activation précédent sera invalidé. "}
+                Un code d'activation valable 7 jours s'affichera : le livreur le saisira avec son nom d'utilisateur pour créer son NIP.
+              </p>
             </div>
             <div className="flex gap-3">
               <button onClick={() => setShowResetPin(false)} className="btn-outline flex-1">Retour</button>
               <button onClick={() => void handleResetPin()} disabled={acting} className="btn-primary flex-1 disabled:opacity-60">
-                {acting ? 'Réinitialisation...' : 'Confirmer'}
+                {acting ? 'Génération...' : 'Confirmer'}
               </button>
             </div>
           </div>

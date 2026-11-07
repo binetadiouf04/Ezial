@@ -57,14 +57,15 @@ export interface HeroSlideInput {
   isActive: boolean;
 }
 
+// The carousel shows no overlay text: the row's title becomes the banner's
+// text alternative and its link the destination of the whole banner. A row
+// has a single image, used for every screen size.
 function mapHeroSlide(row: HeroSlideRow): HeroSlide {
   return {
     id: row.id,
-    image: row.image_url,
-    eyebrow: row.subtitle || undefined,
-    title: row.title,
-    ctaLabel: row.cta_label,
-    ctaRoute: row.cta_link,
+    alt: row.title,
+    route: row.cta_link || undefined,
+    images: { mobile: row.image_url, tablet: row.image_url, desktop: row.image_url },
   };
 }
 

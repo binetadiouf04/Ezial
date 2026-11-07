@@ -11,7 +11,7 @@ import ImageCropModal from '@/components/ImageCropModal';
 import { fetchModerationFlags, latestUnresolvedFlag } from '@/lib/supabaseModeration';
 import { type GeocodeResult } from '@/lib/geocoding';
 import { useAddressSearch } from '@/lib/useAddressSearch';
-import { quartiers } from '@/store/AppContext';
+import { quartiers, navigateTo } from '@/store/AppContext';
 import { categories } from '@/data/categories';
 import { supabase } from '@/lib/supabaseClient';
 import { ownsCustomerProfileForDeletionWarning } from '@/lib/supabaseAccountDeletion';
@@ -47,7 +47,7 @@ export default function SellerShop() {
     const result = await deleteSellerAccount();
     setDeleting(false);
     if (result.error) { setDeleteError(result.error); return; }
-    window.location.hash = '/';
+    navigateTo('/');
   };
 
   // Real moderation flag on this shop (public.moderation_flags), never the
@@ -166,7 +166,6 @@ export default function SellerShop() {
   const handleMapPick = (lat: number, lng: number) => {
     setManualPosition({ lat, lng });
     setManualAdjusted(true);
-    setSearchError('');
   };
 
   const handleSaveManualLocation = async () => {

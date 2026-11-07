@@ -108,28 +108,15 @@ export default function AuthConfirmPage() {
     return () => { cancelled = true; window.clearTimeout(slowTimer); };
   }, [retryCount]);
 
-  // Takes a plain app route ('/pro', '/') and always prepends the '#' itself
-  // — BASE_URL already ends in '/', so concatenating a route without it
-  // produces a literal double slash (https://www.ezial.net//pro), which
-  // GitHub Pages serves as its own 404 instead of letting the SPA's hash
-  // router ever see it.
-  //
-  // Setting location.href to a URL that differs from the current one ONLY
-  // in its hash fragment is a same-document navigation per the HTML spec —
-  // browsers never reload the page for it, they just update the address
-  // bar and fire hashchange. App.tsx decides "render AuthConfirmPage vs.
-  // the real app" exactly once, in a useState initializer at mount, which
-  // a hashchange never re-runs — so this page used to sit there forever
-  // after a successful confirmation, spinner still turning, address bar
-  // already showing the right hash, nothing ever actually leaving this
-  // screen until the visitor manually refreshed (which is a REAL
-  // navigation, and is exactly why refreshing "fixed" it for them). The
-  // explicit reload() is what a manual refresh was always substituting
-  // for — the session is already in localStorage by this point, so the
-  // fresh load re-reads it immediately, no re-authentication needed.
+  // Takes a plain app route ('/pro', '/') and sends the browser there as a
+  // real navigation — a different pathname is a genuine cross-document
+  // navigation (unlike the old "#"-only change this used to do, which
+  // never reloaded the page at all — see git history), so the browser
+  // reloads on its own; no manual reload() needed. The session is already
+  // in localStorage by this point, so the fresh load re-reads it
+  // immediately, no re-authentication required.
   const goToRoute = (route: string) => {
-    window.location.href = `${window.location.origin}${import.meta.env.BASE_URL}#${route}`;
-    window.location.reload();
+    window.location.href = `${window.location.origin}${route}`;
   };
 
   const handleResend = async () => {

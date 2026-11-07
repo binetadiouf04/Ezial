@@ -90,10 +90,13 @@ export async function checkDriverUsername(username: string): Promise<DriverLogin
   return data as DriverLoginStatus;
 }
 
-// Step 2 when the account has no PIN yet — creates it, then logs in.
-export async function createDriverPin(username: string, pin: string): Promise<DriverAuthInfo | { error: string }> {
+// Step 2 when the account has no PIN yet — creates it, then logs in. The
+// activation code is the one-time code an admin generated for this driver
+// (admin_issue_driver_activation_code); without it no PIN can be set, so
+// knowing a new driver's username is not enough to take the account.
+export async function createDriverPin(username: string, pin: string, setupCode: string): Promise<DriverAuthInfo | { error: string }> {
   const { data, error } = await supabase.functions.invoke<{ tokenHash?: string }>(DRIVER_SET_PIN_FUNCTION_SLUG, {
-    body: { username: username.trim(), pin },
+    body: { username: username.trim(), pin, code: setupCode.trim() },
   });
   if (error) return { error: await readFunctionError(error, 'Impossible de créer le NIP.') };
   if (!data?.tokenHash) return { error: GENERIC_ERROR };

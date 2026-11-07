@@ -7,14 +7,6 @@ import AdminBlog from './AdminBlog';
 // hardcoded defaults otherwise — see HomePage.tsx), and the Blog below is
 // unchanged.
 export default function AdminContent() {
-  return (
-    <div className="space-y-6">
-      <h1 className="font-display text-2xl font-semibold text-ink">Contenu</h1>
-
-      <div>
-        <h2 className="text-sm font-semibold text-ink mb-3">Blog</h2>
-        <AdminBlog />
-      </div>
-    </div>
-  );
+  // « Contenu » is the blog for now: render it directly (it has its own title).
+  return <AdminBlog />;
 }

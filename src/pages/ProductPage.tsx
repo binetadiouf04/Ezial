@@ -3,6 +3,8 @@ import { useApp } from '@/store/AppContext';
 import { getProduct, getVariantPrice, getProductsFromSameShop, getSimilarProducts, isRealCatalogId } from '@/data/products';
 import { getShop, registerSupabaseShops } from '@/data/shops';
 import { fetchProductDetailFromSupabase } from '@/lib/supabaseCatalog';
+import { useNoIndex } from '@/lib/seoHead';
+import { isProductUuid, productPath } from '@/lib/productUrl';
 import { fetchProductReviews, checkCanReview, submitReview, deleteReview, createReviewReport, type Review, type ReviewReportReason } from '@/lib/supabaseReviews';
 import ReviewReportModal from '@/components/ReviewReportModal';
 import {
@@ -17,7 +19,8 @@ import Rating from '@/components/Rating';
 import FavoriteButton from '@/components/FavoriteButton';
 import ProductCarousel from '@/components/ProductCarousel';
 import SmartImage from '@/components/SmartImage';
-import { ChevronRight, Store, Plus, Minus, Check, Star, Camera, X, ShieldCheck, Loader2 } from 'lucide-react';
+import { DELIVERY } from '@/shared/siteInfo';
+import { ChevronRight, Store, Plus, Minus, Check, Star, Camera, X, ShieldCheck, Loader2, Truck } from 'lucide-react';
 
 const tabs = ['Description', 'Avis'] as const;
 type Tab = (typeof tabs)[number];
@@ -55,6 +58,14 @@ export default function ProductPage({ productId }: { productId: string }) {
   }, [productId]);
 
   const product = supabaseProduct;
+
+  // An old id-based link (/produit/<uuid>) shows the product's descriptive
+  // URL in the address bar once it is known — same page, no new history
+  // entry. Search engines get the real 301 from Cloudflare's _redirects.
+  useEffect(() => {
+    if (!product?.slug || !isProductUuid(productId)) return;
+    window.history.replaceState(window.history.state, '', `${productPath(product)}${window.location.search}`);
+  }, [product, productId]);
   const [variants, setVariants] = useState<Record<string, string>>({});
   const [qty, setQty] = useState(1);
   // Tissus only — the quantity field's raw text (so the customer can type
@@ -211,6 +222,10 @@ export default function ProductPage({ productId }: { productId: string }) {
     return getVariantPrice(product, variants);
   }, [product, variants]);
 
+  // Only once loading has really finished and the product is confirmed
+  // missing — never while it loads, never on a network error.
+  useNoIndex(!loading && !loadError && !product);
+
   if (loading) return <div className="container-pro py-20 text-center text-ink/50">Chargement du produit…</div>;
   if (loadError) return <div className="container-pro py-20 text-center text-ink/50">Une erreur est survenue lors du chargement du produit.</div>;
   if (!product) return <div className="container-pro py-20 text-center text-ink/50">Produit introuvable.</div>;
@@ -319,6 +334,14 @@ export default function ProductPage({ productId }: { productId: string }) {
               <button onClick={() => handleAdd(false)} disabled={outOfStock || fabricQtyInvalid} className="btn-outline flex-1">{added ? <><Check size={17} /> Ajouté</> : 'Ajouter au panier'}</button>
               <button onClick={() => handleAdd(true)} disabled={outOfStock || fabricQtyInvalid} className="btn-primary flex-1">Acheter maintenant</button>
             </div>
+          </div>
+          {/* Delivery promise (src/shared/siteInfo.js) — information only,
+              the order flow and delivery fee are unchanged. */}
+          <div className="flex items-center gap-3 rounded-xl bg-cream px-4 py-3">
+            <span className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-burgundy text-white"><Truck size={17} aria-hidden="true" /></span>
+            <p className="text-sm leading-snug text-ink/70">
+              <span className="font-semibold text-ink">Livraison en {DELIVERY.delay}</span> à {DELIVERY.area}
+            </p>
           </div>
           {product.pickup && (
             <div className="space-y-2.5 rounded-xl border border-line p-4">
@@ -455,7 +478,7 @@ export default function ProductPage({ productId }: { productId: string }) {
         <section className="mt-16">
           <div className="mb-5 flex items-center justify-between">
             <h2 className="section-title">Vous aimerez aussi</h2>
-            <button onClick={() => navigate(`/produit/${product.id}/similaires`)} className="flex items-center gap-1 text-sm font-medium text-burgundy hover:underline whitespace-nowrap">Voir tout <ChevronRight size={15} /></button>
+            <button onClick={() => navigate(`${productPath(product)}/similaires`)} className="flex items-center gap-1 text-sm font-medium text-burgundy hover:underline whitespace-nowrap">Voir tout <ChevronRight size={15} /></button>
           </div>
           <ProductCarousel products={similarProducts} />
         </section>

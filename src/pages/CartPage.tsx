@@ -1,4 +1,5 @@
 import { useApp } from '@/store/AppContext';
+import { productPath } from '@/lib/productUrl';
 import { formatFCFA, isRealCatalogId, getVariantPrice } from '@/data/products';
 import { fabricQuantityRules, fabricSaleModeUnit, formatFabricQuantity } from '@/data/categories';
 import { getShop } from '@/data/shops';
@@ -59,7 +60,7 @@ export default function CartPage() {
                         <div key={index} className="flex gap-4">
                           <SmartImage src={product.thumbnailUrl || product.images[0]} alt="" className="h-24 w-20 flex-shrink-0 rounded-lg object-cover" />
                           <div className="flex-1 min-w-0">
-                            <button onClick={() => navigate(`/produit/${product.id}`)} className="text-sm font-medium text-ink leading-snug line-clamp-2 hover:text-burgundy">{product.name}</button>
+                            <button onClick={() => navigate(productPath(product))} className="text-sm font-medium text-ink leading-snug line-clamp-2 hover:text-burgundy">{product.name}</button>
                             {isMock && (
                               <p className="mt-1 flex items-center gap-1 text-xs font-medium text-burgundy">
                                 <AlertTriangle size={12} /> Produit de démonstration — à retirer avant de commander
@@ -136,7 +137,7 @@ export default function CartPage() {
                 <div key={idx} className="card p-4 flex items-center gap-4">
                   <SmartImage src={product.thumbnailUrl || product.images[0]} alt="" className="h-16 w-14 flex-shrink-0 rounded-lg object-cover" />
                   <div className="flex-1 min-w-0">
-                    <button onClick={() => navigate(`/produit/${product.id}`)} className="text-sm font-medium text-ink line-clamp-1 hover:text-burgundy">{product.name}</button>
+                    <button onClick={() => navigate(productPath(product))} className="text-sm font-medium text-ink line-clamp-1 hover:text-burgundy">{product.name}</button>
                     {shop && <p className="text-xs text-ink/50">{shop.name}</p>}
                     {Object.entries(saved.variants).map(([k, v]) => <p key={k} className="text-xs text-ink/40">{k}: {v}</p>)}
                     <div className="mt-1">

@@ -5,6 +5,7 @@ import Rating from './Rating';
 import FavoriteButton from './FavoriteButton';
 import { getShop } from '@/data/shops';
 import SmartImage from './SmartImage';
+import { productPath, productPublicPath } from '@/lib/productUrl';
 
 export default function ProductCard({ product, priority = false }: { product: Product; priority?: boolean }) {
   const { navigate } = useApp();
@@ -17,7 +18,7 @@ export default function ProductCard({ product, priority = false }: { product: Pr
     // discover and follow this link to the product's static SEO page
     // (scripts/prerender-seo.mjs) — preventDefault keeps the click itself
     // on the existing in-app (hash) navigation, unchanged for visitors.
-    <a href={`/produit/${product.id}/`} onClick={(e) => { e.preventDefault(); navigate(`/produit/${product.id}`); }} className="group block cursor-pointer">
+    <a href={productPublicPath(product)} onClick={(e) => { e.preventDefault(); navigate(productPath(product)); }} className="group block cursor-pointer">
       <div className="relative aspect-[4/5] overflow-hidden rounded-xl bg-cream">
         {/* The dedicated small crop when one exists (every photo uploaded
            since the thumbnail feature shipped) — never the full-size

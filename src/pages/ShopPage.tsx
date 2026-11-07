@@ -9,6 +9,7 @@ import ShopReportModal from '@/components/ShopReportModal';
 import { createShopReport, type ShopReportReason } from '@/lib/supabaseShopReports';
 import { isRealCatalogId } from '@/data/products';
 import PremiumBadge from '@/components/PremiumBadge';
+import { useNoIndex } from '@/lib/seoHead';
 
 const tabs = ['Accueil', 'Produits', 'Avis'] as const;
 type Tab = (typeof tabs)[number];
@@ -72,6 +73,8 @@ export default function ShopPage({ shopId }: { shopId: string }) {
   // until the Supabase fetch that populates it settles — showing "Boutique
   // introuvable" before that point would be a false negative, not a real
   // 404, so a loading state takes priority over the not-found one.
+  useNoIndex(!shop && !catalogLoading);
+
   if (!shop) {
     if (catalogLoading) return <div className="container-pro py-20 text-center text-sm text-ink/45">Chargement…</div>;
     return <div className="container-pro py-20 text-center text-ink/50">Boutique introuvable.</div>;

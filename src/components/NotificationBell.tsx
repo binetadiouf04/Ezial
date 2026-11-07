@@ -17,8 +17,9 @@ function formatDateTime(iso: string): string {
 // duplicating the dropdown/mark-read logic three times. `onNavigate`
 // receives the notification's stored `url` (set server-side by the DB
 // trigger that created it) and decides how to actually get there — each
-// caller's router works differently (AppContext's hash routes for the
-// customer vs ProContext's in-memory navigate() for seller/driver).
+// caller's navigate() works slightly differently (AppContext's top-level
+// routes for the customer vs ProContext's /pro-relative routes for
+// seller/driver, which strip the /pro prefix first).
 export default function NotificationBell({ onNavigate }: { onNavigate: (url: string) => void }) {
   const [open, setOpen] = useState(false);
   const [notifications, setNotifications] = useState<AppNotification[]>([]);

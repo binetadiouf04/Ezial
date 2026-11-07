@@ -1,7 +1,9 @@
 import { useState } from 'react';
 import { usePro } from '../../ProContext';
 import PricingCards from '@/components/PricingCards';
-import { chooseFreePlan } from '@/lib/supabaseSellerSubscription';
+import PlanComparison from '@/components/PlanComparison';
+import { TRIAL_RULES } from '@/data/subscriptionPlans';
+import { chooseFreePlan, subscriptionPaymentRoute } from '@/lib/supabaseSellerSubscription';
 import { AlertCircle, Loader2 } from 'lucide-react';
 
 // Shown once, right after a new seller's email is confirmed and their
@@ -25,10 +27,11 @@ export default function SellerChoosePlan({ onChosen }: { onChosen: () => void })
 
   return (
     <div className="min-h-screen bg-cream py-10">
-      <div className="container-pro max-w-3xl">
+      <div className="container-pro max-w-4xl">
         <div className="mb-8 text-center">
           <h1 className="font-display text-2xl font-semibold text-ink sm:text-3xl">Choisissez votre formule</h1>
           <p className="mt-2 text-sm text-ink/55">Votre adresse est confirmée — une dernière étape avant de configurer votre boutique.</p>
+          <p className="mx-auto mt-1 max-w-xl text-sm text-ink/55">Commencez avec Ezial Free, ou activez votre essai Ezial Plus gratuit. {TRIAL_RULES}</p>
         </div>
 
         {error && (
@@ -42,7 +45,7 @@ export default function SellerChoosePlan({ onChosen }: { onChosen: () => void })
           freeButtonDisabled={submitting}
           onContinueFree={() => void handleContinueFree()}
           onStartTrial={() => navigate('/seller/abonnement/essai')}
-          onSubscribe={() => navigate('/seller/abonnement/paiement')}
+          onSubscribe={(period) => navigate(subscriptionPaymentRoute(period))}
         />
 
         {submitting && (
@@ -50,6 +53,11 @@ export default function SellerChoosePlan({ onChosen }: { onChosen: () => void })
             <Loader2 size={13} className="animate-spin" /> Activation de votre forfait Free…
           </div>
         )}
+
+        <section aria-labelledby="choose-plan-compare" className="mt-10">
+          <h2 id="choose-plan-compare" className="mb-4 text-center font-display text-xl font-semibold text-ink">Comparer les formules</h2>
+          <PlanComparison />
+        </section>
       </div>
     </div>
   );

@@ -132,7 +132,7 @@ export default function AdminFinances() {
 
           <div className="card p-4 bg-cream/50">
             <p className="text-xs text-ink/45 text-center">
-              Commission Ezial appliquée selon le forfait de chaque boutique (10% en Free, 8% en Premium), sur les ventes uniquement. Les frais de livraison sont gérés séparément.
+              Commission Ezial appliquée selon le forfait de chaque boutique (10% en Free, 8% en Ezial Plus), sur les ventes uniquement. Les frais de livraison sont gérés séparément.
             </p>
           </div>
         </>

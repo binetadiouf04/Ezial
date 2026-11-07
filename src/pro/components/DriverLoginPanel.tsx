@@ -8,14 +8,25 @@ interface DriverLoginPanelProps {
   onBack: () => void;
   onLogin: (username: string, name: string) => void;
   checkUsername: (username: string) => Promise<DriverLoginStatus | { error: string }>;
-  createPin: (username: string, pin: string) => Promise<DriverAuthInfo | { error: string }>;
+  createPin: (username: string, pin: string, setupCode: string) => Promise<DriverAuthInfo | { error: string }>;
   signIn: (username: string, pin: string) => Promise<DriverAuthInfo | { error: string }>;
 }
 
 const PIN_LENGTH = 6;
+const SETUP_CODE_LENGTH = 8;
 
 function sanitizePin(value: string): string {
   return value.replace(/\D/g, '').slice(0, PIN_LENGTH);
+}
+
+// Activation code given by an admin (8 letters/digits, shown as XXXX-XXXX):
+// the dash, spaces and case are ignored.
+function sanitizeSetupCode(value: string): string {
+  return value.replace(/[^a-zA-Z0-9]/g, '').toUpperCase().slice(0, SETUP_CODE_LENGTH);
+}
+
+function formatSetupCode(code: string): string {
+  return code.length > 4 ? `${code.slice(0, 4)}-${code.slice(4)}` : code;
 }
 
 export default function DriverLoginPanel({ onBack, onLogin, checkUsername, createPin, signIn }: DriverLoginPanelProps) {
@@ -26,11 +37,13 @@ export default function DriverLoginPanel({ onBack, onLogin, checkUsername, creat
   const [username, setUsername] = useState('');
   const [pin, setPin] = useState('');
   const [pinConfirm, setPinConfirm] = useState('');
+  const [setupCode, setSetupCode] = useState('');
 
   const backToUsername = () => {
     setView('username');
     setPin('');
     setPinConfirm('');
+    setSetupCode('');
     setError('');
   };
 
@@ -47,11 +60,12 @@ export default function DriverLoginPanel({ onBack, onLogin, checkUsername, creat
   };
 
   const handleCreatePin = async () => {
+    if (setupCode.length !== SETUP_CODE_LENGTH) { setError(`Saisissez le code d'activation à ${SETUP_CODE_LENGTH} caractères remis par Ezial.`); return; }
     if (pin.length !== PIN_LENGTH) { setError(`Le NIP doit comporter ${PIN_LENGTH} chiffres.`); return; }
     if (pin !== pinConfirm) { setError('Les deux NIP ne correspondent pas.'); return; }
     setError('');
     setSubmitting(true);
-    const result = await createPin(username, pin);
+    const result = await createPin(username, pin, setupCode);
     setSubmitting(false);
     if ('error' in result) { setError(result.error); return; }
     onLogin(result.username, result.name);
@@ -77,7 +91,7 @@ export default function DriverLoginPanel({ onBack, onLogin, checkUsername, creat
         <h2 className="font-display text-2xl font-semibold text-ink">Espace Livreur</h2>
         <p className="mt-1.5 text-sm text-ink/55">
           {view === 'username' && "Connectez-vous avec votre nom d'utilisateur."}
-          {view === 'create_pin' && 'Première connexion — créez votre NIP.'}
+          {view === 'create_pin' && "Première connexion — saisissez votre code d'activation, puis créez votre NIP."}
           {view === 'enter_pin' && 'Entrez votre NIP.'}
         </p>
 
@@ -109,6 +123,25 @@ export default function DriverLoginPanel({ onBack, onLogin, checkUsername, creat
 
         {view === 'create_pin' && (
           <div className="mt-5 space-y-4">
+            <div>
+              <label className="block text-xs font-medium text-ink/60 mb-1.5">Code d'activation</label>
+              <div className="relative">
+                <KeyRound size={16} className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-ink/35" />
+                <input
+                  type="text"
+                  value={formatSetupCode(setupCode)}
+                  onChange={(e) => { setSetupCode(sanitizeSetupCode(e.target.value)); setError(''); }}
+                  className="input-field pl-11 text-center tracking-[0.3em] font-mono uppercase"
+                  placeholder="XXXX-XXXX"
+                  autoCapitalize="characters"
+                  autoCorrect="off"
+                  autoComplete="one-time-code"
+                  spellCheck={false}
+                  autoFocus
+                />
+              </div>
+              <p className="mt-1 text-[11px] text-ink/45">Code remis par l'équipe Ezial, valable 7 jours. Code perdu ou expiré : demandez-en un nouveau à un administrateur.</p>
+            </div>
             <p className="text-xs text-ink/45">Choisissez un NIP à {PIN_LENGTH} chiffres — vous vous en resservirez à chaque connexion.</p>
             <div>
               <label className="block text-xs font-medium text-ink/60 mb-1.5">NIP</label>

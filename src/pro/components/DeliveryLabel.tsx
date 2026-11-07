@@ -26,7 +26,7 @@ export default function DeliveryLabel({
 
   useEffect(() => {
     let cancelled = false;
-    const target = `${window.location.origin}${import.meta.env.BASE_URL}#/pro?driver_order=${encodeURIComponent(mission.orderId)}`;
+    const target = `${window.location.origin}${import.meta.env.BASE_URL}pro?driver_order=${encodeURIComponent(mission.orderId)}`;
     QRCode.toDataURL(target, { margin: 1, width: 240 }).then((url) => {
       if (!cancelled) setQrDataUrl(url);
     });

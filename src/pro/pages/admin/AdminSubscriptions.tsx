@@ -10,6 +10,8 @@ import {
   type AdminSellerSubscriptionRow,
 } from '@/lib/supabaseAdminSubscriptions';
 import { Crown, Loader2, Check, X, AlertCircle } from 'lucide-react';
+import { billingPeriodOfPayment } from '@/lib/supabaseSellerSubscription';
+import { BILLING_PERIOD_LABEL, formatFcfa } from '@/data/subscriptionPlans';
 
 type Tab = 'pending' | 'history' | 'all';
 
@@ -102,7 +104,7 @@ export default function AdminSubscriptions() {
         ) : (
           <div className="card divide-y divide-line">
             {subscriptions.map((s) => {
-              const label = !s.isProActive ? 'Free' : s.isTrialActive ? 'Essai Premium' : 'Premium';
+              const label = !s.isProActive ? 'Free' : s.isTrialActive ? 'Essai Ezial Plus' : 'Ezial Plus';
               const labelCls = !s.isProActive ? 'bg-ink/5 text-ink/60 border-line' : s.isTrialActive ? 'bg-amber-50 text-amber-700 border-amber-100' : 'bg-burgundy/10 text-burgundy border-burgundy/20';
               return (
                 <div key={s.shopId} className="flex items-center justify-between gap-3 p-4 flex-wrap">
@@ -131,7 +133,7 @@ export default function AdminSubscriptions() {
               <div className="flex items-start justify-between gap-3 flex-wrap">
                 <div className="min-w-0">
                   <p className="text-sm font-semibold text-ink">{p.shopName}</p>
-                  <p className="text-xs text-ink/50 mt-0.5">{p.amount.toLocaleString('fr-FR')} FCFA — {p.method === 'wave' ? 'Wave' : 'Orange Money'}</p>
+                  <p className="text-xs text-ink/50 mt-0.5">{formatFcfa(p.amount)} · {BILLING_PERIOD_LABEL[billingPeriodOfPayment({ amount: p.amount, periodStart: null, periodEnd: null })]} — {p.method === 'wave' ? 'Wave' : 'Orange Money'}</p>
                   <p className="text-xs text-ink/45 mt-0.5 font-mono">Réf. {p.reference}</p>
                   <p className="text-xs text-ink/40 mt-0.5">Demandé le {formatDate(p.requestedAt)}</p>
                 </div>
@@ -190,7 +192,7 @@ export default function AdminSubscriptions() {
 
       <div className="card p-4 bg-cream/50">
         <p className="text-xs text-ink/45 text-center">
-          Aucune passerelle de paiement n'est connectée à Ezial : chaque référence doit être vérifiée manuellement sur votre compte Wave / Orange Money avant confirmation. La confirmation active ou prolonge l'abonnement Premium pour 3 mois.
+          Aucune passerelle de paiement n'est connectée à Ezial : chaque référence doit être vérifiée manuellement sur votre compte Wave / Orange Money avant confirmation. La confirmation active ou prolonge l'abonnement Ezial Plus selon la formule payée (3 ou 12 mois).
         </p>
       </div>
     </div>
