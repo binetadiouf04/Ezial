@@ -118,51 +118,52 @@ function HomeProductPreview({
 // Static fallback content — used until (or unless) an admin has published
 // active rows in hero_slides / home_discover_tiles. Never removed outright:
 // an empty Home would be worse than showing this curated default.
+// Banner images live in public/hero/, one file per format (phone 750×600,
+// iPad 1024×520, computer 1600×600).
+const heroFormats = (name: string) => ({
+  mobile: `/hero/${name}-mobile.webp`,
+  tablet: `/hero/${name}-ipad.webp`,
+  desktop: `/hero/${name}-ordinateur.webp`,
+});
+
 const staticHeroSlides: HeroSlide[] = [
   {
     id: 'mode-femme',
-    image: 'https://images.pexels.com/photos/38277759/pexels-photo-38277759.jpeg?auto=compress&cs=tinysrgb&h=900&w=1600',
-    imagePosition: 'object-top',
-    eyebrow: 'Mode Femme',
-    title: 'Élégance sénégalaise',
-    ctaLabel: 'Découvrir',
-    ctaRoute: '/categorie/vetements/femme',
-  },
-  {
-    id: 'beaute',
-    image: 'https://images.pexels.com/photos/12352170/pexels-photo-12352170.jpeg?auto=compress&cs=tinysrgb&h=900&w=1600',
-    imagePosition: 'object-center',
-    eyebrow: 'Beauté',
-    title: 'Rituels skincare',
-    ctaLabel: 'Explorer',
-    ctaRoute: '/categorie/beaute/skincare',
-  },
-  {
-    id: 'streetwear',
-    image: 'https://images.pexels.com/photos/19816456/pexels-photo-19816456.jpeg?auto=compress&cs=tinysrgb&h=900&w=1600',
-    imagePosition: 'object-center',
-    eyebrow: 'Streetwear',
-    title: 'Looks urbains',
-    ctaLabel: 'Découvrir',
-    ctaRoute: '/recherche?q=streetwear',
-  },
-  {
-    id: 'bijoux-parfums',
-    image: 'https://images.pexels.com/photos/30746012/pexels-photo-30746012.jpeg?auto=compress&cs=tinysrgb&h=900&w=1600',
-    imagePosition: 'object-center',
-    eyebrow: 'Bijoux & Parfums',
-    title: 'Éclat & senteurs',
-    ctaLabel: 'Découvrir',
-    ctaRoute: '/categorie/bijoux',
+    alt: 'Looks de fêtes : élégance et style pour les fêtes — mode femme',
+    route: '/categorie/vetements/femme',
+    images: heroFormats('banniere-1-mode-femme'),
   },
   {
     id: 'mode-homme',
-    image: 'https://images.pexels.com/photos/34695268/pexels-photo-34695268.jpeg?auto=compress&cs=tinysrgb&h=900&w=1600',
-    imagePosition: 'object-top',
-    eyebrow: 'Mode Homme',
-    title: 'Style affirmé',
-    ctaLabel: 'Découvrir',
-    ctaRoute: '/categorie/vetements/homme',
+    alt: 'Homme : mode et style au quotidien',
+    route: '/categorie/vetements/homme',
+    images: heroFormats('banniere-2-mode-homme'),
+  },
+  {
+    id: 'tendances',
+    alt: 'Livraison à Dakar en 4 h à 48 h',
+    route: '/tendances',
+    images: heroFormats('banniere-3-livraison'),
+  },
+  {
+    id: 'beaute',
+    alt: 'Beauté : maquillage et soin de la peau',
+    route: '/categorie/beaute',
+    images: heroFormats('banniere-4-beaute'),
+  },
+  {
+    // Existing « Made in Sénégal » section (same route as its « À découvrir »
+    // tile): products their sellers marked « Fait à la main ».
+    id: 'made-in-senegal',
+    alt: 'Mode modeste et traditionnelle — Made in Sénégal',
+    route: '/recherche?q=made in senegal',
+    images: heroFormats('banniere-5-made-in-senegal'),
+  },
+  {
+    id: 'parfums',
+    alt: 'Parfums de fêtes, pour lui et pour elle',
+    route: '/categorie/parfums',
+    images: heroFormats('banniere-6-parfums'),
   },
 ];
 
