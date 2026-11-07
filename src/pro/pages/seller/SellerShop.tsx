@@ -2,10 +2,9 @@ import { useState, useEffect, useCallback } from 'react';
 import { usePro } from '../../ProContext';
 import VendorNoticeBanner, { type VendorNotice } from '../../components/VendorNoticeBanner';
 import GoogleLocationPickerMap from '@/components/GoogleLocationPickerMap';
-import { StatusChip } from '../../components/StatusChip';
 import {
   fetchShopLocation, updateShopLocation, fetchShopOnboarding, updateShopOnboarding,
-  submitShopForReview, activateShopIfReady, uploadShopAsset, removeShopAsset, type ShopOnboardingData,
+  submitShopForReview, activateShopIfReady, uploadShopAsset, removeShopAsset, setShopPaused, type ShopOnboardingData,
 } from '@/lib/supabaseSellerShop';
 import ImageCropModal from '@/components/ImageCropModal';
 import { fetchModerationFlags, latestUnresolvedFlag } from '@/lib/supabaseModeration';
@@ -16,7 +15,7 @@ import { categories } from '@/data/categories';
 import { supabase } from '@/lib/supabaseClient';
 import { ownsCustomerProfileForDeletionWarning } from '@/lib/supabaseAccountDeletion';
 import NotificationOptIn from '@/components/NotificationOptIn';
-import { Check, Image as ImageIcon, Camera, MapPin, Loader2, AlertTriangle, AlertCircle, Navigation, Pencil, Search, Send, Trash2 } from 'lucide-react';
+import { Check, Image as ImageIcon, Camera, MapPin, Loader2, AlertTriangle, AlertCircle, Navigation, Pencil, Search, Send, Trash2, PauseCircle, PlayCircle } from 'lucide-react';
 import SmartImage from '@/components/SmartImage';
 
 type LocationStatus = 'idle' | 'requesting' | 'denied' | 'unsupported' | 'error';
@@ -209,6 +208,20 @@ export default function SellerShop() {
     }
   };
 
+  const [pauseBusy, setPauseBusy] = useState(false);
+  const [confirmPause, setConfirmPause] = useState(false);
+  const [pauseError, setPauseError] = useState('');
+  const handleTogglePause = async (paused: boolean) => {
+    if (!sellerSupabaseShopId) return;
+    setPauseError('');
+    setPauseBusy(true);
+    const result = await setShopPaused(sellerSupabaseShopId, paused);
+    setPauseBusy(false);
+    setConfirmPause(false);
+    if (result.error || !result.status) { setPauseError(result.error ?? 'Impossible de modifier le statut de la boutique. Réessayez.'); return; }
+    setForm((f) => ({ ...f, status: result.status as 'active' | 'paused' }));
+  };
+
   const handleSubmitForReview = async () => {
     setSaveError('');
     setSubmitting(true);
@@ -283,28 +296,42 @@ export default function SellerShop() {
           (draft/rejected → pending) stays for that one case. 'active' is
           otherwise never reachable from the client (admin + safety trigger
           enforce that server-side). */}
-      {formLoaded && (
+      {/* No "Statut de la boutique" label any more (owner's request): only a
+          message when there is something to do or know, and the pause
+          control for a shop that is online or paused. */}
+      {formLoaded && form.status !== 'active' && form.status !== 'paused' && (
         <div className="card p-4 space-y-3">
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <p className="text-xs font-medium text-ink/50">Statut de la boutique</p>
-              <div className="mt-1.5"><StatusChip status={form.status} size="md" /></div>
-            </div>
-            {form.status === 'rejected' && (
+          {form.status === 'draft' && <p className="text-xs text-ink/55">Complétez les informations obligatoires ci-dessous (description, téléphone, quartier ou adresse) : votre boutique s'active automatiquement dès qu'elles sont enregistrées, sans validation à attendre.</p>}
+          {form.status === 'pending' && <p className="text-xs text-ink/55">Votre demande est en cours d'examen par l'équipe Ezial. Vous pouvez continuer à préparer vos produits.</p>}
+          {form.status === 'rejected' && (
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <p className="text-xs text-burgundy">Ezial a signalé un problème sur votre boutique. Mettez à jour les informations puis soumettez à nouveau.</p>
               <button onClick={() => void handleSubmitForReview()} disabled={submitting} className="btn-primary flex-shrink-0">
                 {submitting ? <><Loader2 size={15} className="animate-spin" /> Envoi...</> : <><Send size={15} /> Soumettre pour validation</>}
               </button>
-            )}
-          </div>
-          {form.status === 'draft' && <p className="text-xs text-ink/45">Complétez les informations obligatoires ci-dessous (description, téléphone, quartier ou adresse) : votre boutique s'active automatiquement dès qu'elles sont enregistrées, sans validation à attendre.</p>}
-          {form.status === 'pending' && <p className="text-xs text-ink/45">Votre demande est en cours d'examen par l'équipe Ezial. Vous pouvez continuer à préparer vos produits.</p>}
-          {form.status === 'rejected' && <p className="text-xs text-burgundy">Ezial a signalé un problème sur votre boutique. Mettez à jour les informations puis soumettez à nouveau.</p>}
+            </div>
+          )}
           {form.status === 'suspended' && (
             <p className="text-xs text-burgundy">
               Votre boutique est actuellement désactivée par Ezial.
               {form.suspensionReason ? ` Motif : ${form.suspensionReason}` : ' Contactez l\'équipe Ezial pour plus d\'informations.'}
             </p>
           )}
+        </div>
+      )}
+
+      {/* Pause: the shop and its products leave the public site until the
+          seller reactivates it; orders already placed stay in "Commandes". */}
+      {formLoaded && form.status === 'paused' && (
+        <div className="card flex flex-wrap items-center justify-between gap-3 border-amber-300 bg-amber-50 p-4">
+          <div className="min-w-0">
+            <p className="flex items-center gap-1.5 text-sm font-semibold text-amber-800"><PauseCircle size={16} /> Votre boutique est en pause</p>
+            <p className="mt-0.5 text-xs text-amber-800/80">Elle n'apparaît plus sur Ezial. Vos commandes en cours restent accessibles.</p>
+            {pauseError && <p className="mt-1 text-xs text-burgundy">{pauseError}</p>}
+          </div>
+          <button onClick={() => void handleTogglePause(false)} disabled={pauseBusy} className="btn-primary flex-shrink-0">
+            {pauseBusy ? <Loader2 size={15} className="animate-spin" /> : <PlayCircle size={15} />} Réactiver ma boutique
+          </button>
         </div>
       )}
 
@@ -464,22 +491,26 @@ export default function SellerShop() {
 
             {/* Mode toggle */}
             <div className="flex flex-wrap gap-2">
-              <button type="button" onClick={() => setLocationMode('gps')} className={locationMode === 'gps' ? 'btn-primary' : 'btn-outline'}>
-                <Navigation size={14} /> Utiliser ma position actuelle
+              {/* One tap both selects GPS mode and records the position — no
+                  second "Utiliser ma position actuelle" button below. */}
+              <button
+                type="button"
+                onClick={() => { setLocationMode('gps'); requestShopLocation(); }}
+                disabled={locationStatus === 'requesting'}
+                className={locationMode === 'gps' ? 'btn-primary' : 'btn-outline'}
+              >
+                {locationStatus === 'requesting'
+                  ? <><Loader2 size={14} className="animate-spin" /> Détection en cours...</>
+                  : <><Navigation size={14} /> Utiliser ma position actuelle</>}
               </button>
               <button type="button" onClick={openManualMode} className={locationMode === 'manual' ? 'btn-primary' : 'btn-outline'}>
                 <Pencil size={14} /> Définir la localisation manuellement
               </button>
             </div>
 
-            {locationMode === 'gps' && (
+            {locationMode === 'gps' && (locationSaved || locationStatus === 'denied' || locationStatus === 'unsupported' || locationStatus === 'error') && (
               <div className="space-y-3 rounded-lg border border-line p-3.5">
-                <div className="flex items-center gap-3">
-                  <button type="button" onClick={requestShopLocation} disabled={locationStatus === 'requesting'} className="btn-outline">
-                    {locationStatus === 'requesting' ? <><Loader2 size={15} className="animate-spin" /> Détection en cours...</> : <><MapPin size={15} /> {location ? 'Mettre à jour avec ma position actuelle' : 'Utiliser ma position actuelle'}</>}
-                  </button>
-                  {locationSaved && <span className="flex items-center gap-1 text-sm text-green-600"><Check size={14} /> Position enregistrée</span>}
-                </div>
+                {locationSaved && <p className="flex items-center gap-1 text-sm text-green-600"><Check size={14} /> Position enregistrée</p>}
                 {locationStatus === 'denied' && (
                   <p className="flex items-start gap-1.5 text-xs text-burgundy"><AlertCircle size={13} className="mt-0.5 flex-shrink-0" /> Accès à la position refusé. Autorisez la géolocalisation dans les réglages de votre navigateur.</p>
                 )}
@@ -550,6 +581,35 @@ export default function SellerShop() {
           </>
         )}
       </div>
+
+      {/* Pause (shop online): reversible, unlike the deletion below. */}
+      {formLoaded && form.status === 'active' && (
+        <div className="card p-5 space-y-3">
+          <h2 className="text-sm font-semibold text-ink">Mettre ma boutique en pause</h2>
+          <p className="text-xs text-ink/50">
+            Votre boutique et vos produits n'apparaissent plus sur Ezial jusqu'à ce que vous la réactiviez. Vos commandes en cours restent accessibles et à traiter.
+          </p>
+          {pauseError && <p className="text-xs text-burgundy">{pauseError}</p>}
+          <button onClick={() => setConfirmPause(true)} className="btn-outline inline-flex items-center gap-2">
+            <PauseCircle size={16} /> Mettre en pause
+          </button>
+        </div>
+      )}
+
+      {confirmPause && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setConfirmPause(false)}>
+          <div className="card w-full max-w-sm p-6" onClick={(e) => e.stopPropagation()}>
+            <h3 className="font-display text-lg font-semibold text-ink">Mettre votre boutique en pause ?</h3>
+            <p className="mt-2 text-sm text-ink/60">Elle ne sera plus visible sur Ezial. Vous pourrez la réactiver à tout moment depuis cette page.</p>
+            <div className="mt-5 flex gap-3">
+              <button onClick={() => setConfirmPause(false)} className="btn-outline flex-1">Annuler</button>
+              <button onClick={() => void handleTogglePause(true)} disabled={pauseBusy} className="btn-primary flex-1">
+                {pauseBusy ? <Loader2 size={15} className="animate-spin" /> : 'Mettre en pause'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Zone dangereuse */}
       <div className="card border-burgundy/20 p-5 space-y-3">

@@ -8,6 +8,11 @@ import SmartImage from '@/components/SmartImage';
 
 const suspensionReasons = ['Produits suspects ou contrefaits', 'Informations trompeuses', 'Comportement inapproprié', 'Non-conformité répétée'];
 
+// Statut 'paused' : boutique mise en pause par son propre vendeur (masquée
+// du site public). StatusChip garde « En pause » pour les campagnes ; ici
+// on précise qui a mis la boutique en pause.
+const PAUSED_BY_SELLER_LABEL = 'En pause (par le vendeur)';
+
 export default function AdminShops() {
   const { navigate } = usePro();
   const [shops, setShops] = useState<AdminShopSummary[]>([]);
@@ -88,7 +93,7 @@ export default function AdminShops() {
                       {shop.status === 'suspended' && shop.suspensionReason && <p className="text-xs text-burgundy mt-1">Motif : {shop.suspensionReason}</p>}
                     </div>
                   </button>
-                  <StatusChip status={shop.status} size="md" />
+                  <StatusChip status={shop.status} size="md" label={shop.status === 'paused' ? PAUSED_BY_SELLER_LABEL : undefined} />
                   {shop.status === 'active' && (
                     <button onClick={() => setSuspendTarget(shop.id)} disabled={acting === shop.id} title="Désactiver la boutique" className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full text-ink/40 hover:bg-burgundy/5 hover:text-burgundy"><Ban size={16} /></button>
                   )}

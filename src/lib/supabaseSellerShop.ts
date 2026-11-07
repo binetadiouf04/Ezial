@@ -33,7 +33,7 @@ export async function updateShopLocation(shopId: string, latitude: number, longi
 // submitShopForReview(); it's the one and only way a seller can move their
 // own shop forward, and it can never reach 'active' from the client side
 // (an admin-only UPDATE + a safety trigger both enforce that server-side).
-export type ShopWorkflowStatus = 'draft' | 'pending' | 'active' | 'suspended' | 'rejected';
+export type ShopWorkflowStatus = 'draft' | 'pending' | 'active' | 'suspended' | 'rejected' | 'paused';
 
 export interface ShopOnboardingData {
   name: string;
@@ -120,6 +120,15 @@ export async function activateShopIfReady(): Promise<{ ready: boolean; alreadyAc
   const { data, error } = await supabase.rpc('activate_shop_if_ready');
   if (error) return { ready: false, error: error.message };
   return { ready: Boolean(data?.ready), alreadyActive: data?.alreadyActive };
+}
+
+// Seller-side pause: 'active' ↔ 'paused' only (seller_set_shop_paused checks
+// ownership server-side). A paused shop and its products disappear from the
+// public site; orders already placed stay manageable by the seller.
+export async function setShopPaused(shopId: string, paused: boolean): Promise<{ status?: 'active' | 'paused'; error?: string }> {
+  const { data, error } = await supabase.rpc('seller_set_shop_paused', { p_shop_id: shopId, p_paused: paused });
+  if (error) return { error: error.code === 'P0001' ? error.message : 'Impossible de modifier le statut de la boutique. Réessayez.' };
+  return { status: data === 'paused' ? 'paused' : 'active' };
 }
 
 const SHOP_ASSETS_BUCKET = 'product-images';

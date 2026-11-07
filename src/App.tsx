@@ -266,8 +266,8 @@ function headTagsFor(route: string, { catalogProducts, catalogShops }: CatalogFo
   if (clean === '/favoris') return plainTags(`Favoris — ${SITE_TITLE}`, DEFAULT_DESCRIPTION);
   if (clean === '/profil' || clean === '/commandes') return plainTags(`Mon compte — ${SITE_TITLE}`, DEFAULT_DESCRIPTION);
   if (clean === '/promos') return plainTags(`Promotions — ${SITE_TITLE}`, 'Toutes les offres et promotions en cours sur Ezial.');
-  if (clean === '/tendances') return plainTags(`Nouveautés — ${SITE_TITLE}`, 'Les derniers produits arrivés sur Ezial.');
-  if (clean === '/pour-vous') return plainTags(`Inspirations — ${SITE_TITLE}`, 'Des produits à découvrir parmi le catalogue Ezial.');
+  if (clean === '/tendances') return plainTags(`Tendances — ${SITE_TITLE}`, 'Les produits les plus aimés sur Ezial.');
+  if (clean === '/pour-vous') return plainTags(`Vous aimerez — ${SITE_TITLE}`, 'Des produits choisis selon vos envies parmi le catalogue Ezial.');
   if (clean.startsWith('/recherche')) return plainTags(`Recherche — ${SITE_TITLE}`, DEFAULT_DESCRIPTION);
   return plainTags(DEFAULT_TITLE, DEFAULT_DESCRIPTION);
 }

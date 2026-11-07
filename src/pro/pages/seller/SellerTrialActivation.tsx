@@ -2,9 +2,7 @@ import { useState } from 'react';
 import { usePro } from '../../ProContext';
 import { formatDate } from '../../data';
 import { activateSellerTrial } from '@/lib/supabaseSellerSubscription';
-import { PLUS_HIGHLIGHTS, TRIAL_DAYS, TRIAL_PRELAUNCH_NOTE, FREE_PRODUCT_LIMIT, FREE_COMMISSION_PERCENT } from '@/data/subscriptionPlans';
-import { LAUNCH_DATE_ISO, LAUNCH_DATE_LABEL } from '@/shared/siteInfo';
-import { PlusHighlightIcon } from '@/components/PlusHighlights';
+import { PLUS_CARD_ITEMS, TRIAL_DAYS, FREE_PRODUCT_LIMIT, FREE_COMMISSION_PERCENT } from '@/data/subscriptionPlans';
 import { ArrowLeft, Check, Crown, Loader2, AlertCircle, Smartphone, Calendar, ShieldCheck } from 'lucide-react';
 
 export default function SellerTrialActivation({ onActivated }: { onActivated?: () => void } = {}) {
@@ -12,9 +10,6 @@ export default function SellerTrialActivation({ onActivated }: { onActivated?: (
   const [activating, setActivating] = useState(false);
   const [error, setError] = useState('');
   const [trialEnd, setTrialEnd] = useState<string | null>(null);
-  // Before the official launch, activate_seller_trial() starts the 30 days
-  // on launch day; the Ezial Plus advantages are active right away.
-  const beforeLaunch = Date.now() < Date.parse(`${LAUNCH_DATE_ISO}T00:00:00Z`);
 
   const handleActivate = async () => {
     if (!sellerSupabaseShopId) return;
@@ -39,9 +34,6 @@ export default function SellerTrialActivation({ onActivated }: { onActivated?: (
         <div>
           <h1 className="font-display text-xl font-semibold text-ink">Essai Ezial Plus activé !</h1>
           <p className="mt-1.5 text-sm text-ink/60">Vos avantages Ezial Plus sont actifs jusqu'au <strong>{formatDate(trialEnd)}</strong>.</p>
-          {beforeLaunch && (
-            <p className="mt-2 text-sm text-ink/60">Votre essai démarre le {LAUNCH_DATE_LABEL} ; vos avantages Ezial Plus sont déjà actifs.</p>
-          )}
         </div>
         <button onClick={() => navigate('/seller')} className="btn-primary w-full">Aller à mon tableau de bord</button>
       </div>
@@ -62,17 +54,17 @@ export default function SellerTrialActivation({ onActivated }: { onActivated?: (
 
       <div className="card p-5">
         <p className="text-sm font-semibold text-ink mb-4">Vos avantages pendant l’essai</p>
-        <ul className="space-y-4">
-          {PLUS_HIGHLIGHTS.map((h) => (
-            <li key={h.id} className="flex items-start gap-3">
-              <span className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-burgundy/10 text-burgundy">
-                <PlusHighlightIcon id={h.id} size={17} />
+        <ul className="space-y-2.5">
+          {PLUS_CARD_ITEMS.map((item) => (
+            <li key={item.id} className="flex items-start gap-2.5 text-sm leading-snug">
+              <span className="mt-0.5 flex h-4 w-4 flex-shrink-0 items-center justify-center rounded-full bg-burgundy/10 text-burgundy">
+                <Check size={11} strokeWidth={3} aria-hidden="true" />
               </span>
-              <div className="min-w-0">
-                <p className="text-sm font-semibold text-ink">{h.title}</p>
-                <p className="mt-0.5 text-[13px] leading-snug text-ink/60">{h.text}</p>
-                {h.note && <p className="mt-1 text-[11px] leading-snug text-ink/40">{h.note}</p>}
-              </div>
+              <span className="text-ink/60">
+                {item.before}
+                <strong className="font-semibold text-ink">{item.strong}</strong>
+                {item.after}
+              </span>
             </li>
           ))}
         </ul>
@@ -85,7 +77,7 @@ export default function SellerTrialActivation({ onActivated }: { onActivated?: (
         </div>
         <div className="flex items-start gap-2.5 text-sm text-ink/70">
           <Calendar size={15} className="mt-0.5 flex-shrink-0 text-ink/40" />
-          <span>{beforeLaunch ? TRIAL_PRELAUNCH_NOTE : `L’essai commence dès son activation et dure ${TRIAL_DAYS} jours.`}</span>
+          <span>Vos avantages Ezial Plus sont actifs dès l’activation de l’essai.</span>
         </div>
         <div className="flex items-start gap-2.5 text-sm text-ink/70">
           <Smartphone size={15} className="mt-0.5 flex-shrink-0 text-ink/40" />

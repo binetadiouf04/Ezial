@@ -67,8 +67,6 @@ export async function buildInfoPages(ctx) {
           <section><h3>${esc(PLUS_PLAN_NAME)}</h3><p>${esc(plusPrice)}</p><ul>${plusItems.map((b) => `<li>${esc(b)}</li>`).join('')}</ul><p>${link('/pro', `Essayer ${PLUS_PLAN_NAME}`)}</p></section>
         </div>`;
       }
-      case 'plusHighlights':
-        return `<ul>${PLUS_HIGHLIGHTS.map((h) => `<li><h3>${esc(h.title)}</h3><p>${esc(h.text)}</p>${h.note ? `<p><small>${esc(h.note)}</small></p>` : ''}</li>`).join('')}</ul>`;
       case 'planComparison': {
         const cell = (v) => (typeof v === 'boolean' ? (v ? 'Oui' : 'Non') : v);
         return `<table><thead><tr><th scope="col">Critère</th><th scope="col">Free</th><th scope="col">${esc(PLUS_PLAN_NAME)}</th></tr></thead><tbody>${PLAN_COMPARISON.map((r) => `<tr><th scope="row">${esc(r.label)}</th><td>${esc(cell(r.free))}</td><td>${esc(cell(r.plus))}</td></tr>`).join('')}</tbody></table>`;

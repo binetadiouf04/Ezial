@@ -605,20 +605,30 @@ export default function CheckoutPage() {
 
                   {/* Mode toggle */}
                   <div className="flex flex-wrap gap-2">
-                    <button type="button" onClick={() => setLocationMode('gps')} className={locationMode === 'gps' ? 'btn-primary' : 'btn-outline'}>
-                      <Navigation size={14} /> Utiliser ma position actuelle
+                    {/* One tap both selects GPS mode and asks for the position —
+                        no second "Utiliser ma position actuelle" button below. */}
+                    <button
+                      type="button"
+                      onClick={() => { setLocationMode('gps'); requestLocation(); }}
+                      disabled={locationStatus === 'requesting'}
+                      className={locationMode === 'gps' ? 'btn-primary' : 'btn-outline'}
+                    >
+                      {locationStatus === 'requesting'
+                        ? <><Loader2 size={14} className="animate-spin" /> Détection en cours...</>
+                        : <><Navigation size={14} /> Utiliser ma position actuelle</>}
                     </button>
                     <button type="button" onClick={openManualLocationMode} className={locationMode === 'manual' ? 'btn-primary' : 'btn-outline'}>
                       <Search size={14} /> Rechercher une adresse
                     </button>
                   </div>
 
-                  {locationMode === 'gps' && (
+                  {locationMode === 'gps' && (locationStatus === 'granted' || locationStatus === 'denied' || locationStatus === 'unsupported') && (
                     <div className="space-y-2 rounded-lg border border-line p-3.5">
-                      <p className="text-xs text-ink/50">Utilise la position GPS actuelle de votre appareil.</p>
-                      <button type="button" onClick={requestLocation} disabled={locationStatus === 'requesting'} className="btn-outline w-full">
-                        {locationStatus === 'requesting' ? <><Loader2 size={15} className="animate-spin" /> Détection en cours...</> : <><MapPin size={15} /> {locationStatus === 'granted' ? 'Actualiser ma position' : 'Utiliser ma position actuelle'}</>}
-                      </button>
+                      {locationStatus === 'granted' && (
+                        <button type="button" onClick={requestLocation} className="flex items-center gap-1.5 text-xs font-medium text-burgundy hover:underline">
+                          <MapPin size={13} /> Actualiser ma position
+                        </button>
+                      )}
                       {locationStatus === 'denied' && (
                         <p className="flex items-start gap-1.5 text-xs text-burgundy"><AlertCircle size={13} className="mt-0.5 flex-shrink-0" /> Accès à la position refusé. Autorisez la géolocalisation dans les réglages de votre navigateur, ou choisissez le retrait en boutique si disponible.</p>
                       )}

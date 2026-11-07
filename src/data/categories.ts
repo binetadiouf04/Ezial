@@ -164,7 +164,16 @@ export const categoryTiles: { id: CategoryId; label: string; image: string }[] =
   { id: 'tissus', label: 'Tissus', image: 'https://images.pexels.com/photos/3965543/pexels-photo-3965543.jpeg?auto=compress&cs=tinysrgb&h=650&w=940' },
 ];
 
-export interface HomeCircleTile { id: string; label: string; image: string; route: string; highlight?: boolean; }
+export interface HomeCircleTile {
+  id: string;
+  label: string;
+  /** Empty: the photo of a real product of the tile's destination is used (see HomePage). */
+  image: string;
+  route: string;
+  highlight?: boolean;
+  /** Shown even while its destination has no product yet. */
+  alwaysShow?: boolean;
+}
 
 // Curated shortcut circles shown on the homepage — a mix of Promos + the
 // most relevant subcategories (not the full category list, and no exact
@@ -199,7 +208,7 @@ export const homeCircleTiles: HomeCircleTile[] = [
   // crops the other 23 circles use) — swapped in on explicit "mets ce que
   // tu peux, on corrigera" instruction; replace with a real provided photo
   // cropped/optimized the same way as discover01-24 when available.
-  { id: 'tissus', label: 'Tissus', image: 'https://images.pexels.com/photos/3965543/pexels-photo-3965543.jpeg?auto=compress&cs=tinysrgb&h=650&w=940', route: '/categorie/tissus' },
+  { id: 'tissus', label: 'Tissus', image: 'https://images.pexels.com/photos/3965543/pexels-photo-3965543.jpeg?auto=compress&cs=tinysrgb&h=650&w=940', route: '/categorie/tissus', alwaysShow: true },
   // Streetwear/Voile/Abaya n'ont pas encore de sous-catégorie dédiée dans la
   // taxonomie (comme Robes ou Or plus haut) : ils routent vers une recherche
   // sur leur propre libellé, qui remontera les produits dès qu'un vendeur
@@ -211,6 +220,7 @@ export const homeCircleTiles: HomeCircleTile[] = [
   { id: 'parfums-femme', label: 'Parfums Femme', image: discover18, route: '/categorie/parfums/parfums-femme' },
   { id: 'parfums-homme', label: 'Parfums Homme', image: discover19, route: '/categorie/parfums/parfums-homme' },
   { id: 'encens', label: 'Encens', image: discover20, route: '/categorie/parfums/encens-parfums-maison' },
+  { id: 'huiles-brumes', label: 'Huiles & brumes', image: '', route: '/categorie/parfums/huiles-brumes' },
   { id: 'bijoux', label: 'Bijoux', image: discover21, route: '/categorie/bijoux' },
   { id: 'or', label: 'Or', image: discover22, route: '/recherche?q=or' },
   { id: 'pyjamas', label: 'Pyjamas', image: discover23, route: '/categorie/lingerie/pyjamas' },

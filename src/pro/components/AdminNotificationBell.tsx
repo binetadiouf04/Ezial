@@ -69,7 +69,11 @@ export default function AdminNotificationBell({ onNavigate }: { onNavigate: (url
       </button>
 
       {open && (
-        <div className="absolute right-0 top-11 z-30 w-80 max-w-[90vw] rounded-xl border border-line bg-white shadow-lg max-h-[70vh] overflow-y-auto">
+        // Phone: full-width panel under the top bar (an absolute w-80 panel
+        // anchored on the bell overflowed the left edge). Tablet top bar:
+        // anchored right under the bell. Desktop sidebar (bell at its right
+        // edge): opens towards the page content instead of off-screen.
+        <div className="fixed left-2 right-2 top-14 z-30 rounded-xl border border-line bg-white shadow-lg max-h-[70vh] overflow-y-auto sm:absolute sm:left-auto sm:right-0 sm:top-11 sm:w-80 lg:left-0 lg:right-auto">
           <div className="flex items-center justify-between border-b border-line p-3">
             <p className="text-sm font-semibold text-ink">Notifications</p>
             {unreadCount > 0 && (

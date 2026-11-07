@@ -297,7 +297,26 @@ function tokenize(query: string): string[] {
   return normalizeText(query).split(/[^a-z0-9]+/).filter(Boolean);
 }
 
-const COLOR_MOTIF_VARIANT_NAMES = new Set(['couleur', 'motif / imprimé', 'motif/imprimé', 'motif']);
+// Variant key used when a product offers both colours and prints: a print is
+// a variant of its own, exactly like a colour (Noir, Rouge, Léopard × S, M =
+// 6 stock lines, never Noir × Léopard). Its values are the selected colours
+// followed by the selected prints. A product with only colours keeps
+// "Couleur", one with only prints keeps "Motif / Imprimé" — unchanged.
+// Written by SellerProductForm, read back by VariantSelector and search.
+export const COLOR_PRINT_VARIANT_KEY = 'Couleur / Imprimé';
+
+const COLOR_MOTIF_VARIANT_NAMES = new Set(['couleur', 'motif / imprimé', 'motif/imprimé', 'motif', COLOR_PRINT_VARIANT_KEY.toLowerCase()]);
+
+// Whether a product's variant attribute name answers a catalog filter group
+// ('couleur', 'motif', 'taille'...). The combined colour/print key answers
+// both 'couleur' and 'motif'; "Motif / Imprimé" answers 'motif'; any other
+// name keeps the plain letters-only comparison used by the catalog filters.
+export function variantNameMatchesFilterGroup(variantName: string, groupId: string): boolean {
+  const lettersOnly = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z]/g, '');
+  if (variantName === COLOR_PRINT_VARIANT_KEY) return groupId === 'couleur' || groupId === 'motif';
+  if (lettersOnly(variantName).startsWith('motif')) return groupId === 'motif';
+  return lettersOnly(variantName) === lettersOnly(groupId);
+}
 
 // Reference matching ignores case and separators entirely, so "EZ-EZI-0022",
 // "ez-ezi-0022" and the shortened "EZI-0022" (missing the shared "EZ-"

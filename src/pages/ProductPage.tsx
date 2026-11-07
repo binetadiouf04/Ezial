@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect } from 'react';
+import { recordProductView } from '@/lib/browsingHistory';
 import { useApp } from '@/store/AppContext';
 import { getProduct, getVariantPrice, getProductsFromSameShop, getSimilarProducts, isRealCatalogId } from '@/data/products';
 import { getShop, registerSupabaseShops } from '@/data/shops';
@@ -135,6 +136,11 @@ export default function ProductPage({ productId }: { productId: string }) {
     }
     setVariants(autoSelected);
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [product?.id]);
+
+  // Remembered on this device only, for « Vous aimerez » (see browsingHistory).
+  useEffect(() => {
+    if (product?.id) recordProductView(product.id);
   }, [product?.id]);
 
   // Tissus: quantity starts at the sale mode's own minimum (0.5 m/kg, 1

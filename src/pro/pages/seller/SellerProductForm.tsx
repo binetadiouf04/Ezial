@@ -7,7 +7,7 @@ import {
   type FabricSaleMode, type FabricAvailabilityStatus,
 } from '@/data/categories';
 import { getFilters, type FilterGroup } from '@/data/filters';
-import { discountPercent } from '@/data/products';
+import { discountPercent, COLOR_PRINT_VARIANT_KEY } from '@/data/products';
 import { getColor } from '@/data/colors';
 import VendorNoticeBanner, { type VendorNotice } from '../../components/VendorNoticeBanner';
 import { fetchModerationFlags, latestUnresolvedFlag } from '@/lib/supabaseModeration';
@@ -24,6 +24,9 @@ import {
   MAX_PRODUCT_VIDEOS,
   MAX_VIDEO_SIZE_MB,
   ACCEPTED_VIDEO_MIME_TYPES,
+  ACCEPTED_VIDEO_EXTENSIONS,
+  resolveVideoContentType,
+  withContentType,
   type SupabaseProductStatus,
   type NewProductMedia,
 } from '@/lib/supabaseSellerProducts';
@@ -71,6 +74,92 @@ const isVetementsTypeGroup = (categoryId: string, subId: string, groupId: string
 // included here too — a printed variant is as real a stock line as a color.
 const VARIANT_DIMENSION_IDS = new Set(['taille', 'couleur', 'motif', 'longueur', 'densite', 'volume']);
 const COLOR_GROUP_IDS = new Set(['couleur']);
+
+// Colours and prints: as soon as BOTH have selected values they form ONE
+// stock dimension — a print is a variant of its own, exactly like a colour
+// (Noir, Rouge, Léopard × S, M = 6 stock lines, never Noir × Léopard). Its
+// values are the selected colours followed by the selected prints, saved
+// under COLOR_PRINT_VARIANT_KEY ("Couleur / Imprimé"). With only colours or
+// only prints selected nothing changes: one dimension keyed by the group's
+// own label ("Couleur" / "Motif / Imprimé"), exactly as before.
+const COLOR_PRINT_DIMENSION_ID = 'couleur+motif';
+
+// One stock dimension = one key of product_variants.attributes. Most are a
+// single option group; the combined colour/print one merges two.
+interface StockDimension {
+  id: string;
+  label: string;
+  values: string[];
+  isColor: boolean;
+}
+
+// `crossColorPrint` is only ever true for a product saved before this rule,
+// whose variants still cross every colour with every print (rows carrying
+// both "Couleur" and "Motif / Imprimé"): kept as-is so its existing stock
+// lines load and save unchanged, until the seller explicitly separates them.
+function buildStockDimensions(groups: FilterGroup[], valuesFor: (groupId: string) => string[], crossColorPrint: boolean): StockDimension[] {
+  const active = groups
+    .filter((g) => VARIANT_DIMENSION_IDS.has(g.id))
+    .map((g) => ({ group: g, values: valuesFor(g.id) }))
+    .filter((s) => s.values.length > 0);
+  const colors = active.find((s) => s.group.id === 'couleur');
+  const prints = active.find((s) => s.group.id === 'motif');
+  const merge = Boolean(colors && prints) && !crossColorPrint;
+
+  const dimensions: StockDimension[] = [];
+  for (const s of active) {
+    if (merge && (s === colors || s === prints)) {
+      if (dimensions.some((d) => d.id === COLOR_PRINT_DIMENSION_ID)) continue;
+      // Deduplicated: a name offered by both lists (e.g. "Multicolore" for
+      // bijoux) is still one single stock line.
+      const values = [...new Set([...(colors?.values ?? []), ...(prints?.values ?? [])])];
+      dimensions.push({ id: COLOR_PRINT_DIMENSION_ID, label: COLOR_PRINT_VARIANT_KEY, values, isColor: true });
+      continue;
+    }
+    dimensions.push({ id: s.group.id, label: s.group.label, values: s.values, isColor: COLOR_GROUP_IDS.has(s.group.id) });
+  }
+  return dimensions;
+}
+
+// Every combination of one value per dimension, in dimension order — the
+// same order its parts are joined in for a `comboData` key ("S|Noir").
+function cartesianProduct(dimensions: StockDimension[]): string[][] {
+  if (dimensions.length === 0) return [];
+  return dimensions.reduce<string[][]>((acc, d) => acc.flatMap((combo) => d.values.map((v) => [...combo, v])), [[]]);
+}
+
+// A saved variant's value for one stock dimension. The colour/print
+// fallback covers a product saved under the combined key whose selections
+// no longer form the combined dimension — its stock is carried over to the
+// plain "Couleur" / "Motif / Imprimé" line instead of being dropped.
+function variantValueFor(attributes: Record<string, string>, dimension: StockDimension): string | undefined {
+  const value = attributes[dimension.label];
+  if (value) return value;
+  if (dimension.id === 'couleur' || dimension.id === 'motif') return attributes[COLOR_PRINT_VARIANT_KEY] || undefined;
+  return undefined;
+}
+
+// "Autre" in Volume is replaced by the seller's manual value before it
+// ever reaches the combination logic or the saved product.
+function resolveEffectiveValues(selections: OptionSelection, groupId: string, customVolumeMl: string): string[] {
+  const raw = selections[groupId] ?? [];
+  if (groupId === 'volume') {
+    return raw.map((v) => (v === 'Autre' ? (customVolumeMl.trim() ? `${customVolumeMl.trim()} ml` : '') : v)).filter(Boolean);
+  }
+  return raw;
+}
+
+// iOS/iPadOS Safari never fetches a video's first frame on its own: the
+// preview stays an empty box ("la vidéo ne charge pas"). preload="metadata"
+// plus a media-fragment start time (#t=0.1) makes it decode and show that
+// frame — works for blob: previews and Storage URLs alike.
+function withFirstFrame(url: string): string {
+  return url.includes('#') ? url : `${url}#t=0.1`;
+}
+
+// `accept` for the video picker: video/* keeps the iPad/iPhone photo library
+// offered; the extensions cover pickers that don't know a file's MIME type.
+const VIDEO_INPUT_ACCEPT = ['video/*', ...ACCEPTED_VIDEO_MIME_TYPES, ...ACCEPTED_VIDEO_EXTENSIONS.map((e) => `.${e}`)].join(',');
 
 // Number of colors to show before "Voir plus"
 const COLOR_PREVIEW_COUNT = 8;
@@ -333,6 +422,8 @@ export default function SellerProductForm({ productId }: { productId?: string })
   // Options state: which values are selected per option group
   const [selections, setSelections] = useState<OptionSelection>({});
   const [showAllColors, setShowAllColors] = useState<Record<string, boolean>>({});
+  // Old colour × print product being edited — see buildStockDimensions.
+  const [crossColorPrint, setCrossColorPrint] = useState(false);
 
   // Manual value when "Autre" is picked for Volume
   const [customVolumeMl, setCustomVolumeMl] = useState('');
@@ -431,7 +522,13 @@ export default function SellerProductForm({ productId }: { productId?: string })
       const typeproduitValues = data.descriptiveAttributes['Type de produit'];
       const isMakeupCat = data.category === 'beaute' && data.subcategory === 'maquillage';
       const groups = computeOptionGroups(data.category, data.subcategory, typeproduitValues?.[0], isMakeupCat);
-      const variantDimGroups = groups.filter((g) => VARIANT_DIMENSION_IDS.has(g.id));
+      const colorGroup = groups.find((g) => g.id === 'couleur');
+      const printGroup = groups.find((g) => g.id === 'motif');
+      // Saved before "un imprimé est une variante à part" (rows carrying
+      // both a colour and a print): keep crossing them for this product so
+      // every existing stock line keeps its exact key and quantity.
+      const legacyCrossColorPrint = colorGroup !== undefined && printGroup !== undefined
+        && data.variants.some((v) => Boolean(v.attributes[colorGroup.label]) && Boolean(v.attributes[printGroup.label]));
 
       const newSelections: OptionSelection = {};
       if (typeproduitValues && typeproduitValues.length > 0) newSelections.typeproduit = typeproduitValues;
@@ -463,7 +560,30 @@ export default function SellerProductForm({ productId }: { productId?: string })
           if (values && values.length > 0) newSelections[g.id] = values;
         }
       }
+      // Combined "Couleur / Imprimé" values go back to the chip group they
+      // come from. A name offered by both lists (e.g. "Multicolore" for
+      // bijoux) is restored in both — the combined dimension, and so every
+      // stock line, comes out exactly the same.
+      if (colorGroup || printGroup) {
+        const colorValues = new Set(newSelections.couleur ?? []);
+        const printValues = new Set(newSelections.motif ?? []);
+        for (const v of data.variants) {
+          const val = v.attributes[COLOR_PRINT_VARIANT_KEY];
+          if (!val) continue;
+          const inColors = colorGroup?.options.includes(val) ?? false;
+          const inPrints = printGroup?.options.includes(val) ?? false;
+          if (inColors) colorValues.add(val);
+          if (inPrints) printValues.add(val);
+          if (!inColors && !inPrints) {
+            if (colorGroup && (getColor(val) || !printGroup)) colorValues.add(val);
+            else printValues.add(val);
+          }
+        }
+        if (colorGroup && colorValues.size > 0) newSelections.couleur = [...colorValues];
+        if (printGroup && printValues.size > 0) newSelections.motif = [...printValues];
+      }
       setSelections(newSelections);
+      setCrossColorPrint(legacyCrossColorPrint);
       if (customMl) setCustomVolumeMl(customMl);
 
       if (data.category === 'parfums' && data.subcategory === 'huiles-brumes') {
@@ -479,13 +599,14 @@ export default function SellerProductForm({ productId }: { productId?: string })
       // exactly what made an edited product's stock read back as 0. Only the
       // dimensions this product actually selected (newSelections) are used
       // to build each variant's key, matching how buildVariantRows/
-      // `combinations` filter multiChoiceGroups down to non-empty selections.
-      const activeVariantDimGroups = variantDimGroups.filter((g) => (newSelections[g.id]?.length ?? 0) > 0);
+      // `combinations` build their dimensions (buildStockDimensions, same
+      // colour/print rule, same legacy flag) from non-empty selections.
+      const loadedDimensions = buildStockDimensions(groups, (id) => newSelections[id] ?? [], legacyCrossColorPrint);
       const newComboData: Record<string, { stock: number; price: number }> = {};
       let anyPriceDiffers = false;
       for (const v of data.variants) {
-        const parts = activeVariantDimGroups.map((g) => v.attributes[g.label]).filter(Boolean);
-        if (parts.length === 0 || parts.length !== activeVariantDimGroups.length) continue;
+        const parts = loadedDimensions.map((d) => variantValueFor(v.attributes, d)).filter((p): p is string => Boolean(p));
+        if (parts.length === 0 || parts.length !== loadedDimensions.length) continue;
         newComboData[parts.join('|')] = { stock: v.stock, price: v.price };
         if (v.price !== data.basePrice) anyPriceDiffers = true;
       }
@@ -539,43 +660,28 @@ export default function SellerProductForm({ productId }: { productId?: string })
 
   // "Autre" in Volume is replaced by the seller's manual value before it
   // ever reaches the combination logic or the saved product.
-  const effectiveValues = (groupId: string): string[] => {
-    const raw = selections[groupId] ?? [];
-    if (groupId === 'volume') {
-      return raw.map((v) => (v === 'Autre' ? (customVolumeMl.trim() ? `${customVolumeMl.trim()} ml` : '') : v)).filter(Boolean);
-    }
-    return raw;
-  };
+  const effectiveValues = (groupId: string): string[] => resolveEffectiveValues(selections, groupId, customVolumeMl);
 
-  // Generate combinations from selected variant-dimension options
+  // The real stock dimensions (one per product_variants.attributes key):
+  // colours and prints merge into one as soon as both are selected.
+  const stockDimensions = useMemo(
+    () => buildStockDimensions(optionGroups, (groupId) => resolveEffectiveValues(selections, groupId, customVolumeMl), crossColorPrint),
+    [optionGroups, selections, customVolumeMl, crossColorPrint],
+  );
+  const colorPrintMerged = stockDimensions.some((d) => d.id === COLOR_PRINT_DIMENSION_ID);
+  const showsLegacyColorPrintNotice = crossColorPrint
+    && effectiveValues('couleur').length > 0 && effectiveValues('motif').length > 0;
+
+  // Generate combinations from the stock dimensions (cartesian product)
   const combinations: Combo[] = useMemo(() => {
-    const selectedMulti = multiChoiceGroups
-      .map((g) => ({ group: g, values: effectiveValues(g.id) }))
-      .filter((s) => s.values.length > 0);
-
-    if (selectedMulti.length === 0) return [];
-
-    // Build cartesian product
-    let result: string[][] = selectedMulti[0].values.map((v) => [v]);
-    for (let i = 1; i < selectedMulti.length; i++) {
-      const next: string[][] = [];
-      for (const existing of result) {
-        for (const val of selectedMulti[i].values) {
-          next.push([...existing, val]);
-        }
-      }
-      result = next;
-    }
-
-    return result.map((parts) => ({
+    return cartesianProduct(stockDimensions).map((parts) => ({
       key: parts.join('|'),
       label: parts.join(' / '),
       parts,
       stock: comboData[parts.join('|')]?.stock ?? 0,
       price: comboData[parts.join('|')]?.price ?? (parseInt(price) || 0),
     }));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selections, multiChoiceGroups, comboData, price, customVolumeMl]);
+  }, [stockDimensions, comboData, price]);
 
   const totalStock = useMemo(() => {
     if (combinations.length > 0) {
@@ -615,10 +721,27 @@ export default function SellerProductForm({ productId }: { productId?: string })
     setImageActionError('');
     if (videoCount >= MAX_PRODUCT_VIDEOS) { setImageActionError('Une seule vidéo par produit est autorisée.'); return; }
     if (totalMediaCount >= MAX_PRODUCT_MEDIA_ITEMS) { setImageActionError(`Limite de ${MAX_PRODUCT_MEDIA_ITEMS} photos/vidéos par produit atteinte.`); return; }
-    if (!ACCEPTED_VIDEO_MIME_TYPES.includes(file.type)) { setImageActionError('Format vidéo non supporté (MP4, WebM ou MOV uniquement).'); return; }
-    if (file.size > MAX_VIDEO_SIZE_MB * 1024 * 1024) { setImageActionError(`La vidéo dépasse la taille maximale de ${MAX_VIDEO_SIZE_MB} Mo.`); return; }
-    setImages((prev) => [...prev, { key: `local-video-${Date.now()}`, kind: 'video', previewUrl: URL.createObjectURL(file), file }]);
+    // iPhone/iPad can hand over 'video/x-m4v' or an empty file.type: the
+    // format is then recognised from the extension (.mp4, .m4v, .mov, .webm).
+    const contentType = resolveVideoContentType(file);
+    if (!contentType) { setImageActionError('Format vidéo non supporté (MP4, MOV, M4V ou WebM uniquement).'); return; }
+    if (file.size > MAX_VIDEO_SIZE_MB * 1024 * 1024) {
+      const sizeMb = Math.ceil(file.size / (1024 * 1024));
+      setImageActionError(`La vidéo fait ${sizeMb} Mo : la taille maximale est de ${MAX_VIDEO_SIZE_MB} Mo. Raccourcissez-la (Photos > Modifier) ou filmez en 1080p plutôt qu'en 4K.`);
+      return;
+    }
+    // Same bytes, but carrying its real type — that's what Supabase Storage
+    // stores (and later serves) as the video's Content-Type.
+    const typedFile = withContentType(file, contentType);
+    setImages((prev) => [...prev, { key: `local-video-${Date.now()}`, kind: 'video', previewUrl: URL.createObjectURL(typedFile), file: typedFile }]);
   };
+
+  // The main photo (products' is_primary row) is the first PHOTO in the
+  // gallery, never a video: the seller list, seller orders and admin views
+  // render the primary row in an <img>, so a video placed first must not
+  // take that role.
+  const firstImageKeyOf = (list: MediaItem[]): string | undefined => list.find((i) => i.kind === 'image')?.key;
+  const firstImageKey = firstImageKeyOf(images);
 
   // Persists sort_order + is_primary for every already-persisted (existing)
   // row in one pass, matching the array order shown in the form — called
@@ -626,8 +749,9 @@ export default function SellerProductForm({ productId }: { productId?: string })
   // from what the seller sees.
   const persistExistingOrder = (list: MediaItem[]) => {
     if (!existingProductId) return;
+    const primaryKey = firstImageKeyOf(list);
     const rows = list
-      .map((img, i) => (img.existing ? { id: img.existing.id, sortOrder: i, isPrimary: i === 0 } : null))
+      .map((img, i) => (img.existing ? { id: img.existing.id, sortOrder: i, isPrimary: img.key === primaryKey } : null))
       .filter((r): r is { id: string; sortOrder: number; isPrimary: boolean } => Boolean(r));
     if (rows.length > 0) {
       reorderProductMedia(rows).then((r) => { if (r.error) setImageActionError(r.error); });
@@ -881,6 +1005,7 @@ export default function SellerProductForm({ productId }: { productId?: string })
     setComboData({});
     setShowAllColors({});
     setCustomVolumeMl('');
+    setCrossColorPrint(false);
   };
 
   const handleSubCategoryChange = (newSubId: string) => {
@@ -888,6 +1013,7 @@ export default function SellerProductForm({ productId }: { productId?: string })
     setSelections({});
     setComboData({});
     setCustomVolumeMl('');
+    setCrossColorPrint(false);
   };
 
   // Returns the error map directly (not just a boolean) so the caller can
@@ -923,12 +1049,11 @@ export default function SellerProductForm({ productId }: { productId?: string })
     return e;
   };
 
-  // Only the true variant dimensions (multiChoiceGroups) become
-  // product_variants rows; everything else is descriptive-only. Recomputed
-  // here (rather than reused from the `combinations` memo) so each combo's
-  // parts can be paired back up with the group that produced them — needed
-  // to build `attributes` keyed by the group's visible label, e.g.
-  // {"Taille":"M","Couleur":"Noir"}.
+  // Only the true variant dimensions (stockDimensions) become
+  // product_variants rows; everything else is descriptive-only. Each combo's
+  // parts are paired back up with the dimension that produced them to build
+  // `attributes`, e.g. {"Taille":"M","Couleur":"Noir"} or
+  // {"Taille":"M","Couleur / Imprimé":"Léopard"}.
   const buildVariantRows = (): { attributes: Record<string, string>; price: number; stock: number }[] => {
     const basePrice = parseInt(price) || 0;
     // Tissus never has per-combination stock typed in by the seller (the
@@ -942,29 +1067,19 @@ export default function SellerProductForm({ productId }: { productId?: string })
     // statuses are a displayed badge, never a real depletion counter, per
     // the client's own explicit instruction.
     const fabricStock = saleMode === 'piece' && availabilityStatus === 'unique' ? 1 : 99999;
-    const selectedMulti = multiChoiceGroups
-      .map((g) => ({ group: g, values: effectiveValues(g.id) }))
-      .filter((s) => s.values.length > 0);
 
     // No variant dimension selected: still one product_variants row, with
     // empty attributes and the base price/stock — never left without a row.
-    if (selectedMulti.length === 0) {
+    if (stockDimensions.length === 0) {
       return [{ attributes: {}, price: basePrice, stock: isTissus ? fabricStock : Math.max(0, parseInt(simpleStock) || 0) }];
     }
 
-    let combos: string[][] = selectedMulti[0].values.map((v) => [v]);
-    for (let i = 1; i < selectedMulti.length; i++) {
-      const next: string[][] = [];
-      for (const c of combos) {
-        for (const val of selectedMulti[i].values) next.push([...c, val]);
-      }
-      combos = next;
-    }
-
-    return combos.map((parts) => {
+    // Keyed by each dimension's label — the group's own label, or
+    // "Couleur / Imprimé" for the merged colour/print dimension.
+    return cartesianProduct(stockDimensions).map((parts) => {
       const key = parts.join('|');
       const attributes: Record<string, string> = {};
-      selectedMulti.forEach((s, i) => { attributes[s.group.label] = parts[i]; });
+      stockDimensions.forEach((d, i) => { attributes[d.label] = parts[i]; });
       return {
         attributes,
         // "Le prix change selon les options" OFF → every row gets base_price,
@@ -1027,7 +1142,7 @@ export default function SellerProductForm({ productId }: { productId?: string })
       // already-persisted photos, so sort_order/is_primary must reflect its
       // real index, never an assumed "appended at the end" range.
       const newMediaWithPosition = images
-        .map((img, i) => (img.file ? { media: toNewMedia(img), sortOrder: i, isPrimary: i === 0 } : null))
+        .map((img, i) => (img.file ? { media: toNewMedia(img), sortOrder: i, isPrimary: img.key === firstImageKey } : null))
         .filter((x): x is { media: NewProductMedia; sortOrder: number; isPrimary: boolean } => Boolean(x));
 
       const promoPayload = {
@@ -1191,9 +1306,7 @@ export default function SellerProductForm({ productId }: { productId?: string })
   const renderStockMatrix = () => {
     if (combinations.length === 0) return null;
 
-    const activeGroups = multiChoiceGroups.filter((g) => effectiveValues(g.id).length > 0);
-
-    if (activeGroups.length === 1) {
+    if (stockDimensions.length === 1) {
       return (
         <div className="space-y-2.5">
           {combinations.map((combo) => (
@@ -1229,19 +1342,21 @@ export default function SellerProductForm({ productId }: { productId?: string })
       );
     }
 
-    // 2+ dimensions: group rows by one outer dimension (prefer color).
-    const colorGroup = activeGroups.find((g) => COLOR_GROUP_IDS.has(g.id));
-    const outerGroup = colorGroup ?? activeGroups[0];
-    const outerValues = effectiveValues(outerGroup.id);
+    // 2+ dimensions: group rows by one outer dimension (prefer color — the
+    // merged "Couleur / Imprimé" one counts as color: a colour gets its
+    // swatch, a print just its name).
+    const colorIndex = stockDimensions.findIndex((d) => d.isColor);
+    const outerIndex = colorIndex >= 0 ? colorIndex : 0;
+    const outerDimension = stockDimensions[outerIndex];
 
     return (
       <div className="space-y-4">
-        {outerValues.map((outerVal) => {
-          const rowsForOuter = combinations.filter((c) => c.parts.includes(outerVal));
+        {outerDimension.values.map((outerVal) => {
+          const rowsForOuter = combinations.filter((c) => c.parts[outerIndex] === outerVal);
           return (
             <div key={outerVal}>
               <p className="text-xs font-semibold text-ink mb-2 flex items-center gap-2">
-                {COLOR_GROUP_IDS.has(outerGroup.id) && (() => {
+                {outerDimension.isColor && (() => {
                   const c = getColor(outerVal);
                   return c ? <span className="h-3.5 w-3.5 rounded-full border border-line" style={c.multi ? { background: 'conic-gradient(from 0deg, #e0507a, #f4d03f, #2b6cb0, #1c8a5b, #e0507a)' } : { backgroundColor: c.hex }} /> : null;
                 })()}
@@ -1249,7 +1364,7 @@ export default function SellerProductForm({ productId }: { productId?: string })
               </p>
               <div className="space-y-2 ml-5">
                 {rowsForOuter.map((combo) => {
-                  const innerLabel = combo.parts.filter((p) => p !== outerVal).join(' / ');
+                  const innerLabel = combo.parts.filter((_, i) => i !== outerIndex).join(' / ');
                   return (
                     <div key={combo.key} className="flex items-center gap-3">
                       <span className="flex-1 text-sm text-ink/70 min-w-0">{innerLabel}</span>
@@ -1487,14 +1602,14 @@ export default function SellerProductForm({ productId }: { productId?: string })
                 <div className="flex items-center gap-3">
                   <div className="relative h-16 w-16 flex-shrink-0 overflow-hidden rounded-lg bg-cream">
                     {img.kind === 'video' ? (
-                      <video src={img.previewUrl} className="h-full w-full object-cover" muted playsInline />
+                      <video src={withFirstFrame(img.previewUrl)} className="h-full w-full object-cover" muted playsInline preload="metadata" />
                     ) : (
                       <img src={img.previewUrl} alt={`Photo ${i + 1}`} className="h-full w-full object-cover" />
                     )}
                   </div>
                   <div className="min-w-0 flex-1">
                     <p className="text-sm font-medium text-ink truncate">{img.kind === 'video' ? 'Vidéo' : `Photo ${i + 1}`}</p>
-                    {i === 0 && img.kind === 'image' && (
+                    {img.key === firstImageKey && (
                       <p className="mt-0.5 flex items-center gap-1 text-xs font-medium text-burgundy"><Star size={11} fill="currentColor" /> Photo principale</p>
                     )}
                   </div>
@@ -1519,7 +1634,7 @@ export default function SellerProductForm({ productId }: { productId?: string })
                       <ArrowDown size={16} /> Après
                     </button>
                   )}
-                  {i !== 0 && img.kind === 'image' && (
+                  {img.kind === 'image' && img.key !== firstImageKey && (
                     <button
                       type="button"
                       onClick={() => setPrimaryImage(img.key)}
@@ -1576,8 +1691,8 @@ export default function SellerProductForm({ productId }: { productId?: string })
           <label className={`flex flex-col items-center justify-center rounded-lg border-2 border-dashed border-line py-6 transition-colors ${videoCount >= MAX_PRODUCT_VIDEOS ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer hover:border-burgundy/30'}`}>
             <Video size={22} className="text-ink/30" />
             <span className="mt-2 text-sm font-medium text-ink/60">Ajouter une vidéo</span>
-            <span className="mt-0.5 text-xs text-ink/35">MP4/WebM/MOV, {MAX_VIDEO_SIZE_MB} Mo max</span>
-            <input type="file" accept="video/mp4,video/webm,video/quicktime" disabled={videoCount >= MAX_PRODUCT_VIDEOS} className="hidden" onChange={(e) => { handleAddVideo(e.target.files); e.target.value = ''; }} />
+            <span className="mt-0.5 text-xs text-ink/35">MP4/MOV/WebM, {MAX_VIDEO_SIZE_MB} Mo max</span>
+            <input type="file" accept={VIDEO_INPUT_ACCEPT} disabled={videoCount >= MAX_PRODUCT_VIDEOS} className="hidden" onChange={(e) => { handleAddVideo(e.target.files); e.target.value = ''; }} />
           </label>
         </div>
 
@@ -1649,6 +1764,29 @@ export default function SellerProductForm({ productId }: { productId?: string })
               </div>
             );
           })}
+
+          {colorPrintMerged && (
+            <p className="rounded-lg bg-cream px-3 py-2.5 text-xs text-ink/60">
+              Chaque imprimé est une variante à part entière, comme une couleur : il a sa propre ligne de stock et n'est jamais combiné avec une couleur (ex. Noir, Rouge et Léopard en S et M = 6 lignes de stock).
+            </p>
+          )}
+          {showsLegacyColorPrintNotice && (
+            <div className="space-y-2 rounded-lg bg-cream px-3 py-2.5">
+              <p className="text-xs text-ink/70">
+                Ce produit a été enregistré avec l'ancien format : chaque couleur est combinée avec chaque imprimé (ex. Noir × Léopard). Il est conservé tel quel, avec ses stocks actuels.
+              </p>
+              <button
+                type="button"
+                onClick={() => setCrossColorPrint(false)}
+                className="inline-flex h-11 items-center rounded-lg border border-line bg-white px-3 text-xs font-medium text-burgundy hover:border-burgundy/40 transition-colors"
+              >
+                Séparer couleurs et imprimés
+              </button>
+              <p className="text-[11px] text-ink/45">
+                Chaque imprimé deviendra une variante à part, comme une couleur. Les quantités de ces nouvelles lignes seront à saisir dans « En stock » avant d'enregistrer.
+              </p>
+            </div>
+          )}
         </div>
       )}
 

@@ -4,7 +4,6 @@ import {
 } from 'lucide-react';
 import { useApp } from '@/store/AppContext';
 import PricingCards from '@/components/PricingCards';
-import PlusHighlights from '@/components/PlusHighlights';
 import PlanComparison from '@/components/PlanComparison';
 import type { InfoBlock, InfoCard, InfoIcon } from '@/shared/infoPages';
 import InfoInline, { InfoAnchor } from './InfoInline';
@@ -164,9 +163,6 @@ export default function InfoBlockView({ block }: { block: InfoBlock }) {
       const goToSellerSignup = () => navigate('/pro');
       return <PricingCards onContinueFree={goToSellerSignup} onStartTrial={goToSellerSignup} onSubscribe={goToSellerSignup} />;
     }
-
-    case 'plusHighlights':
-      return <PlusHighlights tone="light" />;
 
     case 'planComparison':
       return <PlanComparison />;

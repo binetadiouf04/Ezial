@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import { useApp } from '@/store/AppContext';
 import { categoryMap, type CategoryId } from '@/data/categories';
-import type { Product } from '@/data/products';
+import { variantNameMatchesFilterGroup, type Product } from '@/data/products';
 import { getFilters, type FilterGroup } from '@/data/filters';
 import { fabricSaleModeLabels } from '@/data/categories';
 import ProductGrid from '@/components/ProductGrid';
@@ -80,7 +80,9 @@ export default function CategoryPage({ categoryId, subId }: { categoryId: string
       } else {
         const gnorm = norm(group);
         result = result.filter((p) => {
-          const variantMatch = p.variants.some((v) => norm(v.name) === gnorm && v.values.some((val) => values.includes(val)));
+          // variantNameMatchesFilterGroup also matches "Couleur / Imprimé"
+          // (colours and prints as one dimension) and "Motif / Imprimé".
+          const variantMatch = p.variants.some((v) => (norm(v.name) === gnorm || variantNameMatchesFilterGroup(v.name, group)) && v.values.some((val) => values.includes(val)));
           const detailMatch = p.details.some((d) => {
             const dnorm = norm(d.label);
             return (dnorm === gnorm || dnorm === gnorm.replace(/produit$/, '') || dnorm === gnorm.replace(/decheveu$/, '')) && values.some((val) => d.value.toLowerCase().includes(val.toLowerCase()));

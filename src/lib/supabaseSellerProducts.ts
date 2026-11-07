@@ -32,7 +32,44 @@ export const PRODUCT_MEDIA_ASPECT_RATIO = 4 / 5;
 export const MAX_PRODUCT_MEDIA_ITEMS = 10;
 export const MAX_PRODUCT_VIDEOS = 1;
 export const MAX_VIDEO_SIZE_MB = 50;
-export const ACCEPTED_VIDEO_MIME_TYPES = ['video/mp4', 'video/webm', 'video/quicktime'];
+export const ACCEPTED_VIDEO_MIME_TYPES = ['video/mp4', 'video/x-m4v', 'video/quicktime', 'video/webm'];
+// iPhone/iPad (and some Android pickers) hand over videos typed
+// 'video/x-m4v', 'application/octet-stream' or with an empty file.type:
+// the extension is then what tells the real format.
+export const ACCEPTED_VIDEO_EXTENSIONS = ['mp4', 'm4v', 'mov', 'webm'];
+
+const VIDEO_CONTENT_TYPE_BY_MIME: Record<string, string> = {
+  'video/mp4': 'video/mp4',
+  'video/x-m4v': 'video/mp4',
+  'video/quicktime': 'video/quicktime',
+  'video/webm': 'video/webm',
+};
+const VIDEO_CONTENT_TYPE_BY_EXTENSION: Record<string, string> = {
+  mp4: 'video/mp4',
+  m4v: 'video/mp4',
+  mov: 'video/quicktime',
+  webm: 'video/webm',
+};
+
+// The Content-Type a product video must be stored with in Supabase Storage
+// (it is served back with exactly this header — a video stored as
+// application/octet-stream is refused by Safari/iOS). null = not a
+// supported video format.
+export function resolveVideoContentType(file: { name: string; type: string }): string | null {
+  const byMime = VIDEO_CONTENT_TYPE_BY_MIME[file.type.toLowerCase()];
+  if (byMime) return byMime;
+  const extension = file.name.includes('.') ? (file.name.split('.').pop() ?? '').toLowerCase() : '';
+  return VIDEO_CONTENT_TYPE_BY_EXTENSION[extension] ?? null;
+}
+
+// supabase-js sends a File/Blob as multipart form data, where the stored
+// Content-Type comes from the Blob's own `type` (the `contentType` upload
+// option is ignored for a Blob body) — so the file itself must carry the
+// right type. Same bytes, same name, only the declared type changes.
+export function withContentType(file: File, contentType: string): File {
+  if (file.type === contentType) return file;
+  return new File([file], file.name, { type: contentType, lastModified: file.lastModified });
+}
 
 export type MediaType = 'image' | 'video';
 
@@ -173,7 +210,13 @@ async function uploadMedia(
 
   for (let i = 0; i < items.length; i++) {
     const item = items[i];
-    const upload = async (file: File, suffix: string) => {
+    const upload = async (rawFile: File, suffix: string) => {
+      // Videos: always stored with their real Content-Type (see
+      // resolveVideoContentType/withContentType) — an iPad video with an
+      // empty file.type would otherwise be stored, and served back, as
+      // application/octet-stream, which Safari refuses to play.
+      const videoContentType = item.mediaType === 'video' && suffix === '' ? resolveVideoContentType(rawFile) : null;
+      const file = videoContentType ? withContentType(rawFile, videoContentType) : rawFile;
       // A short random token makes every upload's path globally unique, even
       // when a seller replaces the photo at the same slot (index i) more
       // than once for the same product — without it, a delete-then-reupload
@@ -188,7 +231,10 @@ async function uploadMedia(
       // safe to cache as aggressively as the browser allows instead of the
       // Supabase Storage default (1 hour), which forced every repeat visit
       // to re-download every product image on the page.
-      const { error } = await supabase.storage.from(PRODUCT_IMAGES_BUCKET).upload(path, file, { cacheControl: '31536000' });
+      const { error } = await supabase.storage.from(PRODUCT_IMAGES_BUCKET).upload(path, file, {
+        cacheControl: '31536000',
+        ...(file.type ? { contentType: file.type } : {}),
+      });
       if (error) throw new Error(`L'envoi de "${file.name}" a échoué : ${error.message}.`);
       uploadedSoFar.push(path);
       return path;
@@ -342,10 +388,14 @@ export async function createProductInSupabase(
       }
       uploadedPaths = uploadResult.rows.flatMap((r) => [r.storagePath, r.originalStoragePath, r.brandingOverlay?.logoStoragePath, r.thumbnailStoragePath].filter((p): p is string => Boolean(p)));
 
+      // is_primary is the main PHOTO, never a video: several readers (seller
+      // product list, seller orders, admin) render the primary row in an
+      // <img>, so a video placed first in the gallery must not take it.
+      const primaryIndex = uploadResult.rows.findIndex((r) => r.mediaType === 'image');
       const imageRows = uploadResult.rows.map((r, i) => ({
         product_id: productId,
         storage_path: r.storagePath,
-        is_primary: i === 0,
+        is_primary: i === primaryIndex,
         sort_order: i,
         media_type: r.mediaType,
         original_storage_path: r.originalStoragePath ?? null,

@@ -9,6 +9,19 @@ import NotificationBell from './NotificationBell';
 import PremiumBadge from './PremiumBadge';
 import { productPath } from '@/lib/productUrl';
 
+// Computer category bar: starts with the four most-shopped entry points
+// (owner's order), Maquillage and Skincare replacing « Beauté »; the other
+// categories follow in their usual order.
+const desktopNavLinks: { label: string; route: string }[] = [
+  { label: 'Vêtements homme', route: '/categorie/vetements/homme' },
+  { label: 'Vêtements femme', route: '/categorie/vetements/femme' },
+  { label: 'Maquillage', route: '/categorie/beaute/maquillage' },
+  { label: 'Skincare', route: '/categorie/beaute/skincare' },
+  ...categories
+    .filter((c) => c.id !== 'vetements' && c.id !== 'beaute')
+    .map((c) => ({ label: c.label, route: `/categorie/${c.id}` })),
+];
+
 export default function Header() {
   const { navigate, cartCount, setCategoryDrawerOpen, catalogProducts, catalogShops, customerUser } = useApp();
   const [query, setQuery] = useState('');
@@ -84,7 +97,7 @@ export default function Header() {
       <div className="hidden lg:block border-t border-line bg-white">
         <div className="container-pro">
           <nav className="flex items-center gap-6 h-11 overflow-x-auto no-scrollbar">
-            {categories.map((c) => <button key={c.id} onClick={() => navigate(`/categorie/${c.id}`)} className="whitespace-nowrap text-sm font-medium text-ink/70 hover:text-burgundy transition-colors">{c.label}</button>)}
+            {desktopNavLinks.map((link) => <button key={link.route} onClick={() => navigate(link.route)} className="whitespace-nowrap text-sm font-medium text-ink/70 hover:text-burgundy transition-colors">{link.label}</button>)}
           </nav>
         </div>
       </div>

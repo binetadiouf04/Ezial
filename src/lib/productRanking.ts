@@ -77,6 +77,127 @@ export function diversifyBySubcategory(products: Product[], limit: number): Prod
   return result;
 }
 
+// ---------------------------------------------------------------------------
+// « Vous aimerez » — personalised from the visitor's own habits, in this
+// order of strength: what they bought, put in favorites or in the cart, then
+// what they recently looked at (this device only). Each signal raises the
+// products of the same subcategory, then category, then shop. A visitor
+// with no signal yet gets a random draw (as before). A small random part
+// keeps the selection changing from one visit to the next.
+// ---------------------------------------------------------------------------
+
+export interface ShoppingSignals {
+  purchasedIds: string[];
+  favoriteIds: string[];
+  cartIds: string[];
+  viewedIds: string[];
+}
+
+const SIGNAL_WEIGHTS = { purchased: 4, favorite: 3, cart: 3, viewed: 1 } as const;
+
+function shuffled<T>(items: T[]): T[] {
+  const result = [...items];
+  for (let i = result.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [result[i], result[j]] = [result[j], result[i]];
+  }
+  return result;
+}
+
+export function rankForYou(products: Product[], signals: ShoppingSignals, ctx: RankingContext): Product[] {
+  const byId = new Map(products.map((p) => [p.id, p]));
+  const subWeight = new Map<string, number>();
+  const catWeight = new Map<string, number>();
+  const shopWeight = new Map<string, number>();
+  const add = (map: Map<string, number>, key: string, w: number) => map.set(key, (map.get(key) ?? 0) + w);
+
+  const feed = (ids: string[], w: number) => {
+    for (const id of ids) {
+      const p = byId.get(id);
+      if (!p) continue;
+      add(subWeight, `${p.category}/${p.subcategory}`, w);
+      add(catWeight, p.category, w);
+      add(shopWeight, p.shopId, w);
+    }
+  };
+  feed(signals.purchasedIds, SIGNAL_WEIGHTS.purchased);
+  feed(signals.favoriteIds, SIGNAL_WEIGHTS.favorite);
+  feed(signals.cartIds, SIGNAL_WEIGHTS.cart);
+  feed(signals.viewedIds, SIGNAL_WEIGHTS.viewed);
+
+  const hasSignal = subWeight.size > 0;
+  // Already bought or already in the cart: shown last, the point is to
+  // suggest something new.
+  const alreadyTaken = new Set([...signals.purchasedIds, ...signals.cartIds]);
+
+  return shuffled(products)
+    .map((product, index) => {
+      const interest = hasSignal
+        ? (subWeight.get(`${product.category}/${product.subcategory}`) ?? 0) * 1
+          + (catWeight.get(product.category) ?? 0) * 0.4
+          + (shopWeight.get(product.shopId) ?? 0) * 0.25
+        : 0;
+      const official = ctx.isOfficialShop(product.shopId) ? 0.5 : 0;
+      const taken = alreadyTaken.has(product.id) ? -1000 : 0;
+      // Random part: enough to vary equal or close interests, never enough
+      // to push an unrelated product above a strongly matching one.
+      return { product, index, score: interest + official + taken + Math.random() * 0.75 };
+    })
+    .sort((a, b) => b.score - a.score || a.index - b.index)
+    .map((entry) => entry.product);
+}
+
+// ---------------------------------------------------------------------------
+// « Tendances » — what people like most (product_popularity(): favorites and
+// purchases), with priority to Ezial Plus shops (the official Ezial shop is
+// Ezial Plus by default): Ezial Plus products come first, each group ordered
+// by popularity, then by recency for products nobody has liked or bought yet.
+// ---------------------------------------------------------------------------
+
+export function rankForTrendingByPopularity(
+  products: Product[],
+  popularity: Map<string, number>,
+  isPlusShop: (shopId: string) => boolean,
+): Product[] {
+  const time = (p: Product) => (p.createdAt ? new Date(p.createdAt).getTime() : 0);
+  return [...products].sort((a, b) => {
+    const plusA = isPlusShop(a.shopId) ? 1 : 0;
+    const plusB = isPlusShop(b.shopId) ? 1 : 0;
+    if (plusA !== plusB) return plusB - plusA;
+    const rankA = popularity.get(a.id);
+    const rankB = popularity.get(b.id);
+    if (rankA !== undefined && rankB !== undefined) return rankA - rankB;
+    if (rankA !== undefined) return -1;
+    if (rankB !== undefined) return 1;
+    return time(b) - time(a);
+  });
+}
+
+// Homepage preview for an already meaningful order (« Vous aimerez »,
+// « Tendances »): keeps that order and only caps each subcategory, so the
+// row stays varied without reshuffling what was ranked first.
+export function capPerSubcategory(products: Product[], limit: number, maxPerGroup: number): Product[] {
+  const counts = new Map<string, number>();
+  const result: Product[] = [];
+  for (const p of products) {
+    if (result.length >= limit) break;
+    const key = `${p.category}/${p.subcategory}`;
+    const n = counts.get(key) ?? 0;
+    if (n >= maxPerGroup) continue;
+    counts.set(key, n + 1);
+    result.push(p);
+  }
+  // Small catalog: fill the remaining slots in order rather than show fewer cards.
+  if (result.length < limit) {
+    const taken = new Set(result.map((p) => p.id));
+    for (const p of products) {
+      if (result.length >= limit) break;
+      if (!taken.has(p.id)) result.push(p);
+    }
+  }
+  return result;
+}
+
 export function rankForTrending(products: Product[], ctx: RankingContext): Product[] {
   const byRecency = [...products].sort((a, b) => {
     if (a.createdAt && b.createdAt) return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();

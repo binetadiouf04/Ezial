@@ -1,17 +1,17 @@
-import { Suspense, lazy, useEffect, useMemo, useState } from 'react';
+import { Suspense, lazy, useEffect, useMemo, useRef, useState } from 'react';
 import { useApp } from '@/store/AppContext';
 import { searchProducts, type Product } from '@/data/products';
 import { getShop, type Shop } from '@/data/shops';
 import { homeCircleTiles, type HomeCircleTile } from '@/data/categories';
-import { DELIVERY } from '@/shared/siteInfo';
 import ProductCard from '@/components/ProductCard';
 import ShopCard from '@/components/ShopCard';
 import HeroCarousel, { type HeroSlide } from '@/components/HeroCarousel';
 import DiscoverMarquee from '@/components/DiscoverMarquee';
-import EditorialSelection from '@/components/EditorialSelection';
-import { rankProducts, rankForTrending, diversifyBySubcategory } from '@/lib/productRanking';
+import { rankProducts, rankForYou, rankForTrendingByPopularity, diversifyBySubcategory, capPerSubcategory } from '@/lib/productRanking';
 import { fetchHeroSlides, fetchDiscoverTiles } from '@/lib/supabaseHomeContent';
-import { ChevronRight, Truck, Store, Smartphone } from 'lucide-react';
+import { useShoppingSignals } from '@/lib/useShoppingSignals';
+import { useProductPopularity } from '@/lib/supabasePopularity';
+import { ChevronRight } from 'lucide-react';
 
 
 // Loaded on demand: renders nothing until an article is published, so its
@@ -22,59 +22,41 @@ const BlogHighlights = lazy(() => import('@/components/BlogHighlights'));
 // extend RankingContext with buyer-behavior signals; this function itself
 // won't need to change.
 const isOfficialShop = (shopId: string): boolean => getShop(shopId)?.isOfficial === true;
-
-// Fisher–Yates — `.sort(() => 0.5 - Math.random())` is not a valid
-// comparator and (combined with being re-run on every render) is what let
-// "Inspirations" reshuffle into a different top-9 on any
-// unrelated context change (e.g. toggling a favorite elsewhere), making it
-// look like a card/image had broken. Shuffling is now done once per
-// `products` identity via useMemo below, not on every render.
-function shuffleOnce<T>(items: T[]): T[] {
-  const result = [...items];
-  for (let i = result.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [result[i], result[j]] = [result[j], result[i]];
-  }
-  return result;
-}
+// Ezial Plus shops (the official Ezial shop is Ezial Plus by default).
+const isPlusShop = (shopId: string): boolean => {
+  const shop = getShop(shopId);
+  return shop?.isPremium === true || shop?.isOfficial === true;
+};
 
 // Each automatic section shows at most this many products on the Home —
 // "Voir tout" links to the full, uncapped list on its own page.
-const HOME_SECTION_LIMIT = 12;
+const HOME_SECTION_LIMIT = 18;
 const HOME_SHOPS_LIMIT = 6;
 
 // "À découvrir" tiles (static or admin-managed) only point at real content:
 // a tile is shown when the page it opens has at least one product of the
 // loaded catalog — same matching as the destination page itself
 // (CategoryPage: category/subcategory; /promos: isPromo; SearchPage:
-// searchProducts' exact matches). A route of any other kind is kept as is.
-function tileHasProducts(tile: HomeCircleTile, products: Product[], shops: Shop[]): boolean {
+// searchProducts' exact matches) — unless it is marked alwaysShow (Tissus).
+// Returns null for a route of any other kind (kept as is).
+function productsForTile(tile: HomeCircleTile, products: Product[], shops: Shop[]): Product[] | null {
   const [path, query = ''] = tile.route.split('?');
   const clean = path.replace(/\/+$/, '');
   if (clean.startsWith('/categorie/')) {
     const [, , categoryId, subId] = clean.split('/');
-    if (!categoryId) return true;
-    return products.some((p) => p.category === categoryId && (!subId || p.subcategory === subId));
+    if (!categoryId) return null;
+    return products.filter((p) => p.category === categoryId && (!subId || p.subcategory === subId));
   }
-  if (clean === '/promos') return products.some((p) => p.isPromo);
+  if (clean === '/promos') return products.filter((p) => p.isPromo);
   if (clean === '/recherche') {
     const raw = query.startsWith('q=') ? query.slice(2) : '';
     let q = raw;
     try { q = decodeURIComponent(raw); } catch { /* keep the raw text */ }
-    if (!q.trim()) return true;
-    return searchProducts(q, products, shops).exact.length > 0;
+    if (!q.trim()) return null;
+    return searchProducts(q, products, shops).exact;
   }
-  return true;
+  return null;
 }
-
-// Reassurance band — each line checked against what Ezial actually offers
-// (delivery promise from src/shared/siteInfo.js, payment methods from
-// src/data/payments.ts).
-const reassurance = [
-  { id: 'livraison', icon: Truck, title: `Livraison en ${DELIVERY.delay}`, desc: `À ${DELIVERY.area}, directement chez vous` },
-  { id: 'boutiques', icon: Store, title: 'Boutiques locales', desc: 'Mode, beauté et lifestyle à Dakar' },
-  { id: 'paiement', icon: Smartphone, title: 'Paiement Wave et Orange Money', desc: 'Réglez vos achats depuis votre téléphone' },
-];
 
 // Homepage-only preview row for a product section: a capped selection with
 // a "Voir tout" link to the full list, horizontally swipeable on mobile
@@ -86,6 +68,7 @@ function HomeProductPreview({
   seeAllRoute,
   onNavigate,
   priority = false,
+  keepOrder = false,
 }: {
   eyebrow: string;
   title: string;
@@ -96,8 +79,13 @@ function HomeProductPreview({
    * fold) should skip lazy loading — marking every section priority would
    * just make all of them compete for bandwidth at once. */
   priority?: boolean;
+  /** The list is already ranked (personalised / popularity): keep its order,
+   * only capping each subcategory, instead of round-robin diversification. */
+  keepOrder?: boolean;
 }) {
-  const preview = diversifyBySubcategory(products, HOME_SECTION_LIMIT);
+  const preview = keepOrder
+    ? capPerSubcategory(products, HOME_SECTION_LIMIT, 4)
+    : diversifyBySubcategory(products, HOME_SECTION_LIMIT);
   return (
     <>
       <div className="mb-6 flex items-end justify-between">
@@ -191,20 +179,25 @@ export default function HomePage() {
     return () => { cancelled = true; };
   }, []);
 
-  // Phase 1: official-Ezial-shop products are boosted to the front of each
-  // section (rankProducts), never hidden — everything else just follows in
-  // its existing order. "Pour vous" is shuffled first so its randomness is
-  // preserved within each tier, then ranked so official products still
-  // surface even when they wouldn't have landed in a random slice.
   const rankingContext = { isOfficialShop };
-  // Tendances: real activity data (consultations/favoris/panier/achats)
-  // doesn't exist yet — rankForTrending falls back to real product recency
-  // (products.created_at) instead of simulating engagement numbers.
-  const trending = rankForTrending(products, rankingContext);
+  // « Tendances »: what people like most (favorites + purchases, see
+  // product_popularity), Ezial Plus shops first; recency for the rest.
+  const popularity = useProductPopularity();
+  const trending = useMemo(() => rankForTrendingByPopularity(products, popularity, isPlusShop), [products, popularity]);
   const promos = rankProducts(products.filter((p) => p.isPromo), rankingContext);
-  // Shuffled once per `products` identity, not on every render — see
-  // shuffleOnce's comment above.
-  const pourVous = useMemo(() => rankProducts(shuffleOnce(products), { isOfficialShop }), [products]);
+  // « Vous aimerez »: from the visitor's own habits (purchases, favorites,
+  // cart, recently viewed). Re-ranked when the catalog or the purchase
+  // history arrives — not on every favorite/cart toggle, so the section
+  // never reshuffles under the visitor's finger.
+  const signals = useShoppingSignals();
+  const signalsRef = useRef(signals);
+  signalsRef.current = signals;
+  const purchasedCount = signals.purchasedIds.length;
+  const vousAimerez = useMemo(
+    () => rankForYou(products, signalsRef.current, { isOfficialShop }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- see comment above
+    [products, purchasedCount],
+  );
   // "Les boutiques Ezial": only active shops (catalogShops is already
   // filtered to status 'active') with at least one product in the public
   // catalog — never an empty storefront.
@@ -214,10 +207,18 @@ export default function HomePage() {
   }, [displayShops, products]);
   // Filtered once the real catalog is known — never while it loads, so a
   // tile is never shown and then withdrawn.
-  const visibleTiles = useMemo(
-    () => (catalogLoading ? [] : discoverTiles.filter((tile) => tileHasProducts(tile, products, displayShops))),
-    [catalogLoading, discoverTiles, products, displayShops],
-  );
+  // A tile without its own image shows the photo of a real product of its
+  // destination (e.g. Huiles & brumes).
+  const visibleTiles = useMemo(() => {
+    if (catalogLoading) return [];
+    return discoverTiles.flatMap((tile) => {
+      const matches = productsForTile(tile, products, displayShops);
+      if (matches !== null && matches.length === 0 && !tile.alwaysShow) return [];
+      if (tile.image) return [tile];
+      const photo = matches?.map((p) => p.thumbnailUrl || p.images[0]).find(Boolean);
+      return photo ? [{ ...tile, image: photo }] : [];
+    });
+  }, [catalogLoading, discoverTiles, products, displayShops]);
 
   return (
     <div>
@@ -246,14 +247,9 @@ export default function HomePage() {
           <section className="py-16 text-center"><p className="text-sm text-ink/45">Chargement des produits…</p></section>
         ) : (
           <>
-            {/* Random draw of the catalog (shuffleOnce) — named for what it
-                is, not presented as personalized. */}
             <section>
-              <HomeProductPreview eyebrow="Le catalogue Ezial" title="Inspirations" products={pourVous} seeAllRoute="/pour-vous" onNavigate={navigate} priority />
+              <HomeProductPreview eyebrow="Selon vos envies" title="Vous aimerez" products={vousAimerez} seeAllRoute="/pour-vous" onNavigate={navigate} priority keepOrder />
             </section>
-
-            {/* Renders nothing unless at least one pick qualifies. */}
-            <EditorialSelection />
 
             {promos.length > 0 && (
               <section className="rounded-2xl bg-burgundy/5 p-6 sm:p-10">
@@ -262,7 +258,7 @@ export default function HomePage() {
             )}
 
             <section>
-              <HomeProductPreview eyebrow="Nouveaux sur Ezial" title="Nouveautés" products={trending} seeAllRoute="/tendances" onNavigate={navigate} />
+              <HomeProductPreview eyebrow="Les plus aimés" title="Tendances" products={trending} seeAllRoute="/tendances" onNavigate={navigate} keepOrder />
             </section>
           </>
         )}
@@ -280,28 +276,6 @@ export default function HomePage() {
         {/* Renders nothing while no article is published. */}
         <Suspense fallback={null}><BlogHighlights /></Suspense>
 
-        <section className="border-t border-line pt-12" aria-label="Nos engagements">
-          <div className="grid grid-cols-1 gap-6 sm:grid-cols-3 sm:gap-8">
-            {reassurance.map((f) => {
-              const Icon = f.icon;
-              const highlighted = f.id === 'livraison';
-              return (
-                <div
-                  key={f.id}
-                  className={`flex items-start gap-3.5 ${highlighted ? 'rounded-2xl bg-burgundy p-5 text-white shadow-lg shadow-burgundy/15 sm:-my-2' : 'px-1 sm:pt-3'}`}
-                >
-                  <span className={`flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full ${highlighted ? 'bg-white/15 text-champagne' : 'bg-cream text-burgundy'}`}>
-                    <Icon size={19} aria-hidden="true" />
-                  </span>
-                  <div className="min-w-0">
-                    <h3 className={`font-display font-semibold leading-tight ${highlighted ? 'text-2xl text-white' : 'text-lg text-ink'}`}>{f.title}</h3>
-                    <p className={`mt-1 text-sm ${highlighted ? 'text-white/80' : 'text-ink/55'}`}>{f.desc}</p>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </section>
       </div>
     </div>
   );

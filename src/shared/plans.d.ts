@@ -14,13 +14,18 @@ export const PLUS_ANNUAL_SAVINGS_FCFA: number;
 export const PLUS_ANNUAL_DISCOUNT_PERCENT: number;
 export function formatFcfa(amount: number): string;
 
+/** One line of a pricing card: `strong` is highlighted, `before` / `after` complete it. */
+export interface PlanCardItem { id: string; before?: string; strong: string; after?: string }
+export const FREE_CARD_ITEMS: PlanCardItem[];
+export const PLUS_CARD_ITEMS: PlanCardItem[];
+export function planCardItemLabel(item: PlanCardItem): string;
+
 export const FREE_BENEFITS: string[];
-export interface PlusHighlight { id: 'products' | 'commission' | 'ads' | 'editorial'; value: string; title: string; text: string; note?: string }
+export interface PlusHighlight { id: 'products' | 'commission' | 'ads'; value: string; title: string; text: string; note?: string }
 export const PLUS_HIGHLIGHTS: PlusHighlight[];
 export const PLUS_BENEFITS: string[];
 export interface PlanComparisonRow { label: string; free: string | boolean; plus: string | boolean }
 export const PLAN_COMPARISON: PlanComparisonRow[];
 export const PLUS_SAME_BENEFITS_NOTE: string;
 export const TRIAL_RULES: string;
-export const TRIAL_PRELAUNCH_NOTE: string;
 export const PLAN_END_RULES: string;

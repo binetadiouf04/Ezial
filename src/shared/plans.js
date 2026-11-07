@@ -41,20 +41,42 @@ const plusPriceLabel = `${formatFcfa(PLUS_BILLING.quarterly.priceFcfa)} / 3 mois
 // ---------- Sales texts (validated by the company) ----------
 // Affirmative wording only: no "possibilité de…" for an advantage.
 
-export const FREE_BENEFITS = [
-  `Jusqu’à ${FREE_PRODUCT_LIMIT} produits publiés`,
-  'Boutique personnalisée',
-  'Photos et descriptions de produits',
-  'Gestion des prix, tailles, couleurs et variantes',
-  'Gestion des stocks',
-  'Réception et suivi des commandes',
-  'Tableau de bord des ventes et revenus',
-  'Présence dans le catalogue, les recherches et les catégories',
-  `${FREE_AD_PRODUCTS_LABEL} produit mis en avant dans les publicités Ezial`,
-  'Aucun abonnement à payer',
+// Key facts of each plan, in display order, as listed on the pricing cards:
+// `strong` is highlighted, `before` / `after` complete the line around it.
+// The ids of the first Ezial Plus items match PLUS_HIGHLIGHTS below.
+export const FREE_CARD_ITEMS = [
+  { id: 'products', before: 'Jusqu’à ', strong: `${FREE_PRODUCT_LIMIT} produits`, after: ' publiés' },
+  { id: 'commission', strong: `${FREE_COMMISSION_PERCENT} % de commission`, after: ' par vente' },
+  { id: 'ads', strong: `${FREE_AD_PRODUCTS_LABEL} produit`, after: ' dans les publicités en ligne Ezial' },
+  { id: 'shop', strong: 'Boutique personnalisée', after: ' : photos, descriptions, prix, tailles, couleurs et variantes' },
+  { id: 'management', strong: 'Gestion des stocks et des commandes', after: ', tableau de bord des ventes et revenus' },
+  { id: 'catalog', strong: 'Présence', after: ' dans le catalogue, les recherches et les catégories' },
+  { id: 'noFee', strong: 'Aucun abonnement', after: ' à payer' },
 ];
 
-/** The four headline advantages of Ezial Plus, shown as highlighted cards. */
+export const PLUS_CARD_ITEMS = [
+  { id: 'free', strong: 'Tous les avantages de Free' },
+  { id: 'products', before: 'Jusqu’à ', strong: `${PREMIUM_PRODUCT_LIMIT} produits`, after: ' publiés' },
+  { id: 'commission', strong: `${PREMIUM_COMMISSION_PERCENT} % de commission`, after: ` par vente, au lieu de ${FREE_COMMISSION_PERCENT} %` },
+  { id: 'ads', strong: `${PLUS_AD_PRODUCTS_LABEL} produits`, after: ' dans les publicités en ligne Ezial' },
+  { id: 'trending', before: 'Priorité dans la section ', strong: '« Tendances »', after: ' de l’accueil' },
+  { id: 'hero', before: 'Mise en avant dans le ', strong: 'carrousel de l’accueil' },
+  { id: 'content', strong: 'Création de contenu', after: ' : la boutique fait partie des contenus créés par Ezial' },
+  { id: 'blog', strong: 'Blog Ezial', after: ' : la boutique peut être présentée dans nos articles' },
+  { id: 'badge', strong: 'Badge Ezial Plus', after: ' sur la boutique' },
+];
+
+/** One card item as plain text. */
+export function planCardItemLabel(item) {
+  return `${item.before ?? ''}${item.strong}${item.after ?? ''}`;
+}
+
+/** The Free card items as plain text (static SEO build). */
+export const FREE_BENEFITS = FREE_CARD_ITEMS.map(planCardItemLabel);
+
+/** The four headline advantages of Ezial Plus. No longer rendered by the
+ * React site; the static SEO build still lists their titles on the pricing
+ * page, followed by PLUS_BENEFITS. */
 export const PLUS_HIGHLIGHTS = [
   {
     id: 'products',
@@ -66,38 +88,33 @@ export const PLUS_HIGHLIGHTS = [
     id: 'commission',
     value: `${PREMIUM_COMMISSION_PERCENT} %`,
     title: `${PREMIUM_COMMISSION_PERCENT} % de commission`,
-    text: `Au lieu de ${FREE_COMMISSION_PERCENT} % avec Free, sur chaque vente, même pendant vos promotions. Sur 100 000 FCFA de ventes : 8 000 FCFA de commission au lieu de 10 000 FCFA.`,
+    text: `Au lieu de ${FREE_COMMISSION_PERCENT} % avec Free, sur chaque vente. Sur 100 000 FCFA de ventes : 8 000 FCFA de commission au lieu de 10 000 FCFA.`,
   },
   {
     id: 'ads',
     value: PLUS_AD_PRODUCTS_LABEL,
-    title: 'Plus de produits dans nos publicités',
-    text: `Ezial fait la promotion de toutes ses boutiques. Dans nos campagnes publicitaires, une boutique Ezial Plus présente ${PLUS_AD_PRODUCTS_LABEL} produits, contre ${FREE_AD_PRODUCTS_LABEL} pour une boutique Free.`,
+    title: 'Plus de produits dans nos publicités en ligne',
+    text: `Ezial fait la promotion de toutes ses boutiques. Dans nos campagnes publicitaires en ligne, une boutique Ezial Plus présente ${PLUS_AD_PRODUCTS_LABEL} produits, contre ${FREE_AD_PRODUCTS_LABEL} pour une boutique Free.`,
     note: 'Calendrier, format et budget des campagnes fixés par Ezial ; résultats non garantis.',
-  },
-  {
-    id: 'editorial',
-    value: '★',
-    title: 'Accès à la Sélection Ezial',
-    text: 'Les recommandations mises en avant par Ezial sur la marketplace sont réservées aux boutiques Ezial Plus.',
-    note: 'Les produits sont choisis par l’équipe Ezial selon leur pertinence et leur disponibilité.',
   },
 ];
 
-/** Secondary advantages, listed under the highlights. */
-export const PLUS_BENEFITS = [
-  'Tous les avantages de Free',
-  'Badge Ezial Plus sur la boutique',
-  `Essai gratuit de ${TRIAL_DAYS} jours`,
-];
+/** The Ezial Plus card items not covered by PLUS_HIGHLIGHTS, as plain text
+ * (static SEO build: highlight titles + these = the whole card). */
+export const PLUS_BENEFITS = PLUS_CARD_ITEMS
+  .filter((item) => !PLUS_HIGHLIGHTS.some((h) => h.id === item.id))
+  .map(planCardItemLabel);
 
 /** Free vs Ezial Plus. A boolean renders as ✓ / —. */
 export const PLAN_COMPARISON = [
   { label: 'Prix', free: 'Gratuit', plus: plusPriceLabel },
   { label: 'Produits publiés', free: String(FREE_PRODUCT_LIMIT), plus: String(PREMIUM_PRODUCT_LIMIT) },
   { label: 'Commission par vente', free: `${FREE_COMMISSION_PERCENT} %`, plus: `${PREMIUM_COMMISSION_PERCENT} %` },
-  { label: 'Produits dans les publicités Ezial', free: FREE_AD_PRODUCTS_LABEL, plus: PLUS_AD_PRODUCTS_LABEL },
-  { label: 'Sélection Ezial (recommandations)', free: false, plus: true },
+  { label: 'Produits dans les publicités en ligne Ezial', free: FREE_AD_PRODUCTS_LABEL, plus: PLUS_AD_PRODUCTS_LABEL },
+  { label: 'Priorité dans la section « Tendances » de l’accueil', free: false, plus: true },
+  { label: 'Mise en avant dans le carrousel de l’accueil', free: false, plus: true },
+  { label: 'Création de contenu par Ezial', free: false, plus: true },
+  { label: 'Présentation dans le blog Ezial', free: false, plus: true },
   { label: 'Badge Ezial Plus', free: false, plus: true },
   { label: 'Essai gratuit', free: false, plus: `${TRIAL_DAYS} jours` },
 ];
@@ -105,5 +122,4 @@ export const PLAN_COMPARISON = [
 export const PLUS_SAME_BENEFITS_NOTE = 'Les avantages sont identiques en formule trimestrielle ou annuelle.';
 
 export const TRIAL_RULES = `Une seule période d’essai de ${TRIAL_DAYS} jours par boutique, sans paiement ni numéro Wave ou Orange Money.`;
-export const TRIAL_PRELAUNCH_NOTE = `Essai activé avant le lancement officiel du 12 décembre 2026 : vos ${TRIAL_DAYS} jours d’essai commencent le 12 décembre. En attendant, vous pouvez déjà publier vos produits et profiter des avantages Ezial Plus.`;
 export const PLAN_END_RULES = `À la fin de l’essai sans abonnement, la boutique repasse au forfait Free. Après un abonnement payé, elle conserve ses données et ses produits ; jusqu’au renouvellement, elle est soumise aux limites de Free (${FREE_PRODUCT_LIMIT} produits publiés, commission de ${FREE_COMMISSION_PERCENT} %).`;

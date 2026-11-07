@@ -90,7 +90,7 @@ export default function SellerFinances() {
       <FinanceSummary
         rows={[
           { label: 'Ventes brutes', value: grossTotal, hint: `${transactions.length} transaction${transactions.length > 1 ? 's' : ''}` },
-          { label: 'Commission Ezial', value: -commissionTotal, hint: `${commissionRate ?? FREE_COMMISSION_PERCENT} % (votre forfait actuel, promotions comprises) — déduite automatiquement` },
+          { label: 'Commission Ezial', value: -commissionTotal, hint: `${commissionRate ?? FREE_COMMISSION_PERCENT} % (votre forfait actuel) — déduite automatiquement` },
           { label: 'Montant net', value: netTotal, accent: true },
         ]}
       />

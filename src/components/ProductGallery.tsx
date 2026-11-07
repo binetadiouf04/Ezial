@@ -11,6 +11,14 @@ export interface GalleryMediaItem {
   thumbnailUrl?: string;
 }
 
+// iOS/iPadOS Safari never fetches a video's first frame on its own, even
+// with preload="metadata": the player stays an empty box until the buyer
+// taps play. A media fragment start time (#t=0.1) makes Safari decode and
+// show that frame as the poster; other browsers simply ignore it.
+function withFirstFrame(url: string): string {
+  return url.includes('#') ? url : `${url}#t=0.1`;
+}
+
 // Responsive at every width, not just "mobile vs desktop": a fixed
 // aspect-ratio (kept identical across breakpoints for visual consistency)
 // combined with a max-height cap means the box never grows into a huge
@@ -54,7 +62,7 @@ export default function ProductGallery({ media, alt }: { media: GalleryMediaItem
         {current.type === 'video' ? (
           <video
             key={active}
-            src={current.url}
+            src={withFirstFrame(current.url)}
             className="h-full w-full object-cover fade-in"
             controls
             muted

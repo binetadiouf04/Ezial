@@ -13,15 +13,22 @@ import {
   type SellerSubscriptionInfo,
   type SubscriptionPaymentRow,
 } from '@/lib/supabaseSellerSubscription';
-import {
-  BILLING_PERIOD_LABEL, FREE_COMMISSION_PERCENT, PREMIUM_COMMISSION_PERCENT, PREMIUM_PRODUCT_LIMIT, PLAN_END_RULES, TRIAL_DAYS, formatFcfa,
-} from '@/data/subscriptionPlans';
-import { Crown, Package, Calendar, Percent, Hourglass, Wallet, Repeat, Sparkles, Info } from 'lucide-react';
+import { BILLING_PERIOD_LABEL, PLUS_PLAN_NAME, formatFcfa } from '@/data/subscriptionPlans';
+import { Crown } from 'lucide-react';
 
-// "12 décembre 2026" — the long form, for the sentences explaining a trial
-// that starts on launch day.
-function formatLongDate(iso: string): string {
-  return new Date(iso).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Africa/Dakar' });
+// "Mon abonnement". A Free shop sees the Free / Ezial Plus cards to
+// subscribe. A shop that is (or was) on Ezial Plus sees only its current
+// status — formule, échéance — and the actions that apply to it; the cards
+// are not shown again. The official Ezial shop is always Ezial Plus, with
+// no action at all.
+
+function Fact({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-lg bg-cream px-3 py-2.5">
+      <p className="text-[11px] font-medium text-ink/50">{label}</p>
+      <p className="mt-0.5 text-sm font-semibold text-ink">{value}</p>
+    </div>
+  );
 }
 
 export default function SellerSubscription() {
@@ -39,7 +46,7 @@ export default function SellerSubscription() {
     let cancelled = false;
     setIsLoading(true);
     Promise.all([
-      fetchSellerSubscription(sellerSupabaseShopId),
+      fetchSellerSubscription(sellerSupabaseShopId, { isOfficial: sellerShopIsOfficial }),
       fetchActiveProductCount(sellerSupabaseShopId),
       fetchSubscriptionPayments(sellerSupabaseShopId),
     ]).then(([sub, count, pays]) => {
@@ -50,18 +57,7 @@ export default function SellerSubscription() {
       setIsLoading(false);
     });
     return () => { cancelled = true; };
-  }, [sellerSupabaseShopId]);
-
-  const hasPendingPayment = payments.some((p) => p.status === 'pending_review');
-
-  if (sellerShopIsOfficial) {
-    return (
-      <div className="card p-10 text-center">
-        <Crown size={36} className="mx-auto text-ink/20" />
-        <p className="mt-3 text-sm text-ink/55">Les boutiques officielles Ezial ne sont pas soumises aux abonnements.</p>
-      </div>
-    );
-  }
+  }, [sellerSupabaseShopId, sellerShopIsOfficial]);
 
   if (!sellerSupabaseShopId) {
     return (
@@ -77,22 +73,45 @@ export default function SellerSubscription() {
   }
 
   const summary = summarizeCurrentPlan(info, payments);
-  const startedAt = info.isTrialActive ? info.trialStart : info.proStartedAt;
-  // Trial activated before the official launch: its 30 days start on
-  // launch day, while the Ezial Plus advantages are already active.
-  const trialStartsLater = info.trialStartsLater && !!info.trialStart;
+  const isOfficial = info.isOfficial;
+  const isFree = !isOfficial && !info.isProActive && !info.isPremiumExpired;
+  const isPaidActive = !isOfficial && info.isProActive && !info.isTrialActive;
+  const hasPendingPayment = !isOfficial && payments.some((p) => p.status === 'pending_review');
+  // A renewal or a trial → paid subscription starts on the seller's last
+  // paid billing period; the payment page lets them switch it.
+  const subscribeRoute = subscriptionPaymentRoute(summary.billingPeriod ?? 'quarterly');
+
+  const facts: { label: string; value: string }[] = [];
+  if (!isOfficial) {
+    if (info.isProActive && info.proUntil) {
+      const days = info.isTrialActive ? info.trialDaysRemaining : null;
+      facts.push({
+        label: info.isTrialActive ? 'Fin de l’essai' : 'Échéance',
+        value: `${formatDate(info.proUntil)}${days !== null ? ` · ${days} jour${days > 1 ? 's' : ''} restant${days > 1 ? 's' : ''}` : ''}`,
+      });
+    } else if (info.isPremiumExpired && info.proUntil) {
+      facts.push({ label: 'Expiré le', value: formatDate(info.proUntil) });
+    } else if (isFree) {
+      facts.push({ label: 'Échéance', value: 'Sans limite de durée' });
+    }
+    if (isPaidActive && (summary.amountLabel || summary.periodLabel)) {
+      facts.push({ label: 'Formule', value: [summary.periodLabel, summary.amountLabel].filter(Boolean).join(' · ') });
+    }
+    facts.push({ label: 'Produits publiés', value: `${activeCount} / ${info.productLimit}` });
+    facts.push({ label: 'Commission', value: `${info.commissionPercent} %` });
+  }
 
   return (
     <div className="space-y-6">
       <div>
         <h1 className="font-display text-2xl font-semibold text-ink">Mon abonnement</h1>
-        <p className="mt-1 text-sm text-ink/55">Votre forfait Ezial et vos limites de produits</p>
+        <p className="mt-1 text-sm text-ink/55">Votre forfait Ezial</p>
       </div>
 
-      {/* Current plan summary */}
+      {/* Current plan, compact */}
       <div className="card p-5">
         <div className="flex items-center gap-2">
-          <Crown size={18} className={info.isProActive ? 'text-burgundy' : 'text-ink/30'} />
+          <Crown size={18} className={info.isProActive ? 'text-burgundy' : 'text-ink/30'} aria-hidden="true" />
           <p className="font-display text-lg font-semibold text-ink">{summary.name}</p>
         </div>
 
@@ -102,95 +121,35 @@ export default function SellerSubscription() {
           </p>
         )}
 
-        {trialStartsLater && (
-          <div className="mt-3 flex items-start gap-2.5 rounded-xl bg-burgundy px-4 py-3.5 text-white">
-            <Sparkles size={16} className="mt-0.5 flex-shrink-0 text-champagne" aria-hidden="true" />
-            <p className="text-sm leading-snug">
-              <span className="font-semibold">Votre essai démarre le {formatLongDate(info.trialStart!)} ; vos avantages Ezial Plus sont déjà actifs.</span>
-              <span className="mt-1 block text-xs text-white/75">
-                Vous publiez dès maintenant jusqu’à {PREMIUM_PRODUCT_LIMIT} produits, avec {PREMIUM_COMMISSION_PERCENT} % de commission. Vos {TRIAL_DAYS} jours d’essai se terminent le {formatLongDate(info.proUntil!)}.
-              </span>
-            </p>
+        {facts.length > 0 && (
+          <div className="mt-4 grid grid-cols-2 gap-2.5 sm:grid-cols-4">
+            {facts.map((f) => <Fact key={f.label} label={f.label} value={f.value} />)}
           </div>
         )}
 
-        {info.isPremiumExpired && (
-          <p className="mt-3 rounded-lg bg-burgundy/5 border border-burgundy/20 px-3 py-2 text-xs text-burgundy">
-            Votre abonnement Ezial Plus a expiré. Vos données et vos produits sont conservés ; renouvelez pour retrouver vos {PREMIUM_PRODUCT_LIMIT} produits publiés, la commission à {PREMIUM_COMMISSION_PERCENT} %, votre badge et l’accès à la Sélection Ezial. Cette boutique ne repasse pas au forfait Free.
-          </p>
+        {/* Only the actions that apply: trial → subscribe, paid or expired → renew. */}
+        {!isOfficial && !isFree && (
+          <div className="mt-5 flex flex-col gap-2.5 sm:flex-row">
+            <button onClick={() => navigate(subscribeRoute)} className="btn-primary w-full sm:w-auto">
+              {info.isTrialActive ? `S’abonner à ${PLUS_PLAN_NAME}` : `Renouveler ${PLUS_PLAN_NAME}`}
+            </button>
+          </div>
         )}
-
-        <div className="mt-4 grid grid-cols-2 gap-3">
-          {summary.amountLabel && (
-            <div className="rounded-lg bg-cream p-3">
-              <p className="text-xs font-medium text-ink/50 flex items-center gap-1.5"><Wallet size={13} /> Montant</p>
-              <p className="mt-1 text-lg font-semibold text-ink">{summary.amountLabel}</p>
-            </div>
-          )}
-          {summary.periodLabel && (
-            <div className="rounded-lg bg-cream p-3">
-              <p className="text-xs font-medium text-ink/50 flex items-center gap-1.5"><Repeat size={13} /> Périodicité</p>
-              <p className="mt-1 text-lg font-semibold text-ink">{summary.periodLabel}</p>
-            </div>
-          )}
-          <div className="rounded-lg bg-cream p-3">
-            <p className="text-xs font-medium text-ink/50 flex items-center gap-1.5"><Package size={13} /> Produits publiés</p>
-            <p className="mt-1 text-lg font-semibold text-ink">{activeCount} / {info.productLimit}</p>
-          </div>
-          <div className="rounded-lg bg-cream p-3">
-            <p className="text-xs font-medium text-ink/50 flex items-center gap-1.5"><Percent size={13} /> Commission applicable</p>
-            <p className="mt-1 text-lg font-semibold text-ink">{info.commissionPercent} %</p>
-            <p className="mt-0.5 text-[11px] leading-snug text-ink/50">
-              {info.isProActive
-                ? `Au lieu de ${FREE_COMMISSION_PERCENT} % en Free, promotions comprises`
-                : `${PREMIUM_COMMISSION_PERCENT} % avec Ezial Plus`}
-            </p>
-          </div>
-          {startedAt && (
-            <div className="rounded-lg bg-cream p-3">
-              <p className="text-xs font-medium text-ink/50 flex items-center gap-1.5"><Calendar size={13} /> {info.isTrialActive ? (trialStartsLater ? "L'essai démarre le" : "Début de l'essai") : "Début de l'abonnement"}</p>
-              <p className="mt-1 text-lg font-semibold text-ink">{formatDate(startedAt)}</p>
-            </div>
-          )}
-          {(info.isProActive || info.isPremiumExpired) && info.proUntil && (
-            <div className="rounded-lg bg-cream p-3">
-              <p className="text-xs font-medium text-ink/50 flex items-center gap-1.5"><Calendar size={13} /> {info.isProActive ? (info.isTrialActive ? "Fin de l'essai" : "Date d'expiration") : 'Expiré le'}</p>
-              <p className="mt-1 text-lg font-semibold text-ink">{formatDate(info.proUntil)}</p>
-            </div>
-          )}
-          {info.isTrialActive && (trialStartsLater ? (
-            <div className="rounded-lg bg-cream p-3 col-span-2">
-              <p className="text-xs font-medium text-ink/50 flex items-center gap-1.5"><Hourglass size={13} /> Durée de l'essai</p>
-              <p className="mt-1 text-lg font-semibold text-ink">{TRIAL_DAYS} jours à partir du {formatLongDate(info.trialStart!)}</p>
-            </div>
-          ) : info.trialDaysRemaining !== null && (
-            <div className="rounded-lg bg-cream p-3 col-span-2">
-              <p className="text-xs font-medium text-ink/50 flex items-center gap-1.5"><Hourglass size={13} /> Jours restants de l'essai</p>
-              <p className="mt-1 text-lg font-semibold text-ink">{info.trialDaysRemaining} jour{info.trialDaysRemaining > 1 ? 's' : ''}</p>
-            </div>
-          ))}
-        </div>
-
-        {(info.isProActive || info.isPremiumExpired) && (
-          <p className="mt-4 flex items-start gap-2 border-t border-line pt-4 text-xs leading-relaxed text-ink/55">
-            <Info size={14} className="mt-0.5 flex-shrink-0 text-ink/35" aria-hidden="true" />
-            <span><span className="font-medium text-ink/70">Fin d’Ezial Plus : </span>{PLAN_END_RULES}</span>
-          </p>
+        {info.isTrialActive && info.proUntil && (
+          <p className="mt-3 text-xs text-ink/50">Sans abonnement, votre boutique repasse à Ezial Free le {formatDate(info.proUntil)}.</p>
         )}
       </div>
 
-      {/* Same Free / Ezial Plus cards as the signup flow; a renewal starts
-          on the seller's last paid billing period. */}
-      <PricingCards
-        freeIsCurrent={!info.isProActive && !info.isPremiumExpired}
-        freeOfferDisallowed={info.premiumPaidEver}
-        premiumStatus={info.isProActive ? (info.isTrialActive ? 'trial' : 'paid') : (info.isPremiumExpired ? 'expired' : null)}
-        trialEligible={!info.trialUsed && !info.premiumPaidEver}
-        initialPeriod={summary.billingPeriod ?? 'quarterly'}
-        onStartTrial={() => navigate('/seller/abonnement/essai')}
-        onSubscribe={(period) => navigate(subscriptionPaymentRoute(period))}
-        subscribeButtonLabel={(info.isProActive && !info.isTrialActive) || info.isPremiumExpired ? 'Renouveler Ezial Plus' : 'S’abonner à Ezial Plus'}
-      />
+      {/* Free shop: the two plans, to subscribe */}
+      {isFree && (
+        <PricingCards
+          freeIsCurrent
+          freeOfferDisallowed={info.premiumPaidEver}
+          trialEligible={!info.trialUsed && !info.premiumPaidEver}
+          onStartTrial={() => navigate('/seller/abonnement/essai')}
+          onSubscribe={(period) => navigate(subscriptionPaymentRoute(period))}
+        />
+      )}
 
       {/* Payment history */}
       {payments.length > 0 && (

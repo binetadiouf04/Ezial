@@ -1,5 +1,6 @@
-import type { VariantOption } from '@/data/products';
+import { COLOR_PRINT_VARIANT_KEY, type VariantOption } from '@/data/products';
 import { getColor } from '@/data/colors';
+import { commonPrints } from '@/data/filters';
 
 function ColorSwatch({ colorName, selected, onClick }: { colorName: string; selected: boolean; onClick: () => void }) {
   const def = getColor(colorName);
@@ -32,13 +33,41 @@ function ColorSwatch({ colorName, selected, onClick }: { colorName: string; sele
   );
 }
 
+function OptionChip({ label, selected, onClick }: { label: string; selected: boolean; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={selected}
+      className={`min-w-[44px] rounded-lg border px-3.5 py-2 text-[13px] font-medium transition-all ${
+        selected
+          ? 'border-burgundy bg-burgundy/5 text-burgundy'
+          : 'border-line bg-white text-ink/70 hover:border-ink/30'
+      }`}
+    >
+      {label}
+    </button>
+  );
+}
+
+// In the combined "Couleur / Imprimé" dimension, a print (Léopard, Floral…)
+// has no single colour: it is shown as a text chip, every colour as a
+// swatch. A name that is also a real palette colour (e.g. "Multicolore")
+// keeps its swatch.
+function isPrintValue(value: string): boolean {
+  return commonPrints.includes(value) && !getColor(value);
+}
+
 export default function VariantSelector({ variants, selected, onChange }: { variants: VariantOption[]; selected: Record<string, string>; onChange: (name: string, value: string) => void }) {
   return (
     <div className="space-y-4">
       {variants.map((v) => {
         const isColor = v.name.toLowerCase() === 'couleur' || v.name.toLowerCase() === 'finition';
+        const isColorPrint = v.name === COLOR_PRINT_VARIANT_KEY;
 
-        if (isColor) {
+        if (isColor || isColorPrint) {
+          const colorValues = isColorPrint ? v.values.filter((val) => !isPrintValue(val)) : v.values;
+          const printValues = isColorPrint ? v.values.filter(isPrintValue) : [];
           return (
             <div key={v.name}>
               <div className="mb-2.5 flex items-center gap-1.5">
@@ -46,11 +75,19 @@ export default function VariantSelector({ variants, selected, onChange }: { vari
                 <span className="text-ink/40">:</span>
                 <span className="text-sm font-medium text-ink/80">{selected[v.name] ?? '—'}</span>
               </div>
-              <div className="flex flex-wrap gap-2.5">
-                {v.values.map((val) => (
+              <div className="flex flex-wrap items-center gap-2.5">
+                {colorValues.map((val) => (
                   <ColorSwatch
                     key={val}
                     colorName={val}
+                    selected={selected[v.name] === val}
+                    onClick={() => onChange(v.name, val)}
+                  />
+                ))}
+                {printValues.map((val) => (
+                  <OptionChip
+                    key={val}
+                    label={val}
                     selected={selected[v.name] === val}
                     onClick={() => onChange(v.name, val)}
                   />
@@ -67,22 +104,14 @@ export default function VariantSelector({ variants, selected, onChange }: { vari
               {selected[v.name] && <span className="text-xs text-ink/50">{selected[v.name]}</span>}
             </div>
             <div className="flex flex-wrap gap-2">
-              {v.values.map((val) => {
-                const isActive = selected[v.name] === val;
-                return (
-                  <button
-                    key={val}
-                    onClick={() => onChange(v.name, val)}
-                    className={`min-w-[44px] rounded-lg border px-3.5 py-2 text-[13px] font-medium transition-all ${
-                      isActive
-                        ? 'border-burgundy bg-burgundy/5 text-burgundy'
-                        : 'border-line bg-white text-ink/70 hover:border-ink/30'
-                    }`}
-                  >
-                    {val}
-                  </button>
-                );
-              })}
+              {v.values.map((val) => (
+                <OptionChip
+                  key={val}
+                  label={val}
+                  selected={selected[v.name] === val}
+                  onClick={() => onChange(v.name, val)}
+                />
+              ))}
             </div>
           </div>
         );
