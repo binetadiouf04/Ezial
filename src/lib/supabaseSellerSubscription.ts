@@ -1,7 +1,7 @@
 import { supabase } from './supabaseClient';
 import {
   FREE_PRODUCT_LIMIT, PREMIUM_PRODUCT_LIMIT, FREE_COMMISSION_PERCENT, PREMIUM_COMMISSION_PERCENT,
-  PLUS_PLAN_NAME, PLUS_BILLING, BILLING_PERIOD_LABEL, formatFcfa, type BillingPeriod,
+  PLUS_PLAN_NAME, PLUS_BILLING, BILLING_PERIOD_LABEL, TRIAL_DAYS, formatFcfa, type BillingPeriod,
 } from '@/data/subscriptionPlans';
 
 // Real seller subscription state, backed by the seller_subscriptions /
@@ -29,11 +29,6 @@ export interface SellerSubscriptionInfo {
   // isProActive true, but the UI (and eligibility for a fresh trial)
   // needs to tell them apart.
   isTrialActive: boolean;
-  // Trial activated before the official launch: activate_seller_trial()
-  // sets trial_start to launch day, so its 30 days haven't started
-  // counting yet — while the Ezial Plus advantages are already active
-  // (pro_until = trial_end). Derived only, nothing stored.
-  trialStartsLater: boolean;
   productLimit: number;
   commissionPercent: number;
   trialDaysRemaining: number | null;
@@ -53,6 +48,11 @@ export interface SellerSubscriptionInfo {
   // inferring it from the absence of a row (which also, ambiguously,
   // described an already-chosen Free shop).
   planChosen: boolean;
+  // The official Ezial shop (shops.is_official) is always Ezial Plus:
+  // active, no trial, no expiry, nothing to pay, renew or downgrade. Its
+  // product limit is not enforced (enforce_product_limit() skips it), so
+  // pages show its product count without a limit.
+  isOfficial: boolean;
 }
 
 function daysUntil(iso: string | null): number | null {
@@ -61,11 +61,38 @@ function daysUntil(iso: string | null): number | null {
   return ms > 0 ? Math.ceil(ms / (24 * 60 * 60 * 1000)) : 0;
 }
 
+// Ezial Plus for good — no row is read for the official shop: its
+// seller_subscriptions row (if any) does not describe its plan.
+function officialShopSubscription(): SellerSubscriptionInfo {
+  return {
+    plan: 'pro',
+    trialUsed: false,
+    trialStart: null,
+    trialEnd: null,
+    proUntil: null,
+    proStartedAt: null,
+    isProActive: true,
+    isTrialActive: false,
+    productLimit: PREMIUM_PRODUCT_LIMIT,
+    commissionPercent: PREMIUM_COMMISSION_PERCENT,
+    trialDaysRemaining: null,
+    proDaysRemaining: null,
+    premiumPaidEver: false,
+    isPremiumExpired: false,
+    planChosen: true,
+    isOfficial: true,
+  };
+}
+
 // A shop with no seller_subscriptions row at all (not yet activated, or
 // activated before this feature existed and never backfilled) is implicitly
 // Free with no trial used — mirrors the same coalesce the
-// enforce_product_limit() trigger already uses.
-export async function fetchSellerSubscription(shopId: string): Promise<SellerSubscriptionInfo> {
+// enforce_product_limit() trigger already uses. Pass isOfficial (from
+// shops.is_official, i.e. ProContext's sellerShopIsOfficial) to get the
+// official shop's permanent Ezial Plus status instead.
+export async function fetchSellerSubscription(shopId: string, options: { isOfficial?: boolean } = {}): Promise<SellerSubscriptionInfo> {
+  if (options.isOfficial) return officialShopSubscription();
+
   const { data } = await supabase
     .from('seller_subscriptions')
     .select('plan, trial_used, trial_start, trial_end, pro_until, pro_started_at, premium_paid_ever, plan_chosen')
@@ -83,19 +110,16 @@ export async function fetchSellerSubscription(shopId: string): Promise<SellerSub
   // naturally stops being true the moment a paid period takes over.
   const isTrialActive = isProActive && !!trialEnd && proUntil === trialEnd;
   const isPremiumExpired = plan === 'pro' && !isProActive && premiumPaidEver;
-  const trialStart = (data?.trial_start as string | null) ?? null;
-  const trialStartsLater = isTrialActive && !!trialStart && new Date(trialStart) > new Date();
 
   return {
     plan,
     trialUsed: (data?.trial_used as boolean) ?? false,
-    trialStart,
+    trialStart: (data?.trial_start as string | null) ?? null,
     trialEnd,
     proUntil,
     proStartedAt: (data?.pro_started_at as string | null) ?? null,
     isProActive,
     isTrialActive,
-    trialStartsLater,
     productLimit: isProActive ? PREMIUM_PRODUCT_LIMIT : FREE_PRODUCT_LIMIT,
     commissionPercent: isProActive ? PREMIUM_COMMISSION_PERCENT : FREE_COMMISSION_PERCENT,
     trialDaysRemaining: isTrialActive ? daysUntil(proUntil) : null,
@@ -103,6 +127,7 @@ export async function fetchSellerSubscription(shopId: string): Promise<SellerSub
     premiumPaidEver,
     isPremiumExpired,
     planChosen: (data?.plan_chosen as boolean) ?? false,
+    isOfficial: false,
   };
 }
 
@@ -205,11 +230,15 @@ export interface CurrentPlanSummary {
 // dashboard and "Mon abonnement" — derived from the real subscription row
 // and the last confirmed payment.
 export function summarizeCurrentPlan(info: SellerSubscriptionInfo, payments: SubscriptionPaymentRow[]): CurrentPlanSummary {
+  if (info.isOfficial) {
+    return { name: `${PLUS_PLAN_NAME} — boutique officielle`, amountLabel: null, periodLabel: null, billingPeriod: null, expiresAt: null, isExpired: false };
+  }
+
   const lastConfirmed = payments.find((p) => p.status === 'confirmed') ?? null;
   const billingPeriod = lastConfirmed ? billingPeriodOfPayment(lastConfirmed) : null;
 
   if (info.isTrialActive) {
-    return { name: `Essai ${PLUS_PLAN_NAME}`, amountLabel: 'Gratuit', periodLabel: 'Essai de 30 jours', billingPeriod, expiresAt: info.proUntil, isExpired: false };
+    return { name: `Essai ${PLUS_PLAN_NAME}`, amountLabel: 'Gratuit', periodLabel: `Essai de ${TRIAL_DAYS} jours`, billingPeriod, expiresAt: info.proUntil, isExpired: false };
   }
   if (info.isProActive || info.isPremiumExpired) {
     return {

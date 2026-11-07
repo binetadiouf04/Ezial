@@ -30,14 +30,14 @@ export default function SellerDashboard() {
   const [shopDraft, setShopDraft] = useState(false);
   useEffect(() => { void supabase.auth.getUser().then(({ data }) => setAuthUserId(data.user?.id ?? null)); }, []);
 
-  const load = useCallback(async (shopId: string) => {
+  const load = useCallback(async (shopId: string, isOfficial: boolean) => {
     setLoading(true);
     const [sellerOrders, products, finances, onboarding, subscription, subscriptionPayments] = await Promise.all([
       fetchSellerOrders(shopId),
       fetchSellerProducts(shopId),
       fetchSellerFinances(shopId),
       fetchShopOnboarding(shopId),
-      fetchSellerSubscription(shopId),
+      fetchSellerSubscription(shopId, { isOfficial }),
       fetchSubscriptionPayments(shopId),
     ]);
     setOrders(sellerOrders);
@@ -50,8 +50,8 @@ export default function SellerDashboard() {
   }, []);
 
   useEffect(() => {
-    if (sellerSupabaseShopId) void load(sellerSupabaseShopId);
-  }, [sellerSupabaseShopId, load]);
+    if (sellerSupabaseShopId) void load(sellerSupabaseShopId, sellerShopIsOfficial);
+  }, [sellerSupabaseShopId, sellerShopIsOfficial, load]);
 
   if (!sellerSupabaseShopId || loading) {
     return (
@@ -69,6 +69,13 @@ export default function SellerDashboard() {
   const preparing = orders.filter((o) => o.status === 'preparing').length;
   const ready = orders.filter((o) => o.status === 'ready' || o.status === 'ready_for_pickup').length;
   const recentOrders = orders.slice(0, 5);
+  const planDetails = planSummary
+    ? [
+      planSummary.amountLabel,
+      planSummary.periodLabel,
+      planSummary.expiresAt ? `${planSummary.isExpired ? 'expiré le' : 'jusqu’au'} ${formatDate(planSummary.expiresAt)}` : null,
+    ].filter(Boolean).join(' · ')
+    : '';
 
   return (
     <div className="space-y-6">
@@ -111,16 +118,14 @@ export default function SellerDashboard() {
 
       <SummaryCard label="Solde disponible" value={formatFCFA(availableBalance)} icon={<Wallet size={16} />} accent onClick={() => navigate('/seller/finances')} />
 
-      {!sellerShopIsOfficial && planSummary && (
+      {/* Current plan — the official Ezial shop shows "Ezial Plus — boutique officielle". */}
+      {planSummary && (
         <button onClick={() => navigate('/seller/abonnement')} className="card flex w-full items-center justify-between gap-3 p-4 text-left transition-colors hover:bg-cream/30">
           <div className="flex min-w-0 items-start gap-3">
             <Crown size={18} className={`mt-0.5 flex-shrink-0 ${planSummary.name === 'Ezial Free' ? 'text-ink/30' : 'text-burgundy'}`} />
             <div className="min-w-0">
               <p className="text-sm font-semibold text-ink">{planSummary.name}</p>
-              <p className="mt-0.5 text-xs text-ink/55">
-                {[planSummary.amountLabel, planSummary.periodLabel].filter(Boolean).join(' · ')}
-                {planSummary.expiresAt && ` · ${planSummary.isExpired ? 'expiré le' : 'jusqu’au'} ${formatDate(planSummary.expiresAt)}`}
-              </p>
+              {planDetails && <p className="mt-0.5 text-xs text-ink/55">{planDetails}</p>}
             </div>
           </div>
           <ChevronRight size={16} className="flex-shrink-0 text-ink/30" />

@@ -28,9 +28,8 @@ export type InfoBlock =
   | { type: 'facts'; items: { label: string; value: string; href?: string }[] }
   /** Row of buttons. */
   | { type: 'links'; items: { label: string; href: string; primary?: boolean }[] }
-  /** Seller plans (React: PricingCards / PlusHighlights / PlanComparison). */
+  /** Seller plans (React: PricingCards / PlanComparison). */
   | { type: 'pricingCards' }
-  | { type: 'plusHighlights' }
   | { type: 'planComparison' };
 
 export type InfoSegment =

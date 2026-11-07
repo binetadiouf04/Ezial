@@ -11,6 +11,10 @@ import SmartImage from '@/components/SmartImage';
 
 const suspensionReasons = ['Produits suspects ou contrefaits', 'Informations trompeuses', 'Comportement inapproprié', 'Non-conformité répétée'];
 
+// Statut 'paused' : boutique mise en pause par son propre vendeur (masquée
+// du site public), distinct d'une désactivation par Ezial ('suspended').
+const PAUSED_BY_SELLER_LABEL = 'En pause (par le vendeur)';
+
 const shopReportReasonLabels: Record<ShopReportReason, string> = {
   contrefait: 'Produit suspect ou contrefait',
   trompeur: 'Informations trompeuses',
@@ -119,7 +123,7 @@ export default function AdminShopDetail({ shopId }: { shopId: string }) {
             <h1 className="font-display text-lg font-semibold text-ink truncate">{shop.name}</h1>
             {shop.sellerCode && <p className="text-xs text-ink/45 font-mono mt-0.5">{shop.sellerCode}</p>}
           </div>
-          <StatusChip status={shop.status} size="md" />
+          <StatusChip status={shop.status} size="md" label={shop.status === 'paused' ? PAUSED_BY_SELLER_LABEL : undefined} />
         </div>
       </div>
 
@@ -145,7 +149,16 @@ export default function AdminShopDetail({ shopId }: { shopId: string }) {
           ce bloc générique est le seul filet de sécurité qui reste pour
           toute boutique non active/suspendue (pending, draft, ou tout
           autre statut), plus de file d'approbation manuelle séparée. */}
-      {!['active', 'suspended'].includes(shop.status) && (
+      {shop.status === 'paused' && (
+        <div className="card p-4 space-y-2">
+          <p className="text-sm text-ink/70">Statut actuel : <span className="font-medium">{PAUSED_BY_SELLER_LABEL}</span>. Le vendeur a lui-même mis sa boutique en pause : elle est masquée sur le site public. Il peut la réactiver depuis son espace vendeur.</p>
+          <button onClick={() => void act('active')} disabled={acting} className="btn-primary flex items-center gap-1.5">
+            {acting ? <Loader2 size={15} className="animate-spin" /> : <Check size={15} />} Activer la boutique
+          </button>
+        </div>
+      )}
+
+      {!['active', 'suspended', 'paused'].includes(shop.status) && (
         <div className="card border-amber-200 bg-amber-50/30 p-4 space-y-2">
           <p className="text-sm text-ink/70">Statut actuel : <span className="font-medium">{shop.status}</span>. Cette boutique n'a pas été activée automatiquement (email non confirmé, par exemple).</p>
           <button onClick={() => void act('active')} disabled={acting} className="btn-primary flex items-center gap-1.5">

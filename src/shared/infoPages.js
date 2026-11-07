@@ -17,7 +17,7 @@ import { COMPANY, CONTACT, DELIVERY, SITE_URL } from './siteInfo.js';
 import {
   FREE_PRODUCT_LIMIT, PREMIUM_PRODUCT_LIMIT, FREE_COMMISSION_PERCENT, PREMIUM_COMMISSION_PERCENT, TRIAL_DAYS,
   PLUS_PLAN_NAME, PLUS_BILLING, PLUS_ANNUAL_REFERENCE_PRICE_FCFA, PLUS_ANNUAL_DISCOUNT_PERCENT,
-  PLUS_SAME_BENEFITS_NOTE, TRIAL_RULES, TRIAL_PRELAUNCH_NOTE, PLAN_END_RULES, formatFcfa,
+  PLUS_SAME_BENEFITS_NOTE, TRIAL_RULES, PLAN_END_RULES, formatFcfa,
 } from './plans.js';
 import { parseMarkdown } from './markdown.js';
 
@@ -470,17 +470,11 @@ Fournissez des informations exactes et gardez vos accès confidentiels. Ezial ne
 
 ### Combien coûte la vente sur Ezial ?
 
-**Free** est gratuite : jusqu’à ${FREE_PRODUCT_LIMIT} produits publiés et une commission de ${FREE_COMMISSION_PERCENT} % sur chaque vente. **${PLUS_PLAN_NAME}** coûte ${QUARTERLY} tous les 3 mois ou ${ANNUAL} par an : jusqu’à ${PREMIUM_PRODUCT_LIMIT} produits publiés et une commission de ${PREMIUM_COMMISSION_PERCENT} %.
-
-### La commission change-t-elle pendant une promotion ?
-
-Non. Le taux reste le même : ${FREE_COMMISSION_PERCENT} % avec Free, ${PREMIUM_COMMISSION_PERCENT} % avec ${PLUS_PLAN_NAME}. Il s’applique au prix de vente après la réduction que vous avez appliquée, et jamais aux frais de livraison.
+**Free** est gratuite : jusqu’à ${FREE_PRODUCT_LIMIT} produits publiés et une commission de ${FREE_COMMISSION_PERCENT} % sur chaque vente. **${PLUS_PLAN_NAME}** coûte ${QUARTERLY} tous les 3 mois ou ${ANNUAL} par an : jusqu’à ${PREMIUM_PRODUCT_LIMIT} produits publiés et une commission de ${PREMIUM_COMMISSION_PERCENT} %. La commission ne s’applique jamais aux frais de livraison.
 
 ### Comment fonctionne l’essai gratuit d’${PLUS_PLAN_NAME} ?
 
 ${TRIAL_RULES} L’essai ne se transforme jamais automatiquement en abonnement payant.
-
-${TRIAL_PRELAUNCH_NOTE}
 
 ### Que se passe-t-il à la fin de l’essai ou de l’abonnement ?
 
@@ -572,13 +566,11 @@ Le détail des formules figure sur la page [Tarifs vendeurs](/info/tarifs-vendeu
 
 La commission Ezial s’applique à chaque vente. Son taux dépend uniquement de la formule de la boutique : ${FREE_COMMISSION_PERCENT} % avec Free, ${PREMIUM_COMMISSION_PERCENT} % avec ${PLUS_PLAN_NAME}, pendant l’essai comme avec l’abonnement payant.
 
-Le taux reste identique lorsque le vendeur applique une promotion. La commission est calculée sur le prix de vente des produits, après la réduction appliquée par le vendeur, et jamais sur les frais de livraison. Elle est déduite automatiquement du montant des ventes, visible dans l’espace Finances du vendeur.
+La commission est calculée sur le prix de vente des produits, jamais sur les frais de livraison. Elle est déduite automatiquement du montant des ventes, visible dans l’espace Finances du vendeur.
 
 ### Essai gratuit d’${PLUS_PLAN_NAME}
 
 ${TRIAL_RULES} L’essai ne se transforme jamais automatiquement en abonnement payant.
-
-${TRIAL_PRELAUNCH_NOTE}
 
 ### Paiement et renouvellement
 
@@ -959,16 +951,11 @@ const tarifsVendeurs = {
   intro: `Commencez gratuitement avec ${FREE_PRODUCT_LIMIT} produits. Passez à ${PLUS_PLAN_NAME} pour en publier ${PREMIUM_PRODUCT_LIMIT} et ne payer que ${PREMIUM_COMMISSION_PERCENT} % de commission.`,
   blocks: {
     formules: { type: 'pricingCards' },
-    avantages: { type: 'plusHighlights' },
     comparatif: { type: 'planComparison' },
   },
   markdown: `{{formules}}
 
 Commencez gratuitement, sans obligation de vous abonner.
-
-## Les avantages d’${PLUS_PLAN_NAME}
-
-{{avantages}}
 
 ## Free ou ${PLUS_PLAN_NAME} : le comparatif
 
@@ -979,8 +966,6 @@ ${PLUS_SAME_BENEFITS_NOTE}
 ## Essai gratuit
 
 ${TRIAL_RULES} L’essai ne se transforme jamais automatiquement en abonnement payant.
-
-> ${TRIAL_PRELAUNCH_NOTE}
 
 ## Activation et renouvellement
 
@@ -994,7 +979,7 @@ ${PLAN_END_RULES}
 
 La commission Ezial dépend uniquement de la formule : **${FREE_COMMISSION_PERCENT} % sur chaque vente en Free**, **${PREMIUM_COMMISSION_PERCENT} % sur chaque vente en ${PLUS_PLAN_NAME}** (essai ou payant, trimestriel ou annuel). C’est l’un des principaux avantages d’${PLUS_PLAN_NAME} : sur une vente de ${formatFcfa(EXAMPLE_SALE)}, la commission est de ${exampleCommission(PREMIUM_COMMISSION_PERCENT)} au lieu de ${exampleCommission(FREE_COMMISSION_PERCENT)}.
 
-Le taux reste le même lorsque vous appliquez une promotion. La commission est calculée sur le prix de vente de vos produits, après la réduction que vous avez appliquée, et jamais sur les frais de livraison.
+La commission est calculée sur le prix de vente de vos produits, jamais sur les frais de livraison.
 
 ## Questions fréquentes
 
@@ -1017,10 +1002,6 @@ Sans abonnement, votre boutique repasse au forfait Free. Pour conserver les avan
 ### Que se passe-t-il à la fin d’un abonnement payé ?
 
 Vos données et vos produits sont conservés. Jusqu’au renouvellement, votre boutique est soumise aux limites de Free : ${FREE_PRODUCT_LIMIT} produits publiés et commission de ${FREE_COMMISSION_PERCENT} %.
-
-### La commission change-t-elle pendant une promotion ?
-
-Non : ${FREE_COMMISSION_PERCENT} % avec Free, ${PREMIUM_COMMISSION_PERCENT} % avec ${PLUS_PLAN_NAME}, calculés sur le prix après réduction et jamais sur les frais de livraison.
 
 ### Comment payer ${PLUS_PLAN_NAME} ?
 
