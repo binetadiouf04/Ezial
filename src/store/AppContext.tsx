@@ -132,8 +132,9 @@ interface AppState {
   customerInfo: CustomerInfo; updateCustomerInfo: (info: CustomerInfo) => void;
   // Real customer auth (Supabase) — null while signed out or while the
   // initial session check (authLoading) hasn't resolved yet. A signed-out
-  // visitor can still browse/cart/checkout as a guest; only "Mon compte"
-  // itself gates on this.
+  // visitor can still browse and fill a cart; ordering requires an account
+  // (CheckoutPage gates on this, and create_order() refuses anonymous
+  // callers server-side), as do "Mon compte" and its order tracking.
   customerUser: CustomerProfile | null;
   authLoading: boolean;
   signUpCustomerAccount: (input: SignUpCustomerInput) => Promise<{ status: 'confirmed' | 'pending_confirmation' } | { error: string; code?: 'email_taken' }>;
@@ -193,6 +194,15 @@ const NEVER_RESTORE_ROUTE_PREFIXES = ['/profil', '/checkout', '/commande', '/pro
 export function navigateTo(route: string): void {
   window.history.pushState(null, '', route);
   window.dispatchEvent(new PopStateEvent('popstate'));
+}
+
+// Explicit override of the route above, for the one case where landing
+// back on a normally-excluded page IS the point: a customer who signs up
+// from the checkout (an account is required to order) returns straight to
+// /checkout once their email is confirmed, cart intact (localStorage).
+// Any later browsing overwrites it as usual, via the route effect below.
+export function rememberResumeRoute(route: string): void {
+  try { localStorage.setItem(LAST_BROWSE_ROUTE_KEY, route); } catch { /* best-effort */ }
 }
 
 export function consumeLastBrowseRoute(): string | null {

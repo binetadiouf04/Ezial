@@ -14,7 +14,8 @@ import { fetchDeliveryFeeQuote, type DeliveryFeeQuote } from '@/lib/supabaseDeli
 import CheckoutSteps from '@/components/CheckoutSteps';
 import GoogleLocationPickerMap from '@/components/GoogleLocationPickerMap';
 import PhoneField from '@/components/PhoneField';
-import { Check, Truck, Store, Smartphone, Clock, Loader2, AlertCircle, AlertTriangle, MapPin, Navigation, Search, ArrowLeft, Gift } from 'lucide-react';
+import CustomerAuthPanel from '@/components/CustomerAuthPanel';
+import { Check, Truck, Store, Smartphone, Clock, Loader2, AlertCircle, AlertTriangle, MapPin, Navigation, Search, ArrowLeft, Gift, UserCheck } from 'lucide-react';
 import SmartImage from '@/components/SmartImage';
 
 const paymentIcons: Record<string, typeof Smartphone> = { wave: Smartphone, orange: Smartphone };
@@ -55,11 +56,47 @@ function persistDraftForm(form: CheckoutForm): void {
   }
 }
 
+// Shown instead of the checkout to a signed-out visitor: same two-choice
+// shape as "Mon compte" (AccountEntryPage), then the shared login/signup
+// panel. Signing in re-renders CheckoutPage signed-in, on the spot; a
+// signup awaiting email confirmation comes back here via the confirmation
+// link (resumeRouteAfterConfirmation).
+function CheckoutAccountStep({ onBackToCart }: { onBackToCart: () => void }) {
+  const [authStep, setAuthStep] = useState<'entry' | 'login' | 'signup'>('entry');
+  if (authStep !== 'entry') {
+    return (
+      <div className="container-pro">
+        <CustomerAuthPanel
+          onBack={() => setAuthStep('entry')}
+          initialView={authStep}
+          subtitle={authStep === 'login' ? 'Connectez-vous pour finaliser votre commande.' : 'Créez votre compte pour finaliser votre commande.'}
+          resumeRouteAfterConfirmation="/checkout"
+        />
+      </div>
+    );
+  }
+  return (
+    <div className="container-pro">
+      <div className="mx-auto max-w-sm py-10 text-center">
+        <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-full bg-burgundy/10 text-burgundy"><UserCheck size={26} /></div>
+        <h1 className="font-display text-2xl font-semibold text-ink">Un compte pour commander</h1>
+        <p className="mt-2 text-sm text-ink/55">Votre compte Ezial vous permet de recevoir votre facture et de suivre votre commande jusqu'à la livraison.</p>
+        <p className="mt-2 text-xs text-ink/45">Votre panier est conservé.</p>
+        <div className="mt-8 flex flex-col gap-2.5">
+          <button onClick={() => setAuthStep('signup')} className="btn-primary w-full">Créer mon compte</button>
+          <button onClick={() => setAuthStep('login')} className="btn-outline w-full">J'ai déjà un compte</button>
+          <button onClick={onBackToCart} className="mt-1 inline-flex items-center justify-center gap-1.5 text-sm font-medium text-ink/50 hover:text-ink"><ArrowLeft size={15} /> Retour au panier</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 type LocationStatus = 'idle' | 'requesting' | 'granted' | 'denied' | 'unsupported';
 type LocationMode = 'gps' | 'manual';
 
 export default function CheckoutPage() {
-  const { cart, cartSubtotal, clearCart, navigate, addOrder, catalogProducts, customerUser } = useApp();
+  const { cart, cartSubtotal, clearCart, navigate, addOrder, catalogProducts, customerUser, authLoading } = useApp();
   const [step, setStep] = useState(0);
   const [form, setForm] = useState<CheckoutForm>(() => ({ firstName: '', lastName: '', phone: '', email: '', quartier: 'Plateau', landmark: '', instructions: '', ...loadDraftForm() }));
   const [preference, setPreference] = useState<DeliveryPreference>({ type: 'none' });
@@ -178,6 +215,17 @@ export default function CheckoutPage() {
         <button onClick={() => navigate('/panier')} className="btn-primary mt-6">Retourner au panier</button>
       </div>
     );
+  }
+
+  // Un compte est obligatoire pour commander : c'est lui qui permet de
+  // recevoir la facture et de suivre la commande. create_order() refuse de
+  // toute façon un appel sans session côté serveur ; cet écran l'explique
+  // avant, sans jamais toucher au panier (localStorage).
+  if (authLoading) {
+    return <div className="container-pro flex justify-center py-20"><Loader2 size={24} className="animate-spin text-ink/40" /></div>;
+  }
+  if (!customerUser) {
+    return <CheckoutAccountStep onBackToCart={() => navigate('/panier')} />;
   }
 
   const shopIdsInCart = [...new Set(cart.map((i) => i.shopId))];

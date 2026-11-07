@@ -127,6 +127,10 @@ export async function createOrderInSupabase(
 ): Promise<{ result: CreatedOrderResult } | { error: string }> {
   const { data, error } = await supabase.rpc('create_order', { payload });
   if (error) {
+    // Ordering requires an account: create_order() isn't executable without
+    // a session at all, so the only way to hit this from the (signed-in)
+    // checkout is a session that expired in the meantime.
+    if (error.code === '42501') return { error: 'Votre session a expiré. Reconnectez-vous depuis « Compte » pour finaliser votre commande (votre panier est conservé).' };
     // create_order() raises plain exceptions for every rejection case
     // (produit indisponible, stock insuffisant, coordonnées manquantes...)
     // — error.message is already a clear, user-facing sentence in French.
