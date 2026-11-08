@@ -169,7 +169,7 @@ export default function Footer() {
   return (
     <footer className="mt-auto" style={{ backgroundColor: '#4A1223' }}>
       {/* Main footer content */}
-      <div style={{ backgroundColor: '#651D32' }}>
+      <div style={{ backgroundColor: '#5A0D1E' }}>
         <div className="container-page py-7 lg:py-9">
           {/* Desktop — 4 columns */}
           <div className="hidden lg:grid lg:grid-cols-4 lg:gap-10">

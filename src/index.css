@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -16,6 +16,11 @@
   }
   h1, h2, h3, h4 {
     line-height: 1.2;
+  }
+  /* Playfair Display a des chiffres « elzévir » par défaut (le 0 et le 6 d'un
+     prix paraissent minuscules) : chiffres alignés pour les prix et titres. */
+  .font-display {
+    font-variant-numeric: lining-nums;
   }
   ::-webkit-scrollbar {
     width: 8px;
