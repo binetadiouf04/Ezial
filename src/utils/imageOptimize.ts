@@ -91,6 +91,8 @@ export async function generateThumbnail(file: File, width = 240, height = 300, q
     bitmap.close?.();
 
     const encoded = await encodeCanvasForWeb(canvas, quality);
+    canvas.width = 0;
+    canvas.height = 0;
     if (!encoded) return null;
     return new File([encoded.blob], withExtension(file.name, encoded.ext, '-thumb'), { type: encoded.type });
   } catch {

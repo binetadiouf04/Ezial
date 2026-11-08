@@ -54,6 +54,10 @@ async function reencode(blob: Blob): Promise<{ blob: Blob; type: string } | null
   ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
   bitmap.close?.();
   const encoded = await encodeCanvasForWeb(canvas, 0.82);
+  // Frees the pixel memory right away (iOS Safari keeps canvases alive and
+  // can reload the page after a few dozen large ones).
+  canvas.width = 0;
+  canvas.height = 0;
   return encoded ? { blob: encoded.blob, type: encoded.type } : null;
 }
 
@@ -121,7 +125,7 @@ async function lightenOne(uid: string, row: ImageRow, stored: StoredFile | undef
 // skipped from Storage metadata alone, without downloading them). Lets the
 // automatic background run spread a large backlog over several visits.
 // shouldStop lets the caller abort between two photos (page left, signed out).
-const CONCURRENCY = 3;
+const CONCURRENCY = 2;
 
 export async function lightenShopProductPhotos(
   shopId: string,
@@ -196,6 +200,7 @@ export async function lightenShopProductPhotos(
 // it has really finished: a phone that left the page mid-way (iOS pauses the
 // tab) starts again on the next visit instead of being skipped.
 const AUTO_BATCH = 25;
+const LAST_RUN_KEY = 'ezial-photo-lightening-last';
 const AUTO_DELAY_MS = 3000;
 let autoRunning = false;
 
@@ -218,10 +223,28 @@ export function scheduleAutoLightening(
         if (!('error' in result) && result.failed === 0) {
           try { sessionStorage.setItem(key, '1'); } catch { /* ignore */ }
         }
+        try { localStorage.setItem(LAST_RUN_KEY, JSON.stringify({ at: Date.now(), result })); } catch { /* ignore */ }
         onDone?.(result);
       })
       .catch(() => undefined)
       .finally(() => { autoRunning = false; onProgress?.(null); });
   }, AUTO_DELAY_MS);
   return () => { cancelledBeforeStart = true; window.clearTimeout(timer); };
+}
+
+// Outcome of the last automatic run, kept so it can still be shown when the
+// seller had left the seller space (or the page was reloaded) before it ended.
+export function readLastLighteningReport(): LightenResult | { error: string } | null {
+  try {
+    const raw = localStorage.getItem(LAST_RUN_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as { at: number; result: LightenResult | { error: string } };
+    return Date.now() - parsed.at < 24 * 60 * 60 * 1000 ? parsed.result : null;
+  } catch {
+    return null;
+  }
+}
+
+export function clearLastLighteningReport(): void {
+  try { localStorage.removeItem(LAST_RUN_KEY); } catch { /* ignore */ }
 }

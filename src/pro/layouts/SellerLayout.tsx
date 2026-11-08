@@ -3,7 +3,7 @@ import { usePro } from '../ProContext';
 import { navigateTo } from '@/store/AppContext';
 import { Home, ShoppingBag, Package, Wallet, Store, LogOut, ArrowLeft, Menu, X, AlertTriangle, Star, Crown, Loader2 } from 'lucide-react';
 import { fetchSellerSubscription } from '@/lib/supabaseSellerSubscription';
-import { scheduleAutoLightening } from '@/lib/supabasePhotoLightening';
+import { scheduleAutoLightening, readLastLighteningReport, clearLastLighteningReport, type LightenResult } from '@/lib/supabasePhotoLightening';
 import SellerChoosePlan from '../pages/seller/SellerChoosePlan';
 import SellerDashboard from '../pages/seller/SellerDashboard';
 import SellerOrders from '../pages/seller/SellerOrders';
@@ -38,13 +38,15 @@ export default function SellerLayout() {
   // Heavy product photos from before the iPad upload fix are lightened in
   // the background, automatically (see supabasePhotoLightening.ts).
   const [photoProgress, setPhotoProgress] = useState<{ done: number; total: number } | null>(null);
-  const [photoReport, setPhotoReport] = useState('');
-  useEffect(() => (sellerSupabaseShopId ? scheduleAutoLightening(sellerSupabaseShopId, setPhotoProgress, (r) => {
-    if ('error' in r) { setPhotoReport(`Optimisation des photos impossible : ${r.error}`); return; }
-    if (r.lightened === 0 && r.failed === 0) return;
+  const describeReport = (r: LightenResult | { error: string }): string => {
+    if ('error' in r) return `Optimisation des photos impossible : ${r.error}`;
+    if (r.lightened === 0 && r.failed === 0) return '';
     const mo = (r.savedBytes / (1024 * 1024)).toFixed(1).replace('.', ',');
-    setPhotoReport(`Photos optimisées : ${r.lightened} allégée${r.lightened > 1 ? 's' : ''} (${mo} Mo gagnés)${r.failed ? `, ${r.failed} en échec (${r.firstError ?? 'erreur inconnue'}) : elles seront retentées à la prochaine ouverture` : ''}.`);
-  }) : undefined), [sellerSupabaseShopId]);
+    return `Photos optimisées : ${r.lightened} allégée${r.lightened > 1 ? 's' : ''} (${mo} Mo gagnés)${r.failed ? `, ${r.failed} en échec (${r.firstError ?? 'erreur inconnue'}) : elles seront retentées à la prochaine ouverture` : ''}.`;
+  };
+  // Result of the previous run, if the seller had left before it ended.
+  const [photoReport, setPhotoReport] = useState(() => { const last = readLastLighteningReport(); return last ? describeReport(last) : ''; });
+  useEffect(() => (sellerSupabaseShopId ? scheduleAutoLightening(sellerSupabaseShopId, setPhotoProgress, (r) => setPhotoReport(describeReport(r))) : undefined), [sellerSupabaseShopId]);
 
   const clean = route.split('?')[0];
 
@@ -256,7 +258,7 @@ export default function SellerLayout() {
       <div className="flex-1 min-w-0">
         {!photoProgress && photoReport && (
           <div role="status" className="border-b border-line bg-cream px-4 py-2 text-center text-xs text-ink/65">
-            {photoReport} <button onClick={() => setPhotoReport('')} className="ml-1 underline">Fermer</button>
+            {photoReport} <button onClick={() => { setPhotoReport(''); clearLastLighteningReport(); }} className="ml-1 underline">Fermer</button>
           </div>
         )}
         {photoProgress && (
