@@ -35,8 +35,8 @@ export const SOCIAL_LINKS = [
 // Delivery promise, shown prominently wherever delivery is mentioned.
 export const DELIVERY = {
   delay: '4 à 48 h',
-  area: 'Dakar et environs',
-  promise: 'Livraison en 4 à 48 h à Dakar et environs',
+  area: 'Dakar',
+  promise: 'Livraison en 4 à 48 h à Dakar',
   /** Wording for legal pages: an indicative delay, not a guarantee. */
   legalNote: 'Ce délai est indicatif : il peut varier selon la disponibilité des produits, la zone de livraison et les conditions de circulation.',
 };

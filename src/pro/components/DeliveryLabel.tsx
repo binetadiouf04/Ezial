@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { staffSpaceOrigin } from '@/lib/staffSpace';
 import QRCode from 'qrcode';
 import { X, Printer } from 'lucide-react';
 import type { Mission } from '../data';
@@ -26,7 +27,7 @@ export default function DeliveryLabel({
 
   useEffect(() => {
     let cancelled = false;
-    const target = `${window.location.origin}${import.meta.env.BASE_URL}pro?driver_order=${encodeURIComponent(mission.orderId)}`;
+    const target = `${staffSpaceOrigin('driver')}${import.meta.env.BASE_URL}pro?driver_order=${encodeURIComponent(mission.orderId)}`;
     QRCode.toDataURL(target, { margin: 1, width: 240 }).then((url) => {
       if (!cancelled) setQrDataUrl(url);
     });

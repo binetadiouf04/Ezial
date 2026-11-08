@@ -39,6 +39,7 @@ const ezialLinks: FooterLinkDef[] = [
 
 const legalLinks: FooterLinkDef[] = [
   { label: 'Confidentialité', route: '/info/confidentialite' },
+  { label: 'Politique de résiliation', route: '/info/politique-de-resiliation' },
   { label: 'Mentions légales', route: '/info/mentions-legales' },
 ];
 

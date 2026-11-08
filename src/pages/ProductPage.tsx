@@ -20,6 +20,7 @@ import Rating from '@/components/Rating';
 import FavoriteButton from '@/components/FavoriteButton';
 import ProductCarousel from '@/components/ProductCarousel';
 import SmartImage from '@/components/SmartImage';
+import { CopyReference, ShareProduct } from '@/components/ProductShareActions';
 import { DELIVERY } from '@/shared/siteInfo';
 import { ChevronRight, Store, Plus, Minus, Check, Star, Camera, X, ShieldCheck, Loader2, Truck } from 'lucide-react';
 
@@ -276,7 +277,10 @@ export default function ProductPage({ productId }: { productId: string }) {
           <div>
             {shop && <button onClick={() => navigate(`/boutique/${shop.id}`)} className="text-xs font-medium uppercase tracking-wider text-burgundy hover:underline">{shop.name}</button>}
             <h1 className="mt-1.5 font-display text-2xl font-semibold leading-tight text-ink sm:text-3xl">{product.name}</h1>
-            <p className="mt-1 text-xs font-mono text-ink/40">Réf. {product.reference}</p>
+            <div className="mt-1 flex flex-wrap items-center justify-between gap-2">
+              <CopyReference reference={product.reference} />
+              <ShareProduct product={product} />
+            </div>
             {isRealCatalogId(product.id) ? (
               reviewStats.count > 0 && <div className="mt-2.5"><Rating rating={reviewStats.average} count={reviewStats.count} size="md" /></div>
             ) : (

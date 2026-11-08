@@ -1,4 +1,5 @@
 import { createContext, useContext, useEffect, useState, useCallback, type ReactNode } from 'react';
+import { getStaffSpace } from '@/lib/staffSpace';
 import { type Product } from '@/data/products';
 import { registerSupabaseShops, type Shop } from '@/data/shops';
 import { fetchActiveCatalogFromSupabase } from '@/lib/supabaseCatalog';
@@ -159,6 +160,15 @@ export function useApp(): AppState { const ctx = useContext(AppContext); if (!ct
 // path via replaceState — so it still works, and never leaves a stray
 // hash in the address bar going forward.
 function getInitialRoute(): string {
+  // admin.ezial.net / livreur.ezial.net : aucune page de la marketplace, la
+  // racine (et tout autre chemin) ouvre directement l'espace réservé.
+  if (getStaffSpace()) {
+    const path = window.location.pathname.replace(/\/+$/, '');
+    if (path !== '/pro' && !path.startsWith('/pro/')) {
+      window.history.replaceState(null, '', '/pro' + window.location.search);
+      return '/pro' + window.location.search;
+    }
+  }
   const legacyHash = window.location.hash.replace(/^#/, '');
   if (legacyHash) {
     const clean = legacyHash.startsWith('/') ? legacyHash : `/${legacyHash}`;

@@ -17,12 +17,15 @@ import { COMPANY, CONTACT, DELIVERY, SITE_URL } from './siteInfo.js';
 import {
   FREE_PRODUCT_LIMIT, PREMIUM_PRODUCT_LIMIT, FREE_COMMISSION_PERCENT, PREMIUM_COMMISSION_PERCENT, TRIAL_DAYS,
   PLUS_PLAN_NAME, PLUS_BILLING, PLUS_ANNUAL_REFERENCE_PRICE_FCFA, PLUS_ANNUAL_DISCOUNT_PERCENT,
-  PLUS_SAME_BENEFITS_NOTE, TRIAL_RULES, PLAN_END_RULES, formatFcfa,
+  PLUS_SAME_BENEFITS_NOTE, TRIAL_RULES, PLAN_END_RULES, CANCELLATION_RULES, formatFcfa,
 } from './plans.js';
 import { parseMarkdown } from './markdown.js';
 
 const LEGAL_UPDATED = '6 novembre 2026';
 const LEGAL_UPDATED_ISO = '2026-11-06';
+// Pages modifiées pour la politique de résiliation des abonnements vendeurs.
+const SUBSCRIPTION_POLICY_UPDATED = '8 novembre 2026';
+const SUBSCRIPTION_POLICY_UPDATED_ISO = '2026-11-08';
 
 const QUARTERLY = formatFcfa(PLUS_BILLING.quarterly.priceFcfa);
 const ANNUAL = formatFcfa(PLUS_BILLING.annual.priceFcfa);
@@ -63,7 +66,7 @@ const aPropos = {
   breadcrumb: 'À propos',
   metaTitle: 'À propos — Ezial',
   description: 'Ezial, marketplace sénégalaise de mode et de beauté : des boutiques et créateurs du Sénégal, un seul panier, une livraison en 4 à 48 h à Dakar.',
-  intro: 'Ezial est une marketplace sénégalaise dédiée à la mode et à la beauté. Elle réunit sur un même site des boutiques et des créateurs du Sénégal, pour que chacun puisse découvrir leurs produits, commander simplement et être livré à Dakar et dans ses environs.',
+  intro: 'Ezial est une marketplace sénégalaise dédiée à la mode et à la beauté. Elle réunit sur un même site des boutiques et des créateurs du Sénégal, pour que chacun puisse découvrir leurs produits, commander simplement et être livré à Dakar.',
   jsonLdType: 'AboutPage',
   blocks: {
     categories: {
@@ -206,8 +209,8 @@ const livraison = {
   layout: 'simple',
   title: 'Livraison & retrait',
   metaTitle: 'Livraison et retrait — Ezial',
-  description: 'Livraison Ezial en 4 à 48 h à Dakar et environs, frais calculés selon la distance et affichés avant validation, ou retrait en boutique.',
-  intro: 'Faites-vous livrer à Dakar et dans ses environs, ou retirez votre commande directement en boutique lorsque celle-ci le propose.',
+  description: 'Livraison Ezial en 4 à 48 h à Dakar, frais calculés selon la distance et affichés avant validation, ou retrait en boutique.',
+  intro: 'Faites-vous livrer à Dakar, ou retirez votre commande directement en boutique lorsque celle-ci le propose.',
   blocks: {
     livraison: {
       ...deliveryHighlight,
@@ -228,7 +231,7 @@ const livraison = {
 
 ## Livraison Ezial
 
-Ezial livre à Dakar et dans ses environs. Lorsque votre commande réunit plusieurs boutiques, Ezial regroupe vos articles en une seule livraison vers votre adresse.
+Ezial livre à Dakar. Lorsque votre commande réunit plusieurs boutiques, Ezial regroupe vos articles en une seule livraison vers votre adresse.
 
 - **Délai** : ${DELIVERY.delay}. ${DELIVERY.legalNote}
 - **Adresse** : utilisez votre position actuelle ou recherchez une adresse, puis ajustez le repère sur la carte. Vous pouvez ajouter un point de repère et des instructions pour le livreur.
@@ -503,8 +506,8 @@ const conditionsGenerales = {
   breadcrumb: 'Conditions générales',
   metaTitle: 'Conditions générales de vente et d’utilisation — Ezial',
   description: 'Conditions générales de vente et d’utilisation d’Ezial : commandes, prix, paiement, livraison, retours, comptes, formules et commissions des vendeurs.',
-  updated: LEGAL_UPDATED,
-  updatedIso: LEGAL_UPDATED_ISO,
+  updated: SUBSCRIPTION_POLICY_UPDATED,
+  updatedIso: SUBSCRIPTION_POLICY_UPDATED_ISO,
   markdown: `## Présentation d’Ezial
 
 Ezial est une marketplace sénégalaise permettant aux consommateurs de découvrir et d’acheter des produits proposés par différentes boutiques partenaires ainsi que par la boutique exploitée directement par Ezial.
@@ -579,6 +582,10 @@ ${PLUS_PLAN_NAME} se règle par Wave ou Orange Money depuis l’espace « Mon ab
 ### Fin d’abonnement
 
 ${PLAN_END_RULES}
+
+### Résiliation de l’abonnement
+
+${CANCELLATION_RULES} Le détail figure dans la [politique de résiliation](/info/politique-de-resiliation/).
 
 ### Responsabilités des vendeurs
 
@@ -678,8 +685,8 @@ const confidentialite = {
   breadcrumb: 'Confidentialité',
   metaTitle: 'Politique de confidentialité — Ezial',
   description: 'Comment Ezial traite vos données personnelles : informations collectées, finalités, partage, prestataires techniques, cookies, conservation et droits.',
-  updated: LEGAL_UPDATED,
-  updatedIso: LEGAL_UPDATED_ISO,
+  updated: SUBSCRIPTION_POLICY_UPDATED,
+  updatedIso: SUBSCRIPTION_POLICY_UPDATED_ISO,
   markdown: `## Protection des données
 
 Ezial traite les données personnelles nécessaires au fonctionnement de sa marketplace conformément à la législation sénégalaise applicable, notamment la loi n° 2008-12 relative à la protection des données à caractère personnel. Les coordonnées d’Ezial figurent dans les [mentions légales](/info/mentions-legales/).
@@ -700,6 +707,12 @@ Selon les services utilisés, Ezial peut traiter :
 Ces données servent à gérer les comptes, exécuter les commandes, organiser les livraisons, traiter les paiements et remboursements, répondre aux réclamations et prévenir les utilisations frauduleuses.
 
 Les notifications de suivi de commande ne sont envoyées que si vous les activez. Les communications commerciales sont soumises aux règles applicables et aux choix exprimés par les utilisateurs : les notifications promotionnelles ne sont envoyées qu’aux personnes qui les ont acceptées.
+
+## Abonnements des vendeurs
+
+Pour les boutiques abonnées à ${PLUS_PLAN_NAME}, Ezial traite les données nécessaires à la gestion de l’abonnement : boutique concernée, formule et périodicité choisies, dates de début et de fin, montant payé, moyen de paiement (Wave ou Orange Money), référence de la transaction et, le cas échéant, la date de la demande de résiliation. Ces informations servent uniquement à activer, suivre et facturer l’abonnement et à respecter les obligations comptables.
+
+Un abonnement peut être résilié à tout moment, mais il n’est pas remboursable : il reste actif jusqu’à la fin de la durée prévue. Les règles sont détaillées dans la [politique de résiliation](/info/politique-de-resiliation/).
 
 ## Partage des données
 
@@ -747,6 +760,53 @@ Vous pouvez à tout moment effacer les données de navigation enregistrées par 
 ## Contact
 
 Toute question relative aux données personnelles peut être adressée à ${EMAIL_LINK}.`,
+};
+
+const politiqueResiliation = {
+  slug: 'politique-de-resiliation',
+  layout: 'legal',
+  toc: true,
+  title: 'Politique de résiliation des abonnements',
+  breadcrumb: 'Politique de résiliation',
+  metaTitle: 'Politique de résiliation des abonnements vendeurs — Ezial',
+  description: `Résiliation de l’abonnement ${PLUS_PLAN_NAME} : possible à tout moment, non remboursable, l’abonnement reste actif jusqu’à la fin de la durée prévue.`,
+  updated: SUBSCRIPTION_POLICY_UPDATED,
+  updatedIso: SUBSCRIPTION_POLICY_UPDATED_ISO,
+  markdown: `## À qui s’applique cette politique
+
+Cette politique concerne les boutiques qui souscrivent un abonnement ${PLUS_PLAN_NAME} sur Ezial, au trimestre (${QUARTERLY}) ou à l’année (${ANNUAL}). Elle complète les [conditions générales](/info/conditions-generales/?section=vendeurs-formules-et-commissions) et les [tarifs vendeurs](/info/tarifs-vendeurs/).
+
+La formule Free est gratuite : il n’y a rien à résilier.
+
+## Résilier à tout moment
+
+${CANCELLATION_RULES}
+
+La résiliation se fait en quelques secondes, par le vendeur lui-même, dans l’espace « Mon abonnement » : bouton « Résilier mon abonnement », puis confirmation. Elle est enregistrée immédiatement, et l’abonnement s’arrête à la date de fin affichée.
+
+## Aucun remboursement
+
+Les sommes versées pour la durée en cours ne sont pas remboursées en cas de résiliation, quel que soit le moment où elle est demandée : l’abonnement a été activé pour la durée payée et la boutique en profite jusqu’à son terme. Il en va de même si la boutique cesse son activité ou si son compte est fermé à sa demande.
+
+La résiliation ne remet pas en cause les ventes déjà réalisées ni les montants dus au vendeur pour ces ventes.
+
+## Ce qui se passe jusqu’à la fin de la durée prévue
+
+- Votre boutique conserve tous les avantages d’${PLUS_PLAN_NAME} jusqu’à la date de fin : ${PREMIUM_PRODUCT_LIMIT} produits publiés, commission de ${PREMIUM_COMMISSION_PERCENT} %, badge et mises en avant.
+- Aucun nouveau paiement n’est demandé : Ezial ne débite jamais un vendeur automatiquement.
+- Vous pouvez annuler votre résiliation tant que la durée payée n’est pas terminée : l’abonnement continue alors normalement.
+
+## Après la fin de la durée
+
+${PLAN_END_RULES} Vous pouvez vous réabonner à ${PLUS_PLAN_NAME} à tout moment.
+
+## L’essai gratuit
+
+L’essai gratuit de ${TRIAL_DAYS} jours ne donne lieu à aucun paiement et ne se transforme jamais automatiquement en abonnement payant. Il n’y a donc rien à résilier : sans abonnement, la boutique repasse simplement au forfait Free à la fin de l’essai.
+
+## Questions
+
+Pour toute question sur votre abonnement, écrivez-nous à ${EMAIL_LINK}.`,
 };
 
 const mentionsLegales = {
@@ -975,6 +1035,10 @@ ${PLUS_PLAN_NAME} se règle par Wave ou Orange Money depuis l’espace « Mon ab
 
 ${PLAN_END_RULES}
 
+## Résiliation
+
+${CANCELLATION_RULES} Voir la [politique de résiliation](/info/politique-de-resiliation/).
+
 ## Commission Ezial
 
 La commission Ezial dépend uniquement de la formule : **${FREE_COMMISSION_PERCENT} % sur chaque vente en Free**, **${PREMIUM_COMMISSION_PERCENT} % sur chaque vente en ${PLUS_PLAN_NAME}** (essai ou payant, trimestriel ou annuel). C’est l’un des principaux avantages d’${PLUS_PLAN_NAME} : sur une vente de ${formatFcfa(EXAMPLE_SALE)}, la commission est de ${exampleCommission(PREMIUM_COMMISSION_PERCENT)} au lieu de ${exampleCommission(FREE_COMMISSION_PERCENT)}.
@@ -1002,6 +1066,10 @@ Sans abonnement, votre boutique repasse au forfait Free. Pour conserver les avan
 ### Que se passe-t-il à la fin d’un abonnement payé ?
 
 Vos données et vos produits sont conservés. Jusqu’au renouvellement, votre boutique est soumise aux limites de Free : ${FREE_PRODUCT_LIMIT} produits publiés et commission de ${FREE_COMMISSION_PERCENT} %.
+
+### Puis-je résilier mon abonnement ?
+
+Oui, à tout moment depuis « Mon abonnement ». La résiliation n’est pas remboursable : l’abonnement reste actif jusqu’à la fin de la durée déjà payée, puis il n’est pas renouvelé. Voir la [politique de résiliation](/info/politique-de-resiliation/).
 
 ### Comment payer ${PLUS_PLAN_NAME} ?
 
@@ -1053,6 +1121,7 @@ export const INFO_PAGES = [
   conditionsGenerales,
   retours,
   confidentialite,
+  politiqueResiliation,
   mentionsLegales,
   tarifsVendeurs,
 ].map(finalize);

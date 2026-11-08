@@ -6,7 +6,7 @@ import { ArrowLeft, Lock, KeyRound } from 'lucide-react';
 
 interface LoginFormProps {
   role: Role;
-  onBack: () => void;
+  onBack?: () => void;
   onLogin: (identifier: string, name: string, shopInfo?: SellerShopInfo) => void;
   /** Seller-only: authenticates seller_code + password against Supabase Auth, then checks shop ownership. */
   verifySeller?: (identifier: string, password: string) => Promise<{ shop: { sellerId: string; name: string; supabaseShopId: string; isOfficial: boolean } } | { error: string }>;
@@ -83,9 +83,11 @@ export default function LoginForm({ role, onBack, onLogin, verifySeller, verifyA
 
   return (
     <div className="mx-auto max-w-md slide-up">
-      <button onClick={onBack} className="mb-6 flex items-center gap-1.5 text-sm text-ink/60 hover:text-ink">
-        <ArrowLeft size={16} /> Retour
-      </button>
+      {onBack && (
+        <button onClick={onBack} className="mb-6 flex items-center gap-1.5 text-sm text-ink/60 hover:text-ink">
+          <ArrowLeft size={16} /> Retour
+        </button>
+      )}
 
       <div className="card p-8">
         <h2 className="font-display text-2xl font-semibold text-ink">{cfg.title}</h2>

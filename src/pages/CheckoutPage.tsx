@@ -81,7 +81,6 @@ function CheckoutAccountStep({ onBackToCart }: { onBackToCart: () => void }) {
         <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-full bg-burgundy/10 text-burgundy"><UserCheck size={26} /></div>
         <h1 className="font-display text-2xl font-semibold text-ink">Un compte pour commander</h1>
         <p className="mt-2 text-sm text-ink/55">Votre compte Ezial vous permet de recevoir votre facture et de suivre votre commande jusqu'à la livraison.</p>
-        <p className="mt-2 text-xs text-ink/45">Votre panier est conservé.</p>
         <div className="mt-8 flex flex-col gap-2.5">
           <button onClick={() => setAuthStep('signup')} className="btn-primary w-full">Créer mon compte</button>
           <button onClick={() => setAuthStep('login')} className="btn-outline w-full">J'ai déjà un compte</button>

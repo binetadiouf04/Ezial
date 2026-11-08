@@ -5,7 +5,7 @@ import { ArrowLeft, KeyRound, Lock, Loader2, AlertCircle } from 'lucide-react';
 type View = 'username' | 'create_pin' | 'enter_pin';
 
 interface DriverLoginPanelProps {
-  onBack: () => void;
+  onBack?: () => void;
   onLogin: (username: string, name: string) => void;
   checkUsername: (username: string) => Promise<DriverLoginStatus | { error: string }>;
   createPin: (username: string, pin: string, setupCode: string) => Promise<DriverAuthInfo | { error: string }>;
@@ -83,9 +83,11 @@ export default function DriverLoginPanel({ onBack, onLogin, checkUsername, creat
 
   return (
     <div className="mx-auto max-w-md slide-up">
-      <button onClick={view === 'username' ? onBack : backToUsername} className="mb-6 flex items-center gap-1.5 text-sm text-ink/60 hover:text-ink">
-        <ArrowLeft size={16} /> Retour
-      </button>
+      {(view !== 'username' || onBack) && (
+        <button onClick={view === 'username' ? onBack : backToUsername} className="mb-6 flex items-center gap-1.5 text-sm text-ink/60 hover:text-ink">
+          <ArrowLeft size={16} /> Retour
+        </button>
+      )}
 
       <div className="card p-8">
         <h2 className="font-display text-2xl font-semibold text-ink">Espace Livreur</h2>

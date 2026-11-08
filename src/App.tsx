@@ -1,4 +1,5 @@
 import { useEffect, useState, Suspense, lazy } from 'react';
+import { getStaffSpace } from '@/lib/staffSpace';
 import { AppProvider, useApp } from '@/store/AppContext';
 import { ProProvider } from '@/pro/ProContext';
 import type { Product } from '@/data/products';
@@ -80,7 +81,7 @@ function RouteView() {
   // sub-route (seller/admin/driver pages) lives after "/pro" in this same
   // hash (see ProContext's proSubRouteFromHash) so a refresh on any of
   // those pages still matches here instead of falling through to Home.
-  if (clean === '/pro' || clean.startsWith('/pro/')) return <ProEntryPage />;
+  if (getStaffSpace() || clean === '/pro' || clean.startsWith('/pro/')) return <ProEntryPage />;
 
   // Home
   if (clean === '/' || clean === '') return <HomePage />;
@@ -276,7 +277,7 @@ function Layout() {
   const { route, catalogProducts, catalogShops, catalogLoading } = useApp();
   const clean = route.split('?')[0];
   const isHome = clean === '/' || clean === '';
-  const isPro = clean === '/pro' || clean.startsWith('/pro/');
+  const isPro = getStaffSpace() !== null || clean === '/pro' || clean.startsWith('/pro/');
   const isCheckout = clean === '/checkout';
   const isOrderConfirm = clean.startsWith('/commande/');
 
