@@ -17,7 +17,9 @@ export default {
         champagne: '#C4A46B',
       },
       fontFamily: {
-        display: ['"Playfair Display"', 'Georgia', 'serif'],
+        display: ['"Cormorant Garamond"', 'serif'],
+        // Le mot « EZIAL » seul (logo) garde Playfair Display.
+        logo: ['"Playfair Display"', 'Georgia', 'serif'],
         sans: ['"Inter"', 'system-ui', 'sans-serif'],
       },
       letterSpacing: {

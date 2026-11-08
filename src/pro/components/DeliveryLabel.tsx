@@ -46,7 +46,7 @@ export default function DeliveryLabel({
            thermal label exactly, not just an approximation on screen. */}
         <div id="delivery-label-print-area" className="mx-auto flex flex-col justify-between border-2 border-ink bg-white p-4 text-ink print:border-0" style={{ width: '100mm', height: '150mm', maxWidth: '100%', aspectRatio: '100 / 150' }}>
           <div>
-            <p className="text-center font-display text-xl font-bold tracking-wide">EZIAL</p>
+            <p className="text-center font-logo text-xl font-bold tracking-wide">EZIAL</p>
             <div className="mt-3 border-t border-dashed border-ink/30 pt-2">
               <p className="text-[11px] uppercase tracking-wider text-ink/50">Commande</p>
               <p className="font-mono text-lg font-bold">{mission.orderId}</p>
