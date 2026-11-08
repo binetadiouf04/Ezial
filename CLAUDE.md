@@ -39,4 +39,4 @@ Utiliser des sous-agents pour aller plus vite dès qu'une tâche se découpe en 
 - Positionnement : « La marketplace sénégalaise qui rassemble vos boutiques préférées. » Promesse : Découvrir, Commander, Se faire livrer.
 - Style : fonds bordeaux avec ondulations satinées, motif géométrique beige, icônes en trait fin, coins arrondis.
 - **Logo : ne jamais ajouter le papillon.** Le logo reste le mot « EZIAL » seul ; le symbole papillon de la planche d'identité n'est pas utilisé (ni dans le logo, ni en favicon, ni en icône d'application) sans demande explicite.
-- Tant qu'un changement de design n'est pas demandé, ne pas modifier les couleurs et polices existantes du site (actuellement `burgundy` `#651D32`, Cormorant Garamond + Inter, qui diffèrent de cette planche).
+- Appliquée au site : `burgundy` = bordeaux `#5A0D1E` (`burgundy-ruby` = rouge rubis `#8C1024`), `cream` `#F8F3EE`, `beige` `#D8C6C2`, titres en Playfair Display (chiffres alignés), texte en Inter (voir `tailwind.config.js` et `src/index.css`).

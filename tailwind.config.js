@@ -5,17 +5,19 @@ export default {
     extend: {
       colors: {
         ink: '#171717',
-        cream: '#FAF8F5',
+        cream: '#F8F3EE',
+        beige: '#D8C6C2',
         fog: '#F2F0ED',
         line: '#E8E5E1',
         burgundy: {
-          DEFAULT: '#651D32',
-          deep: '#3F111F',
+          DEFAULT: '#5A0D1E',
+          deep: '#3A0812',
+          ruby: '#8C1024',
         },
         champagne: '#C4A46B',
       },
       fontFamily: {
-        display: ['"Cormorant Garamond"', 'serif'],
+        display: ['"Playfair Display"', 'Georgia', 'serif'],
         sans: ['"Inter"', 'system-ui', 'sans-serif'],
       },
       letterSpacing: {
