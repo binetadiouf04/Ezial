@@ -35,8 +35,8 @@ Utiliser des sous-agents pour aller plus vite dès qu'une tâche se découpe en 
 ## Identité visuelle (fournie par la personne, à respecter pour tout changement de design)
 
 - Couleurs : bordeaux `#5A0D1E`, rouge rubis `#8C1024`, crème `#F8F3EE`, beige `#D8C6C2`.
-- Typographies : Playfair Display pour les titres et mises en avant, Inter pour les textes et l'interface.
+- Typographies : le **logo « EZIAL » est en Playfair Display** (validé). Les titres et textes du site restent en Cormorant Garamond + Inter (la personne a refusé Playfair pour les écritures du site).
 - Positionnement : « La marketplace sénégalaise qui rassemble vos boutiques préférées. » Promesse : Découvrir, Commander, Se faire livrer.
 - Style : fonds bordeaux avec ondulations satinées, motif géométrique beige, icônes en trait fin, coins arrondis.
 - **Logo : ne jamais ajouter le papillon.** Le logo reste le mot « EZIAL » seul ; le symbole papillon de la planche d'identité n'est pas utilisé (ni dans le logo, ni en favicon, ni en icône d'application) sans demande explicite.
-- Appliquée au site : `burgundy` = bordeaux `#5A0D1E` (`burgundy-ruby` = rouge rubis `#8C1024`), `cream` `#F8F3EE`, `beige` `#D8C6C2`, titres en Playfair Display (chiffres alignés), texte en Inter (voir `tailwind.config.js` et `src/index.css`).
+- Appliquée au site : `burgundy` = bordeaux `#5A0D1E` (`burgundy-ruby` = rouge rubis `#8C1024`), `cream` `#F8F3EE`, `beige` `#D8C6C2` ; `font-display` = Cormorant Garamond, `font-logo` = Playfair Display (logo seulement), texte en Inter (voir `tailwind.config.js` et `src/index.css`).
