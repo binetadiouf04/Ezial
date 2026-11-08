@@ -31,3 +31,12 @@ Utiliser des sous-agents pour aller plus vite dès qu'une tâche se découpe en 
 - Migrations SQL : les donner en texte brut dans la conversation pour que la personne les exécute ; ne jamais déployer une interface qui dépend d'une migration pas encore en production.
 - Ne jamais inventer de contenu (avis, notes, stock, produits de démo) ; ne jamais supprimer de données sans avoir vérifié qu'il s'agit de données de test.
 - Distinguer ce qui a été testé sur la branche/preview de ce qui est réellement en ligne ; ne jamais annoncer qu'un problème est résolu sans l'avoir vérifié.
+
+## Identité visuelle (fournie par la personne, à respecter pour tout changement de design)
+
+- Couleurs : bordeaux `#5A0D1E`, rouge rubis `#8C1024`, crème `#F8F3EE`, beige `#D8C6C2`.
+- Typographies : Playfair Display pour les titres et mises en avant, Inter pour les textes et l'interface.
+- Positionnement : « La marketplace sénégalaise qui rassemble vos boutiques préférées. » Promesse : Découvrir, Commander, Se faire livrer.
+- Style : fonds bordeaux avec ondulations satinées, motif géométrique beige, icônes en trait fin, coins arrondis.
+- **Logo : ne jamais ajouter le papillon.** Le logo reste le mot « EZIAL » seul ; le symbole papillon de la planche d'identité n'est pas utilisé (ni dans le logo, ni en favicon, ni en icône d'application) sans demande explicite.
+- Tant qu'un changement de design n'est pas demandé, ne pas modifier les couleurs et polices existantes du site (actuellement `burgundy` `#651D32`, Cormorant Garamond + Inter, qui diffèrent de cette planche).
