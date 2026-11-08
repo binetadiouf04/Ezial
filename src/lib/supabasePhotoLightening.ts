@@ -19,7 +19,7 @@ const MIN_GAIN = 0.8; // keep the new file only if at least 20% lighter
 const MAX_DIMENSION = 1200;
 
 export interface LightenProgress { done: number; total: number }
-export interface LightenResult { checked: number; lightened: number; savedBytes: number; failed: number }
+export interface LightenResult { checked: number; lightened: number; savedBytes: number; failed: number; firstError?: string }
 
 interface ImageRow {
   id: string;
@@ -50,7 +50,7 @@ async function reencode(blob: Blob): Promise<{ blob: Blob; type: string } | null
   canvas.width = Math.max(1, Math.round(bitmap.width * scale));
   canvas.height = Math.max(1, Math.round(bitmap.height * scale));
   const ctx = canvas.getContext('2d');
-  if (!ctx) return null;
+  if (!ctx) throw new Error('canvas indisponible');
   ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
   bitmap.close?.();
   const encoded = await encodeCanvasForWeb(canvas, 0.82);
@@ -62,12 +62,12 @@ async function upload(path: string, blob: Blob, contentType: string): Promise<bo
   return !error;
 }
 
-async function lightenOne(uid: string, row: ImageRow, stored: StoredFile | undefined): Promise<number | null> {
+async function lightenOne(uid: string, row: ImageRow, stored: StoredFile | undefined): Promise<number> {
   // Already light and in a modern format: nothing to do.
   if (stored && stored.size > 0 && stored.size < HEAVY_BYTES && stored.mimetype !== 'image/png') return 0;
 
   const response = await fetch(resolveImageUrl(row.storage_path), { cache: 'no-store' });
-  if (!response.ok) return null;
+  if (!response.ok) throw new Error(`lecture de la photo refusée (${response.status})`);
   const source = await response.blob();
   if (source.size < HEAVY_BYTES && source.type !== 'image/png') return 0;
 
@@ -77,7 +77,7 @@ async function lightenOne(uid: string, row: ImageRow, stored: StoredFile | undef
   const token = Math.random().toString(36).slice(2, 8);
   const ext = extFor(next.type);
   const mainPath = `${uid}/${row.product_id}/opt-${token}.${ext}`;
-  if (!(await upload(mainPath, next.blob, next.type))) return null;
+  if (!(await upload(mainPath, next.blob, next.type))) throw new Error('envoi de la photo allégée refusé');
 
   let thumbPath: string | null = null;
   const thumb = await generateThumbnail(new File([next.blob], `photo.${ext}`, { type: next.type }));
@@ -94,7 +94,7 @@ async function lightenOne(uid: string, row: ImageRow, stored: StoredFile | undef
   if (error || !data || data.length !== 1) {
     // Row unchanged: remove only what was just uploaded.
     await supabase.storage.from(PRODUCT_IMAGES_BUCKET).remove([mainPath, ...(thumbPath ? [thumbPath] : [])]);
-    return null;
+    throw new Error('mise à jour de la fiche photo refusée');
   }
 
   // The row now points at the new files. The old ones are removed, EXCEPT
@@ -177,10 +177,10 @@ export async function lightenShopProductPhotos(
       const row = heavy[next++];
       try {
         const saved = await lightenOne(uid, row, stored.get(row.storage_path));
-        if (saved === null) result.failed += 1;
-        else if (saved > 0) { result.lightened += 1; result.savedBytes += saved; }
-      } catch {
+        if (saved > 0) { result.lightened += 1; result.savedBytes += saved; }
+      } catch (e) {
         result.failed += 1;
+        result.firstError ??= e instanceof Error ? e.message : String(e);
       }
       done += 1;
       onProgress?.({ done, total: heavy.length });
@@ -199,25 +199,29 @@ const AUTO_BATCH = 25;
 const AUTO_DELAY_MS = 3000;
 let autoRunning = false;
 
-export function scheduleAutoLightening(shopId: string, onProgress?: (p: LightenProgress | null) => void): () => void {
+export function scheduleAutoLightening(
+  shopId: string,
+  onProgress?: (p: LightenProgress | null) => void,
+  onDone?: (result: LightenResult | { error: string }) => void,
+): () => void {
   const key = `ezial-photo-lightening-${shopId}`;
   try { if (sessionStorage.getItem(key)) return () => {}; } catch { /* ignore */ }
-  let cancelled = false;
+  let cancelledBeforeStart = false;
   const timer = window.setTimeout(() => {
-    if (cancelled || autoRunning) return;
+    if (cancelledBeforeStart || autoRunning) return;
     autoRunning = true;
-    void lightenShopProductPhotos(shopId, {
-      maxHeavy: AUTO_BATCH,
-      shouldStop: () => cancelled,
-      onProgress: (p) => { if (!cancelled && p.total > 0) onProgress?.(p); },
-    })
+    // Once started, the run goes on even if the seller moves to another page
+    // of the site (the app stays loaded): leaving the seller space after a
+    // few seconds used to cut it short.
+    void lightenShopProductPhotos(shopId, { maxHeavy: AUTO_BATCH, onProgress: (p) => { if (p.total > 0) onProgress?.(p); } })
       .then((result) => {
-        if (!cancelled && !('error' in result)) {
+        if (!('error' in result) && result.failed === 0) {
           try { sessionStorage.setItem(key, '1'); } catch { /* ignore */ }
         }
+        onDone?.(result);
       })
       .catch(() => undefined)
-      .finally(() => { autoRunning = false; if (!cancelled) onProgress?.(null); });
+      .finally(() => { autoRunning = false; onProgress?.(null); });
   }, AUTO_DELAY_MS);
-  return () => { cancelled = true; window.clearTimeout(timer); };
+  return () => { cancelledBeforeStart = true; window.clearTimeout(timer); };
 }

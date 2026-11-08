@@ -38,7 +38,13 @@ export default function SellerLayout() {
   // Heavy product photos from before the iPad upload fix are lightened in
   // the background, automatically (see supabasePhotoLightening.ts).
   const [photoProgress, setPhotoProgress] = useState<{ done: number; total: number } | null>(null);
-  useEffect(() => (sellerSupabaseShopId ? scheduleAutoLightening(sellerSupabaseShopId, setPhotoProgress) : undefined), [sellerSupabaseShopId]);
+  const [photoReport, setPhotoReport] = useState('');
+  useEffect(() => (sellerSupabaseShopId ? scheduleAutoLightening(sellerSupabaseShopId, setPhotoProgress, (r) => {
+    if ('error' in r) { setPhotoReport(`Optimisation des photos impossible : ${r.error}`); return; }
+    if (r.lightened === 0 && r.failed === 0) return;
+    const mo = (r.savedBytes / (1024 * 1024)).toFixed(1).replace('.', ',');
+    setPhotoReport(`Photos optimisées : ${r.lightened} allégée${r.lightened > 1 ? 's' : ''} (${mo} Mo gagnés)${r.failed ? `, ${r.failed} en échec (${r.firstError ?? 'erreur inconnue'}) : elles seront retentées à la prochaine ouverture` : ''}.`);
+  }) : undefined), [sellerSupabaseShopId]);
 
   const clean = route.split('?')[0];
 
@@ -248,6 +254,11 @@ export default function SellerLayout() {
 
       {/* Main content */}
       <div className="flex-1 min-w-0">
+        {!photoProgress && photoReport && (
+          <div role="status" className="border-b border-line bg-cream px-4 py-2 text-center text-xs text-ink/65">
+            {photoReport} <button onClick={() => setPhotoReport('')} className="ml-1 underline">Fermer</button>
+          </div>
+        )}
         {photoProgress && (
           <div role="status" className="border-b border-line bg-cream px-4 py-2 text-center text-xs text-ink/65">
             <Loader2 size={12} className="mr-1.5 inline animate-spin align-[-2px]" aria-hidden="true" />
