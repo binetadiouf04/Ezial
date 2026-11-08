@@ -114,7 +114,7 @@ export default function AdminLayout() {
   return (
     <div className="min-h-screen bg-cream/30 lg:flex">
       {/* Sidebar — desktop */}
-      <aside className="hidden lg:flex w-64 flex-shrink-0 flex-col border-r border-line bg-white">
+      <aside className="hidden lg:flex w-64 flex-shrink-0 flex-col border-r border-line bg-white lg:sticky lg:top-0 lg:h-screen lg:self-start">
         <div className="p-5 border-b border-line">
           <div className="flex items-center gap-3">
             <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-burgundy text-white">
@@ -127,7 +127,7 @@ export default function AdminLayout() {
             <AdminNotificationBell onNavigate={onNotificationNavigate} />
           </div>
         </div>
-        <nav className="flex-1 p-3 space-y-1">
+        <nav className="flex-1 overflow-y-auto p-3 space-y-1">
           {navItems.map((item) => {
             const Icon = item.icon;
             return (
