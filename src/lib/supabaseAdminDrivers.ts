@@ -95,23 +95,10 @@ export async function setAdminDriverSuspended(driverId: string, suspended: boole
   return error ? { error: error.message } : {};
 }
 
-export interface DriverActivationCode {
-  /** 8 characters, shown once — only its hash is stored. */
-  code: string;
-  expiresAt: string;
-}
-
-// One-time activation code the driver needs to create their PIN (first
-// login, or after a reset). Generating one invalidates the current PIN and
-// any previous code. Admins only (checked server-side).
-export async function issueDriverActivationCode(driverId: string): Promise<DriverActivationCode | { error: string }> {
-  const { data, error } = await supabase.rpc('admin_issue_driver_activation_code', { p_driver_id: driverId });
-  if (error) return { error: error.message };
-  const row = data as { code?: string; expiresAt?: string } | null;
-  if (!row?.code || !row.expiresAt) return { error: "Impossible de générer le code d'activation." };
-  return { code: row.code, expiresAt: row.expiresAt };
-}
-
-export function formatActivationCode(code: string): string {
-  return code.length === 8 ? `${code.slice(0, 4)}-${code.slice(4)}` : code;
+// Réinitialise le NIP d'un livreur : l'ancien NIP est invalidé et le livreur
+// en choisit un nouveau (4 chiffres) à sa prochaine connexion avec son nom
+// d'utilisateur. Réservé aux administrateurs (vérifié côté serveur).
+export async function resetDriverPin(driverId: string): Promise<{ error?: string }> {
+  const { error } = await supabase.rpc('admin_reset_driver_pin', { p_driver_id: driverId });
+  return error ? { error: error.message } : {};
 }

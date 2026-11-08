@@ -151,12 +151,12 @@ interface ProState extends AuthState {
   // granting access. Needed so RLS on manually-managed content (Hero,
   // "À découvrir") can actually restrict writes to admins.
   verifyAdminLogin: (email: string, password: string) => Promise<{ name: string } | { error: string }>;
-  // Driver login — username + 6-digit NIP, never an email/password the
+  // Driver login — username + NIP (4 digits), never an email/password the
   // driver has to see. checkDriverUsername tells the UI whether to show
   // "create your PIN" or "enter your PIN"; the other two each establish a
   // real Supabase Auth session on success (see supabaseDriverAuth.ts).
   checkDriverUsername: (username: string) => Promise<DriverLoginStatus | { error: string }>;
-  createDriverPin: (username: string, pin: string, setupCode: string) => Promise<{ id: string; username: string; name: string } | { error: string }>;
+  createDriverPin: (username: string, pin: string) => Promise<{ id: string; username: string; name: string } | { error: string }>;
   signInDriverWithPin: (username: string, pin: string) => Promise<{ id: string; username: string; name: string } | { error: string }>;
   // Seller transactions
   sellerTransactions: typeof initialTransactions;
@@ -584,7 +584,7 @@ export function ProProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const checkDriverUsernameAction = useCallback((username: string) => checkDriverUsername(username), []);
-  const createDriverPinAction = useCallback((username: string, pin: string, setupCode: string) => createDriverPin(username, pin, setupCode), []);
+  const createDriverPinAction = useCallback((username: string, pin: string) => createDriverPin(username, pin), []);
   const signInDriverWithPinAction = useCallback((username: string, pin: string) => signInDriverWithPin(username, pin), []);
 
   // === Driver actions — every mutation writes to Supabase first, then
