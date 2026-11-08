@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { X, ZoomIn, Check } from 'lucide-react';
 import { PRODUCT_MEDIA_ASPECT_RATIO } from '@/lib/supabaseSellerProducts';
+import { encodeCanvasForWeb } from '@/utils/imageOptimize';
 
 // The crop frame's on-screen size — fixed (not viewport-scaled) so the same
 // drag/zoom math works identically on phone, tablet and desktop; 320px wide
@@ -217,7 +218,9 @@ export default function ImageCropModal({ file, onCancel, onConfirm }: Props) {
     // pixel-for-pixel what the frame showed, never an approximation.
     const factor = OUTPUT_W / FRAME_W;
     ctx.drawImage(img, offset.x * factor, offset.y * factor, displayW * factor, displayH * factor);
-    canvas.toBlob((blob) => { if (blob) onConfirm(blob); }, 'image/webp', 0.82);
+    // WebP, or JPEG where the browser can't encode WebP (iPad/iPhone Safari
+    // returns a ~1.3 MB PNG otherwise). The blob's own type is the truth.
+    void encodeCanvasForWeb(canvas, 0.82).then((encoded) => { if (encoded) onConfirm(encoded.blob); });
   };
 
   return (

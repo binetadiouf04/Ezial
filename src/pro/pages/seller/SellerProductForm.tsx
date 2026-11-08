@@ -373,6 +373,15 @@ interface MediaItem {
   };
 }
 
+// The crop modal's output: WebP, or JPEG on iPad/iPhone (no WebP encoder in
+// Safari). Named after its REAL type, so the stored file's extension and
+// Content-Type always match its bytes.
+function croppedPhotoFile(blob: Blob): File {
+  const type = blob.type || 'image/jpeg';
+  const ext = type === 'image/webp' ? 'webp' : type === 'image/png' ? 'png' : 'jpg';
+  return new File([blob], `photo-${Date.now()}.${ext}`, { type });
+}
+
 export default function SellerProductForm({ productId }: { productId?: string }) {
   const { navigate, name: sellerShopName, sellerSupabaseShopId, sellerShopIsOfficial } = usePro();
   const isEditing = Boolean(productId);
@@ -709,7 +718,7 @@ export default function SellerProductForm({ productId }: { productId?: string })
   };
 
   const handleCropConfirm = (blob: Blob) => {
-    const file = new File([blob], `photo-${Date.now()}.webp`, { type: blob.type || 'image/webp' });
+    const file = croppedPhotoFile(blob);
     setImages((prev) => [...prev, { key: `local-${Date.now()}-${Math.random().toString(36).slice(2)}`, kind: 'image', previewUrl: URL.createObjectURL(file), file }]);
     setPendingCropFiles((prev) => prev.slice(1));
   };
@@ -914,7 +923,7 @@ export default function SellerProductForm({ productId }: { productId?: string })
   const handleRecropConfirm = async (blob: Blob) => {
     const target = images.find((i) => i.key === recropTargetKey);
     if (!target) { setRecropTargetKey(null); setRecropSourceFile(null); return; }
-    const newFile = new File([blob], `photo-${Date.now()}.webp`, { type: blob.type || 'image/webp' });
+    const newFile = croppedPhotoFile(blob);
     if (target.existing) {
       const del = await deleteProductImage(target.existing.id, target.existing.storagePath, [
         target.existing.originalStoragePath,
