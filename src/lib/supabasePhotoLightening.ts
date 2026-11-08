@@ -120,8 +120,14 @@ async function lightenOne(uid: string, row: ImageRow, stored: StoredFile | undef
 // maxHeavy: how many heavy photos to convert in this run (light photos are
 // skipped from Storage metadata alone, without downloading them). Lets the
 // automatic background run spread a large backlog over several visits.
-export async function lightenShopProductPhotos(shopId: string, options: { maxHeavy?: number; onProgress?: (p: LightenProgress) => void } = {}): Promise<LightenResult | { error: string }> {
-  const { maxHeavy = Infinity, onProgress } = options;
+// shouldStop lets the caller abort between two photos (page left, signed out).
+const CONCURRENCY = 3;
+
+export async function lightenShopProductPhotos(
+  shopId: string,
+  options: { maxHeavy?: number; onProgress?: (p: LightenProgress) => void; shouldStop?: () => boolean } = {},
+): Promise<LightenResult | { error: string }> {
+  const { maxHeavy = Infinity, onProgress, shouldStop } = options;
   const { data: userData } = await supabase.auth.getUser();
   const uid = userData.user?.id;
   if (!uid) return { error: 'Session expirée : reconnectez-vous.' };
@@ -139,44 +145,79 @@ export async function lightenShopProductPhotos(shopId: string, options: { maxHea
   if (rowsError) return { error: 'Impossible de lire vos photos.' };
 
   // Only photos in the seller's own folder (the only ones RLS lets them
-  // replace), and never one with a logo overlay.
-  const candidates = ((rows ?? []) as ImageRow[]).filter((r) => r.storage_path?.startsWith(`${uid}/`) && !r.original_storage_path);
+  // replace), never one with a logo overlay, and never one this tool already
+  // produced (its name starts with "opt-").
+  const candidates = ((rows ?? []) as ImageRow[]).filter(
+    (r) => r.storage_path?.startsWith(`${uid}/`) && !r.original_storage_path && !/\/opt-[^/]*$/.test(r.storage_path),
+  );
 
+  // One listing per product folder, all at once (not one after the other:
+  // a phone that leaves the page mid-way would never get to the photos).
   const folders = [...new Set(candidates.map((r) => r.storage_path.split('/').slice(0, -1).join('/')))];
   const stored = new Map<string, StoredFile>();
-  for (const folder of folders) for (const [k, v] of await listProductFolder(folder)) stored.set(k, v);
+  for (const listing of await Promise.all(folders.map((f) => listProductFolder(f)))) {
+    for (const [k, v] of listing) stored.set(k, v);
+  }
+
+  // Only the photos that are really heavy or still PNG.
+  const heavy = candidates
+    .filter((r) => {
+      const f = stored.get(r.storage_path);
+      return !f || f.size === 0 || f.size >= HEAVY_BYTES || f.mimetype === 'image/png';
+    })
+    .slice(0, maxHeavy);
 
   const result: LightenResult = { checked: candidates.length, lightened: 0, savedBytes: 0, failed: 0 };
-  onProgress?.({ done: 0, total: candidates.length });
-  for (let i = 0; i < candidates.length; i++) {
-    if (result.lightened + result.failed >= maxHeavy) break;
-    try {
-      const saved = await lightenOne(uid, candidates[i], stored.get(candidates[i].storage_path));
-      if (saved === null) result.failed += 1;
-      else if (saved > 0) { result.lightened += 1; result.savedBytes += saved; }
-    } catch {
-      result.failed += 1;
+  let done = 0;
+  onProgress?.({ done, total: heavy.length });
+
+  let next = 0;
+  const worker = async () => {
+    while (next < heavy.length && !shouldStop?.()) {
+      const row = heavy[next++];
+      try {
+        const saved = await lightenOne(uid, row, stored.get(row.storage_path));
+        if (saved === null) result.failed += 1;
+        else if (saved > 0) { result.lightened += 1; result.savedBytes += saved; }
+      } catch {
+        result.failed += 1;
+      }
+      done += 1;
+      onProgress?.({ done, total: heavy.length });
     }
-    onProgress?.({ done: i + 1, total: candidates.length });
-  }
+  };
+  await Promise.all(Array.from({ length: Math.min(CONCURRENCY, heavy.length) }, worker));
   return result;
 }
 
-// Once per browser session per shop, a few seconds after the seller space
-// opens: converts up to AUTO_BATCH heavy legacy photos in the background.
-// Sellers don't need to know or do anything; a large backlog is simply
-// spread over a few visits. Every failure is silent (nothing changes then).
+// Automatic run, started a few seconds after the seller space opens: up to
+// AUTO_BATCH heavy legacy photos per visit, so a large backlog is spread over
+// a few visits. The run is only marked as done for this browser session once
+// it has really finished: a phone that left the page mid-way (iOS pauses the
+// tab) starts again on the next visit instead of being skipped.
 const AUTO_BATCH = 25;
-const AUTO_DELAY_MS = 4000;
+const AUTO_DELAY_MS = 3000;
+let autoRunning = false;
 
-export function scheduleAutoLightening(shopId: string): () => void {
+export function scheduleAutoLightening(shopId: string, onProgress?: (p: LightenProgress | null) => void): () => void {
   const key = `ezial-photo-lightening-${shopId}`;
   try { if (sessionStorage.getItem(key)) return () => {}; } catch { /* ignore */ }
   let cancelled = false;
   const timer = window.setTimeout(() => {
-    if (cancelled) return;
-    try { sessionStorage.setItem(key, '1'); } catch { /* ignore */ }
-    void lightenShopProductPhotos(shopId, { maxHeavy: AUTO_BATCH }).catch(() => undefined);
+    if (cancelled || autoRunning) return;
+    autoRunning = true;
+    void lightenShopProductPhotos(shopId, {
+      maxHeavy: AUTO_BATCH,
+      shouldStop: () => cancelled,
+      onProgress: (p) => { if (!cancelled && p.total > 0) onProgress?.(p); },
+    })
+      .then((result) => {
+        if (!cancelled && !('error' in result)) {
+          try { sessionStorage.setItem(key, '1'); } catch { /* ignore */ }
+        }
+      })
+      .catch(() => undefined)
+      .finally(() => { autoRunning = false; if (!cancelled) onProgress?.(null); });
   }, AUTO_DELAY_MS);
   return () => { cancelled = true; window.clearTimeout(timer); };
 }

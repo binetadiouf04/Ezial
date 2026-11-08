@@ -37,7 +37,8 @@ export default function SellerLayout() {
   const [menuOpen, setMenuOpen] = useState(false);
   // Heavy product photos from before the iPad upload fix are lightened in
   // the background, automatically (see supabasePhotoLightening.ts).
-  useEffect(() => (sellerSupabaseShopId ? scheduleAutoLightening(sellerSupabaseShopId) : undefined), [sellerSupabaseShopId]);
+  const [photoProgress, setPhotoProgress] = useState<{ done: number; total: number } | null>(null);
+  useEffect(() => (sellerSupabaseShopId ? scheduleAutoLightening(sellerSupabaseShopId, setPhotoProgress) : undefined), [sellerSupabaseShopId]);
 
   const clean = route.split('?')[0];
 
@@ -247,6 +248,12 @@ export default function SellerLayout() {
 
       {/* Main content */}
       <div className="flex-1 min-w-0">
+        {photoProgress && (
+          <div role="status" className="border-b border-line bg-cream px-4 py-2 text-center text-xs text-ink/65">
+            <Loader2 size={12} className="mr-1.5 inline animate-spin align-[-2px]" aria-hidden="true" />
+            Optimisation de vos photos en cours ({photoProgress.done}/{photoProgress.total}) : gardez cette page ouverte.
+          </div>
+        )}
         <main className="p-4 sm:p-6 lg:p-8 max-w-5xl mx-auto pb-8">
           {renderPage()}
         </main>
