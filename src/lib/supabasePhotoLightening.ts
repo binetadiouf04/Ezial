@@ -29,18 +29,6 @@ interface ImageRow {
   original_storage_path: string | null;
 }
 
-interface StoredFile { size: number; mimetype: string }
-
-async function listProductFolder(folder: string): Promise<Map<string, StoredFile>> {
-  const files = new Map<string, StoredFile>();
-  const { data } = await supabase.storage.from(PRODUCT_IMAGES_BUCKET).list(folder, { limit: 1000 });
-  for (const f of data ?? []) {
-    const meta = (f.metadata ?? {}) as { size?: number; mimetype?: string };
-    files.set(`${folder}/${f.name}`, { size: meta.size ?? 0, mimetype: meta.mimetype ?? '' });
-  }
-  return files;
-}
-
 const extFor = (type: string) => (type === 'image/webp' ? 'webp' : type === 'image/png' ? 'png' : 'jpg');
 
 async function reencode(blob: Blob): Promise<{ blob: Blob; type: string } | null> {
@@ -66,10 +54,7 @@ async function upload(path: string, blob: Blob, contentType: string): Promise<bo
   return !error;
 }
 
-async function lightenOne(uid: string, row: ImageRow, stored: StoredFile | undefined): Promise<number> {
-  // Already light and in a modern format: nothing to do.
-  if (stored && stored.size > 0 && stored.size < HEAVY_BYTES && stored.mimetype !== 'image/png') return 0;
-
+async function lightenOne(uid: string, row: ImageRow): Promise<number> {
   const response = await fetch(resolveImageUrl(row.storage_path), { cache: 'no-store' });
   if (!response.ok) throw new Error(`lecture de la photo refusée (${response.status})`);
   const source = await response.blob();
@@ -155,32 +140,22 @@ export async function lightenShopProductPhotos(
     (r) => r.storage_path?.startsWith(`${uid}/`) && !r.original_storage_path && !/\/opt-[^/]*$/.test(r.storage_path),
   );
 
-  // One listing per product folder, all at once (not one after the other:
-  // a phone that leaves the page mid-way would never get to the photos).
-  const folders = [...new Set(candidates.map((r) => r.storage_path.split('/').slice(0, -1).join('/')))];
-  const stored = new Map<string, StoredFile>();
-  for (const listing of await Promise.all(folders.map((f) => listProductFolder(f)))) {
-    for (const [k, v] of listing) stored.set(k, v);
-  }
-
-  // Only the photos that are really heavy or still PNG.
-  const heavy = candidates
-    .filter((r) => {
-      const f = stored.get(r.storage_path);
-      return !f || f.size === 0 || f.size >= HEAVY_BYTES || f.mimetype === 'image/png';
-    })
-    .slice(0, maxHeavy);
-
+  // No Storage listing: listing a folder runs a heavy query on the database,
+  // and ~40 of them at once made it answer "statement timeout" to everyone
+  // (seen in production). A photo's real size and type are read from the
+  // file itself instead, one request at a time per worker (see lightenOne:
+  // an already-light photo is left alone after a cheap download).
   const result: LightenResult = { checked: candidates.length, lightened: 0, savedBytes: 0, failed: 0 };
+  const heavy = candidates;
   let done = 0;
   onProgress?.({ done, total: heavy.length });
 
   let next = 0;
   const worker = async () => {
-    while (next < heavy.length && !shouldStop?.()) {
+    while (next < heavy.length && result.lightened + result.failed < maxHeavy && !shouldStop?.()) {
       const row = heavy[next++];
       try {
-        const saved = await lightenOne(uid, row, stored.get(row.storage_path));
+        const saved = await lightenOne(uid, row);
         if (saved > 0) { result.lightened += 1; result.savedBytes += saved; }
       } catch (e) {
         result.failed += 1;
