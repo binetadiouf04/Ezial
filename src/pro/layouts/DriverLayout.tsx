@@ -1,4 +1,5 @@
 import { usePro } from '../ProContext';
+import { getStaffSpace } from '@/lib/staffSpace';
 import { navigateTo } from '@/store/AppContext';
 import { Home, Truck, History, User, LogOut, ArrowLeft, X } from 'lucide-react';
 import NotificationBell from '@/components/NotificationBell';
@@ -57,14 +58,17 @@ export default function DriverLayout() {
         </div>
         <div className="flex flex-shrink-0 items-center gap-1.5">
           <NotificationBell onNavigate={(url) => navigate(url.replace(/^\/pro/, ''))} />
-          <button
-            onClick={() => { navigateTo('/'); }}
-            className="flex items-center gap-1.5 rounded-lg border border-line px-2.5 py-1.5 text-xs font-medium text-ink/60 hover:border-burgundy/30 hover:text-burgundy transition-colors"
-          >
-            <ArrowLeft size={14} />
-            <span className="hidden sm:inline">Retourner sur Ezial Marketplace</span>
-            <span className="sm:hidden">Marketplace</span>
-          </button>
+          {/* Sur livreur.ezial.net, l'espace est dédié : pas de retour vers la marketplace. */}
+          {!getStaffSpace() && (
+            <button
+              onClick={() => { navigateTo('/'); }}
+              className="flex items-center gap-1.5 rounded-lg border border-line px-2.5 py-1.5 text-xs font-medium text-ink/60 hover:border-burgundy/30 hover:text-burgundy transition-colors"
+            >
+              <ArrowLeft size={14} />
+              <span className="hidden sm:inline">Retourner sur Ezial Marketplace</span>
+              <span className="sm:hidden">Marketplace</span>
+            </button>
+          )}
           <button onClick={logout} className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-burgundy hover:bg-burgundy/5 transition-colors">
             <LogOut size={14} /> Déconnexion
           </button>

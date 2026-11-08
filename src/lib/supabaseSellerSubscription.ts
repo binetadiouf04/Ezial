@@ -259,3 +259,34 @@ export function summarizeCurrentPlan(info: SellerSubscriptionInfo, payments: Sub
 // reference. fetchSubscriptionPayments()/confirmSubscriptionPayment() below
 // still let an admin see and resolve whatever was already pending_review
 // before this change.
+
+// ---- Résiliation ----------------------------------------------------------
+// La date de résiliation est lue dans une requête à part : si la colonne
+// n'existe pas encore (migration de résiliation pas encore exécutée), la
+// lecture de l'abonnement ci-dessus n'est pas affectée et la résiliation
+// est simplement présentée comme indisponible (supported = false).
+export interface CancellationState { supported: boolean; requestedAt: string | null }
+
+export async function fetchCancellationState(shopId: string): Promise<CancellationState> {
+  const { data, error } = await supabase
+    .from('seller_subscriptions')
+    .select('cancel_requested_at')
+    .eq('shop_id', shopId)
+    .maybeSingle();
+  if (error) return { supported: false, requestedAt: null };
+  return { supported: true, requestedAt: (data?.cancel_requested_at as string | null) ?? null };
+}
+
+// Résilier n'est jamais remboursé : l'abonnement reste actif jusqu'à la date
+// de fin renvoyée (le serveur est l'autorité, voir cancel_seller_subscription).
+export async function cancelSellerSubscription(): Promise<{ endsAt?: string; error?: string }> {
+  const { data, error } = await supabase.rpc('cancel_seller_subscription');
+  if (error) return { error: error.code === 'P0001' ? error.message : 'La résiliation n’a pas pu être enregistrée. Réessayez dans un instant.' };
+  return { endsAt: data as string };
+}
+
+export async function resumeSellerSubscription(): Promise<{ error?: string }> {
+  const { error } = await supabase.rpc('resume_seller_subscription');
+  if (error) return { error: error.code === 'P0001' ? error.message : 'L’annulation de la résiliation n’a pas pu être enregistrée. Réessayez dans un instant.' };
+  return {};
+}

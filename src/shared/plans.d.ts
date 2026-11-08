@@ -29,3 +29,4 @@ export const PLAN_COMPARISON: PlanComparisonRow[];
 export const PLUS_SAME_BENEFITS_NOTE: string;
 export const TRIAL_RULES: string;
 export const PLAN_END_RULES: string;
+export const CANCELLATION_RULES: string;

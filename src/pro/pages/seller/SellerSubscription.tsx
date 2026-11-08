@@ -8,13 +8,18 @@ import {
   fetchActiveProductCount,
   fetchSubscriptionPayments,
   summarizeCurrentPlan,
+  fetchCancellationState,
+  cancelSellerSubscription,
+  resumeSellerSubscription,
   billingPeriodOfPayment,
   subscriptionPaymentRoute,
   type SellerSubscriptionInfo,
   type SubscriptionPaymentRow,
+  type CancellationState,
 } from '@/lib/supabaseSellerSubscription';
 import { BILLING_PERIOD_LABEL, PLUS_PLAN_NAME, formatFcfa } from '@/data/subscriptionPlans';
-import { Crown } from 'lucide-react';
+import { CANCELLATION_RULES } from '@/shared/plans.js';
+import { Crown, Loader2 } from 'lucide-react';
 
 // "Mon abonnement". A Free shop sees the Free / Ezial Plus cards to
 // subscribe. A shop that is (or was) on Ezial Plus sees only its current
@@ -37,6 +42,11 @@ export default function SellerSubscription() {
   const [activeCount, setActiveCount] = useState(0);
   const [payments, setPayments] = useState<SubscriptionPaymentRow[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [cancellation, setCancellation] = useState<CancellationState>({ supported: false, requestedAt: null });
+  const [cancelOpen, setCancelOpen] = useState(false);
+  const [cancelAccepted, setCancelAccepted] = useState(false);
+  const [cancelBusy, setCancelBusy] = useState(false);
+  const [cancelError, setCancelError] = useState('');
 
   useEffect(() => {
     if (!sellerSupabaseShopId) {
@@ -49,9 +59,11 @@ export default function SellerSubscription() {
       fetchSellerSubscription(sellerSupabaseShopId, { isOfficial: sellerShopIsOfficial }),
       fetchActiveProductCount(sellerSupabaseShopId),
       fetchSubscriptionPayments(sellerSupabaseShopId),
-    ]).then(([sub, count, pays]) => {
+      fetchCancellationState(sellerSupabaseShopId),
+    ]).then(([sub, count, pays, cancel]) => {
       if (cancelled) return;
       setInfo(sub);
+      setCancellation(cancel);
       setActiveCount(count);
       setPayments(pays);
       setIsLoading(false);
@@ -80,6 +92,27 @@ export default function SellerSubscription() {
   // A renewal or a trial → paid subscription starts on the seller's last
   // paid billing period; the payment page lets them switch it.
   const subscribeRoute = subscriptionPaymentRoute(summary.billingPeriod ?? 'quarterly');
+
+  // Résiliation : seulement pour un abonnement payant en cours (pas l'essai).
+  const canCancel = isPaidActive && cancellation.supported;
+  const isCancelled = canCancel && cancellation.requestedAt !== null;
+
+  const closeCancel = () => { if (!cancelBusy) { setCancelOpen(false); setCancelAccepted(false); setCancelError(''); } };
+  const confirmCancel = async () => {
+    setCancelBusy(true); setCancelError('');
+    const result = await cancelSellerSubscription();
+    setCancelBusy(false);
+    if (result.error) { setCancelError(result.error); return; }
+    setCancellation({ supported: true, requestedAt: new Date().toISOString() });
+    setCancelOpen(false); setCancelAccepted(false);
+  };
+  const resume = async () => {
+    setCancelBusy(true); setCancelError('');
+    const result = await resumeSellerSubscription();
+    setCancelBusy(false);
+    if (result.error) { setCancelError(result.error); return; }
+    setCancellation({ supported: true, requestedAt: null });
+  };
 
   const facts: { label: string; value: string }[] = [];
   if (!isOfficial) {
@@ -138,7 +171,58 @@ export default function SellerSubscription() {
         {info.isTrialActive && info.proUntil && (
           <p className="mt-3 text-xs text-ink/50">Sans abonnement, votre boutique repasse à Ezial Free le {formatDate(info.proUntil)}.</p>
         )}
+
+        {isCancelled && info.proUntil && (
+          <div className="mt-4 rounded-lg border border-amber-100 bg-amber-50 px-3.5 py-3 text-sm text-amber-800">
+            <p className="font-medium">Abonnement résilié</p>
+            <p className="mt-1 text-xs leading-relaxed">
+              {PLUS_PLAN_NAME} reste actif jusqu’au {formatDate(info.proUntil)}, puis ne sera pas renouvelé : votre boutique repassera alors à Ezial Free. La résiliation n’est pas remboursable.
+            </p>
+            <button onClick={() => void resume()} disabled={cancelBusy} className="mt-2 inline-flex items-center gap-1.5 text-xs font-semibold underline underline-offset-2 disabled:opacity-60">
+              {cancelBusy && <Loader2 size={12} className="animate-spin" />} Annuler la résiliation
+            </button>
+          </div>
+        )}
+        {cancelError && !cancelOpen && <p className="mt-3 text-xs text-burgundy">{cancelError}</p>}
+
+        {canCancel && !isCancelled && (
+          <button onClick={() => setCancelOpen(true)} className="mt-4 text-xs font-medium text-ink/50 underline underline-offset-2 hover:text-burgundy">
+            Résilier mon abonnement
+          </button>
+        )}
       </div>
+
+      {/* Avertissement permanent sur les abonnements (voir la politique de résiliation) */}
+      {!isOfficial && (
+        <p className="text-xs leading-relaxed text-ink/45">
+          {PLUS_PLAN_NAME} est résiliable à tout moment, mais non remboursable : l’abonnement payé reste actif jusqu’à la fin de la durée prévue.{' '}
+          <a href="/info/politique-de-resiliation/" target="_blank" rel="noopener noreferrer" className="underline underline-offset-2 hover:text-burgundy">Politique de résiliation</a>
+        </p>
+      )}
+
+      {cancelOpen && info.proUntil && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/50 p-4" onClick={closeCancel}>
+          <div role="dialog" aria-modal="true" aria-labelledby="cancel-title" className="card w-full max-w-sm p-5" onClick={(e) => e.stopPropagation()}>
+            <h2 id="cancel-title" className="font-display text-lg font-semibold text-ink">Résilier mon abonnement ?</h2>
+            <p className="mt-2 text-sm leading-relaxed text-ink/70">{CANCELLATION_RULES}</p>
+            <p className="mt-2 text-sm font-medium text-ink">Votre abonnement reste actif jusqu’au {formatDate(info.proUntil)}.</p>
+            <label className="mt-4 flex items-start gap-2.5 text-sm text-ink/75">
+              <input type="checkbox" checked={cancelAccepted} onChange={(e) => setCancelAccepted(e.target.checked)} className="mt-0.5 h-5 w-5 flex-shrink-0 accent-burgundy" />
+              <span>
+                J’ai compris que la résiliation n’est pas remboursable. Voir la{' '}
+                <a href="/info/politique-de-resiliation/" target="_blank" rel="noopener noreferrer" className="underline underline-offset-2">politique de résiliation</a>.
+              </span>
+            </label>
+            {cancelError && <p className="mt-3 text-sm text-burgundy">{cancelError}</p>}
+            <div className="mt-5 flex flex-col-reverse gap-2.5 sm:flex-row sm:justify-end">
+              <button onClick={closeCancel} disabled={cancelBusy} className="btn-outline w-full sm:w-auto">Garder mon abonnement</button>
+              <button onClick={() => void confirmCancel()} disabled={!cancelAccepted || cancelBusy} className="btn-primary w-full sm:w-auto disabled:opacity-50">
+                {cancelBusy ? <><Loader2 size={16} className="animate-spin" /> Résiliation…</> : 'Résilier'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Free shop: the two plans, to subscribe */}
       {isFree && (

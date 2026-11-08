@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { CANCELLATION_RULES } from '@/shared/plans.js';
 import { usePro } from '../../ProContext';
 import { billingPeriodFromQuery, type SubscriptionPaymentMethod } from '@/lib/supabaseSellerSubscription';
 import {
@@ -91,6 +92,10 @@ export default function SellerSubscriptionPayment() {
 
       <p className="text-xs text-ink/45 text-center">
         Important : après un premier abonnement {PLUS_PLAN_NAME} payé, cette boutique ne revient plus au forfait Free. À l’expiration, elle conserve ses données et ses produits ; jusqu’au renouvellement, elle est soumise aux limites de Free ({FREE_PRODUCT_LIMIT} produits publiés, commission de {FREE_COMMISSION_PERCENT} %). L’abonnement est activé uniquement après la confirmation authentifiée du paiement par l’opérateur.
+      </p>
+      <p className="text-xs text-ink/45 text-center">
+        {CANCELLATION_RULES}{' '}
+        <a href="/info/politique-de-resiliation/" target="_blank" rel="noopener noreferrer" className="underline underline-offset-2 hover:text-burgundy">Politique de résiliation</a>
       </p>
     </div>
   );

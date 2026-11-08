@@ -3,6 +3,7 @@ import { usePro } from '../ProContext';
 import { navigateTo } from '@/store/AppContext';
 import { Home, ShoppingBag, Package, Wallet, Store, LogOut, ArrowLeft, Menu, X, AlertTriangle, Star, Crown, Loader2 } from 'lucide-react';
 import { fetchSellerSubscription } from '@/lib/supabaseSellerSubscription';
+import { scheduleAutoLightening } from '@/lib/supabasePhotoLightening';
 import SellerChoosePlan from '../pages/seller/SellerChoosePlan';
 import SellerDashboard from '../pages/seller/SellerDashboard';
 import SellerOrders from '../pages/seller/SellerOrders';
@@ -34,6 +35,9 @@ const navItems = [
 export default function SellerLayout() {
   const { route, navigate, logout, name, identifier, sellerShop, sellerSupabaseShopId } = usePro();
   const [menuOpen, setMenuOpen] = useState(false);
+  // Heavy product photos from before the iPad upload fix are lightened in
+  // the background, automatically (see supabasePhotoLightening.ts).
+  useEffect(() => (sellerSupabaseShopId ? scheduleAutoLightening(sellerSupabaseShopId) : undefined), [sellerSupabaseShopId]);
 
   const clean = route.split('?')[0];
 

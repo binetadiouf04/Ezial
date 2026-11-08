@@ -6,7 +6,9 @@ import LoginForm from '../components/LoginForm';
 import SellerAuthPanel from '../components/SellerAuthPanel';
 import DriverLoginPanel from '../components/DriverLoginPanel';
 import PricingCards from '@/components/PricingCards';
-import { Loader2, ArrowLeft, ShieldCheck, Bike } from 'lucide-react';
+import { getStaffSpace } from '@/lib/staffSpace';
+import { useNoIndex } from '@/lib/seoHead';
+import { Loader2, ArrowLeft } from 'lucide-react';
 
 // Each role's layout (and every page it pulls in) is its own chunk — a
 // seller logging in never has to download the admin dashboard's code, or
@@ -26,21 +28,29 @@ function ProRouteFallback() {
 export default function ProEntryPage() {
   const { role, login, verifySellerLogin, signUpSellerAccount, continueAsSellerWithCurrentAccount, requestSellerPasswordReset, resendSellerConfirmationEmail, resendSellerConfirmationForLogin, verifyAdminLogin, checkDriverUsername, createDriverPin, signInDriverWithPin } = usePro();
   const { customerUser, navigate: navigateApp } = useApp();
-  const [selectedRole, setSelectedRole] = useState<Role | null>(null);
+  // admin.ezial.net → administrateur, livreur.ezial.net → livreur. Ces deux
+  // espaces n'existent plus sur le site public : ni lien, ni écran, et une
+  // session de ce type n'y ouvre rien. Le site public n'ouvre que l'espace
+  // vendeur. Les droits restent contrôlés côté serveur dans tous les cas.
+  const staffSpace = getStaffSpace();
+  useNoIndex(staffSpace !== null);
+  const [selectedRole, setSelectedRole] = useState<Role | null>(staffSpace);
   const [sellerInitialView, setSellerInitialView] = useState<'login' | 'signup'>('login');
 
+  const roleAllowedHere = role === 'seller' ? staffSpace === null : role === staffSpace;
+
   // If seller is logged in, render the seller layout
-  if (role === 'seller') {
+  if (role === 'seller' && roleAllowedHere) {
     return <Suspense fallback={<ProRouteFallback />}><SellerLayout /></Suspense>;
   }
 
   // If driver is logged in, render the driver layout
-  if (role === 'driver') {
+  if (role === 'driver' && roleAllowedHere) {
     return <Suspense fallback={<ProRouteFallback />}><DriverLayout /></Suspense>;
   }
 
   // If admin is logged in, render the admin layout
-  if (role === 'admin') {
+  if (role === 'admin' && roleAllowedHere) {
     return <Suspense fallback={<ProRouteFallback />}><AdminLayout /></Suspense>;
   }
 
@@ -69,7 +79,7 @@ export default function ProEntryPage() {
     return (
       <div className="min-h-screen bg-cream flex items-center justify-center p-4">
         <DriverLoginPanel
-          onBack={() => setSelectedRole(null)}
+          onBack={staffSpace ? undefined : () => setSelectedRole(null)}
           onLogin={(id, name) => login('driver', id, name)}
           checkUsername={checkDriverUsername}
           createPin={createDriverPin}
@@ -82,7 +92,7 @@ export default function ProEntryPage() {
   if (selectedRole) {
     return (
       <div className="min-h-screen bg-cream flex items-center justify-center p-4">
-        <LoginForm role={selectedRole} onBack={() => setSelectedRole(null)} onLogin={(id, name, shopInfo) => login(selectedRole, id, name, shopInfo)} verifySeller={verifySellerLogin} verifyAdmin={verifyAdminLogin} />
+        <LoginForm role={selectedRole} onBack={staffSpace ? undefined : () => setSelectedRole(null)} onLogin={(id, name, shopInfo) => login(selectedRole, id, name, shopInfo)} verifySeller={verifySellerLogin} verifyAdmin={verifyAdminLogin} />
       </div>
     );
   }
@@ -128,26 +138,6 @@ export default function ProEntryPage() {
             onSubscribe={goToSignup}
           />
         </section>
-
-        {/* Staff access — always visible (not a gate), but visually
-            subordinate (smaller, muted label) so it never competes with
-            the seller actions above. No public signup is possible from
-            here: each card opens the exact same admin/driver login screen
-            already reached from the old picker — server-side role checks
-            are untouched. */}
-        <div className="mx-auto mt-16 w-full max-w-sm border-t border-line pt-6 text-center">
-          <p className="mb-3 text-xs font-medium uppercase tracking-wider text-ink/35">Autres espaces</p>
-          <div className="grid grid-cols-2 gap-3">
-            <button onClick={() => setSelectedRole('admin')} className="flex flex-col items-center gap-2 rounded-xl border border-line bg-white px-3 py-4 text-center transition-colors hover:border-burgundy/30 hover:bg-cream">
-              <ShieldCheck size={20} className="text-ink/60" />
-              <span className="text-sm font-medium text-ink/70">Administrateur</span>
-            </button>
-            <button onClick={() => setSelectedRole('driver')} className="flex flex-col items-center gap-2 rounded-xl border border-line bg-white px-3 py-4 text-center transition-colors hover:border-burgundy/30 hover:bg-cream">
-              <Bike size={20} className="text-ink/60" />
-              <span className="text-sm font-medium text-ink/70">Livreur</span>
-            </button>
-          </div>
-        </div>
       </div>
     </div>
   );

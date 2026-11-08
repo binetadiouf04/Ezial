@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { getStaffSpace, publicSiteOrigin } from '@/lib/staffSpace';
 import { usePro } from '../ProContext';
 import { navigateTo } from '@/store/AppContext';
 import { LayoutDashboard, ShoppingBag, Package, Store, Wallet, LogOut, ArrowLeft, Layers, Truck, AlertTriangle, Star, Megaphone, Menu, X } from 'lucide-react';
@@ -44,7 +45,8 @@ export default function AdminLayout() {
 
   const clean = route.split('?')[0];
   const goTo = (r: string) => { setMenuOpen(false); navigate(r); };
-  const goToMarketplace = () => { navigateTo('/'); };
+  // Sur admin.ezial.net, « Marketplace » mène au vrai site public (autre domaine).
+  const goToMarketplace = () => { if (getStaffSpace()) window.location.href = `${publicSiteOrigin()}/`; else navigateTo('/'); };
   const onNotificationNavigate = (url: string) => { setMenuOpen(false); navigate(url.replace(/^\/pro/, '')); };
 
   const orderDetailMatch = clean.match(/^\/admin\/commandes\/(.+)$/);

@@ -123,3 +123,8 @@ export const PLUS_SAME_BENEFITS_NOTE = 'Les avantages sont identiques en formule
 
 export const TRIAL_RULES = `Une seule période d’essai de ${TRIAL_DAYS} jours par boutique, sans paiement ni numéro Wave ou Orange Money.`;
 export const PLAN_END_RULES = `À la fin de l’essai sans abonnement, la boutique repasse au forfait Free. Après un abonnement payé, elle conserve ses données et ses produits ; jusqu’au renouvellement, elle est soumise aux limites de Free (${FREE_PRODUCT_LIMIT} produits publiés, commission de ${FREE_COMMISSION_PERCENT} %).`;
+
+// Résiliation : toujours possible, jamais remboursée, l'abonnement payé court
+// jusqu'à son terme (texte repris par la politique de résiliation, les
+// conditions, les tarifs vendeurs et l'espace « Mon abonnement »).
+export const CANCELLATION_RULES = `Vous pouvez résilier ${PLUS_PLAN_NAME} à tout moment depuis l’espace « Mon abonnement ». La résiliation ne donne lieu à aucun remboursement : l’abonnement déjà payé reste actif jusqu’à la fin de la durée prévue, puis il n’est pas renouvelé et la boutique repasse au forfait Free.`;
