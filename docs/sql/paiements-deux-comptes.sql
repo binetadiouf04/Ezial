@@ -2,9 +2,11 @@
 -- Règle (décision du 11/11/2026) : une vente payée par Wave est versée sur
 -- le compte Wave du vendeur, une vente payée par Orange Money sur son compte
 -- Orange Money. Un vendeur qui n'a enregistré qu'un seul compte reçoit tout
--- sur celui-là. Chaque numéro reste validé par un administrateur ; pendant
--- la vérification d'un nouveau numéro, les versements vers CE fournisseur
--- sont suspendus. Aucune donnée supprimée (seulement deux index remplacés).
+-- sur celui-là. Le PREMIER numéro d'un fournisseur est enregistré tout de
+-- suite ; un CHANGEMENT de numéro est vérifié par un administrateur (qui
+-- contacte le vendeur) et, en attendant, les versements vers ce fournisseur
+-- sont suspendus (rien n'est envoyé à l'ancien ni au nouveau numéro).
+-- Aucune donnée supprimée (seulement deux index remplacés).
 -- Rejouable, une transaction.
 begin;
 
@@ -30,12 +32,27 @@ begin
 
   update public.seller_payout_methods set status = 'superseded'
    where shop_id = v_shop and provider = p_provider and status = 'pending_review';
+
+  -- Premier numéro de ce fournisseur : enregistré directement.
+  if not exists (select 1 from public.seller_payout_methods m where m.shop_id = v_shop and m.provider = p_provider and m.status = 'approved') then
+    insert into public.seller_payout_methods (shop_id, provider, phone, holder_name, status, consent_given_at, submitted_by, reviewed_at, review_note)
+    values (v_shop, p_provider, v_phone, nullif(trim(p_holder_name), ''), 'approved', now(), v_uid, now(), 'premier numéro, enregistré sans validation')
+    returning id into v_id;
+    perform ezial_private.audit('seller', 'payout_method_added', 'seller_payout_method', v_id, jsonb_build_object('shop_id', v_shop, 'provider', p_provider,
+      'phone_end', right(v_phone, 2)));
+    return jsonb_build_object('id', v_id, 'status', 'approved');
+  end if;
+
+  -- Changement de numéro : vérifié par un administrateur ; versements vers
+  -- ce fournisseur suspendus d'ici là.
   insert into public.seller_payout_methods (shop_id, provider, phone, holder_name, status, consent_given_at, submitted_by)
   values (v_shop, p_provider, v_phone, nullif(trim(p_holder_name), ''), 'pending_review', now(), v_uid)
   returning id into v_id;
-  perform ezial_private.audit('seller', 'payout_method_submitted', 'seller_payout_method', v_id, jsonb_build_object('shop_id', v_shop, 'provider', p_provider,
+  perform ezial_private.audit('seller', 'payout_method_change_requested', 'seller_payout_method', v_id, jsonb_build_object('shop_id', v_shop, 'provider', p_provider,
     'phone_end', right(v_phone, 2)));
-  perform public.notify_admins('payout_method_review', 'Nouveau moyen de réception à valider pour une boutique', '/pro/admin/paiements', null, null, null, v_shop);
+  perform public.notify_admins('payout_method_review',
+    'Changement de numéro ' || case p_provider when 'wave' then 'Wave' else 'Orange Money' end || ' à vérifier pour une boutique (contacter le vendeur)',
+    '/pro/admin/paiements', null, null, null, v_shop);
   return jsonb_build_object('id', v_id, 'status', 'pending_review');
 end;
 $$;

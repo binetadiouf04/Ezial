@@ -119,7 +119,7 @@ function ProviderAccount({
   const [consent, setConsent] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
-  const [sent, setSent] = useState(false);
+  const [sent, setSent] = useState<'approved' | 'pending_review' | null>(null);
   const label = providerLabel(provider);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -136,7 +136,7 @@ function ProviderAccount({
     setHolderName('');
     setConsent(false);
     setFormOpen(false);
-    setSent(true);
+    setSent(result.status);
     await onSubmitted();
   };
 
@@ -160,20 +160,23 @@ function ProviderAccount({
                 {!approved && <p className="font-mono text-ink/80">{maskWalletPhone(pending.phone)}</p>}
                 <p className="mt-1 text-xs font-medium text-amber-700">
                   <Clock size={13} className="mr-1 inline-block align-[-2px]" />
-                  {approved ? <>Nouveau numéro <span className="whitespace-nowrap font-mono">{maskWalletPhone(pending.phone)}</span> en attente de validation</> : 'En attente de validation'}
+                  {approved ? <>Nouveau numéro <span className="whitespace-nowrap font-mono">{maskWalletPhone(pending.phone)}</span> en cours de vérification : versements {label} en attente</> : 'En cours de vérification'}
                 </p>
               </>
             )}
           </div>
         </div>
         {!formOpen && (
-          <button type="button" onClick={() => { setFormOpen(true); setSent(false); }} className="btn-outline flex-shrink-0 whitespace-nowrap px-3 py-1.5 text-xs">
+          <button type="button" onClick={() => { setFormOpen(true); setSent(null); }} className="btn-outline flex-shrink-0 whitespace-nowrap px-3 py-1.5 text-xs">
             {approved || pending ? 'Changer' : 'Ajouter'}
           </button>
         )}
       </div>
       {sent && !formOpen && (
-        <p className="flex items-center gap-1.5 text-sm text-green-700"><Check size={15} /> Numéro envoyé pour validation.</p>
+        <p className="flex items-start gap-1.5 text-sm text-green-700">
+          <Check size={15} className="mt-0.5 flex-shrink-0" />
+          {sent === 'approved' ? 'Numéro enregistré.' : `Changement enregistré : Ezial vous contactera pour le confirmer. Vos versements ${label} sont en attente d’ici là.`}
+        </p>
       )}
 
       {formOpen && (
@@ -202,7 +205,7 @@ function ProviderAccount({
           {error && <p className="text-sm text-burgundy">{error}</p>}
           <div className="flex flex-wrap gap-2">
             <button type="submit" disabled={submitting || !consent || !phone.trim()} className="btn-primary">
-              {submitting && <Loader2 size={15} className="animate-spin" />} Envoyer pour validation
+              {submitting && <Loader2 size={15} className="animate-spin" />} Enregistrer
             </button>
             <button type="button" onClick={() => { setFormOpen(false); setError(''); }} className="btn-outline">Annuler</button>
           </div>

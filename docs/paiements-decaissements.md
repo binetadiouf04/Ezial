@@ -121,8 +121,12 @@ Les numéros de téléphone complets n'apparaissent jamais dans les journaux
 
 - **Frais de transfert payés par Ezial** (`fees_paid_by = 'ezial'`) : le
   vendeur reçoit exactement sa part nette.
-- **Nouveau numéro de réception validé par un administrateur** avant tout
-  versement (`submit_payout_method` puis `admin_review_payout_method`).
+- **Numéros de réception** (`submit_payout_method`) : le premier numéro Wave
+  ou Orange Money d'une boutique est enregistré directement ; un
+  **changement** de numéro est vérifié par un administrateur, qui contacte le
+  vendeur (`admin_review_payout_method`). D'ici là, les versements vers ce
+  fournisseur sont en attente : rien n'est envoyé, ni à l'ancien ni au
+  nouveau numéro.
 - **Deux comptes possibles par boutique** (décision du 11/11/2026, migration
   `docs/sql/paiements-deux-comptes.sql`) : un compte Wave et/ou un compte
   Orange Money. Une vente payée par Wave est versée sur le compte Wave du
