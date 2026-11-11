@@ -1,6 +1,7 @@
 import { supabase } from './supabaseClient';
 import { uploadSecurePhoto, resolveSecurePhotoUrl } from './secureStorage';
 import { optimizeImageFile } from '@/utils/imageOptimize';
+import { isRpcMissing } from './supabaseFeatureDetect';
 import type { Mission } from '@/pro/data';
 
 // Real driver missions, backed by delivery_missions / delivery_stops /
@@ -212,12 +213,14 @@ export async function startMissionDelivery(missionId: string): Promise<{ error?:
 // image in the app) — never a raw 5-10 Mo phone camera file.
 const PROOF_PHOTO_MAX_DIMENSION = 1280;
 
-export async function completeMissionDelivery(
-  missionId: string,
-  driverId: string,
-  deliveryCode: string,
-  proofPhotoFile: File,
-): Promise<{ error?: string }> {
+// null = pas encore su. Mis à false dès qu'un appel montre que la fonction
+// serveur driver_complete_delivery n'existe pas (migration non exécutée).
+let serverCompletionAvailable: boolean | null = null;
+
+// Ancienne vérification côté navigateur, gardée uniquement comme raccourci
+// quand la fonction serveur est absente : avec elle, c'est le serveur qui
+// vérifie le code.
+async function precheckDeliveryCode(missionId: string, deliveryCode: string): Promise<{ error?: string }> {
   const { data: missionRow, error: fetchError } = await supabase
     .from('delivery_missions')
     .select('delivery_code')
@@ -225,6 +228,31 @@ export async function completeMissionDelivery(
     .maybeSingle();
   if (fetchError || !missionRow) return { error: 'Mission introuvable.' };
   if ((missionRow.delivery_code as string | null) !== deliveryCode) return { error: 'Code de livraison incorrect.' };
+  return {};
+}
+
+// Ancien enregistrement direct de la livraison (avant la fonction serveur).
+async function markMissionDeliveredDirectly(missionId: string, path: string): Promise<{ error?: string }> {
+  const { data, error } = await supabase
+    .from('delivery_missions')
+    .update({ status: MISSION_STATUS.delivered, delivered_at: new Date().toISOString(), proof_photo_path: path })
+    .eq('id', missionId)
+    .select('id');
+  if (error) return { error: error.message };
+  if ((data?.length ?? 0) === 0) return { error: "Impossible de confirmer la livraison (droits d'accès)." };
+  return {};
+}
+
+export async function completeMissionDelivery(
+  missionId: string,
+  driverId: string,
+  deliveryCode: string,
+  proofPhotoFile: File,
+): Promise<{ error?: string }> {
+  if (serverCompletionAvailable === false) {
+    const precheck = await precheckDeliveryCode(missionId, deliveryCode);
+    if (precheck.error) return precheck;
+  }
 
   const optimized = await optimizeImageFile(proofPhotoFile, PROOF_PHOTO_MAX_DIMENSION);
   const token = Math.random().toString(36).slice(2, 8);
@@ -235,12 +263,26 @@ export async function completeMissionDelivery(
   const { error: uploadError } = await uploadSecurePhoto(path, optimized);
   if (uploadError) return { error: `Envoi de la preuve photo impossible : ${uploadError}` };
 
-  const { data, error } = await supabase
-    .from('delivery_missions')
-    .update({ status: MISSION_STATUS.delivered, delivered_at: new Date().toISOString(), proof_photo_path: path })
-    .eq('id', missionId)
-    .select('id');
-  if (error) return { error: error.message };
-  if ((data?.length ?? 0) === 0) return { error: "Impossible de confirmer la livraison (droits d'accès)." };
-  return {};
+  if (serverCompletionAvailable !== false) {
+    // Le serveur vérifie la mission, le code client et la preuve photo, puis
+    // enregistre la livraison : c'est lui qui décide.
+    const { error } = await supabase.rpc('driver_complete_delivery', {
+      p_mission_id: missionId,
+      p_delivery_code: deliveryCode,
+      p_proof_photo_path: path,
+    });
+    if (!error) {
+      serverCompletionAvailable = true;
+      return {};
+    }
+    if (!isRpcMissing(error)) {
+      return { error: error.code === 'P0001' ? error.message : 'Impossible de confirmer la livraison. Réessayez dans un instant.' };
+    }
+    // Fonction absente (migration non exécutée) : comportement actuel.
+    serverCompletionAvailable = false;
+    const precheck = await precheckDeliveryCode(missionId, deliveryCode);
+    if (precheck.error) return precheck;
+  }
+
+  return markMissionDeliveredDirectly(missionId, path);
 }

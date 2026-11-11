@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { getStaffSpace, publicSiteOrigin } from '@/lib/staffSpace';
 import { usePro } from '../ProContext';
 import { navigateTo } from '@/store/AppContext';
-import { LayoutDashboard, ShoppingBag, Package, Store, Wallet, LogOut, ArrowLeft, Layers, Truck, AlertTriangle, Star, Megaphone, MessageCircle, Menu, X } from 'lucide-react';
+import { LayoutDashboard, ShoppingBag, Package, Store, Wallet, LogOut, ArrowLeft, Layers, Truck, AlertTriangle, Star, Megaphone, MessageCircle, Menu, X, Landmark } from 'lucide-react';
 import AdminDashboard from '../pages/admin/AdminDashboard';
 import AdminContent from '../pages/admin/AdminContent';
 import AdminOrders from '../pages/admin/AdminOrders';
@@ -21,6 +21,7 @@ import AdminDrivers from '../pages/admin/AdminDrivers';
 import AdminDriverDetail from '../pages/admin/AdminDriverDetail';
 import AdminFinances from '../pages/admin/AdminFinances';
 import AdminShopFinanceDetail from '../pages/admin/AdminShopFinanceDetail';
+import AdminPayments from '../pages/admin/AdminPayments';
 import AdminBlog from '../pages/admin/AdminBlog';
 import AdminBlogForm from '../pages/admin/AdminBlogForm';
 import AdminBlogPreview from '../pages/admin/AdminBlogPreview';
@@ -39,6 +40,7 @@ const navItems = [
   { route: '/admin/livreurs', label: 'Livreurs', icon: Truck },
   { route: '/admin/contenu', label: 'Contenu', icon: Layers },
   { route: '/admin/finances', label: 'Finances', icon: Wallet },
+  { route: '/admin/paiements', label: 'Paiements', icon: Landmark },
 ];
 
 export default function AdminLayout() {
@@ -85,6 +87,7 @@ export default function AdminLayout() {
     if (driverDetailMatch) return <AdminDriverDetail driverId={driverDetailMatch[1]} />;
     if (clean === '/admin/finances') return <AdminFinances />;
     if (financeDetailMatch) return <AdminShopFinanceDetail shopId={financeDetailMatch[1]} />;
+    if (clean === '/admin/paiements') return <AdminPayments />;
     return null;
   };
 

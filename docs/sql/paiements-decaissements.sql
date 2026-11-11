@@ -466,13 +466,18 @@ $$;
 create or replace function public.payments_record_event(p_provider text, p_capability text, p_provider_event_id text, p_event_type text,
   p_provider_reference text, p_reported_status text, p_reported_amount integer, p_signature_valid boolean)
 returns jsonb language plpgsql security definer set search_path = '' as $$
-declare v_id uuid;
+declare v_id uuid; v_processed boolean;
 begin
   insert into public.payment_events (provider, capability, provider_event_id, event_type, provider_reference, reported_status, reported_amount, signature_valid)
   values (p_provider, p_capability, p_provider_event_id, p_event_type, p_provider_reference, p_reported_status, p_reported_amount, coalesce(p_signature_valid, false))
   on conflict (provider, capability, provider_event_id) do nothing
   returning id into v_id;
-  return jsonb_build_object('new', v_id is not null, 'id', v_id);
+  if v_id is not null then return jsonb_build_object('new', true, 'id', v_id, 'processed', false); end if;
+  -- Déjà reçue : à retraiter seulement si son traitement n'a pas abouti
+  -- (vérification du statut impossible la première fois).
+  select e.id, e.processed_at is not null into v_id, v_processed from public.payment_events e
+   where e.provider = p_provider and e.capability = p_capability and e.provider_event_id = p_provider_event_id;
+  return jsonb_build_object('new', false, 'id', v_id, 'processed', coalesce(v_processed, true));
 end;
 $$;
 
@@ -634,6 +639,8 @@ begin
        and o.payment_status = 'paid'
        and exists (select 1 from public.payment_transactions pt where pt.order_id = o.id and pt.status = 'confirmed')
        and not exists (select 1 from public.seller_payouts p where p.shop_id = st.shop_id and p.status in ('scheduled', 'processing', 'unknown', 'blocked'))
+       -- Changement de numéro en attente de validation : versements suspendus.
+       and not exists (select 1 from public.seller_payout_methods pend where pend.shop_id = st.shop_id and pend.status = 'pending_review')
      group by st.shop_id, pm.id, pm.provider, pm.phone
     having sum(st.net_amount) > 0
   loop
@@ -665,6 +672,7 @@ returns setof public.seller_payouts language sql security definer set search_pat
     select p.id from public.seller_payouts p, public.payment_settings s
      where s.id and s.payouts_enabled and p.status in ('scheduled', 'blocked') and p.next_attempt_at <= now()
        and exists (select 1 from public.seller_payout_methods pm where pm.id = p.payout_method_id and pm.status = 'approved')
+       and not exists (select 1 from public.seller_payout_methods pend where pend.shop_id = p.shop_id and pend.status = 'pending_review')
      order by p.created_at limit greatest(1, least(coalesce(p_limit, 10), 50))
      for update of p skip locked
   )
