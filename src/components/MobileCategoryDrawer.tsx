@@ -1,12 +1,14 @@
 import { useState } from 'react';
-import { X, ChevronRight, ChevronLeft, User, Home, LayoutGrid, Store, Percent } from 'lucide-react';
+import { X, ChevronRight, ChevronLeft, User, Home, LayoutGrid, Store, Percent, Loader2 } from 'lucide-react';
 import { categories, type CategoryId } from '@/data/categories';
 import { useApp } from '@/store/AppContext';
+import { useSellerEntry } from '@/lib/sellerIntent';
 
 type View = 'main' | 'categories';
 
 export default function MobileCategoryDrawer() {
   const { categoryDrawerOpen, setCategoryDrawerOpen, navigate } = useApp();
+  const { openMyShop, busy: shopLoading } = useSellerEntry();
   const [view, setView] = useState<View>('main');
   const [selectedCat, setSelectedCat] = useState<CategoryId | null>(null);
   if (!categoryDrawerOpen) return null;
@@ -35,7 +37,7 @@ export default function MobileCategoryDrawer() {
             // Deliberately short and mobile-first: two destinations up top
             // (Home, then the categories drill-in — never the full category
             // list dumped straight into the main menu), Boutiques/Promotions
-            // grouped just below, Mon compte pinned to the bottom, separated
+            // grouped just below, Ma boutique and Mon compte pinned to the bottom, separated
             // from the rest. Large tap targets throughout, no secondary
             // links.
             <>
@@ -59,9 +61,16 @@ export default function MobileCategoryDrawer() {
 
               <div className="flex-1" />
 
-              <nav className="border-t border-line">
+              {/* Two distinct spaces of the same account: « Ma boutique »
+                  (seller: dashboard, sign-in or « Devenir vendeur ») and
+                  « Mon compte » (buyer: orders, details, addresses). */}
+              <nav className="divide-y divide-line border-t border-line">
+                <button onClick={() => void openMyShop()} disabled={shopLoading} className="flex w-full items-center gap-3 px-4 py-4 text-left hover:bg-cream disabled:opacity-60">
+                  <Store size={19} strokeWidth={1.5} className="text-ink/60" /><span className="flex-1 text-[15px] font-medium text-ink">Ma boutique</span>
+                  {shopLoading && <Loader2 size={16} className="animate-spin text-ink/40" />}
+                </button>
                 <button onClick={() => navigate('/profil')} className="flex w-full items-center gap-3 px-4 py-4 text-left hover:bg-cream">
-                  <User size={19} className="text-ink/60" /><span className="text-[15px] font-medium text-ink">Mon compte</span>
+                  <User size={19} strokeWidth={1.5} className="text-ink/60" /><span className="text-[15px] font-medium text-ink">Mon compte</span>
                 </button>
               </nav>
             </>

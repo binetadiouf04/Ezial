@@ -1,0 +1,11 @@
+export const BECOME_SELLER_PATH: string;
+export const BECOME_SELLER_META: { title: string; description: string };
+export const BECOME_SELLER_HERO: { eyebrow: string; title: string; text: string };
+export const BECOME_SELLER_SUMMARY: string[];
+export type BecomeSellerIcon = 'eye' | 'store' | 'truck' | 'dashboard' | 'handshake';
+export const BECOME_SELLER_BENEFITS: { icon: BecomeSellerIcon; title: string; text: string }[];
+export const BECOME_SELLER_MISSION_TAGLINE: string;
+export const BECOME_SELLER_MISSION: string[];
+export const BECOME_SELLER_STEPS: { title: string; text: string }[];
+export const BECOME_SELLER_FAQ: { q: string; a: string }[];
+export function becomeSellerFaqJsonLd(): Record<string, unknown>;

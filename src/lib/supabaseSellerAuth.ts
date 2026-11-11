@@ -290,12 +290,10 @@ export async function restoreSellerSession(): Promise<SellerAuthShop | null> {
   const { data, error } = await supabase.auth.getSession();
   if (error || !data.session) return null;
 
-  const shop = await shopForCurrentUser();
-  if (!shop) {
-    await supabase.auth.signOut();
-    return null;
-  }
-  return shop;
+  // One account can be buyer and seller: a session with no shop is a buyer's
+  // session, left untouched (signing it out here used to log a buyer out of
+  // the whole site as soon as they opened the seller space).
+  return shopForCurrentUser();
 }
 
 export async function signOutSeller(): Promise<void> {

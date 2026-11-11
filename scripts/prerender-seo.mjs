@@ -28,6 +28,7 @@ import { fileURLToPath } from 'node:url';
 import { createClient } from '@supabase/supabase-js';
 import { buildInfoPages } from './seo/info.mjs';
 import { buildBlogPages } from './seo/blog.mjs';
+import { buildBecomeSellerPage } from './seo/become-seller.mjs';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const DIST = `${ROOT}dist`;
@@ -428,6 +429,7 @@ const seoContext = {
   products, shops, productPath, CATEGORY_LABELS, SUBCATEGORY_LABELS,
 };
 await buildInfoPages(seoContext);
+await buildBecomeSellerPage(seoContext);
 await buildBlogPages(seoContext);
 
 // --- Organization + WebSite JSON-LD on the homepage itself --------------

@@ -143,10 +143,9 @@ export default function SellerAuthPanel({ onBack, onLogin, verifySeller, signUpS
           {view === 'forgot' && 'Réinitialisez votre mot de passe.'}
         </p>
 
-        {/* No login/signup tab switcher any more — the entry page
-            (ProEntryPage: "Créer ma boutique" vs "Se connecter à Ezial
-            Pro") is the only place that choice is made now, each opening
-            this panel directly on the right view via initialView. */}
+        {/* Opened on the right view by its link (« Ma boutique » → login,
+            « Devenir vendeur » → signup); a discreet link under each form
+            switches to the other one. */}
 
         {error && (
           <div className="mt-4">
@@ -204,6 +203,10 @@ export default function SellerAuthPanel({ onBack, onLogin, verifySeller, signUpS
               {submitting ? <><Loader2 size={16} className="animate-spin" /> Connexion...</> : 'Se connecter'}
             </button>
             <button onClick={() => switchView('forgot')} className="w-full text-center text-xs font-medium text-burgundy hover:underline">Mot de passe oublié ?</button>
+            <p className="border-t border-line pt-4 text-center text-sm text-ink/60">
+              Pas encore de boutique ?{' '}
+              <button onClick={() => switchView(loggedInCustomer ? 'current_account' : 'signup')} className="font-medium text-burgundy hover:underline">Créer ma boutique</button>
+            </p>
           </div>
         )}
 
@@ -220,6 +223,10 @@ export default function SellerAuthPanel({ onBack, onLogin, verifySeller, signUpS
             <button onClick={() => void handleSignup()} disabled={submitting} className="btn-primary w-full">
               {submitting ? <><Loader2 size={16} className="animate-spin" /> Création...</> : 'Créer le compte'}
             </button>
+            <p className="border-t border-line pt-4 text-center text-sm text-ink/60">
+              Déjà une boutique ?{' '}
+              <button onClick={() => switchView('login')} className="font-medium text-burgundy hover:underline">Se connecter</button>
+            </p>
           </div>
         )}
 

@@ -3,7 +3,7 @@ import { usePro } from '../../ProContext';
 import { formatFCFA } from '../../data';
 import { categoryMap, type CategoryId } from '@/data/categories';
 import { StatusChip } from '../../components/StatusChip';
-import { Plus, Package, Pencil, Power, Flag, Trash2, X, AlertTriangle } from 'lucide-react';
+import { Plus, Package, Pencil, Power, Flag, Trash2, X, AlertTriangle, ArrowRight } from 'lucide-react';
 import SmartImage from '@/components/SmartImage';
 import {
   fetchSellerProducts,
@@ -13,6 +13,7 @@ import {
 } from '@/lib/supabaseSellerProducts';
 import { fetchModerationFlagsForTargets, latestUnresolvedFlag, type ModerationFlagRow } from '@/lib/supabaseModeration';
 import { fetchSellerSubscription, type SellerSubscriptionInfo } from '@/lib/supabaseSellerSubscription';
+import { fetchPlanUnpublishedProducts } from '@/lib/supabaseProductSelection';
 
 export default function SellerProducts() {
   const { navigate, sellerSupabaseShopId, sellerShopIsOfficial } = usePro();
@@ -23,6 +24,8 @@ export default function SellerProducts() {
   const [actionError, setActionError] = useState('');
   const [actionNotice, setActionNotice] = useState('');
   const [productPendingDelete, setProductPendingDelete] = useState<SellerProductSummary | null>(null);
+  // null until known / migration not run: no « Choisir mes produits » entry.
+  const [offlineByPlanCount, setOfflineByPlanCount] = useState<number | null>(null);
 
   // Always the real products for the signed-in seller's real Supabase shop —
   // never the local mock sellerProducts array, which a fresh Supabase
@@ -36,16 +39,18 @@ export default function SellerProducts() {
     setIsLoading(true);
     Promise.all([
       fetchSellerProducts(sellerSupabaseShopId),
-      fetchSellerSubscription(sellerSupabaseShopId),
-    ]).then(async ([rows, sub]) => {
+      fetchSellerSubscription(sellerSupabaseShopId, { isOfficial: sellerShopIsOfficial }),
+      fetchPlanUnpublishedProducts(sellerSupabaseShopId),
+    ]).then(async ([rows, sub, offline]) => {
       if (cancelled) return;
       setProducts(rows);
       setSubscription(sub);
+      setOfflineByPlanCount(offline.supported ? offline.ids.length : null);
       setFlagsByProduct(await fetchModerationFlagsForTargets('product', rows.map((p) => p.id)));
       setIsLoading(false);
     });
     return () => { cancelled = true; };
-  }, [sellerSupabaseShopId]);
+  }, [sellerSupabaseShopId, sellerShopIsOfficial]);
 
   const activeCount = products.filter((p) => p.status === 'active').length;
   const productLimit = subscription?.productLimit ?? 10;
@@ -138,6 +143,23 @@ export default function SellerProducts() {
           <Plus size={16} /> Ajouter un produit
         </button>
       </div>
+
+      {/* After an Ezial Plus trial/subscription ended: some products were
+          taken offline by the server (never deleted) — the seller chooses
+          which ones stay online. */}
+      {!sellerShopIsOfficial && offlineByPlanCount !== null && (offlineByPlanCount > 0 || activeCount > productLimit) && (
+        <button onClick={() => navigate('/seller/produits/selection')} className="flex w-full items-center justify-between gap-3 rounded-xl border border-burgundy/20 bg-burgundy/5 p-4 text-left transition-colors hover:bg-burgundy/10">
+          <span>
+            <span className="block text-sm font-semibold text-ink">Choisissez vos {productLimit} produits en ligne</span>
+            <span className="mt-0.5 block text-xs text-ink/60">
+              {offlineByPlanCount > 0
+                ? `${offlineByPlanCount} produit${offlineByPlanCount > 1 ? 's ont été mis' : ' a été mis'} hors ligne à la fin de votre période Ezial Plus. Rien n’est supprimé.`
+                : `Vous avez ${activeCount} produits publiés pour une limite de ${productLimit}.`}
+            </span>
+          </span>
+          <ArrowRight size={16} className="flex-shrink-0 text-burgundy" />
+        </button>
+      )}
 
       {actionError && <p className="rounded-lg bg-burgundy/5 px-4 py-3 text-sm text-burgundy">{actionError}</p>}
       {actionNotice && <p className="rounded-lg bg-cream px-4 py-3 text-sm text-ink/70">{actionNotice}</p>}

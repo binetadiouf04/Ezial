@@ -32,7 +32,7 @@ const aideLinks: FooterLinkDef[] = [
 
 const ezialLinks: FooterLinkDef[] = [
   { label: 'À propos', route: '/info/a-propos' },
-  { label: 'Devenir vendeur', route: '/pro' },
+  { label: 'Devenir vendeur', route: '/devenir-vendeur' },
   { label: 'Tarifs vendeurs', route: '/info/tarifs-vendeurs' },
   { label: 'Conditions générales', route: '/info/conditions-generales' },
 ];
@@ -44,7 +44,7 @@ const legalLinks: FooterLinkDef[] = [
 ];
 
 function hrefFor(route: string): string {
-  return route.startsWith('/info/') || route === '/blog' ? `${route}/` : route;
+  return route.startsWith('/info/') || route === '/blog' || route === '/devenir-vendeur' ? `${route}/` : route;
 }
 
 const linkBase = 'text-sm text-white/75 hover:text-white hover:underline transition-colors';
