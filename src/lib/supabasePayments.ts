@@ -169,7 +169,7 @@ function mapMethod(row: Record<string, unknown>): PayoutMethod {
 }
 
 /** Moyen validé en cours et demande en attente de la boutique (la RLS limite déjà à la boutique du vendeur). */
-export async function fetchMyPayoutMethods(shopId: string): Promise<FeatureResult<{ approved: PayoutMethod | null; pending: PayoutMethod | null }>> {
+export async function fetchMyPayoutMethods(shopId: string): Promise<FeatureResult<{ methods: PayoutMethod[] }>> {
   const { data, error } = await supabase
     .from('seller_payout_methods')
     .select(METHOD_COLUMNS)
@@ -177,12 +177,8 @@ export async function fetchMyPayoutMethods(shopId: string): Promise<FeatureResul
     .in('status', ['approved', 'pending_review'])
     .order('submitted_at', { ascending: false });
   if (error) return isModuleMissing(error) ? { supported: false } : { supported: true, error: 'Impossible de charger vos informations de paiement.' };
-  const methods = ((data ?? []) as Record<string, unknown>[]).map(mapMethod);
-  return {
-    supported: true,
-    approved: methods.find((m) => m.status === 'approved') ?? null,
-    pending: methods.find((m) => m.status === 'pending_review') ?? null,
-  };
+  // Au plus un compte validé et une demande en attente par fournisseur.
+  return { supported: true, methods: ((data ?? []) as Record<string, unknown>[]).map(mapMethod) };
 }
 
 export async function submitPayoutMethod(input: {

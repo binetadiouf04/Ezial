@@ -123,6 +123,14 @@ Les numéros de téléphone complets n'apparaissent jamais dans les journaux
   vendeur reçoit exactement sa part nette.
 - **Nouveau numéro de réception validé par un administrateur** avant tout
   versement (`submit_payout_method` puis `admin_review_payout_method`).
+- **Deux comptes possibles par boutique** (décision du 11/11/2026, migration
+  `docs/sql/paiements-deux-comptes.sql`) : un compte Wave et/ou un compte
+  Orange Money. Une vente payée par Wave est versée sur le compte Wave du
+  vendeur, une vente payée par Orange Money sur son compte Orange Money
+  (chaque compte de décaissement finance les ventes encaissées chez le même
+  fournisseur). Avec un seul compte, tout y est versé. Pendant la
+  vérification d'un nouveau numéro, seuls les versements vers ce
+  fournisseur sont suspendus (`payout_provider_for_sale`).
 - **Retrait en boutique** : déclaré par le vendeur, confirmé par un
   administrateur (`admin_confirm_pickup`) tant que le code du client n'est pas
   vérifié côté serveur (`pickup_auto_eligible` reste à `false`).
