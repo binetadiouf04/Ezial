@@ -31,6 +31,11 @@ Utiliser des sous-agents pour aller plus vite dès qu'une tâche se découpe en 
 - Migrations SQL : les donner en texte brut dans la conversation pour que la personne les exécute ; ne jamais déployer une interface qui dépend d'une migration pas encore en production.
 - Ne jamais inventer de contenu (avis, notes, stock, produits de démo) ; ne jamais supprimer de données sans avoir vérifié qu'il s'agit de données de test.
 - Distinguer ce qui a été testé sur la branche/preview de ce qui est réellement en ligne ; ne jamais annoncer qu'un problème est résolu sans l'avoir vérifié.
+- **Textes du site : toujours optimisés SEO, AEO et GEO** (demande de la personne, 11 nov. 2026), pour tout texte visible ajouté ou réécrit sur le site :
+  - SEO : un seul H1, titres H2/H3 hiérarchisés, `<title>` ≤ 60 caractères et description ≤ 160 avec les mots recherchés (« Sénégal », « Dakar », catégorie, « vendre / acheter en ligne »), URL canonique, page présente dans la version statique (`scripts/prerender-seo.mjs`) et le sitemap.
+  - AEO : titres sous forme de questions réelles quand c'est pertinent, réponse directe dans la première phrase, FAQ balisée `FAQPage` lorsque la page répond à des questions.
+  - GEO : phrases autonomes et factuelles, citables seules, qui nomment les entités (Ezial, Dakar, Sénégal, FCFA, chiffres tirés de `src/shared/plans.js` et `src/shared/siteInfo.js`) ; données structurées schema.org adaptées.
+  - Jamais de bourrage de mots-clés ni d'affirmation non vérifiée (la règle « ne jamais inventer » prime).
 
 ## Identité visuelle (fournie par la personne, à respecter pour tout changement de design)
 
