@@ -1,4 +1,5 @@
 import { supabase } from './supabaseClient';
+import { isModuleMissing, type FeatureResult } from './supabaseFeatureDetect';
 
 // Notifications WhatsApp automatiques (whatsapp_notifications,
 // whatsapp_settings, consentement par compte). Aucun envoi ne part du site :
@@ -46,22 +47,14 @@ export interface WhatsAppNotification {
 
 export type WhatsAppCounts = Record<WhatsAppStatusFilter, number>;
 
-type Unsupported = { supported: false };
-type Supported<T> = { supported: true } & T;
 /** error : erreur de chargement réelle (réseau, droits), distincte de « pas installé ». */
-export type WhatsAppResult<T> = Unsupported | Supported<T> | { supported: true; error: string };
+export type WhatsAppResult<T> = FeatureResult<T>;
 
 // Le numéro complet (recipient_phone) n'est volontairement jamais lu ici.
 const NOTIFICATION_COLUMNS = 'id, kind, order_id, order_shop_id, shop_id, recipient_masked, status, skip_reason, attempts, next_attempt_at, last_error, provider, expires_at, created_at, sent_at';
 
-const MISSING_CODES = ['42P01', '42883', 'PGRST202', 'PGRST205'];
-
 /** Vrai quand la table ou la fonction n'existe pas encore (migration non exécutée). */
-export function isWhatsAppModuleMissing(error: { code?: string; message?: string } | null | undefined): boolean {
-  if (!error) return false;
-  if (MISSING_CODES.includes(error.code ?? '')) return true;
-  return /does not exist|schema cache|could not find/i.test(error.message ?? '');
-}
+export const isWhatsAppModuleMissing = isModuleMissing;
 
 function statusesFor(filter: WhatsAppStatusFilter): WhatsAppStatus[] {
   return filter === 'pending' ? ['pending', 'sending'] : [filter];

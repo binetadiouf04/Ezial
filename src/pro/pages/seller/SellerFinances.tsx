@@ -7,6 +7,35 @@ import { FREE_COMMISSION_PERCENT, PREMIUM_COMMISSION_PERCENT } from '@/data/subs
 import FinanceSummary from '../../components/FinanceSummary';
 import { StatusChip } from '../../components/StatusChip';
 import { Wallet, TrendingUp, Calendar, Check, Loader2 } from 'lucide-react';
+import {
+  fetchSellerFinanceSummary, fetchMyPayoutMethods, fetchMyPayouts,
+  type SellerPaymentSummary, type PayoutMethod, type SellerPayout,
+} from '@/lib/supabasePayments';
+import { SellerPaymentCards, SellerPayoutMethodCard, SellerPayoutHistory } from './SellerPaymentsSection';
+
+// Module paiements (migration Wave / Orange Money) : tant qu'il n'est pas
+// installé, la page garde exactement son affichage actuel.
+type PaymentsState =
+  | { kind: 'missing' }
+  | { kind: 'ready'; summary: SellerPaymentSummary | null; approved: PayoutMethod | null; pending: PayoutMethod | null; payouts: SellerPayout[]; error: string };
+
+async function loadPaymentsState(shopId: string): Promise<PaymentsState> {
+  const [summaryRes, methodsRes, payoutsRes] = await Promise.all([
+    fetchSellerFinanceSummary(),
+    fetchMyPayoutMethods(shopId),
+    fetchMyPayouts(shopId),
+  ]);
+  if (!summaryRes.supported || !methodsRes.supported || !payoutsRes.supported) return { kind: 'missing' };
+  const errors = [summaryRes, methodsRes, payoutsRes].map((r) => ('error' in r ? r.error : '')).filter(Boolean);
+  return {
+    kind: 'ready',
+    summary: 'summary' in summaryRes ? summaryRes.summary : null,
+    approved: 'approved' in methodsRes ? methodsRes.approved : null,
+    pending: 'pending' in methodsRes ? methodsRes.pending : null,
+    payouts: 'payouts' in payoutsRes ? payoutsRes.payouts : [],
+    error: errors.join(' '),
+  };
+}
 
 export default function SellerFinances() {
   const { sellerSupabaseShopId, sellerShopIsOfficial } = usePro();
@@ -20,6 +49,7 @@ export default function SellerFinances() {
   const [requestError, setRequestError] = useState('');
   const [requestSent, setRequestSent] = useState(false);
   const [commissionRate, setCommissionRate] = useState<number | null>(null);
+  const [payments, setPayments] = useState<PaymentsState>({ kind: 'missing' });
 
   // Real financial history for the signed-in seller's real Supabase shop —
   // never the mock sellerTransactions array, which only ever matched one
@@ -34,8 +64,10 @@ export default function SellerFinances() {
     Promise.all([
       fetchSellerFinances(sellerSupabaseShopId),
       fetchSellerSubscription(sellerSupabaseShopId),
-    ]).then(([summary, sub]) => {
+      loadPaymentsState(sellerSupabaseShopId),
+    ]).then(([summary, sub, paymentsState]) => {
       if (cancelled) return;
+      setPayments(paymentsState);
       setTransactions(summary.transactions);
       setGrossTotal(summary.grossTotal);
       setCommissionTotal(summary.commissionTotal);
@@ -47,6 +79,13 @@ export default function SellerFinances() {
     });
     return () => { cancelled = true; };
   }, [sellerSupabaseShopId, sellerShopIsOfficial]);
+
+  const reloadPayments = async () => {
+    if (!sellerSupabaseShopId) return;
+    setPayments(await loadPaymentsState(sellerSupabaseShopId));
+  };
+
+  const commissionHint = commissionRate === 0 ? 'Aucune commission sur les ventes de la boutique Ezial' : `${commissionRate ?? FREE_COMMISSION_PERCENT} % (votre forfait actuel) — déduite automatiquement`;
 
   const handleRequestPayout = async () => {
     if (!sellerSupabaseShopId) return;
@@ -87,14 +126,20 @@ export default function SellerFinances() {
         <p className="mt-1 text-sm text-ink/55">Vos revenus et transactions</p>
       </div>
 
-      {/* Summary */}
-      <FinanceSummary
-        rows={[
-          { label: 'Ventes brutes', value: grossTotal, hint: `${transactions.length} transaction${transactions.length > 1 ? 's' : ''}` },
-          { label: 'Commission Ezial', value: -commissionTotal, hint: commissionRate === 0 ? 'Aucune commission sur les ventes de la boutique Ezial' : `${commissionRate ?? FREE_COMMISSION_PERCENT} % (votre forfait actuel) — déduite automatiquement` },
-          { label: 'Montant net', value: netTotal, accent: true },
-        ]}
-      />
+      {/* Summary — remplacé par « Mes paiements » (calculé par le serveur)
+          une fois le module paiements installé. */}
+      {payments.kind === 'ready' && payments.summary ? (
+        <SellerPaymentCards summary={payments.summary} commissionHint={commissionHint} />
+      ) : (
+        <FinanceSummary
+          rows={[
+            { label: 'Ventes brutes', value: grossTotal, hint: `${transactions.length} transaction${transactions.length > 1 ? 's' : ''}` },
+            { label: 'Commission Ezial', value: -commissionTotal, hint: commissionHint },
+            { label: 'Montant net', value: netTotal, accent: true },
+          ]}
+        />
+      )}
+      {payments.kind === 'ready' && payments.error && <p className="text-sm text-burgundy">{payments.error}</p>}
 
       {/* Available balance */}
       <div className="card p-5">
@@ -110,6 +155,13 @@ export default function SellerFinances() {
         </div>
         {requestError && <p className="mt-2 text-sm text-burgundy">{requestError}</p>}
       </div>
+
+      {payments.kind === 'ready' && (
+        <>
+          <SellerPayoutMethodCard approved={payments.approved} pending={payments.pending} onSubmitted={reloadPayments} />
+          <SellerPayoutHistory payouts={payments.payouts} />
+        </>
+      )}
 
       {/* Period summaries */}
       <div className="grid grid-cols-2 gap-3">
