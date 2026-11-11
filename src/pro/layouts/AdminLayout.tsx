@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { getStaffSpace, publicSiteOrigin } from '@/lib/staffSpace';
 import { usePro } from '../ProContext';
 import { navigateTo } from '@/store/AppContext';
-import { LayoutDashboard, ShoppingBag, Package, Store, Wallet, LogOut, ArrowLeft, Layers, Truck, AlertTriangle, Star, Megaphone, Menu, X } from 'lucide-react';
+import { LayoutDashboard, ShoppingBag, Package, Store, Wallet, LogOut, ArrowLeft, Layers, Truck, AlertTriangle, Star, Megaphone, MessageCircle, Menu, X } from 'lucide-react';
 import AdminDashboard from '../pages/admin/AdminDashboard';
 import AdminContent from '../pages/admin/AdminContent';
 import AdminOrders from '../pages/admin/AdminOrders';
@@ -11,6 +11,7 @@ import AdminClaims from '../pages/admin/AdminClaims';
 import AdminClaimDetail from '../pages/admin/AdminClaimDetail';
 import AdminReviews from '../pages/admin/AdminReviews';
 import AdminPushCampaigns from '../pages/admin/AdminPushCampaigns';
+import AdminWhatsApp from '../pages/admin/AdminWhatsApp';
 import AdminProducts from '../pages/admin/AdminProducts';
 import AdminShops from '../pages/admin/AdminShops';
 import AdminShopDetail from '../pages/admin/AdminShopDetail';
@@ -33,6 +34,7 @@ const navItems = [
   { route: '/admin/produits', label: 'Produits', icon: Package },
   { route: '/admin/avis', label: 'Avis', icon: Star },
   { route: '/admin/notifications-promo', label: 'Promo', icon: Megaphone },
+  { route: '/admin/whatsapp', label: 'WhatsApp', icon: MessageCircle },
   { route: '/admin/boutiques', label: 'Boutiques', icon: Store },
   { route: '/admin/livreurs', label: 'Livreurs', icon: Truck },
   { route: '/admin/contenu', label: 'Contenu', icon: Layers },
@@ -68,6 +70,7 @@ export default function AdminLayout() {
     if (clean === '/admin/produits') return <AdminProducts />;
     if (clean === '/admin/avis') return <AdminReviews />;
     if (clean === '/admin/notifications-promo') return <AdminPushCampaigns />;
+    if (clean === '/admin/whatsapp') return <AdminWhatsApp />;
     if (clean === '/admin/boutiques') return <AdminShops />;
     if (shopDetailMatch) return <AdminShopDetail shopId={shopDetailMatch[1]} />;
     if (clean === '/admin/contenu') return <AdminContent />;
