@@ -15,6 +15,7 @@ import { categories } from '@/data/categories';
 import { supabase } from '@/lib/supabaseClient';
 import { ownsCustomerProfileForDeletionWarning } from '@/lib/supabaseAccountDeletion';
 import NotificationOptIn from '@/components/NotificationOptIn';
+import WhatsAppConsentToggle from '@/components/WhatsAppConsentToggle';
 import { Check, Image as ImageIcon, Camera, MapPin, Loader2, AlertTriangle, AlertCircle, Navigation, Pencil, Search, Send, Trash2, PauseCircle, PlayCircle } from 'lucide-react';
 import SmartImage from '@/components/SmartImage';
 
@@ -434,6 +435,12 @@ export default function SellerShop() {
           <label className="block text-xs font-medium text-ink/60 mb-1.5">Téléphone</label>
           <input className="input-field" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
           <p className="mt-1 text-xs text-ink/40">Numéro permettant à Ezial de vous contacter.</p>
+          <WhatsAppConsentToggle
+            source="boutique"
+            variant="inline"
+            label="Recevoir sur WhatsApp mes nouvelles commandes et un rappel si une commande attend depuis 24 h"
+            description="Au numéro de téléphone de la boutique. Jamais de publicité."
+          />
         </div>
 
         <div>
