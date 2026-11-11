@@ -45,7 +45,7 @@ export function CopyReference({ reference }: { reference: string }) {
   );
 }
 
-export function ShareProduct({ product }: { product: { id: string; slug?: string; name: string } }) {
+export function ShareProduct({ product, iconOnly = false }: { product: { id: string; slug?: string; name: string }; iconOnly?: boolean }) {
   const [copied, setCopied] = useState(false);
   const handleShare = async () => {
     const url = `${window.location.origin}${productPublicPath(product)}`;
@@ -60,6 +60,19 @@ export function ShareProduct({ product }: { product: { id: string; slug?: string
     }
     if (await copyText(url)) { setCopied(true); window.setTimeout(() => setCopied(false), 1800); }
   };
+  if (iconOnly) {
+    return (
+      <button
+        type="button"
+        onClick={() => void handleShare()}
+        className="flex h-9 w-9 items-center justify-center rounded-full bg-white/90 text-ink/70 backdrop-blur-sm transition-all hover:scale-110 active:scale-95"
+        aria-label={copied ? 'Lien copié' : 'Partager ce produit'}
+        title={copied ? 'Lien copié' : 'Partager'}
+      >
+        {copied ? <Check size={17} className="text-green-700" aria-hidden="true" /> : <Share2 size={17} aria-hidden="true" />}
+      </button>
+    );
+  }
   return (
     <button
       type="button"

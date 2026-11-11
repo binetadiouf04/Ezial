@@ -21,7 +21,7 @@ function ColorSwatch({ colorName, selected, onClick }: { colorName: string; sele
       aria-pressed={selected}
       className={`relative flex h-9 w-9 items-center justify-center rounded-full transition-all ${
         selected
-          ? 'ring-2 ring-offset-2 ring-ink'
+          ? 'ring-2 ring-offset-2 ring-burgundy'
           : 'ring-1 ring-transparent hover:ring-ink/20'
       }`}
     >
@@ -39,10 +39,10 @@ function OptionChip({ label, selected, onClick }: { label: string; selected: boo
       type="button"
       onClick={onClick}
       aria-pressed={selected}
-      className={`min-w-[44px] rounded-lg border px-3.5 py-2 text-[13px] font-medium transition-all ${
+      className={`min-h-[40px] min-w-[44px] rounded-lg border px-3.5 py-2 text-[13px] font-medium transition-colors ${
         selected
-          ? 'border-burgundy bg-burgundy/5 text-burgundy'
-          : 'border-line bg-white text-ink/70 hover:border-ink/30'
+          ? 'border-burgundy bg-burgundy text-white'
+          : 'border-ink/20 bg-white text-ink/75 hover:border-ink/50'
       }`}
     >
       {label}
@@ -71,9 +71,9 @@ export default function VariantSelector({ variants, selected, onChange }: { vari
           return (
             <div key={v.name}>
               <div className="mb-2.5 flex items-center gap-1.5">
-                <span className="text-sm font-medium text-ink">{v.name}</span>
-                <span className="text-ink/40">:</span>
-                <span className="text-sm font-medium text-ink/80">{selected[v.name] ?? '—'}</span>
+                <span className="text-xs font-semibold text-ink/70">{v.name}</span>
+                <span className="text-ink/30">·</span>
+                <span className="text-xs font-medium text-ink">{selected[v.name] ?? '—'}</span>
               </div>
               <div className="flex flex-wrap items-center gap-2.5">
                 {colorValues.map((val) => (
@@ -100,8 +100,8 @@ export default function VariantSelector({ variants, selected, onChange }: { vari
         return (
           <div key={v.name}>
             <div className="mb-2 flex items-center justify-between">
-              <span className="text-sm font-medium text-ink">{v.name}</span>
-              {selected[v.name] && <span className="text-xs text-ink/50">{selected[v.name]}</span>}
+              <span className="text-xs font-semibold text-ink/70">{v.name}</span>
+              {selected[v.name] && <span className="text-xs font-medium text-ink">{selected[v.name]}</span>}
             </div>
             <div className="flex flex-wrap gap-2">
               {v.values.map((val) => (

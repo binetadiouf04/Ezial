@@ -22,7 +22,7 @@ import ProductCarousel from '@/components/ProductCarousel';
 import SmartImage from '@/components/SmartImage';
 import { CopyReference, ShareProduct } from '@/components/ProductShareActions';
 import { DELIVERY } from '@/shared/siteInfo';
-import { ChevronRight, Store, Plus, Minus, Check, Star, Camera, X, ShieldCheck, Loader2, Truck } from 'lucide-react';
+import { ChevronRight, Store, Plus, Minus, Check, Star, Camera, X, ShieldCheck, Loader2, Truck, ShoppingBag } from 'lucide-react';
 
 const tabs = ['Description', 'Avis'] as const;
 type Tab = (typeof tabs)[number];
@@ -262,25 +262,24 @@ export default function ProductPage({ productId }: { productId: string }) {
   };
 
   return (
-    <div className="container-pro py-6">
-      <nav className="mb-6 flex flex-wrap items-center gap-1.5 text-xs text-ink/40">
-        <button onClick={() => navigate('/')} className="hover:text-burgundy">Accueil</button><ChevronRight size={12} />
-        {cat && <><button onClick={() => navigate(`/categorie/${cat.id}`)} className="hover:text-burgundy">{cat.label}</button><ChevronRight size={12} /></>}
-        <span className="text-ink/70 line-clamp-1">{product.name}</span>
+    <div className="container-pro pb-28 pt-4 lg:py-8">
+      <nav aria-label="Fil d'Ariane" className="mb-4 flex flex-wrap items-center gap-1.5 text-[11px] text-ink/45 lg:mb-6">
+        <button onClick={() => navigate('/')} className="hover:text-burgundy">Accueil</button><ChevronRight size={11} aria-hidden="true" />
+        {cat && <><button onClick={() => navigate(`/categorie/${cat.id}`)} className="hover:text-burgundy">{cat.label}</button><ChevronRight size={11} aria-hidden="true" /></>}
+        <span className="line-clamp-1 text-ink/70">{product.name}</span>
       </nav>
-      <div className="grid gap-8 lg:grid-cols-2 lg:gap-14">
-        <div className="relative mx-auto w-full max-w-[420px] lg:sticky lg:top-[90px] lg:max-w-[448px] lg:self-start">
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,540px)_minmax(0,1fr)] lg:gap-16">
+        <div className="relative mx-auto w-full sm:max-w-[480px] lg:sticky lg:top-[90px] lg:mx-0 lg:max-w-[540px] lg:self-start">
           <ProductGallery media={product.media ?? product.images.map((url) => ({ url, type: 'image' as const }))} alt={product.name} />
-          <div className="absolute right-2.5 top-2.5 z-10"><FavoriteButton productId={product.id} /></div>
+          <div className="absolute right-3 top-3 z-10 flex flex-col gap-2">
+            <FavoriteButton productId={product.id} className="!h-9 !w-9 !p-0" size={18} />
+            <ShareProduct product={product} iconOnly />
+          </div>
         </div>
-        <div className="space-y-6">
+        <div className="mx-auto w-full space-y-5 sm:max-w-[480px] lg:mx-0 lg:max-w-none">
           <div>
-            {shop && <button onClick={() => navigate(`/boutique/${shop.id}`)} className="text-xs font-medium uppercase tracking-wider text-burgundy hover:underline">{shop.name}</button>}
-            <h1 className="mt-1.5 font-display text-2xl font-semibold leading-tight text-ink sm:text-3xl">{product.name}</h1>
-            <div className="mt-1 flex flex-wrap items-center justify-between gap-2">
-              <CopyReference reference={product.reference} />
-              <ShareProduct product={product} />
-            </div>
+            <h1 className="font-display text-[28px] font-medium leading-tight text-ink sm:text-4xl">{product.name}</h1>
+            <div className="mt-1.5"><CopyReference reference={product.reference} /></div>
             {isRealCatalogId(product.id) ? (
               reviewStats.count > 0 && <div className="mt-2.5"><Rating rating={reviewStats.average} count={reviewStats.count} size="md" /></div>
             ) : (
@@ -288,23 +287,24 @@ export default function ProductPage({ productId }: { productId: string }) {
             )}
           </div>
           <PriceDisplay price={dynamicPrice.price} oldPrice={dynamicPrice.oldPrice ?? product.oldPrice} size="lg" />
-          {product.saleMode && <p className="text-xs text-ink/45">{formatFCFA(dynamicPrice.price)} / {fabricSaleModeUnit[product.saleMode]}</p>}
+          {product.saleMode && <p className="-mt-3 text-xs text-ink/50">{formatFCFA(dynamicPrice.price)} / {fabricSaleModeUnit[product.saleMode]}</p>}
           {product.availabilityStatus && (
-            <span className="inline-flex w-fit items-center gap-1 rounded-full bg-burgundy/10 px-2.5 py-1 text-xs font-semibold text-burgundy">
+            <span className="inline-flex w-fit items-center gap-1 rounded-md bg-burgundy/10 px-2.5 py-1 text-xs font-semibold text-burgundy">
               {fabricAvailabilityLabels[product.availabilityStatus]}
             </span>
           )}
           {outOfStock ? <p className="text-sm font-medium text-ink/50">Rupture de stock</p> : (lowStock && !product.saleMode) ? <p className="text-sm font-medium text-burgundy">Plus que {product.stock} disponibles</p> : null}
-          {product.variants.length > 0 && <div className="border-t border-line pt-5"><VariantSelector variants={product.variants} selected={variants} onChange={handleVariant} /></div>}
-          <div className="space-y-3">
-            <div className="flex items-center gap-4">
-              <span className="text-sm font-medium text-ink">Quantité</span>
+          {product.variants.length > 0 && <div className="border-t border-ink/10 pt-5"><VariantSelector variants={product.variants} selected={variants} onChange={handleVariant} /></div>}
+          <div className="space-y-4">
+            <div>
+              <span className="mb-1.5 block text-xs font-semibold text-ink/70">Quantité</span>
               {product.saleMode ? (
-                <div className="flex items-center border border-line rounded-full">
+                <div className="inline-flex items-center rounded-lg border border-ink/20">
                   <button
                     onClick={() => applyFabricQty(product.saleMode!, +(qty - fabricQuantityRules[product.saleMode!].step).toFixed(2))}
                     disabled={qty <= fabricQuantityRules[product.saleMode].min}
-                    className="flex h-9 w-9 flex-shrink-0 items-center justify-center text-ink/60 hover:text-ink disabled:opacity-30"
+                    aria-label="Diminuer la quantité"
+                    className="flex h-10 w-10 flex-shrink-0 items-center justify-center text-ink/60 hover:text-ink disabled:opacity-30"
                   ><Minus size={15} /></button>
                   <span className="flex items-center gap-1 px-0.5">
                     <input
@@ -313,21 +313,23 @@ export default function ProductPage({ productId }: { productId: string }) {
                       value={qtyText}
                       onChange={(e) => handleFabricQtyInput(product.saleMode!, e.target.value)}
                       onBlur={() => { if (!qtyError && qtyText.trim() !== '') setQtyText(formatFabricQuantity(qty)); }}
-                      className="w-12 border-0 bg-transparent text-center text-sm font-medium text-ink focus:outline-none focus:ring-0"
+                      aria-label="Quantité"
+                      className="w-12 border-0 bg-transparent text-center text-base font-medium text-ink focus:outline-none focus:ring-0"
                     />
                     <span className="text-sm font-medium text-ink/60">{fabricSaleModeUnit[product.saleMode]}</span>
                   </span>
                   <button
                     onClick={() => applyFabricQty(product.saleMode!, +(qty + fabricQuantityRules[product.saleMode!].step).toFixed(2))}
                     disabled={qty >= fabricQuantityRules[product.saleMode].max}
-                    className="flex h-9 w-9 flex-shrink-0 items-center justify-center text-ink/60 hover:text-ink disabled:opacity-30"
+                    aria-label="Augmenter la quantité"
+                    className="flex h-10 w-10 flex-shrink-0 items-center justify-center text-ink/60 hover:text-ink disabled:opacity-30"
                   ><Plus size={15} /></button>
                 </div>
               ) : (
-                <div className="flex items-center border border-line rounded-full">
-                  <button onClick={() => setQty((q) => Math.max(1, q - 1))} className="flex h-9 w-9 items-center justify-center text-ink/60 hover:text-ink"><Minus size={15} /></button>
+                <div className="inline-flex items-center rounded-lg border border-ink/20">
+                  <button onClick={() => setQty((q) => Math.max(1, q - 1))} aria-label="Diminuer la quantité" className="flex h-10 w-10 items-center justify-center text-ink/60 hover:text-ink"><Minus size={15} /></button>
                   <span className="w-10 text-center text-sm font-medium">{qty}</span>
-                  <button onClick={() => setQty((q) => q + 1)} className="flex h-9 w-9 items-center justify-center text-ink/60 hover:text-ink"><Plus size={15} /></button>
+                  <button onClick={() => setQty((q) => q + 1)} aria-label="Augmenter la quantité" className="flex h-10 w-10 items-center justify-center text-ink/60 hover:text-ink"><Plus size={15} /></button>
                 </div>
               )}
             </div>
@@ -336,33 +338,44 @@ export default function ProductPage({ productId }: { productId: string }) {
                 Hidden while the typed quantity isn't valid, rather than
                 showing a total that doesn't match what's in the field. */}
             {product.saleMode && !fabricQtyInvalid && (
-              <p className="text-sm font-medium text-ink/70">Total : <span className="text-base font-semibold text-ink">{formatFCFA(dynamicPrice.price * qty)}</span></p>
+              <p className="text-sm font-medium text-ink/70">Total : <span className="text-base font-bold text-burgundy">{formatFCFA(dynamicPrice.price * qty)}</span></p>
             )}
             {product.saleMode && qtyError && <p className="text-sm text-burgundy">{qtyError}</p>}
             {error && <p className="text-sm text-burgundy">{error}</p>}
-            <div className="flex flex-col gap-2.5 sm:flex-row">
-              <button onClick={() => handleAdd(false)} disabled={outOfStock || fabricQtyInvalid} className="btn-outline flex-1">{added ? <><Check size={17} /> Ajouté</> : 'Ajouter au panier'}</button>
-              <button onClick={() => handleAdd(true)} disabled={outOfStock || fabricQtyInvalid} className="btn-primary flex-1">Acheter maintenant</button>
+          </div>
+          {shop && (
+            <button onClick={() => navigate(`/boutique/${shop.id}`)} className="flex w-full items-center gap-3 rounded-lg border border-ink/15 px-3.5 py-3 text-left transition-colors hover:border-ink/40">
+              <Store size={18} className="flex-shrink-0 text-burgundy" aria-hidden="true" />
+              <span className="min-w-0 flex-1 truncate text-sm font-semibold text-ink">{shop.name}</span>
+              <span className="flex flex-shrink-0 items-center gap-0.5 text-xs font-medium text-burgundy">Voir la boutique <ChevronRight size={14} aria-hidden="true" /></span>
+            </button>
+          )}
+          {/* Barre d'achat : fixée en bas de l'écran sur mobile (zone de
+              sécurité respectée), intégrée à la page sur ordinateur. */}
+          <div className="fixed inset-x-0 bottom-0 z-30 border-t border-ink/10 bg-white/95 px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 backdrop-blur lg:static lg:z-auto lg:border-0 lg:bg-transparent lg:p-0 lg:backdrop-blur-none">
+            <div className="mx-auto flex max-w-[480px] gap-2.5 lg:max-w-none">
+              <button onClick={() => handleAdd(false)} disabled={outOfStock || fabricQtyInvalid} className="btn-shop min-w-0 flex-1 whitespace-nowrap !px-3 !text-sm sm:!text-[15px]">{added ? <><Check size={17} /> Ajouté</> : <><ShoppingBag size={17} aria-hidden="true" /> Ajouter au panier</>}</button>
+              <button onClick={() => handleAdd(true)} disabled={outOfStock || fabricQtyInvalid} className="btn-shop-line flex-none whitespace-nowrap !px-4 !text-sm sm:!text-[15px]">Acheter maintenant</button>
             </div>
           </div>
           {/* Delivery promise (src/shared/siteInfo.js) — information only,
               the order flow and delivery fee are unchanged. */}
-          <div className="flex items-center gap-3 rounded-xl bg-cream px-4 py-3">
-            <span className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-burgundy text-white"><Truck size={17} aria-hidden="true" /></span>
+          <div className="flex items-center gap-3 rounded-lg border border-ink/10 bg-cream/50 px-3.5 py-3">
+            <Truck size={18} className="flex-shrink-0 text-burgundy" aria-hidden="true" />
             <p className="text-sm leading-snug text-ink/70">
               <span className="font-semibold text-ink">Livraison en {DELIVERY.delay}</span> à {DELIVERY.area}
             </p>
           </div>
           {product.pickup && (
-            <div className="space-y-2.5 rounded-xl border border-line p-4">
-              <div className="flex items-center gap-2.5 text-sm text-ink/75"><Store size={17} className="text-ink/50" /><span>{product.pickup}</span></div>
+            <div className="rounded-lg border border-ink/10 px-3.5 py-3">
+              <div className="flex items-center gap-3 text-sm text-ink/75"><Store size={18} className="flex-shrink-0 text-burgundy" aria-hidden="true" /><span>{product.pickup}</span></div>
             </div>
           )}
-          <div className="border-t border-line pt-5">
-            <div className="flex gap-5 border-b border-line">
+          <div className="border-t border-ink/10 pt-5">
+            <div className="flex gap-6 border-b border-ink/10">
               {tabs.map((t) => {
                 const count = isRealCatalogId(product.id) ? reviewStats.count : product.reviewCount;
-                return <button key={t} onClick={() => openTab(t)} className={`whitespace-nowrap border-b-2 pb-2.5 text-sm font-medium transition-colors ${tab === t ? 'border-burgundy text-burgundy' : 'border-transparent text-ink/50 hover:text-ink'}`}>{t}{t === 'Avis' && count ? ` (${count})` : ''}</button>;
+                return <button key={t} onClick={() => openTab(t)} className={`whitespace-nowrap border-b-2 pb-2.5 text-sm font-semibold transition-colors ${tab === t ? 'border-burgundy text-burgundy' : 'border-transparent text-ink/45 hover:text-ink'}`}>{t}{t === 'Avis' && count ? ` (${count})` : ''}</button>;
               })}
             </div>
             <div className="py-5 text-sm text-ink/70">
@@ -370,7 +383,7 @@ export default function ProductPage({ productId }: { productId: string }) {
                 <div className="space-y-5">
                   <p>{product.description}</p>
                   {product.details.length > 0 && (
-                    <div className="border-t border-line pt-5">
+                    <div className="border-t border-ink/10 pt-5">
                       <h3 className="mb-3 text-sm font-semibold text-ink">Caractéristiques</h3>
                       <dl className="grid grid-cols-2 gap-y-3">{product.details.map((d) => <div key={d.label}><dt className="text-xs text-ink/40">{d.label}</dt><dd className="mt-0.5 font-medium text-ink">{d.value}</dd></div>)}</dl>
                     </div>

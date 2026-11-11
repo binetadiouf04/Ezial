@@ -15,7 +15,7 @@ import CheckoutSteps from '@/components/CheckoutSteps';
 import GoogleLocationPickerMap from '@/components/GoogleLocationPickerMap';
 import PhoneField from '@/components/PhoneField';
 import CustomerAuthPanel from '@/components/CustomerAuthPanel';
-import { Check, Truck, Store, Smartphone, Clock, Loader2, AlertCircle, AlertTriangle, MapPin, Navigation, Search, ArrowLeft, Gift, UserCheck } from 'lucide-react';
+import { Check, Truck, Store, Smartphone, Clock, Loader2, AlertCircle, AlertTriangle, MapPin, Navigation, Search, ArrowLeft, Gift, UserCheck, ChevronDown, Wallet, FileText, Lock } from 'lucide-react';
 import SmartImage from '@/components/SmartImage';
 
 const paymentIcons: Record<string, typeof Smartphone> = { wave: Smartphone, orange: Smartphone };
@@ -54,6 +54,15 @@ function persistDraftForm(form: CheckoutForm): void {
   } catch {
     // Ignore — the form still works for the current session.
   }
+}
+
+// Pastille de sélection des choix exclusifs (réception, préférence, paiement).
+function Radio({ active }: { active: boolean }) {
+  return (
+    <span aria-hidden="true" className={`ml-auto flex h-[18px] w-[18px] flex-shrink-0 items-center justify-center rounded-full border ${active ? 'border-burgundy' : 'border-ink/30'}`}>
+      {active && <span className="h-2.5 w-2.5 rounded-full bg-burgundy" />}
+    </span>
+  );
 }
 
 // Shown instead of the checkout to a signed-out visitor: same two-choice
@@ -489,88 +498,160 @@ export default function CheckoutPage() {
   // Pickup-only shops (to show pickup cards)
   const pickupShops = shopsInCart.filter((s) => getShopFulfillment(s.id) === 'pickup');
 
+  // --- Présentation seulement : le récapitulatif est construit une fois et
+  // réutilisé (colonne latérale sur ordinateur, bloc repliable sur mobile aux
+  // étapes 1 et 2, bloc complet à l'étape 3 sur mobile). Mêmes données, mêmes
+  // montants, mêmes libellés que précédemment.
+  const summaryLines = cart.map((item, i) => {
+    const p = catalogProducts.find((cp) => cp.id === item.productId);
+    if (!p) return null;
+    const price = item.unitPrice ?? p.price;
+    const shop = getShop(item.shopId);
+    const { oldPrice: unitOldPrice } = getVariantPrice(p, item.variants);
+    return (
+      <div key={i} className="flex gap-3">
+        <SmartImage src={p.thumbnailUrl || p.images[0]} alt="" className="h-[72px] w-[58px] flex-shrink-0 rounded-md object-cover" />
+        <div className="min-w-0 flex-1">
+          <p className="line-clamp-2 text-[13px] font-medium leading-snug text-ink">{p.name}</p>
+          {Object.entries(item.variants).length > 0 && (
+            <p className="mt-0.5 text-xs text-ink/55">{Object.entries(item.variants).map(([k, v]) => `${k} : ${v}`).join(' · ')}</p>
+          )}
+          <p className="text-xs text-ink/55">Quantité : {p.saleMode ? `${formatFabricQuantity(item.quantity)} ${fabricSaleModeUnit[p.saleMode]}` : item.quantity}</p>
+          {shop && <p className="mt-0.5 text-[11px] text-ink/40">Vendu par {shop.name}</p>}
+        </div>
+        <div className="flex-shrink-0 text-right"><PriceDisplay price={price * item.quantity} oldPrice={unitOldPrice ? unitOldPrice * item.quantity : undefined} size="sm" /></div>
+      </div>
+    );
+  });
+
+  const firstSummaryProduct = catalogProducts.find((cp) => cp.id === cart[0]?.productId);
+
+  const summaryTotals = (
+    <div className="space-y-2 text-sm">
+      <div className="flex justify-between"><span className="text-ink/60">Produits</span><span className="font-medium text-ink">{formatFCFA(cartSubtotal)}</span></div>
+      <div className="flex justify-between gap-3"><span className="text-ink/60">{hasDeliveryShops && deliveryFeeKnown ? 'Livraison Ezial (estimation)' : 'Livraison Ezial'}</span><span className="text-right font-medium text-ink">{!hasDeliveryShops ? 'Gratuit' : deliveryFeeKnown ? formatFCFA(effectiveDeliveryFeeEstimate) : `À partir de ${formatFCFA(DELIVERY_FEE_FLOOR)}`}</span></div>
+      {isGift && giftWrap && <div className="flex justify-between"><span className="text-ink/60">Emballage cadeau</span><span className="font-medium text-ink">{formatFCFA(GIFT_WRAP_FEE)}</span></div>}
+      {appliedPromo && <div className="flex justify-between text-green-700"><span>Code promo {appliedPromo.code}</span><span className="font-medium">-{formatFCFA(appliedPromo.discountAmount)}</span></div>}
+      <div className="flex items-baseline justify-between rounded-lg bg-burgundy/[0.06] px-3 py-3">
+        <span className="text-sm font-semibold text-ink">{hasDeliveryShops && !deliveryFeeKnown ? 'Total à partir de' : 'Total estimé'}</span>
+        <span className="text-lg font-bold leading-none text-burgundy">{formatFCFA(estimatedTotal)}</span>
+      </div>
+      {hasDeliveryShops && <p className="text-[11px] leading-relaxed text-ink/45">Le montant exact de la livraison est calculé à la validation et confirmé sur votre reçu.</p>}
+      {isGift && (
+        <div className="flex items-start gap-1.5 border-t border-ink/10 pt-3 text-xs text-ink/60">
+          <Gift size={13} className="mt-0.5 flex-shrink-0 text-burgundy" aria-hidden="true" />
+          <span>Commande cadeau pour {giftRecipientName || 'le destinataire'} — livrée à son adresse.</span>
+        </div>
+      )}
+    </div>
+  );
+
   return (
-    <div className="container-pro py-6 max-w-3xl">
-      <div className="mb-8"><CheckoutSteps steps={steps} current={step} /></div>
-      <div className="grid gap-8 lg:grid-cols-[1fr_320px]">
-        <div>
+    <div className="container-pro max-w-5xl py-5 sm:py-8">
+      <h1 className="mb-5 text-center text-lg font-semibold text-ink lg:text-left lg:text-2xl lg:font-medium lg:font-display">Finaliser ma commande</h1>
+      <div className="mx-auto mb-6 max-w-sm sm:mb-8 lg:mx-0 lg:max-w-md"><CheckoutSteps steps={steps} current={step} /></div>
+
+      {/* Mobile, étapes 1 et 2 : le récapitulatif reste à portée, replié. */}
+      {step !== 2 && (
+        <details className="group mb-6 rounded-lg border border-ink/15 lg:hidden">
+          <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-3.5 py-3 text-ink [&::-webkit-details-marker]:hidden">
+            <span className="flex min-w-0 items-center gap-3">
+              {firstSummaryProduct && <SmartImage src={firstSummaryProduct.thumbnailUrl || firstSummaryProduct.images[0]} alt="" className="h-12 w-10 flex-shrink-0 rounded-md object-cover" />}
+              <span className="min-w-0 normal-case tracking-normal"><span className="block text-sm font-semibold text-ink">Votre commande</span><span className="block text-xs font-normal text-ink/55">{cart.length} article{cart.length > 1 ? 's' : ''}</span></span>
+            </span>
+            <span className="flex flex-shrink-0 items-center gap-2"><span className="text-sm font-bold text-burgundy">{formatFCFA(estimatedTotal)}</span><ChevronDown size={15} className="transition-transform group-open:rotate-180" aria-hidden="true" /></span>
+          </summary>
+          <div className="space-y-4 border-t border-ink/10 px-4 py-4">
+            <div className="space-y-4">{summaryLines}</div>
+            {summaryTotals}
+          </div>
+        </details>
+      )}
+
+      <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_340px] lg:gap-14">
+        <div className="mx-auto w-full max-w-xl lg:mx-0 lg:max-w-none">
           {/* Step 0: Customer info */}
           {step === 0 && (
             <div className="space-y-5 fade-in">
-              <button onClick={() => navigate('/panier')} className="flex items-center gap-1.5 text-sm text-ink/50 hover:text-ink transition-colors">
-                <ArrowLeft size={15} /> Retour au panier
-              </button>
-              <h2 className="font-display text-xl font-semibold">Vos coordonnées</h2>
-              <div className="grid grid-cols-2 gap-4">
+              <div>
+                <button onClick={() => navigate('/panier')} className="flex items-center gap-1.5 text-xs uppercase tracking-[0.1em] text-ink/50 transition-colors hover:text-ink">
+                  <ArrowLeft size={14} /> Retour au panier
+                </button>
+                <h2 className="mt-3 font-display text-[28px] font-medium leading-tight text-ink">Vos coordonnées</h2>
+              </div>
+              <div className="grid grid-cols-2 gap-3 sm:gap-4">
                 <div>
-                  <label className="block text-xs font-medium text-ink/60 mb-1.5">Prénom</label>
-                  <input className="input-field" value={form.firstName} onChange={(e) => setForm({ ...form, firstName: e.target.value })} />
+                  <label className="co-label">Prénom</label>
+                  <input className="co-input" value={form.firstName} onChange={(e) => setForm({ ...form, firstName: e.target.value })} />
                   {errors.firstName && <p className="mt-1 text-xs text-burgundy">{errors.firstName}</p>}
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-ink/60 mb-1.5">Nom</label>
-                  <input className="input-field" value={form.lastName} onChange={(e) => setForm({ ...form, lastName: e.target.value })} />
+                  <label className="co-label">Nom</label>
+                  <input className="co-input" value={form.lastName} onChange={(e) => setForm({ ...form, lastName: e.target.value })} />
                   {errors.lastName && <p className="mt-1 text-xs text-burgundy">{errors.lastName}</p>}
                 </div>
               </div>
               <div>
-                <label className="block text-xs font-medium text-ink/60 mb-1.5">Téléphone</label>
-                <PhoneField value={form.phone} onChange={(v) => setForm({ ...form, phone: v })} />
+                <label className="co-label">Téléphone</label>
+                <div className="co-phone"><PhoneField className="co-input" value={form.phone} onChange={(v) => setForm({ ...form, phone: v })} /></div>
                 {errors.phone && <p className="mt-1 text-xs text-burgundy">{errors.phone}</p>}
               </div>
               <div>
-                <label className="block text-xs font-medium text-ink/60 mb-1.5">Email (optionnel)</label>
-                <input type="email" className="input-field" placeholder="vous@exemple.com" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
+                <label className="co-label">Email <span className="normal-case tracking-normal text-ink/40">(optionnel)</span></label>
+                <input type="email" className="co-input" placeholder="vous@exemple.com" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
               </div>
               <div>
-                <label className="block text-xs font-medium text-ink/60 mb-1.5">Quartier</label>
-                <select className="input-field" value={form.quartier} onChange={(e) => setForm({ ...form, quartier: e.target.value })}>
-                  {Object.keys(quartierToZone).map((q) => <option key={q} value={q}>{q}</option>)}
-                </select>
+                <label className="co-label">Quartier</label>
+                <div className="relative">
+                  <select className="co-input appearance-none pr-10" value={form.quartier} onChange={(e) => setForm({ ...form, quartier: e.target.value })}>
+                    {Object.keys(quartierToZone).map((q) => <option key={q} value={q}>{q}</option>)}
+                  </select>
+                  <ChevronDown size={16} className="pointer-events-none absolute right-3.5 top-1/2 -translate-y-1/2 text-ink/45" aria-hidden="true" />
+                </div>
               </div>
 
-              <button onClick={() => { if (validateContactInfo()) setStep(1); }} className="btn-primary w-full">Continuer</button>
+              <button onClick={() => { if (validateContactInfo()) setStep(1); }} className="btn-shop w-full">Continuer</button>
             </div>
           )}
 
           {/* Step 1: Delivery — fulfillment choice, address/map, gift details */}
           {step === 1 && (
-            <div className="space-y-5 fade-in">
-              <h2 className="font-display text-xl font-semibold">Livraison</h2>
+            <div className="space-y-6 fade-in">
+              <h2 className="font-display text-[28px] font-medium leading-tight text-ink">Livraison</h2>
 
-              <div className="border-t border-line pt-4 space-y-3">
+              <div className="space-y-3">
                 <label className="flex cursor-pointer items-center gap-2.5">
-                  <input type="checkbox" className="h-4 w-4 rounded border-line text-burgundy focus:ring-burgundy" checked={isGift} onChange={(e) => setIsGift(e.target.checked)} />
+                  <input type="checkbox" className="h-4 w-4 rounded-[2px] border-ink/30 text-burgundy focus:ring-burgundy/30" checked={isGift} onChange={(e) => setIsGift(e.target.checked)} />
                   <span className="flex items-center gap-1.5 text-sm font-medium text-ink"><Gift size={15} className="text-ink/50" /> Cette commande est un cadeau</span>
                 </label>
 
                 {isGift && (
-                  <div className="space-y-4 rounded-xl border border-line bg-cream/30 p-4 fade-in">
-                    <p className="text-xs text-ink/50">Ces informations concernent le destinataire — elles remplacent les vôtres pour la livraison de cette commande.</p>
+                  <div className="fade-in space-y-4 rounded-lg border border-ink/15 bg-cream/50 p-4">
+                    <p className="text-xs leading-relaxed text-ink/55">Ces informations concernent le destinataire — elles remplacent les vôtres pour la livraison de cette commande.</p>
                     <div>
-                      <label className="block text-xs font-medium text-ink/60 mb-1.5">Nom du destinataire</label>
-                      <input className="input-field" value={giftRecipientName} onChange={(e) => { setGiftRecipientName(e.target.value); setErrors((prev) => { const next = { ...prev }; delete next.giftRecipientName; return next; }); }} />
+                      <label className="co-label">Nom du destinataire</label>
+                      <input className="co-input" value={giftRecipientName} onChange={(e) => { setGiftRecipientName(e.target.value); setErrors((prev) => { const next = { ...prev }; delete next.giftRecipientName; return next; }); }} />
                       {errors.giftRecipientName && <p className="mt-1 text-xs text-burgundy">{errors.giftRecipientName}</p>}
                     </div>
                     <div>
-                      <label className="block text-xs font-medium text-ink/60 mb-1.5">Téléphone du destinataire</label>
-                      <PhoneField value={giftRecipientPhone} onChange={(v) => { setGiftRecipientPhone(v); setErrors((prev) => { const next = { ...prev }; delete next.giftRecipientPhone; return next; }); }} />
+                      <label className="co-label">Téléphone du destinataire</label>
+                      <div className="co-phone"><PhoneField className="co-input" value={giftRecipientPhone} onChange={(v) => { setGiftRecipientPhone(v); setErrors((prev) => { const next = { ...prev }; delete next.giftRecipientPhone; return next; }); }} /></div>
                       {errors.giftRecipientPhone && <p className="mt-1 text-xs text-burgundy">{errors.giftRecipientPhone}</p>}
                     </div>
                     <div>
-                      <label className="block text-xs font-medium text-ink/60 mb-1.5">Point de repère (optionnel)</label>
-                      <input className="input-field" placeholder="Ex: près de la pharmacie, en face de..." value={giftRecipientLandmark} onChange={(e) => setGiftRecipientLandmark(e.target.value)} />
+                      <label className="co-label">Point de repère <span className="normal-case tracking-normal text-ink/40">(optionnel)</span></label>
+                      <input className="co-input" placeholder="Ex: près de la pharmacie, en face de..." value={giftRecipientLandmark} onChange={(e) => setGiftRecipientLandmark(e.target.value)} />
                     </div>
                     <label className="flex cursor-pointer items-center gap-2.5">
-                      <input type="checkbox" className="h-4 w-4 rounded border-line text-burgundy focus:ring-burgundy" checked={giftShowBuyerName} onChange={(e) => setGiftShowBuyerName(e.target.checked)} />
+                      <input type="checkbox" className="h-4 w-4 rounded-[2px] border-ink/30 text-burgundy focus:ring-burgundy/30" checked={giftShowBuyerName} onChange={(e) => setGiftShowBuyerName(e.target.checked)} />
                       <span className="text-sm text-ink">Afficher mon nom au destinataire</span>
                     </label>
                     <div>
-                      <label className="block text-xs font-medium text-ink/60 mb-1.5">Ajouter un petit mot (optionnel)</label>
-                      <textarea className="input-field" rows={2} placeholder="Votre message pour le destinataire..." value={giftMessage} onChange={(e) => setGiftMessage(e.target.value)} />
+                      <label className="co-label">Ajouter un petit mot <span className="normal-case tracking-normal text-ink/40">(optionnel)</span></label>
+                      <textarea className="co-input" rows={2} placeholder="Votre message pour le destinataire..." value={giftMessage} onChange={(e) => setGiftMessage(e.target.value)} />
                     </div>
                     <label className="flex cursor-pointer items-center gap-2.5">
-                      <input type="checkbox" className="h-4 w-4 rounded border-line text-burgundy focus:ring-burgundy" checked={giftWrap} onChange={(e) => setGiftWrap(e.target.checked)} />
+                      <input type="checkbox" className="h-4 w-4 rounded-[2px] border-ink/30 text-burgundy focus:ring-burgundy/30" checked={giftWrap} onChange={(e) => setGiftWrap(e.target.checked)} />
                       <span className="text-sm text-ink">Emballage cadeau <span className="text-ink/45">(+{formatFCFA(GIFT_WRAP_FEE)})</span></span>
                     </label>
                   </div>
@@ -578,8 +659,8 @@ export default function CheckoutPage() {
               </div>
 
               {anyShopOffersPickup && (
-                <div className="border-t border-line pt-5">
-                  <h3 className="text-sm font-semibold text-ink mb-3">Mode de réception</h3>
+                <div className="border-t border-ink/10 pt-5">
+                  <h3 className="flex items-center gap-2 text-[15px] font-semibold text-ink"><Truck size={17} className="text-burgundy" aria-hidden="true" /> Mode de réception</h3>
                 </div>
               )}
 
@@ -590,32 +671,32 @@ export default function CheckoutPage() {
                 const current = getShopFulfillment(shop.id);
                 const shopItems = cart.filter((i) => i.shopId === shop.id);
                 return (
-                  <div key={shop.id} className="card p-4 space-y-3">
-                    <div className="flex items-center gap-2">
+                  <div key={shop.id} className="space-y-3 rounded-lg border border-ink/15 p-4">
+                    <div className="flex items-center gap-2.5">
                       <SmartImage src={shop.logo} alt="" className="h-8 w-8 rounded-full object-cover" />
                       <p className="text-sm font-semibold text-ink">{shop.name}</p>
-                      <span className="text-xs text-ink/40 ml-auto">{shopItems.length} article{shopItems.length > 1 ? 's' : ''}</span>
+                      <span className="ml-auto text-xs text-ink/45">{shopItems.length} article{shopItems.length > 1 ? 's' : ''}</span>
                     </div>
                     <div className="space-y-2">
-                      <button onClick={() => setShopFulfillments({ ...shopFulfillments, [shop.id]: 'delivery' })} className={`flex w-full items-start gap-3 rounded-xl border p-3.5 text-left transition-colors ${current === 'delivery' ? 'border-burgundy bg-burgundy/5' : 'border-line'}`}>
-                        <Truck size={18} className={current === 'delivery' ? 'text-burgundy' : 'text-ink/40'} />
-                        <div><p className="text-sm font-medium text-ink">Livraison</p><p className="text-xs text-ink/50">Dakar sous 4–48 h</p></div>
-                        {current === 'delivery' && <Check size={16} className="ml-auto text-burgundy" />}
+                      <button onClick={() => setShopFulfillments({ ...shopFulfillments, [shop.id]: 'delivery' })} className={`opt-row ${current === 'delivery' ? 'opt-row-active' : ''}`}>
+                        <Truck size={17} className={`mt-px flex-shrink-0 ${current === 'delivery' ? 'text-burgundy' : 'text-ink/40'}`} />
+                        <div><p className="text-sm font-medium text-ink">Livraison</p><p className="text-xs text-ink/55">Dakar sous 4–48 h</p></div>
+                        <Radio active={current === 'delivery'} />
                       </button>
                       {shop.pickupEnabled && (
-                        <button onClick={() => setShopFulfillments({ ...shopFulfillments, [shop.id]: 'pickup' })} className={`flex w-full items-start gap-3 rounded-xl border p-3.5 text-left transition-colors ${current === 'pickup' ? 'border-burgundy bg-burgundy/5' : 'border-line'}`}>
-                          <Store size={18} className={current === 'pickup' ? 'text-burgundy' : 'text-ink/40'} />
+                        <button onClick={() => setShopFulfillments({ ...shopFulfillments, [shop.id]: 'pickup' })} className={`opt-row ${current === 'pickup' ? 'opt-row-active' : ''}`}>
+                          <Store size={17} className={`mt-px flex-shrink-0 ${current === 'pickup' ? 'text-burgundy' : 'text-ink/40'}`} />
                           <div>
                             <p className="text-sm font-medium text-ink">Retrait en boutique</p>
-                            {shop.address && <p className="text-xs text-ink/50">{shop.address}</p>}
+                            {shop.address && <p className="text-xs text-ink/55">{shop.address}</p>}
                           </div>
-                          {current === 'pickup' && <Check size={16} className="ml-auto text-burgundy" />}
+                          <Radio active={current === 'pickup'} />
                         </button>
                       )}
                     </div>
                     {current === 'pickup' && (
-                      <div className="rounded-lg bg-cream/40 p-3 fade-in">
-                        <p className="text-xs text-ink/55 leading-relaxed">Vous pourrez récupérer votre commande dès qu'elle sera marquée prête.</p>
+                      <div className="fade-in rounded-lg bg-cream/60 p-3">
+                        <p className="text-xs leading-relaxed text-ink/60">Vous pourrez récupérer votre commande dès qu'elle sera marquée prête.</p>
                       </div>
                     )}
                   </div>
@@ -624,23 +705,23 @@ export default function CheckoutPage() {
 
               {/* ONE consolidated Ezial delivery card */}
               {hasDeliveryShops && (
-                <div className="rounded-xl border border-burgundy/20 bg-burgundy/5 p-4">
-                  <div className="flex items-center gap-2.5">
-                    <Truck size={20} className="text-burgundy" />
+                <div className="rounded-lg border border-burgundy/25 bg-burgundy/[0.04] p-4">
+                  <div className="flex items-center gap-3">
+                    <Truck size={19} className="flex-shrink-0 text-burgundy" aria-hidden="true" />
                     <div>
                       <p className="text-sm font-semibold text-ink">Livraison Ezial</p>
-                      <p className="text-xs text-ink/55">Dakar sous 4–48 h · {deliveryFeeText}</p>
+                      <p className="text-xs text-ink/60">Dakar sous 4–48 h · {deliveryFeeText}</p>
                     </div>
                   </div>
-                  <p className="mt-2 text-xs text-ink/45 leading-relaxed">Ezial regroupe vos articles des différentes boutiques en une seule livraison vers votre adresse. Le frais exact est calculé à la validation, selon la distance réelle.</p>
+                  <p className="mt-2.5 text-xs leading-relaxed text-ink/50">Ezial regroupe vos articles des différentes boutiques en une seule livraison vers votre adresse. Le frais exact est calculé à la validation, selon la distance réelle.</p>
                 </div>
               )}
 
               {/* Position de livraison — requise dès qu'une boutique livre */}
               {hasDeliveryShops && (
-                <div className="rounded-xl border border-line p-4 space-y-3">
-                  <h3 className="text-sm font-semibold text-ink flex items-center gap-1.5"><MapPin size={16} className="text-burgundy" /> Position de livraison</h3>
-                  <p className="text-xs font-medium text-ink/70 leading-relaxed">
+                <div className="space-y-3 rounded-lg border border-ink/15 p-4">
+                  <h3 className="flex items-center gap-1.5 text-sm font-semibold text-ink"><MapPin size={16} className="text-burgundy" /> Position de livraison</h3>
+                  <p className="text-xs leading-relaxed text-ink/65">
                     Cette position est utilisée pour calculer vos frais de livraison.
                   </p>
 
@@ -651,26 +732,26 @@ export default function CheckoutPage() {
                   )}
 
                   {/* Mode toggle */}
-                  <div className="flex flex-wrap gap-2">
+                  <div className="grid gap-2 sm:grid-cols-2">
                     {/* One tap both selects GPS mode and asks for the position —
                         no second "Utiliser ma position actuelle" button below. */}
                     <button
                       type="button"
                       onClick={() => { setLocationMode('gps'); requestLocation(); }}
                       disabled={locationStatus === 'requesting'}
-                      className={locationMode === 'gps' ? 'btn-primary' : 'btn-outline'}
+                      className={`${locationMode === 'gps' ? 'btn-shop' : 'btn-shop-line'} !px-3 !py-3 !text-[11px]`}
                     >
                       {locationStatus === 'requesting'
                         ? <><Loader2 size={14} className="animate-spin" /> Détection en cours...</>
-                        : <><Navigation size={14} /> Utiliser ma position actuelle</>}
+                        : <><Navigation size={14} /> Ma position actuelle</>}
                     </button>
-                    <button type="button" onClick={openManualLocationMode} className={locationMode === 'manual' ? 'btn-primary' : 'btn-outline'}>
+                    <button type="button" onClick={openManualLocationMode} className={`${locationMode === 'manual' ? 'btn-shop' : 'btn-shop-line'} !px-3 !py-3 !text-[11px]`}>
                       <Search size={14} /> Rechercher une adresse
                     </button>
                   </div>
 
                   {locationMode === 'gps' && (locationStatus === 'granted' || locationStatus === 'denied' || locationStatus === 'unsupported') && (
-                    <div className="space-y-2 rounded-lg border border-line p-3.5">
+                    <div className="space-y-2 rounded-lg border border-ink/15 p-3.5">
                       {locationStatus === 'granted' && (
                         <button type="button" onClick={requestLocation} className="flex items-center gap-1.5 text-xs font-medium text-burgundy hover:underline">
                           <MapPin size={13} /> Actualiser ma position
@@ -686,13 +767,13 @@ export default function CheckoutPage() {
                   )}
 
                   {locationMode === 'manual' && (
-                    <div className="space-y-3 rounded-lg border border-line p-3.5">
+                    <div className="space-y-3 rounded-lg border border-ink/15 p-3.5">
                       <div>
-                        <label className="block text-xs font-medium text-ink/60 mb-1.5">Rechercher une adresse ou un lieu</label>
+                        <label className="co-label">Rechercher une adresse ou un lieu</label>
                         <div className="relative">
                           <input
                             type="text"
-                            className="input-field min-w-0 w-full pr-10"
+                            className="co-input min-w-0 w-full pr-10"
                             placeholder="Ex. : Sacré-Cœur 3, Dakar"
                             value={addressSearch.query}
                             onChange={(e) => addressSearch.setQuery(e.target.value)}
@@ -708,7 +789,7 @@ export default function CheckoutPage() {
                       {addressSearch.results && addressSearch.results.length > 0 && (
                         <div className="space-y-2">
                           {addressSearch.notice && <p className="text-xs text-ink/50">{addressSearch.notice}</p>}
-                          <div className="divide-y divide-line overflow-hidden rounded-lg border border-line">
+                          <div className="divide-y divide-ink/10 overflow-hidden rounded-lg border border-ink/15">
                             {addressSearch.results.map((r) => (
                               <button key={r.id} type="button" onClick={() => applySearchResult(r)} className="block w-full px-3 py-2.5 text-left text-sm text-ink/75 hover:bg-cream/60">
                                 {r.label}
@@ -719,7 +800,7 @@ export default function CheckoutPage() {
                       )}
 
                       {(selectedLabel || manualAdjusted || resolvingAddress) && (
-                        <div className="flex items-start gap-2 rounded-lg border border-green-300 bg-green-50 p-3 space-y-0.5">
+                        <div className="flex items-start gap-2 rounded-lg border border-green-300 bg-green-50 p-3">
                           <Check size={16} className="mt-0.5 flex-shrink-0 text-green-600" />
                           <div className="min-w-0 flex-1">
                             <p className="text-sm font-medium text-green-800">Adresse sélectionnée</p>
@@ -735,23 +816,23 @@ export default function CheckoutPage() {
                       )}
 
                       <GoogleLocationPickerMap position={location} onChange={handleMapPick} />
-                      <p className="text-xs text-ink/40">Cliquez sur la carte ou faites glisser le repère pour préciser l'emplacement exact de livraison. Vous pouvez rechercher une autre adresse à tout moment.</p>
+                      <p className="text-xs leading-relaxed text-ink/45">Cliquez sur la carte ou faites glisser le repère pour préciser l'emplacement exact de livraison. Vous pouvez rechercher une autre adresse à tout moment.</p>
                     </div>
                   )}
                 </div>
               )}
 
               {hasDeliveryShops && (
-                <>
+                <div className="space-y-4">
                   <div>
-                    <label className="block text-xs font-medium text-ink/60 mb-1.5">Point de repère (optionnel)</label>
-                    <input className="input-field" placeholder="Ex: près de la pharmacie, en face de..." value={form.landmark} onChange={(e) => setForm({ ...form, landmark: e.target.value })} />
+                    <label className="co-label">Point de repère <span className="normal-case tracking-normal text-ink/40">(optionnel)</span></label>
+                    <input className="co-input" placeholder="Ex: près de la pharmacie, en face de..." value={form.landmark} onChange={(e) => setForm({ ...form, landmark: e.target.value })} />
                   </div>
                   <div>
-                    <label className="block text-xs font-medium text-ink/60 mb-1.5">Instructions pour la livraison (facultatif)</label>
-                    <textarea className="input-field" rows={2} placeholder="Ex. Appelez-moi en arrivant, portail noir..." value={form.instructions} onChange={(e) => setForm({ ...form, instructions: e.target.value })} />
+                    <label className="co-label">Instructions pour la livraison <span className="normal-case tracking-normal text-ink/40">(facultatif)</span></label>
+                    <textarea className="co-input" rows={2} placeholder="Ex. Appelez-moi en arrivant, portail noir..." value={form.instructions} onChange={(e) => setForm({ ...form, instructions: e.target.value })} />
                   </div>
-                </>
+                </div>
               )}
 
               {/* Pickup shop info — only the pieces that actually have a
@@ -759,38 +840,45 @@ export default function CheckoutPage() {
                   delay/hours per shop), so it's never rendered as a bare,
                   empty line. */}
               {pickupShops.map((shop) => (
-                <div key={`pickup-${shop.id}`} className="rounded-lg bg-cream/40 p-3 space-y-1">
-                  <p className="text-xs text-ink/55 flex items-center gap-1.5"><Store size={12} /> {shop.name}{shop.address ? ` · ${shop.address}` : ''}</p>
+                <div key={`pickup-${shop.id}`} className="rounded-lg bg-cream/60 p-3">
+                  <p className="flex items-center gap-1.5 text-xs text-ink/60"><Store size={12} /> {shop.name}{shop.address ? ` · ${shop.address}` : ''}</p>
                 </div>
               ))}
 
               {/* Delivery preference (only if at least one delivery) */}
               {hasDeliveryShops && (
-                <div className="border-t border-line pt-4 space-y-3">
-                  <h3 className="text-sm font-semibold text-ink">Avez-vous une préférence de livraison ?</h3>
-                  <div className="space-y-2">
-                    <button onClick={() => setPreference({ type: 'none' })} className={`flex w-full items-center gap-3 rounded-lg border p-3 text-left transition-colors ${preference.type === 'none' ? 'border-burgundy bg-burgundy/5' : 'border-line'}`}>
+                <div className="space-y-3 border-t border-ink/10 pt-5">
+                  <h3 className="flex items-center gap-2 text-[15px] font-semibold text-ink"><Clock size={17} className="text-burgundy" aria-hidden="true" /> Avez-vous une préférence de livraison ?</h3>
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    <button onClick={() => setPreference({ type: 'none' })} className={`opt-row items-center ${preference.type === 'none' ? 'opt-row-active' : ''}`}>
                       <Clock size={16} className={preference.type === 'none' ? 'text-burgundy' : 'text-ink/40'} />
                       <span className="text-sm font-medium text-ink">Sans préférence</span>
+                      <Radio active={preference.type === 'none'} />
                     </button>
-                    <button onClick={() => setPreference({ type: 'preferred', date: tomorrowISO(), window: deliveryWindows[0] })} className={`flex w-full items-center gap-3 rounded-lg border p-3 text-left transition-colors ${preference.type === 'preferred' ? 'border-burgundy bg-burgundy/5' : 'border-line'}`}>
+                    <button onClick={() => setPreference({ type: 'preferred', date: tomorrowISO(), window: deliveryWindows[0] })} className={`opt-row items-center ${preference.type === 'preferred' ? 'opt-row-active' : ''}`}>
                       <Clock size={16} className={preference.type === 'preferred' ? 'text-burgundy' : 'text-ink/40'} />
                       <span className="text-sm font-medium text-ink">Avec préférence</span>
+                      <Radio active={preference.type === 'preferred'} />
                     </button>
                   </div>
                   {preference.type === 'preferred' && (
-                    <div className="space-y-3 fade-in pl-1">
-                      <div>
-                        <label className="block text-xs font-medium text-ink/60 mb-1.5">Date souhaitée</label>
-                        <input type="date" className="input-field" min={tomorrowISO()} value={preference.date} onChange={(e) => setPreference({ ...preference, date: e.target.value })} />
+                    <div className="fade-in space-y-3">
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        <div>
+                          <label className="co-label">Date souhaitée</label>
+                          <input type="date" className="co-input" min={tomorrowISO()} value={preference.date} onChange={(e) => setPreference({ ...preference, date: e.target.value })} />
+                        </div>
+                        <div>
+                          <label className="co-label">Créneau préféré</label>
+                          <div className="relative">
+                            <select className="co-input appearance-none pr-10" value={preference.window} onChange={(e) => setPreference({ ...preference, window: e.target.value })}>
+                              {deliveryWindows.map((w) => <option key={w} value={w}>{w}</option>)}
+                            </select>
+                            <ChevronDown size={16} className="pointer-events-none absolute right-3.5 top-1/2 -translate-y-1/2 text-ink/45" aria-hidden="true" />
+                          </div>
+                        </div>
                       </div>
-                      <div>
-                        <label className="block text-xs font-medium text-ink/60 mb-1.5">Créneau préféré</label>
-                        <select className="input-field" value={preference.window} onChange={(e) => setPreference({ ...preference, window: e.target.value })}>
-                          {deliveryWindows.map((w) => <option key={w} value={w}>{w}</option>)}
-                        </select>
-                      </div>
-                      <p className="text-xs text-ink/40 leading-relaxed flex items-start gap-1.5">
+                      <p className="flex items-start gap-1.5 text-xs leading-relaxed text-ink/45">
                         <AlertCircle size={13} className="mt-0.5 flex-shrink-0" />
                         Nous ferons notre possible pour respecter votre préférence. Le créneau n'est pas garanti.
                       </p>
@@ -799,74 +887,40 @@ export default function CheckoutPage() {
                 </div>
               )}
 
-              <div className="flex gap-3">
-                <button onClick={() => setStep(0)} className="btn-outline flex-1">Retour</button>
-                <button onClick={() => { if (validateDeliveryInfo()) setStep(2); }} disabled={hasDeliveryShops && !location} className="btn-primary flex-1 disabled:opacity-50 disabled:cursor-not-allowed">Continuer</button>
+              <div className="grid grid-cols-[auto_1fr] gap-3 pt-1">
+                <button onClick={() => setStep(0)} className="btn-shop-line">Retour</button>
+                <button onClick={() => { if (validateDeliveryInfo()) setStep(2); }} disabled={hasDeliveryShops && !location} className="btn-shop">Continuer</button>
               </div>
             </div>
           )}
 
           {/* Step 2: Payment + Summary */}
           {step === 2 && (
-            <div className="space-y-5 fade-in">
-              <h2 className="font-display text-xl font-semibold">Paiement</h2>
+            <div className="space-y-6 fade-in">
+              <h2 className="font-display text-[28px] font-medium leading-tight text-ink">Paiement</h2>
 
-              {/* Product-first summary */}
-              <div className="card p-5 space-y-4">
-                <h3 className="text-sm font-semibold text-ink">Votre commande</h3>
-                <div className="space-y-4">
-                  {cart.map((item, i) => {
-                    const p = catalogProducts.find((cp) => cp.id === item.productId);
-                    if (!p) return null;
-                    const price = item.unitPrice ?? p.price;
-                    const shop = getShop(item.shopId);
-                    const { oldPrice: unitOldPrice } = getVariantPrice(p, item.variants);
-                    return (
-                      <div key={i} className="flex gap-3">
-                        <SmartImage src={p.thumbnailUrl || p.images[0]} alt="" className="h-16 w-14 rounded-lg object-cover flex-shrink-0" />
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium text-ink line-clamp-1">{p.name}</p>
-                          {Object.entries(item.variants).length > 0 && (
-                            <p className="text-xs text-ink/50 mt-0.5">{Object.entries(item.variants).map(([k, v]) => `${k} : ${v}`).join(' · ')}</p>
-                          )}
-                          <p className="text-xs text-ink/50">Quantité : {p.saleMode ? `${formatFabricQuantity(item.quantity)} ${fabricSaleModeUnit[p.saleMode]}` : item.quantity}</p>
-                          {shop && <p className="text-[11px] text-ink/35 mt-0.5">Vendu par {shop.name}</p>}
-                        </div>
-                        <div className="flex-shrink-0"><PriceDisplay price={price * item.quantity} oldPrice={unitOldPrice ? unitOldPrice * item.quantity : undefined} size="sm" /></div>
-                      </div>
-                    );
-                  })}
-                </div>
-                <div className="border-t border-line pt-3 space-y-1.5 text-sm">
-                  <div className="flex justify-between"><span className="text-ink/60">Produits</span><span className="font-medium">{formatFCFA(cartSubtotal)}</span></div>
-                  <div className="flex justify-between"><span className="text-ink/60">{hasDeliveryShops && deliveryFeeKnown ? 'Livraison Ezial (estimation)' : 'Livraison Ezial'}</span><span className="font-medium">{!hasDeliveryShops ? 'Gratuit' : deliveryFeeKnown ? formatFCFA(effectiveDeliveryFeeEstimate) : `À partir de ${formatFCFA(DELIVERY_FEE_FLOOR)}`}</span></div>
-                  {isGift && giftWrap && <div className="flex justify-between"><span className="text-ink/60">Emballage cadeau</span><span className="font-medium">{formatFCFA(GIFT_WRAP_FEE)}</span></div>}
-                  {appliedPromo && <div className="flex justify-between text-green-700"><span>Code promo {appliedPromo.code}</span><span className="font-medium">-{formatFCFA(appliedPromo.discountAmount)}</span></div>}
-                  <div className="border-t border-line pt-1.5 flex justify-between"><span className="font-medium text-ink">{hasDeliveryShops && !deliveryFeeKnown ? 'Total à partir de' : 'Total estimé'}</span><span className="font-semibold text-ink">{formatFCFA(estimatedTotal)}</span></div>
-                  {hasDeliveryShops && <p className="text-[11px] text-ink/40">Le montant exact de la livraison est calculé à la validation et confirmé sur votre reçu.</p>}
-                </div>
-                {isGift && (
-                  <div className="flex items-start gap-1.5 rounded-lg bg-cream/50 p-2.5 text-xs text-ink/60">
-                    <Gift size={13} className="mt-0.5 flex-shrink-0 text-burgundy" />
-                    <span>Commande cadeau pour {giftRecipientName || 'le destinataire'} — livrée à son adresse.</span>
-                  </div>
-                )}
+              {/* Récapitulatif complet sur mobile ; sur ordinateur il se trouve
+                  dans la colonne de droite. */}
+              <div className="space-y-4 rounded-lg border border-ink/15 p-4 lg:hidden">
+                <h3 className="flex items-center gap-2 text-[15px] font-semibold text-ink"><FileText size={17} className="text-burgundy" aria-hidden="true" /> Récapitulatif</h3>
+                <div className="space-y-4">{summaryLines}</div>
+                <div className="border-t border-ink/10 pt-4">{summaryTotals}</div>
               </div>
 
               {/* Promo code — the discount shown is always confirmed by
                   validate_promo_code() server-side; create_order() itself
                   re-validates and recomputes it again authoritatively. */}
-              <div className="card p-4 space-y-2">
-                <label className="block text-xs font-medium text-ink/60">Code promo</label>
+              <div className="space-y-2">
+                <label className="co-label">Code promo</label>
                 {appliedPromo ? (
-                  <div className="flex items-center justify-between rounded-lg bg-green-50 px-3 py-2.5">
+                  <div className="flex items-center justify-between gap-3 rounded-lg border border-green-300 bg-green-50 px-3 py-2.5">
                     <span className="flex items-center gap-1.5 text-sm font-medium text-green-700"><Check size={15} /> {appliedPromo.code} appliqué — économie {formatFCFA(appliedPromo.discountAmount)}</span>
-                    <button onClick={handleRemovePromo} className="text-xs font-medium text-ink/50 hover:text-burgundy">Retirer</button>
+                    <button onClick={handleRemovePromo} className="flex-shrink-0 text-xs font-medium text-ink/55 hover:text-burgundy">Retirer</button>
                   </div>
                 ) : (
                   <div className="flex gap-2">
-                    <input className="input-field flex-1 uppercase" placeholder="Ex : EZIAL10" value={promoInput} onChange={(e) => { setPromoInput(e.target.value); setPromoError(''); }} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); void handleApplyPromo(); } }} />
-                    <button onClick={() => void handleApplyPromo()} disabled={promoChecking || !promoInput.trim()} className="btn-outline flex-shrink-0">
+                    <input className="co-input flex-1 uppercase" placeholder="Ex : EZIAL10" value={promoInput} onChange={(e) => { setPromoInput(e.target.value); setPromoError(''); }} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); void handleApplyPromo(); } }} />
+                    <button onClick={() => void handleApplyPromo()} disabled={promoChecking || !promoInput.trim()} className="btn-shop-line flex-shrink-0 !px-5">
                       {promoChecking ? <Loader2 size={15} className="animate-spin" /> : 'Appliquer'}
                     </button>
                   </div>
@@ -874,30 +928,33 @@ export default function CheckoutPage() {
                 {promoError && <p className="text-xs text-burgundy">{promoError}</p>}
               </div>
 
-              <p className="text-sm text-ink/55">Choisissez votre mode de paiement. Simulation uniquement, aucun paiement réel.</p>
               <div className="space-y-3">
-                {paymentMethods.map((p) => {
-                  const Icon = p.icon;
-                  return (
-                    <button key={p.id} onClick={() => setPayment(p.id)} className={`flex w-full items-center gap-3 rounded-xl border p-4 text-left transition-colors ${payment === p.id ? 'border-burgundy bg-burgundy/5' : 'border-line'}`}>
-                      <Icon size={20} className={payment === p.id ? 'text-burgundy' : 'text-ink/40'} />
-                      <div><p className="text-sm font-medium text-ink">{p.label}</p><p className="text-xs text-ink/45">{p.description}</p></div>
-                      {payment === p.id && <Check size={17} className="ml-auto text-burgundy" />}
-                    </button>
-                  );
-                })}
+                <h3 className="flex items-center gap-2 text-[15px] font-semibold text-ink"><Wallet size={17} className="text-burgundy" aria-hidden="true" /> Choisir un mode de paiement</h3>
+                <p className="text-xs leading-relaxed text-ink/55">Choisissez votre mode de paiement. Simulation uniquement, aucun paiement réel.</p>
+                <div className="space-y-2">
+                  {paymentMethods.map((p) => {
+                    const Icon = p.icon;
+                    return (
+                      <button key={p.id} onClick={() => setPayment(p.id)} className={`opt-row items-center !p-4 ${payment === p.id ? 'opt-row-active' : ''}`}>
+                        <Icon size={19} className={`flex-shrink-0 ${payment === p.id ? 'text-burgundy' : 'text-ink/40'}`} />
+                        <div><p className="text-sm font-medium text-ink">{p.label}</p><p className="text-xs text-ink/50">{p.description}</p></div>
+                        <Radio active={payment === p.id} />
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
 
               <label className="flex cursor-pointer items-start gap-2.5">
                 <input
                   type="checkbox"
-                  className="mt-0.5 h-4 w-4 rounded border-line text-burgundy focus:ring-burgundy"
+                  className="mt-0.5 h-4 w-4 flex-shrink-0 rounded-[2px] border-ink/30 text-burgundy focus:ring-burgundy/30"
                   checked={cgvAccepted}
                   onChange={(e) => setCgvAccepted(e.target.checked)}
                 />
-                <span className="text-sm text-ink/70">
+                <span className="text-sm leading-relaxed text-ink/70">
                   J'ai lu et j'accepte les{' '}
-                  <button type="button" onClick={() => navigate('/info/conditions-generales')} className="font-medium text-burgundy hover:underline">
+                  <button type="button" onClick={() => navigate('/info/conditions-generales')} className="font-medium text-burgundy underline underline-offset-2">
                     conditions générales de vente
                   </button>
                   .
@@ -905,72 +962,32 @@ export default function CheckoutPage() {
               </label>
 
               {submitError && (
-                <p className="flex items-start gap-1.5 rounded-lg bg-burgundy/5 p-3 text-sm text-burgundy">
+                <p className="flex items-start gap-1.5 rounded-lg border border-burgundy/20 bg-burgundy/[0.04] p-3 text-sm text-burgundy">
                   <AlertCircle size={15} className="mt-0.5 flex-shrink-0" /> {submitError}
                 </p>
               )}
 
-              <div className="flex gap-3">
-                <button onClick={() => setStep(1)} className="btn-outline flex-1" disabled={processing}>Retour</button>
-                <button onClick={placeOrder} className="btn-primary flex-1 disabled:opacity-50 disabled:cursor-not-allowed" disabled={processing || !cgvAccepted}>
-                  {processing ? <><Loader2 size={17} className="animate-spin" /> Traitement...</> : `Payer ${formatFCFA(estimatedTotal)} ${hasDeliveryShops && !deliveryFeeKnown ? '(à partir de)' : '(estimé)'}`}
-                </button>
+              {/* Barre de validation : reste visible en bas de l'écran sur mobile. */}
+              <div className="sticky bottom-0 z-20 -mx-4 border-t border-ink/10 bg-white/95 px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 backdrop-blur sm:mx-0 sm:border-0 sm:bg-transparent sm:p-0 sm:backdrop-blur-none">
+                <div className="grid grid-cols-[auto_1fr] gap-3">
+                  <button onClick={() => setStep(1)} className="btn-shop-line" disabled={processing}>Retour</button>
+                  <button onClick={placeOrder} className="btn-shop" disabled={processing || !cgvAccepted}>
+                    {processing ? <><Loader2 size={17} className="animate-spin" /> Traitement...</> : <><Lock size={16} aria-hidden="true" /> {`Payer ${formatFCFA(estimatedTotal)} ${hasDeliveryShops && !deliveryFeeKnown ? '(à partir de)' : '(estimé)'}`}</>}
+                  </button>
+                </div>
               </div>
             </div>
           )}
         </div>
 
-        {/* Order summary sidebar */}
-        <div className="lg:sticky lg:top-[90px] lg:self-start">
-          <div className="card p-5 space-y-3">
-            <h3 className="text-sm font-semibold text-ink">Votre commande</h3>
-            <div className="max-h-56 space-y-3 overflow-y-auto">
-              {cart.map((item, i) => {
-                const p = catalogProducts.find((cp) => cp.id === item.productId);
-                if (!p) return null;
-                const price = item.unitPrice ?? p.price;
-                const shop = getShop(item.shopId);
-                const { oldPrice: unitOldPrice } = getVariantPrice(p, item.variants);
-                return (
-                  <div key={i} className="flex gap-2.5">
-                    <SmartImage src={p.thumbnailUrl || p.images[0]} alt="" className="h-12 w-10 rounded object-cover flex-shrink-0" />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs font-medium text-ink line-clamp-1">{p.name}</p>
-                      {Object.entries(item.variants).length > 0 && (
-                        <p className="text-[11px] text-ink/45">{Object.entries(item.variants).map(([k, v]) => `${k} : ${v}`).join(' · ')}</p>
-                      )}
-                      <p className="text-[11px] text-ink/35">Vendu par {shop?.name}</p>
-                    </div>
-                    <div className="flex-shrink-0"><PriceDisplay price={price * item.quantity} oldPrice={unitOldPrice ? unitOldPrice * item.quantity : undefined} size="sm" /></div>
-                  </div>
-                );
-              })}
-            </div>
-            <div className="border-t border-line pt-3 space-y-1.5 text-sm">
-              <div className="flex justify-between"><span className="text-ink/60">Produits</span><span className="font-medium">{formatFCFA(cartSubtotal)}</span></div>
-              <div className="flex justify-between">
-                <span className="text-ink/60">Livraison Ezial</span>
-                <span className="font-medium">{!hasDeliveryShops ? 'Gratuit' : deliveryFeeKnown ? formatFCFA(effectiveDeliveryFeeEstimate) : `À partir de ${formatFCFA(DELIVERY_FEE_FLOOR)}`}</span>
-              </div>
-              {isGift && giftWrap && (
-                <div className="flex justify-between">
-                  <span className="text-ink/60">Emballage cadeau</span>
-                  <span className="font-medium">{formatFCFA(GIFT_WRAP_FEE)}</span>
-                </div>
-              )}
-              {appliedPromo && (
-                <div className="flex justify-between text-green-700">
-                  <span>Code {appliedPromo.code}</span>
-                  <span className="font-medium">-{formatFCFA(appliedPromo.discountAmount)}</span>
-                </div>
-              )}
-              <div className="border-t border-line pt-1.5 flex justify-between">
-                <span className="font-medium text-ink">{hasDeliveryShops && !deliveryFeeKnown ? 'Total à partir de' : 'Total estimé'}</span>
-                <span className="font-semibold text-ink">{formatFCFA(estimatedTotal)}</span>
-              </div>
-            </div>
+        {/* Récapitulatif — colonne de droite sur ordinateur */}
+        <aside className="hidden lg:block lg:sticky lg:top-[90px] lg:self-start">
+          <div className="space-y-5 rounded-lg border border-ink/15 bg-cream/40 p-6">
+            <h3 className="flex items-center gap-2 text-[15px] font-semibold text-ink"><FileText size={17} className="text-burgundy" aria-hidden="true" /> Récapitulatif</h3>
+            <div className="max-h-72 space-y-4 overflow-y-auto pr-1">{summaryLines}</div>
+            <div className="border-t border-ink/10 pt-5">{summaryTotals}</div>
           </div>
-        </div>
+        </aside>
       </div>
     </div>
   );

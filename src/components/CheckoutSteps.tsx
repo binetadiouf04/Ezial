@@ -2,18 +2,28 @@ import { Check } from 'lucide-react';
 
 export interface OrderStep { id: string; label: string; }
 
+// Indicateur d'étapes : pastilles reliées par un trait fin, nom de l'étape
+// dessous. Étapes terminées : pastille bordeaux avec coche ; étape en cours :
+// pastille bordeaux numérotée, libellé en gras ; étapes suivantes : contour gris.
 export default function CheckoutSteps({ steps, current }: { steps: OrderStep[]; current: number }) {
   return (
-    <div className="flex items-center">
-      {steps.map((step, i) => { const done = i < current; const active = i === current; return (
-        <div key={step.id} className="flex items-center flex-1 last:flex-none">
-          <div className="flex items-center gap-2.5">
-            <div className={`flex h-8 w-8 items-center justify-center rounded-full border-2 text-xs font-semibold transition-colors ${done ? 'border-burgundy bg-burgundy text-white' : active ? 'border-burgundy text-burgundy' : 'border-line text-ink/40'}`}>{done ? <Check size={15} strokeWidth={3} /> : i + 1}</div>
-            <span className={`text-sm font-medium hidden sm:inline ${active ? 'text-burgundy' : done ? 'text-ink' : 'text-ink/40'}`}>{step.label}</span>
-          </div>
-          {i < steps.length - 1 && <div className={`mx-3 h-0.5 flex-1 rounded-full ${done ? 'bg-burgundy' : 'bg-line'}`} />}
-        </div>
-      ); })}
-    </div>
+    <ol className="flex items-start" aria-label="Étapes de la commande">
+      {steps.map((step, i) => {
+        const done = i < current;
+        const active = i === current;
+        return (
+          <li key={step.id} aria-current={active ? 'step' : undefined} className="flex flex-1 flex-col items-center last:flex-none">
+            <div className="flex w-full items-center">
+              <div className={`h-px flex-1 ${i === 0 ? 'bg-transparent' : i <= current ? 'bg-burgundy' : 'bg-ink/20'}`} />
+              <span className={`flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full border text-xs font-semibold ${done || active ? 'border-burgundy bg-burgundy text-white' : 'border-ink/25 bg-white text-ink/45'}`}>
+                {done ? <Check size={14} strokeWidth={3} aria-hidden="true" /> : i + 1}
+              </span>
+              <div className={`h-px flex-1 ${i === steps.length - 1 ? 'bg-transparent' : i < current ? 'bg-burgundy' : 'bg-ink/20'}`} />
+            </div>
+            <span className={`mt-1.5 text-[11px] ${active ? 'font-semibold text-ink' : done ? 'text-ink/70' : 'text-ink/40'}`}>{step.label}</span>
+          </li>
+        );
+      })}
+    </ol>
   );
 }
