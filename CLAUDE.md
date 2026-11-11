@@ -25,7 +25,7 @@ Utiliser des sous-agents pour aller plus vite dès qu'une tâche se découpe en 
 
 ## Règles permanentes
 
-- Travailler sur la branche de développement ; ne jamais pousser ni fusionner dans `main` sans accord explicite.
+- Travailler sur la branche de développement. **Accord permanent de la personne (8 nov. 2026) : publier ses changements sans attendre son accord**, une fois typecheck, lint, build et tests passés, via une pull request fusionnée dans `main` (jamais de push direct sur `main`). Les règles sur les migrations SQL ci-dessous restent valables : une interface qui dépend d'une migration n'est publiée qu'après son exécution en production. Après chaque publication, dire à la personne ce qu'elle doit vérifier dans Cloudflare.
 - `www.ezial.net` : ne pas modifier le DNS ni la configuration du domaine.
 - Ne jamais contourner la RLS depuis le frontend ; la clé `service_role` ne doit jamais atteindre le frontend.
 - Migrations SQL : les donner en texte brut dans la conversation pour que la personne les exécute ; ne jamais déployer une interface qui dépend d'une migration pas encore en production.
