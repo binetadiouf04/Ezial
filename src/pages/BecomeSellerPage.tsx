@@ -1,8 +1,12 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import { ArrowRight, Check, Eye, HeartHandshake, LayoutDashboard, Loader2, Store, Truck, type LucideIcon } from 'lucide-react';
+import { ArrowRight, Check, ChevronDown, Eye, HeartHandshake, LayoutDashboard, Loader2, Store, Truck, type LucideIcon } from 'lucide-react';
 import { applyHeadTags, DEFAULT_OG_IMAGE, SITE_URL } from '@/lib/seoHead';
 import { useSellerEntry, type SellerIntent } from '@/lib/sellerIntent';
 import { PLUS_PLAN_NAME, TRIAL_DAYS, TRIAL_RULES, PLAN_END_RULES } from '@/data/subscriptionPlans';
+import {
+  BECOME_SELLER_PATH, BECOME_SELLER_META, BECOME_SELLER_HERO, BECOME_SELLER_SUMMARY, BECOME_SELLER_BENEFITS,
+  BECOME_SELLER_MISSION_TAGLINE, BECOME_SELLER_MISSION, BECOME_SELLER_STEPS, BECOME_SELLER_FAQ, type BecomeSellerIcon,
+} from '@/shared/becomeSeller';
 import PricingCards from '@/components/PricingCards';
 import PlanComparison from '@/components/PlanComparison';
 
@@ -11,36 +15,13 @@ import PlanComparison from '@/components/PlanComparison';
 // which keeps the chosen plan and routes the visitor to account creation,
 // login or their existing shop — nothing is activated or charged here.
 //
-// The static SEO version (scripts/seo/become-seller.mjs) carries the same
-// texts and the same title / description / canonical: keep both in sync.
-// Plan numbers always come from src/shared/plans.js, never typed here.
+// Texts, title and description live in src/shared/becomeSeller.js, shared
+// with the static SEO version (scripts/seo/become-seller.mjs, which also
+// carries the FAQPage structured data).
 
-const META_TITLE = 'Devenir vendeur sur Ezial — Créez votre boutique en ligne | Ezial';
-const META_DESCRIPTION = `Créez votre boutique sur Ezial, la marketplace sénégalaise : présentez vos produits et touchez de nouveaux clients. Formule Free ou ${PLUS_PLAN_NAME}.`;
-const CANONICAL = `${SITE_URL}/devenir-vendeur/`;
+const CANONICAL = `${SITE_URL}${BECOME_SELLER_PATH}`;
 
-const BENEFITS: { icon: LucideIcon; title: string; text: string }[] = [
-  { icon: Eye, title: 'Plus de visibilité', text: 'Votre boutique est présentée aux clients qui parcourent Ezial : catalogue, recherche et catégories.' },
-  { icon: Store, title: 'Votre boutique en ligne', text: 'Une vitrine à votre nom : photos, descriptions, prix, tailles, couleurs et variantes.' },
-  { icon: Truck, title: 'Livraison organisée', text: 'Ezial organise la collecte et la livraison de vos commandes à Dakar.' },
-  { icon: LayoutDashboard, title: 'Gestion simplifiée', text: 'Commandes, stocks, ventes et revenus suivis depuis un seul espace.' },
-  { icon: HeartHandshake, title: 'Accompagnement', text: 'L’équipe Ezial vous aide à configurer votre boutique et à présenter vos produits.' },
-];
-
-const MISSION = [
-  'Rendre les boutiques sénégalaises accessibles en ligne.',
-  'Rassembler vos boutiques préférées sur une seule marketplace.',
-  'Simplifier la commande et la livraison pour les clients.',
-  'Offrir aux commerçants des outils simples pour vendre en ligne.',
-  'Valoriser le savoir-faire et les créateurs locaux.',
-];
-
-const STEPS = [
-  { title: 'Créez votre compte', text: 'Inscrivez-vous, ou connectez-vous avec votre compte Ezial si vous en avez déjà un.' },
-  { title: 'Créez votre boutique', text: 'Donnez-lui un nom, ajoutez votre logo et une description.' },
-  { title: 'Choisissez votre formule', text: `Free ou ${PLUS_PLAN_NAME}, avec un essai gratuit de ${TRIAL_DAYS} jours.` },
-  { title: 'Publiez vos produits', text: 'Mettez vos produits en ligne et recevez vos commandes.' },
-];
+const ICONS: Record<BecomeSellerIcon, LucideIcon> = { eye: Eye, store: Store, truck: Truck, dashboard: LayoutDashboard, handshake: HeartHandshake };
 
 // Burgundy band with satin waves and a fine beige geometric pattern (brand
 // identity), purely decorative. `patternId` must be unique on the page.
@@ -87,8 +68,8 @@ export default function BecomeSellerPage() {
 
   useEffect(() => {
     applyHeadTags({
-      title: META_TITLE, description: META_DESCRIPTION, canonical: CANONICAL,
-      ogTitle: META_TITLE, ogDescription: META_DESCRIPTION, ogImage: DEFAULT_OG_IMAGE, ogType: 'website',
+      title: BECOME_SELLER_META.title, description: BECOME_SELLER_META.description, canonical: CANONICAL,
+      ogTitle: BECOME_SELLER_META.title, ogDescription: BECOME_SELLER_META.description, ogImage: DEFAULT_OG_IMAGE, ogType: 'website',
     });
   }, []);
 
@@ -104,19 +85,29 @@ export default function BecomeSellerPage() {
       <BrandBand patternId="become-seller-hero-pattern">
         <div className="container-pro py-16 sm:py-24 lg:py-28">
           <div className="max-w-2xl">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-beige">Devenir vendeur</p>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-beige">{BECOME_SELLER_HERO.eyebrow}</p>
             <h1 className="mt-4 font-display text-4xl font-semibold leading-[1.1] tracking-tightish sm:text-5xl lg:text-6xl">
-              Développez votre boutique avec Ezial.
+              {BECOME_SELLER_HERO.title}
             </h1>
-            <p className="mt-5 max-w-xl text-base leading-relaxed text-white/80 sm:text-lg">
-              Rejoignez une marketplace pensée pour les commerces sénégalais. Présentez vos produits, touchez de nouveaux clients et développez vos ventes en ligne.
-            </p>
+            <p className="mt-5 max-w-xl text-base leading-relaxed text-white/80 sm:text-lg">{BECOME_SELLER_HERO.text}</p>
             <div className="mt-8">
               <CtaButton onClick={() => go(null, 'hero')} loading={busy && pressed === 'hero'} disabled={busy} />
             </div>
           </div>
         </div>
       </BrandBand>
+
+      {/* En bref — direct answer to « comment vendre sur Ezial ? » */}
+      <section aria-labelledby="become-seller-summary" className="border-b border-line bg-white">
+        <div className="container-pro py-10 sm:py-12">
+          <div className="max-w-3xl">
+            <h2 id="become-seller-summary" className="text-xs font-semibold uppercase tracking-[0.16em] text-burgundy">En bref</h2>
+            <div className="mt-3 space-y-2 text-[15px] leading-relaxed text-ink/75">
+              {BECOME_SELLER_SUMMARY.map((line) => <p key={line}>{line}</p>)}
+            </div>
+          </div>
+        </div>
+      </section>
 
       {/* 2. Pourquoi vendre sur Ezial ? */}
       <section aria-labelledby="become-seller-why" className="container-pro py-16 sm:py-20">
@@ -125,7 +116,7 @@ export default function BecomeSellerPage() {
           <h2 id="become-seller-why" className="section-title">Pourquoi vendre sur Ezial ?</h2>
         </div>
         <ul className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 lg:gap-5">
-          {BENEFITS.map(({ icon: Icon, title, text }) => (
+          {BECOME_SELLER_BENEFITS.map(({ icon, title, text }) => { const Icon = ICONS[icon]; return (
             <li key={title} className="rounded-2xl border border-line bg-white p-6">
               <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-burgundy/[0.06] text-burgundy">
                 <Icon size={22} strokeWidth={1.5} aria-hidden="true" />
@@ -133,7 +124,7 @@ export default function BecomeSellerPage() {
               <h3 className="mt-4 font-display text-xl font-semibold text-ink">{title}</h3>
               <p className="mt-2 text-sm leading-relaxed text-ink/65">{text}</p>
             </li>
-          ))}
+          ); })}
         </ul>
       </section>
 
@@ -142,10 +133,10 @@ export default function BecomeSellerPage() {
         <div className="container-pro grid gap-8 py-16 sm:py-20 lg:grid-cols-[1fr_1.4fr] lg:gap-16">
           <div>
             <h2 id="become-seller-mission" className="section-title">Notre mission</h2>
-            <p className="mt-3 text-sm leading-relaxed text-ink/60 sm:text-base">La marketplace sénégalaise qui rassemble vos boutiques préférées.</p>
+            <p className="mt-3 text-sm leading-relaxed text-ink/60 sm:text-base">{BECOME_SELLER_MISSION_TAGLINE}</p>
           </div>
           <ul className="space-y-4">
-            {MISSION.map((point) => (
+            {BECOME_SELLER_MISSION.map((point) => (
               <li key={point} className="flex items-start gap-3 text-[15px] leading-snug text-ink/80">
                 <span className="mt-0.5 flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full border border-burgundy/30 text-burgundy">
                   <Check size={12} strokeWidth={1.5} aria-hidden="true" />
@@ -160,11 +151,11 @@ export default function BecomeSellerPage() {
       {/* 4. Comment ça marche ? */}
       <section aria-labelledby="become-seller-steps" className="container-pro py-16 sm:py-20">
         <div className="max-w-2xl">
-          <p className="eyebrow mb-2">En {STEPS.length} étapes</p>
+          <p className="eyebrow mb-2">En {BECOME_SELLER_STEPS.length} étapes</p>
           <h2 id="become-seller-steps" className="section-title">Comment ça marche ?</h2>
         </div>
         <ol className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-4 lg:gap-5">
-          {STEPS.map((step, i) => (
+          {BECOME_SELLER_STEPS.map((step, i) => (
             <li key={step.title} className="rounded-2xl border border-line bg-white p-6">
               <span className="flex h-9 w-9 items-center justify-center rounded-full bg-burgundy font-display text-lg font-semibold text-white" aria-hidden="true">
                 {i + 1}
@@ -198,6 +189,26 @@ export default function BecomeSellerPage() {
               <p>{PLAN_END_RULES}</p>
             </div>
             <PlanComparison className="mt-10" />
+          </div>
+        </div>
+      </section>
+
+      {/* Questions fréquentes (same Q&A as the FAQPage data of the static page) */}
+      <section aria-labelledby="become-seller-faq" className="border-t border-line">
+        <div className="container-pro py-16 sm:py-20">
+          <div className="mx-auto max-w-3xl">
+            <h2 id="become-seller-faq" className="section-title">Questions fréquentes sur la vente sur Ezial</h2>
+            <div className="mt-8 divide-y divide-line rounded-2xl border border-line bg-white">
+              {BECOME_SELLER_FAQ.map(({ q, a }) => (
+                <details key={q} className="group px-5 py-4 sm:px-6">
+                  <summary className="flex cursor-pointer list-none items-center justify-between gap-4 text-[15px] font-medium text-ink [&::-webkit-details-marker]:hidden">
+                    <h3 className="font-sans text-[15px] font-medium">{q}</h3>
+                    <ChevronDown size={18} strokeWidth={1.5} className="flex-shrink-0 text-ink/40 transition-transform group-open:rotate-180" aria-hidden="true" />
+                  </summary>
+                  <p className="mt-3 text-sm leading-relaxed text-ink/70">{a}</p>
+                </details>
+              ))}
+            </div>
           </div>
         </div>
       </section>
