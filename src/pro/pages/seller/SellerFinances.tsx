@@ -17,7 +17,7 @@ import { SellerPaymentCards, SellerPayoutMethodCard, SellerPayoutHistory } from 
 // installé, la page garde exactement son affichage actuel.
 type PaymentsState =
   | { kind: 'missing' }
-  | { kind: 'ready'; summary: SellerPaymentSummary | null; approved: PayoutMethod | null; pending: PayoutMethod | null; payouts: SellerPayout[]; error: string };
+  | { kind: 'ready'; summary: SellerPaymentSummary | null; methods: PayoutMethod[]; payouts: SellerPayout[]; error: string };
 
 async function loadPaymentsState(shopId: string): Promise<PaymentsState> {
   const [summaryRes, methodsRes, payoutsRes] = await Promise.all([
@@ -30,8 +30,7 @@ async function loadPaymentsState(shopId: string): Promise<PaymentsState> {
   return {
     kind: 'ready',
     summary: 'summary' in summaryRes ? summaryRes.summary : null,
-    approved: 'approved' in methodsRes ? methodsRes.approved : null,
-    pending: 'pending' in methodsRes ? methodsRes.pending : null,
+    methods: 'methods' in methodsRes ? methodsRes.methods : [],
     payouts: 'payouts' in payoutsRes ? payoutsRes.payouts : [],
     error: errors.join(' '),
   };
@@ -158,7 +157,7 @@ export default function SellerFinances() {
 
       {payments.kind === 'ready' && (
         <>
-          <SellerPayoutMethodCard approved={payments.approved} pending={payments.pending} onSubmitted={reloadPayments} />
+          <SellerPayoutMethodCard methods={payments.methods} onSubmitted={reloadPayments} />
           <SellerPayoutHistory payouts={payments.payouts} />
         </>
       )}

@@ -169,7 +169,7 @@ function mapMethod(row: Record<string, unknown>): PayoutMethod {
 }
 
 /** Moyen validé en cours et demande en attente de la boutique (la RLS limite déjà à la boutique du vendeur). */
-export async function fetchMyPayoutMethods(shopId: string): Promise<FeatureResult<{ approved: PayoutMethod | null; pending: PayoutMethod | null }>> {
+export async function fetchMyPayoutMethods(shopId: string): Promise<FeatureResult<{ methods: PayoutMethod[] }>> {
   const { data, error } = await supabase
     .from('seller_payout_methods')
     .select(METHOD_COLUMNS)
@@ -177,12 +177,8 @@ export async function fetchMyPayoutMethods(shopId: string): Promise<FeatureResul
     .in('status', ['approved', 'pending_review'])
     .order('submitted_at', { ascending: false });
   if (error) return isModuleMissing(error) ? { supported: false } : { supported: true, error: 'Impossible de charger vos informations de paiement.' };
-  const methods = ((data ?? []) as Record<string, unknown>[]).map(mapMethod);
-  return {
-    supported: true,
-    approved: methods.find((m) => m.status === 'approved') ?? null,
-    pending: methods.find((m) => m.status === 'pending_review') ?? null,
-  };
+  // Au plus un compte validé et une demande en attente par fournisseur.
+  return { supported: true, methods: ((data ?? []) as Record<string, unknown>[]).map(mapMethod) };
 }
 
 export async function submitPayoutMethod(input: {
@@ -190,7 +186,7 @@ export async function submitPayoutMethod(input: {
   phone: string;
   holderName: string;
   consent: boolean;
-}): Promise<FeatureResult<{ id: string | null }>> {
+}): Promise<FeatureResult<{ id: string | null; status: 'approved' | 'pending_review' }>> {
   const { data, error } = await supabase.rpc('submit_payout_method', {
     p_provider: input.provider,
     p_phone: input.phone,
@@ -201,8 +197,10 @@ export async function submitPayoutMethod(input: {
     if (isModuleMissing(error)) return { supported: false };
     return { supported: true, error: error.code === 'P0001' ? error.message : 'Votre numéro n’a pas pu être envoyé. Réessayez dans un instant.' };
   }
-  const v = (data ?? {}) as { id?: string };
-  return { supported: true, id: v.id ?? null };
+  const v = (data ?? {}) as { id?: string; status?: string };
+  // 'approved' : premier numéro, enregistré directement ; 'pending_review' :
+  // changement de numéro, vérifié par Ezial.
+  return { supported: true, id: v.id ?? null, status: v.status === 'approved' ? 'approved' : 'pending_review' };
 }
 
 export interface SellerPayout {
@@ -462,6 +460,8 @@ export async function fetchAmountsDueToSellers(): Promise<FeatureResult<{ total:
 
 export interface PendingPayoutMethod extends PayoutMethod {
   shopName: string | null;
+  /** Numéro actuellement validé pour ce fournisseur (celui qui serait remplacé). */
+  currentPhone: string | null;
 }
 
 export async function fetchPendingPayoutMethods(): Promise<FeatureResult<{ methods: PendingPayoutMethod[] }>> {
@@ -473,7 +473,19 @@ export async function fetchPendingPayoutMethods(): Promise<FeatureResult<{ metho
   if (error) return isModuleMissing(error) ? { supported: false } : { supported: true, error: 'Impossible de charger les moyens de réception à valider.' };
   const methods = ((data ?? []) as Record<string, unknown>[]).map(mapMethod);
   const names = await shopNamesFor(methods.map((m) => m.shopId));
-  return { supported: true, methods: methods.map((m) => ({ ...m, shopName: names.get(m.shopId) ?? null })) };
+  const current = new Map<string, string>();
+  if (methods.length > 0) {
+    const { data: approved } = await supabase
+      .from('seller_payout_methods')
+      .select('shop_id, provider, phone')
+      .eq('status', 'approved')
+      .in('shop_id', [...new Set(methods.map((m) => m.shopId))]);
+    for (const row of (approved ?? []) as { shop_id: string; provider: string; phone: string }[]) current.set(`${row.shop_id}:${row.provider}`, row.phone);
+  }
+  return {
+    supported: true,
+    methods: methods.map((m) => ({ ...m, shopName: names.get(m.shopId) ?? null, currentPhone: current.get(`${m.shopId}:${m.provider}`) ?? null })),
+  };
 }
 
 export async function reviewPayoutMethod(methodId: string, approve: boolean, note: string): Promise<FeatureResult<{ status: 'approved' | 'rejected' }>> {

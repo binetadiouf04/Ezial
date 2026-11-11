@@ -275,11 +275,11 @@ function ApiStatusSection({ settings, statuses, checkedAt }: { settings: Payment
 function PendingMethodsSection({ methods, onReviewed }: { methods: PendingPayoutMethod[]; onReviewed: () => Promise<void> }) {
   return (
     <section>
-      <SectionTitle hint="Vérifiez que le numéro appartient bien à la boutique avant de valider. Les versements vers ce numéro n'ont lieu qu'après validation.">
-        Moyens de réception à valider
+      <SectionTitle hint="Contactez le vendeur pour confirmer le changement avant de valider. D'ici là, ses versements vers ce service sont en attente.">
+        Changements de numéro à vérifier
       </SectionTitle>
       {methods.length === 0 ? (
-        <div className="card p-6 text-center text-sm text-ink/45">Aucun numéro en attente de validation.</div>
+        <div className="card p-6 text-center text-sm text-ink/45">Aucun changement de numéro à vérifier.</div>
       ) : (
         <div className="grid gap-3 lg:grid-cols-2">
           {methods.map((m) => <PendingMethodCard key={m.id} method={m} onReviewed={onReviewed} />)}
@@ -314,7 +314,8 @@ function PendingMethodCard({ method, onReviewed }: { method: PendingPayoutMethod
         <span className="flex-shrink-0 rounded-full bg-cream px-2.5 py-1 text-[11px] font-semibold text-burgundy">{providerLabel(method.provider)}</span>
       </div>
       <div className="space-y-0.5 text-sm">
-        <p className="font-mono text-ink">{formatWalletPhone(method.phone)}</p>
+        {method.currentPhone && <p className="text-xs text-ink/55">Numéro actuel : <span className="font-mono">{formatWalletPhone(method.currentPhone)}</span></p>}
+        <p className="text-ink"><span className="text-xs text-ink/55">Nouveau numéro : </span><span className="font-mono">{formatWalletPhone(method.phone)}</span></p>
         <p className="text-xs text-ink/55">Titulaire : {method.holderName ?? 'non renseigné'}</p>
       </div>
       <label className="block">

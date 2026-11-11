@@ -4,7 +4,7 @@ import {
   submitPayoutMethod, maskWalletPhone, providerLabel, PAYOUT_STATUS_LABELS,
   type SellerPaymentSummary, type PayoutMethod, type SellerPayout, type PaymentProvider, type SellerPayoutStatus,
 } from '@/lib/supabasePayments';
-import { Loader2, Check, ShieldCheck, Clock, Smartphone } from 'lucide-react';
+import { Loader2, Check, Clock, Smartphone } from 'lucide-react';
 
 // « Mes paiements » du vendeur, affiché seulement quand le module paiements
 // est installé. Tout est en lecture seule (montants calculés par le serveur) ;
@@ -81,39 +81,51 @@ export function SellerPayoutHistory({ payouts }: { payouts: SellerPayout[] }) {
   );
 }
 
-function MethodLine({ method, label }: { method: PayoutMethod; label: string }) {
+// Un compte Wave et/ou un compte Orange Money. Les ventes payées par Wave
+// sont versées sur Wave, celles payées par Orange Money sur Orange Money ;
+// avec un seul compte, tout y est versé (payout_provider_for_sale, serveur).
+export function SellerPayoutMethodCard({
+  methods, onSubmitted,
+}: { methods: PayoutMethod[]; onSubmitted: () => Promise<void> }) {
   return (
-    <div className="flex items-start gap-3">
-      <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-cream text-burgundy">
-        <Smartphone size={17} strokeWidth={1.6} />
-      </div>
-      <div className="min-w-0 text-sm">
-        <p className="text-xs font-medium text-ink/50">{label}</p>
-        <p className="font-medium text-ink">
-          {providerLabel(method.provider)} · <span className="font-mono">{maskWalletPhone(method.phone)}</span>
+    <section className="card space-y-4 p-5">
+      <div>
+        <h2 className="text-sm font-semibold text-ink">Mes informations de paiement</h2>
+        <p className="mt-1 text-xs leading-relaxed text-ink/55">
+          Les ventes payées par Wave vous sont versées sur Wave, celles payées par Orange Money sur Orange Money. Avec un seul compte, tout y est versé.
         </p>
-        {method.holderName && <p className="text-xs text-ink/55">Titulaire : {method.holderName}</p>}
       </div>
-    </div>
+      <div className="divide-y divide-line">
+        {(['wave', 'orange_money'] as PaymentProvider[]).map((p) => (
+          <ProviderAccount
+            key={p}
+            provider={p}
+            approved={methods.find((m) => m.provider === p && m.status === 'approved') ?? null}
+            pending={methods.find((m) => m.provider === p && m.status === 'pending_review') ?? null}
+            onSubmitted={onSubmitted}
+          />
+        ))}
+      </div>
+    </section>
   );
 }
 
-export function SellerPayoutMethodCard({
-  approved, pending, onSubmitted,
-}: { approved: PayoutMethod | null; pending: PayoutMethod | null; onSubmitted: () => Promise<void> }) {
-  const [formOpen, setFormOpen] = useState(!approved && !pending);
-  const [provider, setProvider] = useState<PaymentProvider>('wave');
+function ProviderAccount({
+  provider, approved, pending, onSubmitted,
+}: { provider: PaymentProvider; approved: PayoutMethod | null; pending: PayoutMethod | null; onSubmitted: () => Promise<void> }) {
+  const [formOpen, setFormOpen] = useState(false);
   const [phone, setPhone] = useState('');
   const [holderName, setHolderName] = useState('');
   const [consent, setConsent] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
-  const [sent, setSent] = useState(false);
+  const [sent, setSent] = useState<'approved' | 'pending_review' | null>(null);
+  const label = providerLabel(provider);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!consent) { setError('Votre autorisation est nécessaire pour recevoir les versements.'); return; }
-    if (!phone.trim()) { setError('Indiquez votre numéro Wave ou Orange Money.'); return; }
+    if (!phone.trim()) { setError(`Indiquez votre numéro ${label}.`); return; }
     setSubmitting(true);
     setError('');
     const result = await submitPayoutMethod({ provider, phone, holderName, consent });
@@ -124,45 +136,53 @@ export function SellerPayoutMethodCard({
     setHolderName('');
     setConsent(false);
     setFormOpen(false);
-    setSent(true);
+    setSent(result.status);
     await onSubmitted();
   };
 
   return (
-    <section className="card space-y-4 p-5">
-      <h2 className="text-sm font-semibold text-ink">Mes informations de paiement</h2>
-
-      {approved && <MethodLine method={approved} label="Compte de réception validé" />}
-      {pending && (
-        <div className="space-y-2">
-          <MethodLine method={pending} label="Nouvelle demande" />
-          <p className="flex items-center gap-1.5 rounded-lg bg-amber-50 px-3 py-2 text-xs font-medium text-amber-700">
-            <Clock size={13} className="flex-shrink-0" /> En attente de validation par Ezial
-          </p>
+    <div className="space-y-3 py-4 first:pt-0 last:pb-0">
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex min-w-0 items-start gap-3">
+          <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-cream text-burgundy">
+            <Smartphone size={17} strokeWidth={1.6} />
+          </div>
+          <div className="min-w-0 text-sm">
+            <p className="font-medium text-ink">{label}</p>
+            {approved ? (
+              <>
+                <p className="font-mono text-ink/80">{maskWalletPhone(approved.phone)}</p>
+                {approved.holderName && <p className="text-xs text-ink/55">Titulaire : {approved.holderName}</p>}
+              </>
+            ) : !pending && <p className="text-ink/50">Non renseigné</p>}
+            {pending && (
+              <>
+                {!approved && <p className="font-mono text-ink/80">{maskWalletPhone(pending.phone)}</p>}
+                <p className="mt-1 text-xs font-medium text-amber-700">
+                  <Clock size={13} className="mr-1 inline-block align-[-2px]" />
+                  {approved ? <>Nouveau numéro <span className="whitespace-nowrap font-mono">{maskWalletPhone(pending.phone)}</span> en cours de vérification : versements {label} en attente</> : 'En cours de vérification'}
+                </p>
+              </>
+            )}
+          </div>
         </div>
-      )}
-      {!approved && !pending && !formOpen && (
-        <p className="text-sm text-ink/55">Aucun compte de réception enregistré.</p>
-      )}
+        {!formOpen && (
+          <button type="button" onClick={() => { setFormOpen(true); setSent(null); }} className="btn-outline flex-shrink-0 whitespace-nowrap px-3 py-1.5 text-xs">
+            {approved || pending ? 'Changer' : 'Ajouter'}
+          </button>
+        )}
+      </div>
       {sent && !formOpen && (
-        <p className="flex items-center gap-1.5 text-sm text-green-700"><Check size={15} /> Numéro envoyé pour validation.</p>
+        <p className="flex items-start gap-1.5 text-sm text-green-700">
+          <Check size={15} className="mt-0.5 flex-shrink-0" />
+          {sent === 'approved' ? 'Numéro enregistré.' : `Changement enregistré : Ezial vous contactera pour le confirmer. Vos versements ${label} sont en attente d’ici là.`}
+        </p>
       )}
 
-      {formOpen ? (
-        <form onSubmit={(e) => void handleSubmit(e)} className="space-y-4 border-t border-line pt-4">
-          <fieldset>
-            <legend className="mb-2 text-xs font-medium text-ink/60">Recevoir mes versements sur</legend>
-            <div className="flex flex-wrap gap-2">
-              {(['wave', 'orange_money'] as PaymentProvider[]).map((p) => (
-                <label key={p} className={`chip cursor-pointer ${provider === p ? 'chip-active' : ''}`}>
-                  <input type="radio" name="payout-provider" value={p} checked={provider === p} onChange={() => setProvider(p)} className="accent-burgundy" />
-                  {providerLabel(p)}
-                </label>
-              ))}
-            </div>
-          </fieldset>
+      {formOpen && (
+        <form onSubmit={(e) => void handleSubmit(e)} className="space-y-4 rounded-xl bg-cream/40 p-4">
           <label className="block">
-            <span className="mb-1.5 block text-xs font-medium text-ink/60">Numéro {providerLabel(provider)}</span>
+            <span className="mb-1.5 block text-xs font-medium text-ink/60">Numéro {label}</span>
             <input
               type="tel"
               inputMode="tel"
@@ -180,28 +200,17 @@ export function SellerPayoutMethodCard({
           </label>
           <label className="flex items-start gap-2.5 text-sm text-ink/75">
             <input type="checkbox" checked={consent} onChange={(e) => setConsent(e.target.checked)} className="mt-0.5 h-4 w-4 flex-shrink-0 accent-burgundy" required />
-            <span>J’autorise Ezial à verser mes revenus sur ce compte</span>
+            <span>J’autorise Ezial à verser mes revenus sur ce compte {label}</span>
           </label>
           {error && <p className="text-sm text-burgundy">{error}</p>}
           <div className="flex flex-wrap gap-2">
             <button type="submit" disabled={submitting || !consent || !phone.trim()} className="btn-primary">
-              {submitting && <Loader2 size={15} className="animate-spin" />} Envoyer pour validation
+              {submitting && <Loader2 size={15} className="animate-spin" />} Enregistrer
             </button>
-            {(approved || pending) && (
-              <button type="button" onClick={() => { setFormOpen(false); setError(''); }} className="btn-outline">Annuler</button>
-            )}
+            <button type="button" onClick={() => { setFormOpen(false); setError(''); }} className="btn-outline">Annuler</button>
           </div>
         </form>
-      ) : (
-        <button type="button" onClick={() => { setFormOpen(true); setSent(false); }} className="btn-outline">
-          {approved || pending ? 'Changer de numéro' : 'Ajouter un numéro'}
-        </button>
       )}
-
-      <p className="flex items-start gap-1.5 text-xs leading-relaxed text-ink/50">
-        <ShieldCheck size={14} strokeWidth={1.6} className="mt-0.5 flex-shrink-0" />
-        <span>Pas besoin de compte bancaire. Votre numéro est vérifié par l’équipe Ezial avant tout versement ; les versements sont suspendus pendant la vérification. Le paiement en ligne et les versements automatiques sont en cours d’activation.</span>
-      </p>
-    </section>
+    </div>
   );
 }
