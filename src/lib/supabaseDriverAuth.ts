@@ -1,7 +1,7 @@
 import { FunctionsHttpError } from '@supabase/supabase-js';
 import { supabase } from './supabaseClient';
 
-// Driver identity is username + 6-digit PIN, never an email/password the
+// Driver identity is username + PIN (4 digits; older 6-digit PINs still work), never an email/password the
 // driver has to see or type. The technical Supabase Auth identity behind
 // it (a never-delivered drivers.ezial.internal address) is generated and
 // consumed entirely server-side (see supabase/functions/create-driver,
@@ -90,13 +90,12 @@ export async function checkDriverUsername(username: string): Promise<DriverLogin
   return data as DriverLoginStatus;
 }
 
-// Step 2 when the account has no PIN yet — creates it, then logs in. The
-// activation code is the one-time code an admin generated for this driver
-// (admin_issue_driver_activation_code); without it no PIN can be set, so
-// knowing a new driver's username is not enough to take the account.
-export async function createDriverPin(username: string, pin: string, setupCode: string): Promise<DriverAuthInfo | { error: string }> {
+// Step 2 when the account has no PIN yet — the driver chooses a 4-digit PIN
+// (no activation code: the first connection with the username creates it),
+// then is logged in.
+export async function createDriverPin(username: string, pin: string): Promise<DriverAuthInfo | { error: string }> {
   const { data, error } = await supabase.functions.invoke<{ tokenHash?: string }>(DRIVER_SET_PIN_FUNCTION_SLUG, {
-    body: { username: username.trim(), pin, code: setupCode.trim() },
+    body: { username: username.trim(), pin },
   });
   if (error) return { error: await readFunctionError(error, 'Impossible de créer le NIP.') };
   if (!data?.tokenHash) return { error: GENERIC_ERROR };

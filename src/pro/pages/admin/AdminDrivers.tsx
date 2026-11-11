@@ -1,7 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { usePro } from '../../ProContext';
-import { fetchAdminDrivers, createAdminDriver, issueDriverActivationCode, type AdminDriverSummary, type DriverActivationCode } from '@/lib/supabaseAdminDrivers';
-import DriverActivationCodeCard from '../../components/DriverActivationCodeCard';
+import { fetchAdminDrivers, createAdminDriver, type AdminDriverSummary } from '@/lib/supabaseAdminDrivers';
 import { Search, Plus, X, Check, User, Loader2, AlertCircle } from 'lucide-react';
 
 const USERNAME_PATTERN = /^[a-zA-Z0-9._-]{4,32}$/;
@@ -21,7 +20,7 @@ export default function AdminDrivers() {
   const [search, setSearch] = useState('');
 
   const [showAdd, setShowAdd] = useState(false);
-  const [createdDriver, setCreatedDriver] = useState<{ name: string; username: string; activation: DriverActivationCode | null } | null>(null);
+  const [createdDriver, setCreatedDriver] = useState<{ name: string; username: string } | null>(null);
   const [form, setForm] = useState({ firstName: '', lastName: '', username: '', phone: '' });
   const [formError, setFormError] = useState('');
   const [creating, setCreating] = useState(false);
@@ -61,14 +60,8 @@ export default function AdminDrivers() {
       phone: form.phone.trim() || undefined,
     });
     if ('error' in result) { setCreating(false); setFormError(result.error); return; }
-    // The driver needs a one-time activation code to create their PIN.
-    const activation = await issueDriverActivationCode(result.id);
     setCreating(false);
-    setCreatedDriver({
-      name: `${result.firstName} ${result.lastName}`.trim(),
-      username: result.username,
-      activation: 'error' in activation ? null : activation,
-    });
+    setCreatedDriver({ name: `${result.firstName} ${result.lastName}`.trim(), username: result.username });
     setForm({ firstName: '', lastName: '', username: '', phone: '' });
     setShowAdd(false);
     void load();
@@ -136,15 +129,11 @@ export default function AdminDrivers() {
             <h3 className="mt-4 font-display text-lg font-semibold text-ink">Livreur ajouté</h3>
             <p className="mt-1 text-sm text-ink/55">{createdDriver.name}</p>
             <div className="mt-4">
-              {createdDriver.activation ? (
-                <DriverActivationCodeCard username={createdDriver.username} activation={createdDriver.activation} />
-              ) : (
-                <div className="rounded-lg bg-cream p-3">
-                  <p className="text-xs text-ink/45">Nom d'utilisateur</p>
-                  <p className="font-mono text-sm font-semibold text-burgundy mt-0.5">{createdDriver.username}</p>
-                  <p className="mt-2 flex items-start gap-1.5 text-xs text-burgundy"><AlertCircle size={13} className="mt-0.5 flex-shrink-0" /> Le code d'activation n'a pas pu être généré. Ouvrez la fiche du livreur pour en générer un.</p>
-                </div>
-              )}
+              <div className="rounded-lg bg-cream p-3">
+                <p className="text-xs text-ink/45">Nom d'utilisateur</p>
+                <p className="font-mono text-sm font-semibold text-burgundy mt-0.5">{createdDriver.username}</p>
+                <p className="mt-2 text-xs text-ink/55">Communiquez-lui ce nom d'utilisateur : à sa première connexion, il choisira lui-même son NIP à 4 chiffres.</p>
+              </div>
             </div>
             <button onClick={() => setCreatedDriver(null)} className="btn-primary w-full mt-5">Fermer</button>
           </div>

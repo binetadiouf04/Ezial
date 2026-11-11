@@ -53,9 +53,9 @@ export default function ProductGallery({ media, alt }: { media: GalleryMediaItem
   if (!current) return null;
 
   return (
-    <div className="mx-auto w-full max-w-[420px] lg:max-w-[448px]">
+    <div className="mx-auto w-full sm:max-w-[480px] lg:mx-0 lg:max-w-[540px]">
       <div
-        className="relative w-full overflow-hidden rounded-xl bg-cream aspect-[4/5] max-h-[62vh] sm:max-h-[525px] lg:max-h-[560px]"
+        className="relative w-full overflow-hidden rounded-lg bg-cream aspect-[4/5] max-h-[66vh] sm:max-h-[600px] lg:max-h-[675px]"
         onTouchStart={onTouchStart}
         onTouchEnd={onTouchEnd}
       >
@@ -89,7 +89,7 @@ export default function ProductGallery({ media, alt }: { media: GalleryMediaItem
             >
               <ChevronRight size={16} />
             </button>
-            <div className="absolute bottom-2.5 right-2.5 rounded-full bg-ink/60 px-2 py-0.5 text-[11px] font-medium text-white backdrop-blur">
+            <div className="absolute bottom-3 right-3 rounded-full bg-white/90 px-2.5 py-1 text-[11px] font-semibold text-ink backdrop-blur">
               {active + 1}/{count}
             </div>
           </>
@@ -105,14 +105,14 @@ export default function ProductGallery({ media, alt }: { media: GalleryMediaItem
               key={i}
               onClick={() => setActive(i)}
               aria-label={`Voir le média ${i + 1}`}
-              className={`relative flex-shrink-0 overflow-hidden rounded-lg border-2 transition-colors ${active === i ? 'border-burgundy' : 'border-line hover:border-ink/20'}`}
+              className={`relative flex-shrink-0 overflow-hidden rounded-md border-2 transition-colors ${active === i ? 'border-burgundy' : 'border-transparent hover:border-ink/20'}`}
             >
               {item.type === 'video' ? (
-                <div className="flex h-14 w-14 items-center justify-center bg-ink/5">
+                <div className="flex h-16 w-[52px] items-center justify-center bg-ink/5">
                   <Play size={16} className="text-ink/60" />
                 </div>
               ) : (
-                <SmartImage src={item.thumbnailUrl || item.url} alt="" className="h-14 w-14 object-cover" />
+                <SmartImage src={item.thumbnailUrl || item.url} alt="" className="h-16 w-[52px] object-cover" />
               )}
             </button>
           ))}
