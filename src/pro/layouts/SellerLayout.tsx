@@ -2,13 +2,15 @@ import { useState, useEffect } from 'react';
 import { usePro } from '../ProContext';
 import { navigateTo } from '@/store/AppContext';
 import { Home, ShoppingBag, Package, Wallet, Store, LogOut, ArrowLeft, Menu, X, AlertTriangle, Star, Crown, Loader2 } from 'lucide-react';
-import { fetchSellerSubscription } from '@/lib/supabaseSellerSubscription';
+import { fetchSellerSubscription, chooseFreePlan, subscriptionPaymentRoute } from '@/lib/supabaseSellerSubscription';
+import { readSellerIntent, clearSellerIntent } from '@/lib/sellerIntent';
 import { scheduleAutoLightening, readLastLighteningReport, clearLastLighteningReport, type LightenResult } from '@/lib/supabasePhotoLightening';
 import SellerChoosePlan from '../pages/seller/SellerChoosePlan';
 import SellerDashboard from '../pages/seller/SellerDashboard';
 import SellerOrders from '../pages/seller/SellerOrders';
 import SellerOrderDetail from '../pages/seller/SellerOrderDetail';
 import SellerProducts from '../pages/seller/SellerProducts';
+import SellerProductSelection from '../pages/seller/SellerProductSelection';
 import SellerProductForm from '../pages/seller/SellerProductForm';
 import SellerFinances from '../pages/seller/SellerFinances';
 import SellerSubscription from '../pages/seller/SellerSubscription';
@@ -33,7 +35,7 @@ const navItems = [
 ];
 
 export default function SellerLayout() {
-  const { route, navigate, logout, name, identifier, sellerShop, sellerSupabaseShopId } = usePro();
+  const { route, navigate, logout, name, identifier, sellerShop, sellerSupabaseShopId, sellerShopIsOfficial } = usePro();
   const [menuOpen, setMenuOpen] = useState(false);
   // Heavy product photos from before the iPad upload fix are lightened in
   // the background, automatically (see supabasePhotoLightening.ts).
@@ -60,11 +62,35 @@ export default function SellerLayout() {
   useEffect(() => {
     if (!sellerSupabaseShopId) return;
     let cancelled = false;
-    fetchSellerSubscription(sellerSupabaseShopId).then((info) => {
-      if (!cancelled) setPlanChosen(info.planChosen);
-    });
+    void (async () => {
+      const info = await fetchSellerSubscription(sellerSupabaseShopId);
+      if (cancelled) return;
+      // The plan picked on « Devenir vendeur » before signing up is applied
+      // once, here, so the seller is never asked to choose it again. Free is
+      // recorded right away (no payment, nothing to confirm); the trial and
+      // the subscription open their own page, where the seller still
+      // confirms — nothing is activated or charged from the stored choice.
+      const intent = readSellerIntent();
+      if (intent) clearSellerIntent();
+      if (intent && !sellerShopIsOfficial) {
+        if (intent.kind === 'free' && !info.planChosen) {
+          const result = await chooseFreePlan();
+          if (cancelled) return;
+          setPlanChosen(!result.error);
+          return;
+        }
+        if (intent.kind === 'trial') {
+          navigate(!info.trialUsed && !info.isProActive ? '/seller/abonnement/essai' : '/seller/abonnement');
+        } else if (intent.kind === 'subscribe') {
+          navigate(subscriptionPaymentRoute(intent.period));
+        }
+      }
+      setPlanChosen(info.planChosen);
+    })();
     return () => { cancelled = true; };
-  }, [sellerSupabaseShopId]);
+    // navigate is stable (useCallback in ProContext).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sellerSupabaseShopId, sellerShopIsOfficial]);
   const choosingViaTrialOrPayment = clean === '/seller/abonnement/essai' || clean === '/seller/abonnement/paiement';
   const goTo = (r: string) => { setMenuOpen(false); navigate(r); };
 
@@ -102,6 +128,7 @@ export default function SellerLayout() {
     if (clean === '/seller/reclamations') return <SellerClaims />;
     if (claimDetailMatch) return <SellerClaimDetail claimId={claimDetailMatch[1]} />;
     if (clean === '/seller/produits') return <SellerProducts />;
+    if (clean === '/seller/produits/selection') return <SellerProductSelection />;
     if (clean === '/seller/avis') return <SellerReviews />;
     if (isProductAdd) return <SellerProductForm />;
     if (productEditMatch) return <SellerProductForm productId={productEditMatch[1]} />;

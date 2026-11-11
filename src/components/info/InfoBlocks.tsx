@@ -2,8 +2,8 @@ import {
   Truck, Store, ShoppingCart, ShoppingBag, Smartphone, Package, Mail, Phone, MapPin, Gift, ShieldCheck, HelpCircle,
   Shirt, Footprints, Gem, Sparkles, SprayCan, Heart, Scissors, Info, ArrowRight, type LucideIcon,
 } from 'lucide-react';
-import { useApp } from '@/store/AppContext';
 import PricingCards from '@/components/PricingCards';
+import { useSellerEntry } from '@/lib/sellerIntent';
 import PlanComparison from '@/components/PlanComparison';
 import type { InfoBlock, InfoCard, InfoIcon } from '@/shared/infoPages';
 import InfoInline, { InfoAnchor } from './InfoInline';
@@ -23,6 +23,19 @@ const CARD_COLUMNS: Record<1 | 2 | 3 | 4, string> = {
   3: 'sm:grid-cols-2 lg:grid-cols-3',
   4: 'sm:grid-cols-2 lg:grid-cols-4',
 };
+
+// The plan picked here is kept through signup (see sellerIntent.ts), exactly
+// like on « Devenir vendeur ».
+function PricingCardsBlock() {
+  const { startSelling } = useSellerEntry();
+  return (
+    <PricingCards
+      onContinueFree={() => void startSelling({ kind: 'free' })}
+      onStartTrial={() => void startSelling({ kind: 'trial' })}
+      onSubscribe={(period) => void startSelling({ kind: 'subscribe', period })}
+    />
+  );
+}
 
 function CardIcon({ icon, emphasis }: { icon?: InfoIcon; emphasis?: boolean }) {
   if (!icon) return null;
@@ -76,8 +89,6 @@ function CompactCard({ card }: { card: InfoCard }) {
 }
 
 export default function InfoBlockView({ block }: { block: InfoBlock }) {
-  const { navigate } = useApp();
-
   switch (block.type) {
     case 'highlight':
       if (block.tone === 'delivery') {
@@ -159,10 +170,8 @@ export default function InfoBlockView({ block }: { block: InfoBlock }) {
         </div>
       );
 
-    case 'pricingCards': {
-      const goToSellerSignup = () => navigate('/pro');
-      return <PricingCards onContinueFree={goToSellerSignup} onStartTrial={goToSellerSignup} onSubscribe={goToSellerSignup} />;
-    }
+    case 'pricingCards':
+      return <PricingCardsBlock />;
 
     case 'planComparison':
       return <PlanComparison />;

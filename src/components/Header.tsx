@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Search, Heart, ShoppingBag, User, Menu } from 'lucide-react';
+import { Search, Heart, ShoppingBag, User, Menu, Store } from 'lucide-react';
 import { useApp } from '@/store/AppContext';
 import Logo from './Logo';
 import { searchProducts } from '@/data/products';
@@ -8,6 +8,7 @@ import SmartImage from './SmartImage';
 import NotificationBell from './NotificationBell';
 import PremiumBadge from './PremiumBadge';
 import { productPath } from '@/lib/productUrl';
+import { useSellerEntry } from '@/lib/sellerIntent';
 
 // Computer category bar: starts with the four most-shopped entry points
 // (owner's order), Maquillage and Skincare replacing « Beauté »; the other
@@ -24,6 +25,7 @@ const desktopNavLinks: { label: string; route: string }[] = [
 
 export default function Header() {
   const { navigate, cartCount, setCategoryDrawerOpen, catalogProducts, catalogShops, customerUser } = useApp();
+  const { openMyShop, busy: shopLoading } = useSellerEntry();
   const [query, setQuery] = useState('');
   const [focused, setFocused] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -83,7 +85,8 @@ export default function Header() {
           <div className="flex items-center gap-1 sm:gap-2 ml-auto">
             <button onClick={() => navigate('/recherche')} className="flex h-9 w-9 items-center justify-center rounded-full text-ink hover:bg-cream sm:hidden" aria-label="Rechercher"><Search size={20} /></button>
             {customerUser && <NotificationBell onNavigate={(url) => navigate(url)} />}
-            <button onClick={() => navigate('/profil')} className="hidden items-center gap-1.5 rounded-full px-3 py-2 text-sm font-medium text-ink hover:bg-cream sm:flex"><User size={18} /><span>Compte</span></button>
+            <button onClick={() => void openMyShop()} disabled={shopLoading} className="hidden items-center gap-1.5 rounded-full px-3 py-2 text-sm font-medium text-ink hover:bg-cream disabled:opacity-60 lg:flex"><Store size={18} strokeWidth={1.5} /><span>Ma boutique</span></button>
+            <button onClick={() => navigate('/profil')} className="hidden items-center gap-1.5 rounded-full px-3 py-2 text-sm font-medium text-ink hover:bg-cream sm:flex"><User size={18} strokeWidth={1.5} /><span>Mon compte</span></button>
             <button onClick={() => navigate('/favoris')} className="relative flex h-9 w-9 items-center justify-center rounded-full text-ink hover:bg-cream sm:h-auto sm:w-auto sm:px-3 sm:py-2 sm:gap-1.5 sm:text-sm sm:font-medium" aria-label="Favoris">
               <Heart size={20} /><span className="hidden sm:inline">Favoris</span>
             </button>

@@ -35,6 +35,7 @@ const ProfilePage = lazy(() => import('@/pages/ProfilePage'));
 const OrderDetailPage = lazy(() => import('@/pages/OrderDetailPage'));
 const ProEntryPage = lazy(() => import('@/pro/pages/ProEntryPage'));
 const InfoPage = lazy(() => import('@/pages/InfoPage'));
+const BecomeSellerPage = lazy(() => import('@/pages/BecomeSellerPage'));
 const PromoPage = lazy(() => import('@/pages/PromoPage'));
 const TrendingPage = lazy(() => import('@/pages/TrendingPage'));
 const ForYouPage = lazy(() => import('@/pages/ForYouPage'));
@@ -93,6 +94,9 @@ function RouteView() {
     const subId = parts[3];
     if (categoryId) return <CategoryPage categoryId={categoryId} subId={subId} />;
   }
+
+  // « Devenir vendeur »: public presentation of selling on Ezial
+  if (clean === '/devenir-vendeur') return <BecomeSellerPage />;
 
   // Promos: /promos
   if (clean === '/promos') return <PromoPage />;
@@ -256,8 +260,8 @@ function headTagsFor(route: string, { catalogProducts, catalogShops }: CatalogFo
   }
 
   // Info pages set their own tags (InfoPage), like the blog — their texts
-  // stay out of the main bundle.
-  if (parts[1] === 'info') return null;
+  // stay out of the main bundle. Same for « Devenir vendeur ».
+  if (parts[1] === 'info' || clean === '/devenir-vendeur') return null;
 
   if (clean === '/panier') return plainTags(`Panier — ${SITE_TITLE}`, DEFAULT_DESCRIPTION);
   if (clean === '/checkout') return plainTags(`Commande — ${SITE_TITLE}`, DEFAULT_DESCRIPTION);

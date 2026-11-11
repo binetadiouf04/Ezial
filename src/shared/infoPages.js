@@ -171,7 +171,7 @@ const commentCaMarche = {
     vendreLiens: {
       type: 'links',
       items: [
-        { label: 'Créer mon espace vendeur', href: '/pro', primary: true },
+        { label: 'Créer mon espace vendeur', href: '/pro?vue=inscription', primary: true },
         { label: 'Voir les tarifs vendeurs', href: '/info/tarifs-vendeurs/' },
       ],
     },

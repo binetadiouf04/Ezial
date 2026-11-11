@@ -5,10 +5,10 @@ import type { Role } from '../data';
 import LoginForm from '../components/LoginForm';
 import SellerAuthPanel from '../components/SellerAuthPanel';
 import DriverLoginPanel from '../components/DriverLoginPanel';
-import PricingCards from '@/components/PricingCards';
 import { getStaffSpace } from '@/lib/staffSpace';
 import { useNoIndex } from '@/lib/seoHead';
-import { Loader2, ArrowLeft } from 'lucide-react';
+import { BECOME_SELLER_ROUTE } from '@/lib/sellerIntent';
+import { Loader2 } from 'lucide-react';
 
 // Each role's layout (and every page it pulls in) is its own chunk — a
 // seller logging in never has to download the admin dashboard's code, or
@@ -34,8 +34,13 @@ export default function ProEntryPage() {
   // vendeur. Les droits restent contrôlés côté serveur dans tous les cas.
   const staffSpace = getStaffSpace();
   useNoIndex(staffSpace !== null);
-  const [selectedRole, setSelectedRole] = useState<Role | null>(staffSpace);
-  const [sellerInitialView, setSellerInitialView] = useState<'login' | 'signup'>('login');
+  // On the public site, /pro is the seller sign-in itself: « Ma boutique »
+  // opens it on login (?vue=connexion), « Devenir vendeur » on shop creation
+  // (?vue=inscription). The commercial presentation (plans, steps) lives on
+  // /devenir-vendeur, not here.
+  const [selectedRole, setSelectedRole] = useState<Role | null>(staffSpace ?? 'seller');
+  const [sellerInitialView] = useState<'login' | 'signup'>(() =>
+    new URLSearchParams(window.location.search).get('vue') === 'inscription' ? 'signup' : 'login');
 
   const roleAllowedHere = role === 'seller' ? staffSpace === null : role === staffSpace;
 
@@ -60,7 +65,7 @@ export default function ProEntryPage() {
     return (
       <div className="min-h-screen bg-cream flex items-center justify-center p-4">
         <SellerAuthPanel
-          onBack={() => setSelectedRole(null)}
+          onBack={() => navigateApp(sellerInitialView === 'signup' ? BECOME_SELLER_ROUTE : '/')}
           onLogin={(id, name, shopInfo) => login('seller', id, name, shopInfo)}
           verifySeller={verifySellerLogin}
           signUpSeller={signUpSellerAccount}
@@ -97,48 +102,7 @@ export default function ProEntryPage() {
     );
   }
 
-  // Entry screen — Ezial Pro's primary audience is sellers, so this is a
-  // seller-focused landing, not a three-way role picker: the seller
-  // actions, then the two plan cards (with the 3 mois / Annuel toggle) and
-  // nothing else about the plans — the full comparison lives on
-  // /info/tarifs-vendeurs. Admin/driver access
-  // (staff, not public signup) stays one tap away at the bottom, instead
-  // of sharing top billing with "Créer ma boutique".
-  const goToSignup = () => { setSellerInitialView('signup'); setSelectedRole('seller'); };
-  const goToLogin = () => { setSellerInitialView('login'); setSelectedRole('seller'); };
-
-  return (
-    <div className="relative min-h-screen bg-cream">
-      <div className="container-pro pb-14 pt-16 sm:pt-20">
-        <button onClick={() => navigateApp('/')} className="absolute left-4 top-5 flex items-center gap-1.5 text-sm text-ink/60 hover:text-ink sm:left-6 sm:top-6">
-          <ArrowLeft size={16} /> Marketplace
-        </button>
-
-        <div className="mx-auto w-full max-w-md text-center slide-up">
-          <p className="eyebrow mb-3">Ezial Pro</p>
-          <h1 className="font-display text-3xl font-semibold text-ink sm:text-4xl">Votre boutique commence ici.</h1>
-          <p className="mt-3 text-sm text-ink/60 sm:text-base">Créez votre boutique, publiez vos produits et gérez vos commandes depuis un seul espace.</p>
-
-          <div className="mx-auto mt-8 flex max-w-sm flex-col gap-2.5">
-            <button onClick={goToSignup} className="btn-primary w-full">Créer ma boutique</button>
-            <button onClick={goToLogin} className="btn-outline w-full">Se connecter à Ezial Pro</button>
-          </div>
-        </div>
-
-        {/* The two plans — every choice starts with creating the shop */}
-        <section aria-labelledby="pro-plans-title" className="mx-auto mt-16 max-w-5xl">
-          <div className="mb-8 text-center">
-            <p className="eyebrow mb-2">Nos formules</p>
-            <h2 id="pro-plans-title" className="section-title">Deux formules pour vendre sur Ezial</h2>
-          </div>
-          <PricingCards
-            freeButtonLabel="Commencer gratuitement"
-            onContinueFree={goToSignup}
-            onStartTrial={goToSignup}
-            onSubscribe={goToSignup}
-          />
-        </section>
-      </div>
-    </div>
-  );
+  // Only reachable on a staff host with no role picked (never: staffSpace
+  // always preselects it) — kept as a safe fallback.
+  return <ProRouteFallback />;
 }

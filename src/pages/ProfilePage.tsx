@@ -53,7 +53,8 @@ interface InfoForm { firstName: string; lastName: string; phone: string; email: 
 // plain "Bienvenue" screen first, the real form only once a choice is
 // made. Never gates product browsing (ProfilePage is only ever reached
 // via "Compte" in the nav, never required to view the catalog).
-function AccountEntryPage({ onChoose, onAccessPro }: { onChoose: (view: 'login' | 'signup') => void; onAccessPro: () => void }) {
+// The seller space has its own entry, « Ma boutique » (menu and header).
+function AccountEntryPage({ onChoose }: { onChoose: (view: 'login' | 'signup') => void }) {
   // No logo here — Header already shows it on this same page, repeating
   // it below would just be visual clutter.
   return (
@@ -64,12 +65,6 @@ function AccountEntryPage({ onChoose, onAccessPro }: { onChoose: (view: 'login' 
       <div className="mt-8 flex flex-col gap-2.5">
         <button onClick={() => onChoose('signup')} className="btn-primary w-full">Créer mon compte</button>
         <button onClick={() => onChoose('login')} className="btn-outline w-full">Se connecter</button>
-        {/* A quiet link, not a third button — same weight as "Mot de passe
-            oublié ?" elsewhere in this file, not btn-outline/btn-primary.
-            Opens the Ezial Pro entry screen itself (create a shop or log
-            in there) — never grants any seller/admin/driver role on its
-            own, it's just a route to that space's own login/signup. */}
-        <button onClick={onAccessPro} className="mt-1 text-sm font-medium text-burgundy/80 hover:text-burgundy hover:underline">Accéder à Ezial Pro</button>
       </div>
     </div>
   );
@@ -329,7 +324,7 @@ export default function ProfilePage() {
     return (
       <div className="container-pro">
         {authStep === 'entry' ? (
-          <AccountEntryPage onChoose={setAuthStep} onAccessPro={() => navigate('/pro')} />
+          <AccountEntryPage onChoose={setAuthStep} />
         ) : (
           <CustomerAuthPanel onBack={() => setAuthStep('entry')} initialView={authStep} />
         )}
@@ -516,14 +511,6 @@ export default function ProfilePage() {
           {infoSaved && emailConfirmationNotice && (
             <p className="flex items-start gap-1.5 text-sm text-green-700"><Check size={15} className="mt-0.5 flex-shrink-0" /> Enregistré. Un email de confirmation a été envoyé à votre nouvelle adresse.</p>
           )}
-
-          {/* Discreet, distinct from the dangerous actions below — a link,
-              not a big card, and never grants any role by itself. */}
-          <div className="border-t border-line pt-5">
-            <button onClick={() => navigate('/pro')} className="inline-flex items-center gap-1 text-sm font-medium text-burgundy hover:underline">
-              Accéder à Ezial Pro <ChevronRight size={14} />
-            </button>
-          </div>
 
           {/* Only here now — logout/delete used to show under every tab,
               favorites included. */}
