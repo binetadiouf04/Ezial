@@ -253,9 +253,12 @@ export interface AdminShopSummary {
 // Formule d'une boutique, lue côté serveur (seller_subscriptions) : « essai »
 // = période d'essai Ezial Plus en cours (pro_until = trial_end, jamais payée),
 // « plus » = abonnement payé en cours, « official » = boutique officielle
-// (toujours Ezial Plus), « trial_ended » = essai utilisé et terminé, « free ».
+// (toujours Ezial Plus), « trial_ended » = essai utilisé et terminé, « free »,
+// « gift » = accès Ezial Plus offert par un administrateur (premium_grants
+// actif ; prioritaire sur l'abonnement lu dans seller_subscriptions, que le
+// serveur peut avoir prolongé pour la durée de l'accès offert).
 export interface AdminShopSubscription {
-  kind: 'official' | 'trial' | 'plus' | 'trial_ended' | 'free';
+  kind: 'official' | 'trial' | 'plus' | 'trial_ended' | 'free' | 'gift';
   /** Fin de l'essai ou de l'abonnement en cours (ISO), sinon null. */
   until: string | null;
   /** Début de l'essai (ISO) : peut être dans le futur (essais ouverts avant le lancement). */
@@ -291,8 +294,24 @@ export async function fetchAdminShops(): Promise<AdminShopSummary[]> {
     : { data: [] };
   const subByShop = new Map<string, Record<string, unknown>>((subRows ?? []).map((r) => [r.shop_id as string, r as Record<string, unknown>]));
 
+  // Accès offerts actifs. Table absente (migration non exécutée) ou erreur de
+  // lecture : ignoré en silence, la liste garde son comportement actuel.
+  const giftByShop = new Map<string, string>();
+  if (shopIds.length > 0) {
+    const { data: giftRows, error: giftError } = await supabase.from('premium_grants').select('shop_id, ends_at').eq('status', 'active').in('shop_id', shopIds);
+    if (!giftError) {
+      for (const g of (giftRows ?? []) as { shop_id: string; ends_at: string | null }[]) {
+        if (g.ends_at && new Date(g.ends_at) > new Date()) giftByShop.set(g.shop_id, g.ends_at);
+      }
+    }
+  }
+
   const subscriptionFor = (shop: Record<string, unknown>): AdminShopSubscription => {
     if (shop.is_official) return { kind: 'official', until: null, trialStart: null, billingPeriod: null, daysLeft: null };
+    const giftEnd = giftByShop.get(shop.id as string);
+    if (giftEnd) {
+      return { kind: 'gift', until: giftEnd, trialStart: null, billingPeriod: null, daysLeft: Math.max(0, Math.ceil((new Date(giftEnd).getTime() - Date.now()) / 86_400_000)) };
+    }
     const sub = subByShop.get(shop.id as string);
     const proUntil = (sub?.pro_until as string | null) ?? null;
     const trialEnd = (sub?.trial_end as string | null) ?? null;
@@ -362,6 +381,8 @@ export interface AdminShopDetail {
   ownerEmail: string | null;
   createdAt: string;
   suspensionReason: string | null;
+  /** Boutique officielle Ezial (toujours Ezial Plus). */
+  isOfficial: boolean;
   products: AdminProductSummary[];
 }
 
@@ -393,6 +414,7 @@ export async function fetchAdminShopDetail(shopId: string): Promise<AdminShopDet
     ownerEmail: (ownerRow?.email as string | null) ?? null,
     createdAt: (shopRow.created_at as string) ?? '',
     suspensionReason: (shopRow.suspension_reason as string | null) ?? null,
+    isOfficial: Boolean(shopRow.is_official),
     products,
   };
 }

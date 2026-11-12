@@ -3,6 +3,7 @@ import { usePro } from '../../ProContext';
 import { formatDate } from '../../data';
 import { StatusChip } from '../../components/StatusChip';
 import PricingCards from '@/components/PricingCards';
+import GiftAccessNotice from '../../components/GiftAccessNotice';
 import {
   fetchSellerSubscription,
   fetchActiveProductCount,
@@ -87,7 +88,13 @@ export default function SellerSubscription() {
   const summary = summarizeCurrentPlan(info, payments);
   const isOfficial = info.isOfficial;
   const isFree = !isOfficial && !info.isProActive && !info.isPremiumExpired;
-  const isPaidActive = !isOfficial && info.isProActive && !info.isTrialActive;
+  // Accès Ezial Plus offert par Ezial : pas de résiliation, pas de paiement
+  // proposé par défaut, seulement la possibilité de s'abonner à la suite.
+  const gift = isOfficial ? null : info.gift;
+  // Un abonnement payant déjà enregistré court au-delà de la fin du don.
+  const subscriptionTakesOver = !!gift && info.premiumPaidEver && !!info.proUntil
+    && new Date(info.proUntil).getTime() > new Date(gift.endsAt).getTime() + 24 * 60 * 60 * 1000;
+  const isPaidActive = !isOfficial && !gift && info.isProActive && !info.isTrialActive;
   const hasPendingPayment = !isOfficial && payments.some((p) => p.status === 'pending_review');
   // A renewal or a trial → paid subscription starts on the seller's last
   // paid billing period; the payment page lets them switch it.
@@ -115,7 +122,10 @@ export default function SellerSubscription() {
   };
 
   const facts: { label: string; value: string }[] = [];
-  if (!isOfficial) {
+  if (gift) {
+    facts.push({ label: 'Produits publiés', value: `${activeCount} / ${info.productLimit}` });
+    facts.push({ label: 'Commission', value: `${info.commissionPercent} %` });
+  } else if (!isOfficial) {
     if (info.isProActive && info.proUntil) {
       const days = info.isTrialActive ? info.trialDaysRemaining : null;
       facts.push({
@@ -154,6 +164,12 @@ export default function SellerSubscription() {
           </p>
         )}
 
+        {gift && (
+          <div className="mt-4">
+            <GiftAccessNotice gift={gift} subscriptionTakesOver={subscriptionTakesOver} />
+          </div>
+        )}
+
         {facts.length > 0 && (
           <div className="mt-4 grid grid-cols-2 gap-2.5 sm:grid-cols-4">
             {facts.map((f) => <Fact key={f.label} label={f.label} value={f.value} />)}
@@ -161,10 +177,17 @@ export default function SellerSubscription() {
         )}
 
         {/* Only the actions that apply: trial → subscribe, paid or expired → renew. */}
-        {!isOfficial && !isFree && (
+        {!isOfficial && !isFree && !gift && (
           <div className="mt-5 flex flex-col gap-2.5 sm:flex-row">
             <button onClick={() => navigate(subscribeRoute)} className="btn-primary w-full sm:w-auto">
               {info.isTrialActive ? `S’abonner à ${PLUS_PLAN_NAME}` : `Renouveler ${PLUS_PLAN_NAME}`}
+            </button>
+          </div>
+        )}
+        {gift && !subscriptionTakesOver && (
+          <div className="mt-5 flex flex-col gap-2.5 sm:flex-row">
+            <button onClick={() => navigate(subscribeRoute)} className="btn-outline w-full sm:w-auto">
+              S’abonner pour continuer après le {formatDate(gift.endsAt)}
             </button>
           </div>
         )}
@@ -193,7 +216,7 @@ export default function SellerSubscription() {
       </div>
 
       {/* Avertissement permanent sur les abonnements (voir la politique de résiliation) */}
-      {!isOfficial && (
+      {!isOfficial && !gift && (
         <p className="text-xs leading-relaxed text-ink/45">
           {PLUS_PLAN_NAME} est résiliable à tout moment, mais non remboursable : l’abonnement payé reste actif jusqu’à la fin de la durée prévue.{' '}
           <a href="/info/politique-de-resiliation/" target="_blank" rel="noopener noreferrer" className="underline underline-offset-2 hover:text-burgundy">Politique de résiliation</a>

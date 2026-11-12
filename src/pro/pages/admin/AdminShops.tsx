@@ -3,7 +3,7 @@ import { usePro } from '../../ProContext';
 import { fetchAdminShops, updateShopStatus, type AdminShopSummary } from '@/lib/supabaseAdminData';
 import { StatusChip } from '../../components/StatusChip';
 import FlagModal from '../../components/FlagModal';
-import { Search, Loader2, AlertCircle, Check, Ban, Crown } from 'lucide-react';
+import { Search, Loader2, AlertCircle, Check, Ban, Crown, Gift } from 'lucide-react';
 import { formatDate } from '../../data';
 import SmartImage from '@/components/SmartImage';
 
@@ -14,11 +14,12 @@ const suspensionReasons = ['Produits suspects ou contrefaits', 'Informations tro
 // on précise qui a mis la boutique en pause.
 const PAUSED_BY_SELLER_LABEL = 'En pause (par le vendeur)';
 
-type PlanFilter = 'all' | 'trial' | 'plus' | 'free';
+type PlanFilter = 'all' | 'trial' | 'plus' | 'gift' | 'free';
 const PLAN_FILTERS: { id: PlanFilter; label: string }[] = [
   { id: 'all', label: 'Toutes' },
   { id: 'trial', label: 'Essais gratuits' },
   { id: 'plus', label: 'Abonnées Ezial Plus' },
+  { id: 'gift', label: 'Accès offerts' },
   { id: 'free', label: 'Free' },
 ];
 
@@ -27,11 +28,12 @@ function matchesPlan(shop: AdminShopSummary, filter: PlanFilter): boolean {
   if (filter === 'all') return true;
   if (filter === 'trial') return k === 'trial';
   if (filter === 'plus') return k === 'plus' || k === 'official';
+  if (filter === 'gift') return k === 'gift';
   return k === 'free' || k === 'trial_ended';
 }
 
 // Ligne « formule » d'une boutique : essai en cours (avec sa date de fin),
-// abonnement payé, essai terminé ou Free.
+// abonnement payé, accès offert par Ezial, essai terminé ou Free.
 function SubscriptionLine({ sub }: { sub: AdminShopSummary['subscription'] }) {
   const days = sub.daysLeft !== null ? ` · ${sub.daysLeft} jour${sub.daysLeft > 1 ? 's' : ''} restant${sub.daysLeft > 1 ? 's' : ''}` : '';
   if (sub.kind === 'official') return <p className="mt-1 flex items-center gap-1 text-xs text-burgundy"><Crown size={12} /> Ezial Plus — boutique officielle</p>;
@@ -42,6 +44,9 @@ function SubscriptionLine({ sub }: { sub: AdminShopSummary['subscription'] }) {
         <Crown size={12} /> Essai gratuit {notStarted ? `du ${formatDate(sub.trialStart as string)} ` : ''}jusqu’au {formatDate(sub.until)}{days}
       </p>
     );
+  }
+  if (sub.kind === 'gift' && sub.until) {
+    return <p className="mt-1 flex items-center gap-1 text-xs font-medium text-burgundy"><Gift size={12} className="flex-shrink-0" /> Accès Ezial Plus offert jusqu’au {formatDate(sub.until)}{days}</p>;
   }
   if (sub.kind === 'plus' && sub.until) {
     return <p className="mt-1 flex items-center gap-1 text-xs text-burgundy"><Crown size={12} /> Ezial Plus {sub.billingPeriod === 'annual' ? 'annuel' : sub.billingPeriod === 'quarterly' ? 'trimestriel' : ''} jusqu’au {formatDate(sub.until)}{days}</p>;

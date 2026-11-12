@@ -5,10 +5,11 @@ import { fetchSellerFinances } from '@/lib/supabaseSellerFinances';
 import { fetchSellerOrders, type SellerOrderSummary } from '@/lib/supabaseSellerOrders';
 import { fetchSellerProducts } from '@/lib/supabaseSellerProducts';
 import { fetchShopOnboarding } from '@/lib/supabaseSellerShop';
-import { fetchSellerSubscription, fetchSubscriptionPayments, summarizeCurrentPlan, type CurrentPlanSummary } from '@/lib/supabaseSellerSubscription';
+import { fetchSellerSubscription, fetchSubscriptionPayments, summarizeCurrentPlan, type CurrentPlanSummary, type SellerGiftInfo } from '@/lib/supabaseSellerSubscription';
 import { formatFCFA, formatDateTime, formatDate } from '../../data';
 import SummaryCard from '../../components/SummaryCard';
 import { StatusChip } from '../../components/StatusChip';
+import GiftAccessNotice from '../../components/GiftAccessNotice';
 import NotificationOptIn from '@/components/NotificationOptIn';
 import NotificationGateModal from '@/components/NotificationGateModal';
 import { ShoppingBag, Package, Wallet, Clock, ChevronRight, Truck, Store, Loader2, ArrowRight, Crown } from 'lucide-react';
@@ -25,6 +26,7 @@ export default function SellerDashboard() {
   // independently-wrong number.
   const [productLimit, setProductLimit] = useState(10);
   const [planSummary, setPlanSummary] = useState<CurrentPlanSummary | null>(null);
+  const [gift, setGift] = useState<SellerGiftInfo | null>(null);
   const [availableBalance, setAvailableBalance] = useState(0);
   const [authUserId, setAuthUserId] = useState<string | null>(null);
   const [shopDraft, setShopDraft] = useState(false);
@@ -45,6 +47,7 @@ export default function SellerDashboard() {
     setAvailableBalance(finances.availableBalance);
     setShopDraft(onboarding?.status === 'draft');
     setProductLimit(subscription.productLimit);
+    setGift(subscription.gift);
     setPlanSummary(summarizeCurrentPlan(subscription, subscriptionPayments));
     setLoading(false);
   }, []);
@@ -119,7 +122,15 @@ export default function SellerDashboard() {
       <SummaryCard label="Solde disponible" value={formatFCFA(availableBalance)} icon={<Wallet size={16} />} accent onClick={() => navigate('/seller/finances')} />
 
       {/* Current plan — the official Ezial shop shows "Ezial Plus — boutique officielle". */}
-      {planSummary && (
+      {gift && (
+        <div className="space-y-2">
+          <GiftAccessNotice gift={gift} />
+          <button onClick={() => navigate('/seller/abonnement')} className="flex items-center gap-1 text-xs font-medium text-burgundy hover:underline">
+            Voir mon abonnement <ChevronRight size={14} aria-hidden="true" />
+          </button>
+        </div>
+      )}
+      {planSummary && !gift && (
         <button onClick={() => navigate('/seller/abonnement')} className="card flex w-full items-center justify-between gap-3 p-4 text-left transition-colors hover:bg-cream/30">
           <div className="flex min-w-0 items-start gap-3">
             <Crown size={18} className={`mt-0.5 flex-shrink-0 ${planSummary.name === 'Ezial Free' ? 'text-ink/30' : 'text-burgundy'}`} />

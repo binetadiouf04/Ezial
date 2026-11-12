@@ -53,6 +53,17 @@ export interface SellerSubscriptionInfo {
   // product limit is not enforced (enforce_product_limit() skips it), so
   // pages show its product count without a limit.
   isOfficial: boolean;
+  // Accès Ezial Plus offert par un administrateur (table premium_grants),
+  // seulement quand un don est actif. null sinon — y compris tant que la
+  // migration n'est pas exécutée. Un don n'est jamais un essai : isTrialActive
+  // reste faux, isProActive vrai, limite et commission sont ceux d'Ezial Plus.
+  gift: SellerGiftInfo | null;
+}
+
+export interface SellerGiftInfo {
+  endsAt: string;
+  daysRemaining: number;
+  grantedMonths: number;
 }
 
 function daysUntil(iso: string | null): number | null {
@@ -81,7 +92,32 @@ function officialShopSubscription(): SellerSubscriptionInfo {
     isPremiumExpired: false,
     planChosen: true,
     isOfficial: true,
+    gift: null,
   };
+}
+
+// Le don actif de la boutique (le propriétaire peut lire ses propres lignes).
+// Requête à part : si la table n'existe pas encore (migration non exécutée)
+// ou si la lecture échoue, on ignore silencieusement — comportement actuel.
+async function fetchActiveGift(shopId: string): Promise<SellerGiftInfo | null> {
+  try {
+    const { data, error } = await supabase
+      .from('premium_grants')
+      .select('granted_months, ends_at, status')
+      .eq('shop_id', shopId)
+      .eq('status', 'active')
+      .order('ends_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (error || !data) return null;
+    const endsAt = data.ends_at as string | null;
+    // Le serveur marque le don « expired » avec un léger décalage : une date
+    // de fin passée n'est jamais présentée comme un don actif.
+    if (!endsAt || new Date(endsAt).getTime() <= Date.now()) return null;
+    return { endsAt, daysRemaining: daysUntil(endsAt) ?? 0, grantedMonths: Number(data.granted_months) || 0 };
+  } catch {
+    return null;
+  }
 }
 
 // A shop with no seller_subscriptions row at all (not yet activated, or
@@ -93,22 +129,26 @@ function officialShopSubscription(): SellerSubscriptionInfo {
 export async function fetchSellerSubscription(shopId: string, options: { isOfficial?: boolean } = {}): Promise<SellerSubscriptionInfo> {
   if (options.isOfficial) return officialShopSubscription();
 
-  const { data } = await supabase
-    .from('seller_subscriptions')
-    .select('plan, trial_used, trial_start, trial_end, pro_until, pro_started_at, premium_paid_ever, plan_chosen')
-    .eq('shop_id', shopId)
-    .maybeSingle();
+  const [{ data }, gift] = await Promise.all([
+    supabase
+      .from('seller_subscriptions')
+      .select('plan, trial_used, trial_start, trial_end, pro_until, pro_started_at, premium_paid_ever, plan_chosen')
+      .eq('shop_id', shopId)
+      .maybeSingle(),
+    fetchActiveGift(shopId),
+  ]);
 
   const proUntil = (data?.pro_until as string | null) ?? null;
   const trialEnd = (data?.trial_end as string | null) ?? null;
   const plan = (data?.plan as SubscriptionPlan) ?? 'free';
   const premiumPaidEver = (data?.premium_paid_ever as boolean) ?? false;
-  const isProActive = !!proUntil && new Date(proUntil) > new Date();
+  const isProActive = (!!proUntil && new Date(proUntil) > new Date()) || gift !== null;
   // A trial is "active" specifically when the current pro_until is the
   // trial's own end date — once a real payment is confirmed, pro_until
   // moves past trial_end (see confirm_subscription_payment), so this
   // naturally stops being true the moment a paid period takes over.
-  const isTrialActive = isProActive && !!trialEnd && proUntil === trialEnd;
+  // A gift is never a trial, even if the dates happen to coincide.
+  const isTrialActive = gift === null && isProActive && !!trialEnd && proUntil === trialEnd;
   const isPremiumExpired = plan === 'pro' && !isProActive && premiumPaidEver;
 
   return {
@@ -128,6 +168,7 @@ export async function fetchSellerSubscription(shopId: string, options: { isOffic
     isPremiumExpired,
     planChosen: (data?.plan_chosen as boolean) ?? false,
     isOfficial: false,
+    gift,
   };
 }
 
@@ -147,6 +188,8 @@ export async function chooseFreePlan(): Promise<{ error?: string }> {
 // explicit "Activer mes 30 jours gratuits" moment or page.
 export async function activateSellerTrial(shopId: string): Promise<{ trialEnd?: string; alreadyUsed?: boolean; error?: string }> {
   const { data, error } = await supabase.rpc('activate_seller_trial', { p_shop_id: shopId });
+  // Le serveur refuse l'essai pendant un accès offert ou un abonnement actif
+  // avec une erreur P0001 en français : on l'affiche telle quelle.
   if (error) return { error: error.message };
   if (data?.alreadyUsed) return { alreadyUsed: true };
   return { trialEnd: data?.trialEnd as string | undefined };
@@ -232,6 +275,10 @@ export interface CurrentPlanSummary {
 export function summarizeCurrentPlan(info: SellerSubscriptionInfo, payments: SubscriptionPaymentRow[]): CurrentPlanSummary {
   if (info.isOfficial) {
     return { name: `${PLUS_PLAN_NAME} — boutique officielle`, amountLabel: null, periodLabel: null, billingPeriod: null, expiresAt: null, isExpired: false };
+  }
+
+  if (info.gift) {
+    return { name: `Accès ${PLUS_PLAN_NAME} offert`, amountLabel: 'Offert', periodLabel: null, billingPeriod: null, expiresAt: info.gift.endsAt, isExpired: false };
   }
 
   const lastConfirmed = payments.find((p) => p.status === 'confirmed') ?? null;
