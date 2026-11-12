@@ -25,6 +25,13 @@ export default function NotificationBell({ onNavigate }: { onNavigate: (url: str
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const panelRef = useRef<HTMLDivElement>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  // Hauteur (px) sous la cloche, mesurée à l'ouverture : sur téléphone le
+  // panneau est fixe et pleine largeur, quel que soit l'emplacement de la cloche.
+  const [panelTop, setPanelTop] = useState(56);
+  // Cloche trop près du bord gauche (barre latérale ordinateur) : le panneau
+  // s'ouvre vers la droite au lieu de déborder de l'écran.
+  const [opensRight, setOpensRight] = useState(false);
 
   const refreshCount = useCallback(() => {
     void fetchUnreadNotificationCount().then(setUnreadCount);
@@ -63,7 +70,19 @@ export default function NotificationBell({ onNavigate }: { onNavigate: (url: str
 
   return (
     <div className="relative" ref={panelRef}>
-      <button onClick={() => setOpen((o) => !o)} className="relative flex h-9 w-9 items-center justify-center rounded-full text-ink/50 hover:bg-cream hover:text-ink transition-colors" aria-label="Notifications">
+      <button
+        ref={buttonRef}
+        onClick={() => {
+          if (buttonRef.current) {
+            const rect = buttonRef.current.getBoundingClientRect();
+            setPanelTop(Math.round(rect.bottom) + 8);
+            setOpensRight(rect.right < 340);
+          }
+          setOpen((o) => !o);
+        }}
+        className="relative flex h-9 w-9 items-center justify-center rounded-full text-ink/50 hover:bg-cream hover:text-ink transition-colors"
+        aria-label="Notifications"
+      >
         <Bell size={18} />
         {unreadCount > 0 && (
           <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-burgundy px-1 text-[10px] font-semibold text-white">{unreadCount}</span>
@@ -71,7 +90,13 @@ export default function NotificationBell({ onNavigate }: { onNavigate: (url: str
       </button>
 
       {open && (
-        <div className="absolute right-0 top-11 z-30 w-80 max-w-[90vw] rounded-xl border border-line bg-white shadow-lg max-h-[70vh] overflow-y-auto">
+        // Téléphone : panneau fixe, pleine largeur, sous l'en-tête (un panneau
+        // ancré sur la cloche débordait à gauche de l'écran). Tablette et
+        // ordinateur : ancré sous la cloche.
+        <div
+          style={{ '--bell-top': `${panelTop}px` } as React.CSSProperties}
+          className={`fixed left-2 right-2 top-[var(--bell-top)] z-30 max-h-[70vh] overflow-y-auto rounded-xl border border-line bg-white shadow-lg sm:absolute sm:top-11 sm:w-80 ${opensRight ? 'sm:left-0 sm:right-auto' : 'sm:left-auto sm:right-0'}`}
+        >
           <div className="flex items-center justify-between border-b border-line p-3">
             <p className="text-sm font-semibold text-ink">Notifications</p>
             {unreadCount > 0 && (
@@ -92,9 +117,9 @@ export default function NotificationBell({ onNavigate }: { onNavigate: (url: str
                 >
                   <div className="flex w-full items-center gap-1.5">
                     {!n.isRead && <span className="h-1.5 w-1.5 flex-shrink-0 rounded-full bg-burgundy" />}
-                    <p className="text-sm font-medium text-ink truncate">{n.title}</p>
+                    <p className="text-sm font-medium text-ink">{n.title}</p>
                   </div>
-                  {n.body && <p className="text-xs text-ink/55 line-clamp-2">{n.body}</p>}
+                  {n.body && <p className="text-xs text-ink/55 line-clamp-3">{n.body}</p>}
                   <p className="text-[11px] text-ink/35">{formatDateTime(n.createdAt)}</p>
                 </button>
               ))}
