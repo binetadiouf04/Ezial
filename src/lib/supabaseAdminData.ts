@@ -1,4 +1,5 @@
 import { supabase } from './supabaseClient';
+import { isDeletedShop, DELETED_SHOP_NAME } from './deletedShop';
 import { resolveImageUrl } from './supabaseCatalog';
 
 // Real Supabase-backed admin data — orders/order_shops/order_items/shops/
@@ -82,7 +83,7 @@ export interface AdminDashboardStats {
 export async function fetchAdminDashboardStats(): Promise<AdminDashboardStats> {
   const [ordersCountRes, shopsCountRes, productsCountRes, recentRes, activeDeliveryIds] = await Promise.all([
     supabase.from('orders').select('id', { count: 'exact', head: true }),
-    supabase.from('shops').select('id', { count: 'exact', head: true }),
+    supabase.from('shops').select('id', { count: 'exact', head: true }).neq('status', 'deleted').neq('name', DELETED_SHOP_NAME),
     supabase.from('products').select('id', { count: 'exact', head: true }).eq('status', 'active'),
     supabase.from('orders').select('*').order('created_at', { ascending: false }).limit(5),
     fetchActiveDeliveryOrderIds(),
@@ -246,6 +247,22 @@ export interface AdminShopSummary {
   neighborhood: string | null;
   createdAt: string;
   suspensionReason: string | null;
+  subscription: AdminShopSubscription;
+}
+
+// Formule d'une boutique, lue côté serveur (seller_subscriptions) : « essai »
+// = période d'essai Ezial Plus en cours (pro_until = trial_end, jamais payée),
+// « plus » = abonnement payé en cours, « official » = boutique officielle
+// (toujours Ezial Plus), « trial_ended » = essai utilisé et terminé, « free ».
+export interface AdminShopSubscription {
+  kind: 'official' | 'trial' | 'plus' | 'trial_ended' | 'free';
+  /** Fin de l'essai ou de l'abonnement en cours (ISO), sinon null. */
+  until: string | null;
+  /** Début de l'essai (ISO) : peut être dans le futur (essais ouverts avant le lancement). */
+  trialStart: string | null;
+  /** Mensualité / période de l'abonnement payé. */
+  billingPeriod: string | null;
+  daysLeft: number | null;
 }
 
 // Newest first — surfaces new onboarding requests (status 'pending') at the
@@ -254,8 +271,9 @@ export interface AdminShopSummary {
 // status instead of removing the row (order/finance history depends on it
 // surviving), but it has no place in the normal admin management list.
 export async function fetchAdminShops(): Promise<AdminShopSummary[]> {
-  const { data: shopRows, error } = await supabase.from('shops').select('*').neq('status', 'deleted').order('created_at', { ascending: false });
-  if (error || !shopRows) return [];
+  const { data: allShopRows, error } = await supabase.from('shops').select('*').order('created_at', { ascending: false });
+  if (error || !allShopRows) return [];
+  const shopRows = allShopRows.filter((s) => !isDeletedShop(s));
 
   const shopIds = shopRows.map((s) => s.id as string);
   const { data: productRows } = shopIds.length > 0
@@ -268,11 +286,32 @@ export async function fetchAdminShops(): Promise<AdminShopSummary[]> {
     countByShop.set(sid, (countByShop.get(sid) ?? 0) + 1);
   }
 
+  const { data: subRows } = shopIds.length > 0
+    ? await supabase.from('seller_subscriptions').select('shop_id, plan, trial_used, trial_start, trial_end, pro_until, billing_period').in('shop_id', shopIds)
+    : { data: [] };
+  const subByShop = new Map<string, Record<string, unknown>>((subRows ?? []).map((r) => [r.shop_id as string, r as Record<string, unknown>]));
+
+  const subscriptionFor = (shop: Record<string, unknown>): AdminShopSubscription => {
+    if (shop.is_official) return { kind: 'official', until: null, trialStart: null, billingPeriod: null, daysLeft: null };
+    const sub = subByShop.get(shop.id as string);
+    const proUntil = (sub?.pro_until as string | null) ?? null;
+    const trialEnd = (sub?.trial_end as string | null) ?? null;
+    const trialStart = (sub?.trial_start as string | null) ?? null;
+    const billingPeriod = (sub?.billing_period as string | null) ?? null;
+    const active = !!proUntil && new Date(proUntil) > new Date();
+    const daysLeft = active ? Math.max(0, Math.ceil((new Date(proUntil as string).getTime() - Date.now()) / 86_400_000)) : null;
+    if (active && !!trialEnd && proUntil === trialEnd) return { kind: 'trial', until: proUntil, trialStart, billingPeriod: null, daysLeft };
+    if (active) return { kind: 'plus', until: proUntil, trialStart, billingPeriod, daysLeft };
+    if (sub?.trial_used) return { kind: 'trial_ended', until: trialEnd ?? proUntil, trialStart, billingPeriod, daysLeft: null };
+    return { kind: 'free', until: null, trialStart: null, billingPeriod: null, daysLeft: null };
+  };
+
   return shopRows.map((s) => ({
     id: s.id as string,
     name: (s.name as string) ?? '',
     logoUrl: (s.logo_url as string) ?? '',
     status: (s.status as string) ?? 'active',
+    subscription: subscriptionFor(s),
     sellerCode: (s.seller_code as string | null) ?? null,
     activeProductCount: countByShop.get(s.id as string) ?? 0,
     phone: (s.phone as string | null) ?? null,
@@ -363,10 +402,17 @@ export async function fetchAdminShopDetail(shopId: string): Promise<AdminShopDet
 // Scoped to one shop when shopId is given (used by the shop detail page);
 // otherwise every product across every shop (the admin Produits list).
 export async function fetchAdminProducts(shopId?: string): Promise<AdminProductSummary[]> {
-  let query = supabase.from('products').select('*').order('created_at', { ascending: false });
+  // Les produits supprimés par leur vendeur (archivés) ne sont pas listés.
+  let query = supabase.from('products').select('*').is('archived_at', null).order('created_at', { ascending: false });
   if (shopId) query = query.eq('shop_id', shopId);
-  const { data: productRows, error } = await query;
-  if (error || !productRows || productRows.length === 0) return [];
+  const { data: rawProductRows, error } = await query;
+  if (error || !rawProductRows || rawProductRows.length === 0) return [];
+
+  // ...ni ceux d'une boutique supprimée.
+  const { data: ownerShops } = await supabase.from('shops').select('id, name, status').in('id', [...new Set(rawProductRows.map((p) => p.shop_id as string))]);
+  const deletedShopIds = new Set((ownerShops ?? []).filter((s) => isDeletedShop(s)).map((s) => s.id as string));
+  const productRows = rawProductRows.filter((p) => !deletedShopIds.has(p.shop_id as string));
+  if (productRows.length === 0) return [];
 
   const productIds = productRows.map((p) => p.id as string);
   const shopIds = [...new Set(productRows.map((p) => p.shop_id as string))];

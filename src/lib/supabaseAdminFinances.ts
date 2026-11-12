@@ -1,4 +1,5 @@
 import { supabase } from './supabaseClient';
+import { isDeletedShop } from './deletedShop';
 
 // Real seller financial tracking, built on the pre-existing
 // public.seller_transactions table (schema confirmed with the user before
@@ -48,7 +49,7 @@ function statusFor(netToSeller: number, remaining: number): AdminShopFinanceSumm
 
 export async function fetchAdminFinanceOverview(): Promise<AdminFinanceOverview> {
   const [{ data: shopRows }, { data: orderShopRows }, { data: payoutRows }] = await Promise.all([
-    supabase.from('shops').select('id, name, logo_url').order('name', { ascending: true }),
+    supabase.from('shops').select('id, name, logo_url, status').order('name', { ascending: true }),
     supabase.from('order_shops').select('shop_id, subtotal, commission_amount, net_amount'),
     supabase.from('seller_transactions').select('shop_id, net_amount').eq('type', 'payout').eq('status', 'paid'),
   ]);
@@ -69,7 +70,9 @@ export async function fetchAdminFinanceOverview(): Promise<AdminFinanceOverview>
     paidByShop.set(sid, (paidByShop.get(sid) ?? 0) + ((row.net_amount as number) ?? 0));
   }
 
-  const shops: AdminShopFinanceSummary[] = (shopRows ?? []).map((s) => {
+  // Une boutique supprimée n'est listée que si elle a un historique de ventes
+  // (l'argent éventuellement dû doit rester visible).
+  const shops: AdminShopFinanceSummary[] = (shopRows ?? []).filter((s) => !isDeletedShop(s) || grossByShop.has(s.id as string)).map((s) => {
     const sales = grossByShop.get(s.id as string) ?? 0;
     const commission = commissionByShop.get(s.id as string) ?? 0;
     const netToSeller = netByShop.get(s.id as string) ?? 0;
