@@ -59,7 +59,7 @@ function segmentSpacing(segment: InfoSegment, index: number): string {
 // length even when the segment spans the full width (cards next to them).
 const PROSE_WIDTH = '[&>*]:max-w-3xl';
 
-function Segments({ segments }: { segments: InfoSegment[] }) {
+export function Segments({ segments }: { segments: InfoSegment[] }) {
   return (
     <>
       {segments.map((segment, i) => (

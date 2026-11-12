@@ -10,6 +10,7 @@ import {
   applyHeadTags, absoluteUrl, SITE_URL as SEO_SITE_URL, DEFAULT_OG_TITLE, DEFAULT_OG_DESCRIPTION, DEFAULT_OG_IMAGE, type HeadTags,
 } from '@/lib/seoHead';
 import Header from '@/components/Header';
+import BackBar from '@/components/BackBar';
 import MobileCategoryDrawer from '@/components/MobileCategoryDrawer';
 import CartDrawer from '@/components/CartDrawer';
 import Footer from '@/components/Footer';
@@ -323,9 +324,12 @@ function Layout() {
           <Suspense fallback={<RouteFallback />}><RouteView /></Suspense>
         </main>
       ) : (
-        <main className="flex-1">
-          <Suspense fallback={<RouteFallback />}><RouteView /></Suspense>
-        </main>
+        <>
+          <BackBar />
+          <main className="flex-1">
+            <Suspense fallback={<RouteFallback />}><RouteView /></Suspense>
+          </main>
+        </>
       )}
 
       <Footer />

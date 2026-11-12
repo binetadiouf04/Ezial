@@ -105,6 +105,12 @@ export interface Order {
 
 interface AppState {
   route: string; navigate: (route: string) => void;
+  // « Retour » cohérent sur tout le site : revient à la page précédente du
+  // site quand il y en a une (le client retrouve exactement où il était),
+  // sinon va vers `fallback` (accueil par défaut) — par exemple après être
+  // arrivé directement depuis un moteur de recherche.
+  goBack: (fallback?: string) => void;
+  canGoBack: boolean;
   // Real Supabase catalog merged with the still-temporary mock catalog —
   // fetched once here (not per-page) so Home, Promotions, Tendances,
   // Sélection personnalisée and the shops listing all see the same real
@@ -196,13 +202,21 @@ const CART_STORAGE_KEY = 'ezial-cart-v1';
 const LAST_BROWSE_ROUTE_KEY = 'ezial-last-browse-route';
 const NEVER_RESTORE_ROUTE_PREFIXES = ['/profil', '/checkout', '/commande', '/pro'];
 
+// Rang de la page courante dans l'historique du site (0 = première page
+// ouverte dans cet onglet) : sert au bouton « Retour » à savoir s'il existe
+// une page précédente du site, sans jamais quitter Ezial par erreur.
+function currentHistoryIndex(): number {
+  const state = window.history.state as { ezialIdx?: number } | null;
+  return typeof state?.ezialIdx === 'number' ? state.ezialIdx : 0;
+}
+
 // Generic escape hatch for a plain click handler with no access to
 // useApp()'s navigate (e.g. "retour au marketplace" buttons rendered deep
 // inside Ezial Pro's own tree) — mirrors exactly what the browser's own
 // Back/Forward buttons do, which the popstate listener above (and
 // ProContext's own) already picks up, so `route` state stays in sync.
 export function navigateTo(route: string): void {
-  window.history.pushState(null, '', route);
+  window.history.pushState({ ezialIdx: currentHistoryIndex() + 1 }, '', route);
   window.dispatchEvent(new PopStateEvent('popstate'));
 }
 
@@ -496,11 +510,22 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [catalogLoading, catalogProducts]);
 
   const navigate = useCallback((r: string) => {
-    window.history.pushState(null, '', r);
+    window.history.pushState({ ezialIdx: currentHistoryIndex() + 1 }, '', r);
     setRoute(r);
     setCategoryDrawerOpen(false);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }, []);
+
+  // Relu à chaque rendu : le fournisseur se rend de nouveau à chaque changement de page.
+  const canGoBack = currentHistoryIndex() > 0;
+  const goBack = useCallback((fallback = '/') => {
+    if (currentHistoryIndex() > 0) {
+      window.history.back();
+      setCategoryDrawerOpen(false);
+    } else {
+      navigate(fallback);
+    }
+  }, [navigate]);
 
   const toggleFavorite = useCallback((productId: string) => {
     setFavorites((prev) => {
@@ -664,7 +689,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const updateCustomerInfo = useCallback((info: CustomerInfo) => setCustomerInfo(info), []);
 
   const value: AppState = {
-    route, navigate, catalogProducts, catalogShops, catalogLoading, favorites, toggleFavorite, isFavorite,
+    route, navigate, goBack, canGoBack, catalogProducts, catalogShops, catalogLoading, favorites, toggleFavorite, isFavorite,
     cart, addToCart, removeFromCart, updateQuantity, clearCart,
     saveForLater, moveToCart, removeFromSaved, savedItems,
     cartCount, cartSubtotal, cartOpen, setCartOpen, categoryDrawerOpen, setCategoryDrawerOpen,

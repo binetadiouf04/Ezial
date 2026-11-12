@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { lazy, Suspense, useEffect, useState } from 'react';
 import { useApp, type Order, type ShopFulfillment, type DeliveryPreference, type DeliveryStepStatus, quartierToZone, deliveryWindows } from '@/store/AppContext';
 import { formatFCFA, isRealCatalogId, getVariantPrice } from '@/data/products';
 import { fabricSaleModeUnit, formatFabricQuantity } from '@/data/categories';
@@ -17,6 +17,8 @@ import PhoneField from '@/components/PhoneField';
 import CustomerAuthPanel from '@/components/CustomerAuthPanel';
 import { Check, Truck, Store, Smartphone, Clock, Loader2, AlertCircle, AlertTriangle, MapPin, Navigation, Search, ArrowLeft, Gift, UserCheck, ChevronDown, Wallet, FileText, Lock } from 'lucide-react';
 import SmartImage from '@/components/SmartImage';
+
+const InfoSheet = lazy(() => import('@/components/info/InfoSheet'));
 
 const paymentIcons: Record<string, typeof Smartphone> = { wave: Smartphone, orange: Smartphone };
 const paymentMethods = paymentMethodsData.map((p) => ({ ...p, icon: paymentIcons[p.id] ?? Smartphone }));
@@ -117,7 +119,8 @@ export default function CheckoutPage() {
   // ever means "j'ai lu et j'accepte les CGV", unchecked by default, and
   // the version + timestamp are recorded server-side via record_order_cgv_consent()
   // right after the order itself is created.
-  const [cgvAccepted, setCgvAccepted] = useState(false);
+  // Les conditions générales s'ouvrent dans une fenêtre, sans quitter le paiement.
+  const [cgvOpen, setCgvOpen] = useState(false);
   const [location, setLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [locationStatus, setLocationStatus] = useState<LocationStatus>('idle');
   const [locationMode, setLocationMode] = useState<LocationMode>('gps');
@@ -401,10 +404,6 @@ export default function CheckoutPage() {
       setSubmitError('Position de livraison manquante. Autorisez la géolocalisation ou choisissez le retrait en boutique.');
       return;
     }
-    if (!cgvAccepted) {
-      setSubmitError('Vous devez accepter les conditions générales de vente pour valider votre commande.');
-      return;
-    }
     setSubmitError('');
     setProcessing(true);
     // finally garantit que "processing" ne reste jamais bloqué, y compris
@@ -548,7 +547,15 @@ export default function CheckoutPage() {
 
   return (
     <div className="container-pro max-w-5xl py-5 sm:py-8">
-      <h1 className="mb-5 text-center text-lg font-semibold text-ink lg:text-left lg:text-2xl lg:font-medium lg:font-display">Finaliser ma commande</h1>
+      <button
+        type="button"
+        onClick={() => (step === 0 ? navigate('/panier') : setStep(step - 1))}
+        disabled={processing}
+        className="mb-3 inline-flex items-center gap-1.5 text-sm font-medium text-ink/60 transition-colors hover:text-ink disabled:opacity-50"
+      >
+        <ArrowLeft size={16} aria-hidden="true" /> {step === 0 ? 'Retour au panier' : 'Retour'}
+      </button>
+      <h1 className="mb-6 font-display text-[30px] font-medium leading-tight text-ink lg:text-4xl">Finaliser ma commande</h1>
       <div className="mx-auto mb-6 max-w-sm sm:mb-8 lg:mx-0 lg:max-w-md"><CheckoutSteps steps={steps} current={step} /></div>
 
       {/* Mobile, étapes 1 et 2 : le récapitulatif reste à portée, replié. */}
@@ -573,12 +580,7 @@ export default function CheckoutPage() {
           {/* Step 0: Customer info */}
           {step === 0 && (
             <div className="space-y-5 fade-in">
-              <div>
-                <button onClick={() => navigate('/panier')} className="flex items-center gap-1.5 text-xs uppercase tracking-[0.1em] text-ink/50 transition-colors hover:text-ink">
-                  <ArrowLeft size={14} /> Retour au panier
-                </button>
-                <h2 className="mt-3 font-display text-[28px] font-medium leading-tight text-ink">Vos coordonnées</h2>
-              </div>
+              <h2 className="font-display text-[26px] font-medium leading-tight text-ink">Vos coordonnées</h2>
               <div className="grid grid-cols-2 gap-3 sm:gap-4">
                 <div>
                   <label className="co-label">Prénom</label>
@@ -945,21 +947,6 @@ export default function CheckoutPage() {
                 </div>
               </div>
 
-              <label className="flex cursor-pointer items-start gap-2.5">
-                <input
-                  type="checkbox"
-                  className="mt-0.5 h-4 w-4 flex-shrink-0 rounded-[2px] border-ink/30 text-burgundy focus:ring-burgundy/30"
-                  checked={cgvAccepted}
-                  onChange={(e) => setCgvAccepted(e.target.checked)}
-                />
-                <span className="text-sm leading-relaxed text-ink/70">
-                  J'ai lu et j'accepte les{' '}
-                  <button type="button" onClick={() => navigate('/info/conditions-generales')} className="font-medium text-burgundy underline underline-offset-2">
-                    conditions générales de vente
-                  </button>
-                  .
-                </span>
-              </label>
 
               {submitError && (
                 <p className="flex items-start gap-1.5 rounded-lg border border-burgundy/20 bg-burgundy/[0.04] p-3 text-sm text-burgundy">
@@ -969,9 +956,13 @@ export default function CheckoutPage() {
 
               {/* Barre de validation : reste visible en bas de l'écran sur mobile. */}
               <div className="sticky bottom-0 z-20 -mx-4 border-t border-ink/10 bg-white/95 px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 backdrop-blur sm:mx-0 sm:border-0 sm:bg-transparent sm:p-0 sm:backdrop-blur-none">
+                <p className="mb-2.5 text-center text-xs leading-relaxed text-ink/55">
+                  En cliquant sur « Payer », vous acceptez les{' '}
+                  <button type="button" onClick={() => setCgvOpen(true)} className="font-medium text-burgundy underline underline-offset-2">conditions générales de vente</button>.
+                </p>
                 <div className="grid grid-cols-[auto_1fr] gap-3">
                   <button onClick={() => setStep(1)} className="btn-shop-line" disabled={processing}>Retour</button>
-                  <button onClick={placeOrder} className="btn-shop" disabled={processing || !cgvAccepted}>
+                  <button onClick={placeOrder} className="btn-shop" disabled={processing}>
                     {processing ? <><Loader2 size={17} className="animate-spin" /> Traitement...</> : <><Lock size={16} aria-hidden="true" /> {`Payer ${formatFCFA(estimatedTotal)} ${hasDeliveryShops && !deliveryFeeKnown ? '(à partir de)' : '(estimé)'}`}</>}
                   </button>
                 </div>
@@ -989,6 +980,11 @@ export default function CheckoutPage() {
           </div>
         </aside>
       </div>
+      {cgvOpen && (
+        <Suspense fallback={null}>
+          <InfoSheet slug="conditions-generales" onClose={() => setCgvOpen(false)} />
+        </Suspense>
+      )}
     </div>
   );
 }
