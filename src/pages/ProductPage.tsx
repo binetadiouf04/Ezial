@@ -279,6 +279,12 @@ export default function ProductPage({ productId }: { productId: string }) {
         <div className="mx-auto w-full space-y-5 sm:max-w-[480px] lg:mx-0 lg:max-w-none">
           <div>
             <h1 className="font-display text-[28px] font-medium leading-tight text-ink sm:text-4xl">{product.name}</h1>
+            {shop && (
+              <p className="mt-1.5 text-sm text-ink/55">
+                Vendu par{' '}
+                <button type="button" onClick={() => navigate(`/boutique/${shop.id}`)} className="font-medium text-ink/75 underline-offset-2 transition-colors hover:text-burgundy hover:underline">{shop.name}</button>
+              </p>
+            )}
             <div className="mt-1.5"><CopyReference reference={product.reference} /></div>
             {isRealCatalogId(product.id) ? (
               reviewStats.count > 0 && <div className="mt-2.5"><Rating rating={reviewStats.average} count={reviewStats.count} size="md" /></div>
@@ -343,13 +349,6 @@ export default function ProductPage({ productId }: { productId: string }) {
             {product.saleMode && qtyError && <p className="text-sm text-burgundy">{qtyError}</p>}
             {error && <p className="text-sm text-burgundy">{error}</p>}
           </div>
-          {shop && (
-            <button onClick={() => navigate(`/boutique/${shop.id}`)} className="flex w-full items-center gap-3 rounded-lg border border-ink/15 px-3.5 py-3 text-left transition-colors hover:border-ink/40">
-              <Store size={18} className="flex-shrink-0 text-burgundy" aria-hidden="true" />
-              <span className="min-w-0 flex-1 truncate text-sm font-semibold text-ink">{shop.name}</span>
-              <span className="flex flex-shrink-0 items-center gap-0.5 text-xs font-medium text-burgundy">Voir la boutique <ChevronRight size={14} aria-hidden="true" /></span>
-            </button>
-          )}
           {/* Barre d'achat : fixée en bas de l'écran sur mobile (zone de
               sécurité respectée), intégrée à la page sur ordinateur. */}
           <div className="fixed inset-x-0 bottom-0 z-30 border-t border-ink/10 bg-white/95 px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 backdrop-blur lg:static lg:z-auto lg:border-0 lg:bg-transparent lg:p-0 lg:backdrop-blur-none">
