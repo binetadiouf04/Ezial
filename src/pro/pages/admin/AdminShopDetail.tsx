@@ -4,6 +4,7 @@ import { fetchAdminShopDetail, updateShopStatus, type AdminShopDetail as AdminSh
 import { formatFCFA, shopModerationReasons } from '../../data';
 import { StatusChip } from '../../components/StatusChip';
 import FlagModal from '../../components/FlagModal';
+import AdminPremiumGrantsSection from '../../components/AdminPremiumGrantsSection';
 import { createModerationFlag, fetchModerationFlags, resolveModerationFlag, latestUnresolvedFlag, type ModerationFlagRow } from '@/lib/supabaseModeration';
 import { fetchShopReports, type AdminShopReport, type ShopReportReason } from '@/lib/supabaseShopReports';
 import { ArrowLeft, Phone, MapPin, Loader2, Flag, Check, User, Ban, AlertOctagon } from 'lucide-react';
@@ -228,6 +229,9 @@ export default function AdminShopDetail({ shopId }: { shopId: string }) {
           </div>
         )}
       </div>
+
+      {/* Accès Ezial Plus offert (partenaires, collaborations) */}
+      <AdminPremiumGrantsSection shopId={shop.id} shopName={shop.name} shopIsOfficial={shop.isOfficial} />
 
       {/* Products */}
       <div>
