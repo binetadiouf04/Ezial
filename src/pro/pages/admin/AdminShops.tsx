@@ -3,7 +3,8 @@ import { usePro } from '../../ProContext';
 import { fetchAdminShops, updateShopStatus, type AdminShopSummary } from '@/lib/supabaseAdminData';
 import { StatusChip } from '../../components/StatusChip';
 import FlagModal from '../../components/FlagModal';
-import { Search, Loader2, AlertCircle, Check, Ban } from 'lucide-react';
+import { Search, Loader2, AlertCircle, Check, Ban, Crown } from 'lucide-react';
+import { formatDate } from '../../data';
 import SmartImage from '@/components/SmartImage';
 
 const suspensionReasons = ['Produits suspects ou contrefaits', 'Informations trompeuses', 'Comportement inapproprié', 'Non-conformité répétée'];
@@ -13,12 +14,49 @@ const suspensionReasons = ['Produits suspects ou contrefaits', 'Informations tro
 // on précise qui a mis la boutique en pause.
 const PAUSED_BY_SELLER_LABEL = 'En pause (par le vendeur)';
 
+type PlanFilter = 'all' | 'trial' | 'plus' | 'free';
+const PLAN_FILTERS: { id: PlanFilter; label: string }[] = [
+  { id: 'all', label: 'Toutes' },
+  { id: 'trial', label: 'Essais gratuits' },
+  { id: 'plus', label: 'Abonnées Ezial Plus' },
+  { id: 'free', label: 'Free' },
+];
+
+function matchesPlan(shop: AdminShopSummary, filter: PlanFilter): boolean {
+  const k = shop.subscription.kind;
+  if (filter === 'all') return true;
+  if (filter === 'trial') return k === 'trial';
+  if (filter === 'plus') return k === 'plus' || k === 'official';
+  return k === 'free' || k === 'trial_ended';
+}
+
+// Ligne « formule » d'une boutique : essai en cours (avec sa date de fin),
+// abonnement payé, essai terminé ou Free.
+function SubscriptionLine({ sub }: { sub: AdminShopSummary['subscription'] }) {
+  const days = sub.daysLeft !== null ? ` · ${sub.daysLeft} jour${sub.daysLeft > 1 ? 's' : ''} restant${sub.daysLeft > 1 ? 's' : ''}` : '';
+  if (sub.kind === 'official') return <p className="mt-1 flex items-center gap-1 text-xs text-burgundy"><Crown size={12} /> Ezial Plus — boutique officielle</p>;
+  if (sub.kind === 'trial' && sub.until) {
+    const notStarted = sub.trialStart && new Date(sub.trialStart) > new Date();
+    return (
+      <p className="mt-1 flex items-center gap-1 text-xs font-medium text-amber-700">
+        <Crown size={12} /> Essai gratuit {notStarted ? `du ${formatDate(sub.trialStart as string)} ` : ''}jusqu’au {formatDate(sub.until)}{days}
+      </p>
+    );
+  }
+  if (sub.kind === 'plus' && sub.until) {
+    return <p className="mt-1 flex items-center gap-1 text-xs text-burgundy"><Crown size={12} /> Ezial Plus {sub.billingPeriod === 'annual' ? 'annuel' : sub.billingPeriod === 'quarterly' ? 'trimestriel' : ''} jusqu’au {formatDate(sub.until)}{days}</p>;
+  }
+  if (sub.kind === 'trial_ended') return <p className="mt-1 text-xs text-ink/45">Essai terminé{sub.until ? ` le ${formatDate(sub.until)}` : ''} · Free</p>;
+  return <p className="mt-1 text-xs text-ink/45">Free · essai non utilisé</p>;
+}
+
 export default function AdminShops() {
   const { navigate } = usePro();
   const [shops, setShops] = useState<AdminShopSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
   const [search, setSearch] = useState('');
+  const [planFilter, setPlanFilter] = useState<PlanFilter>('all');
   const [acting, setActing] = useState<string | null>(null);
   const [actionError, setActionError] = useState('');
   const [suspendTarget, setSuspendTarget] = useState<string | null>(null);
@@ -53,6 +91,7 @@ export default function AdminShops() {
   };
 
   const filtered = shops.filter((s) => {
+    if (!matchesPlan(s, planFilter)) return false;
     if (!search.trim()) return true;
     const q = search.toLowerCase();
     return s.name.toLowerCase().includes(q) || (s.sellerCode ?? '').toLowerCase().includes(q);
@@ -78,6 +117,18 @@ export default function AdminShops() {
             <input className="input-field pl-9" placeholder="Rechercher une boutique" value={search} onChange={(e) => setSearch(e.target.value)} />
           </div>
 
+          {/* Formule : essais gratuits offerts, abonnées, Free */}
+          <div className="flex flex-wrap gap-2">
+            {PLAN_FILTERS.map((f) => {
+              const n = shops.filter((s) => matchesPlan(s, f.id)).length;
+              return (
+                <button key={f.id} onClick={() => setPlanFilter(f.id)} className={`chip ${planFilter === f.id ? 'chip-active' : ''}`}>
+                  {f.label} ({n})
+                </button>
+              );
+            })}
+          </div>
+
           <div className="space-y-3">
             {filtered.length === 0 ? (
               <div className="card p-8 text-center"><p className="text-sm text-ink/45">Aucune boutique trouvée.</p></div>
@@ -89,6 +140,7 @@ export default function AdminShops() {
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-semibold text-ink truncate">{shop.name}</p>
                       {shop.sellerCode && <p className="text-xs text-ink/45 font-mono mt-0.5">{shop.sellerCode}</p>}
+                      <SubscriptionLine sub={shop.subscription} />
                       <p className="text-xs text-ink/45 mt-1.5">{shop.activeProductCount} produit{shop.activeProductCount > 1 ? 's' : ''} actif{shop.activeProductCount > 1 ? 's' : ''}</p>
                       {shop.status === 'suspended' && shop.suspensionReason && <p className="text-xs text-burgundy mt-1">Motif : {shop.suspensionReason}</p>}
                     </div>
