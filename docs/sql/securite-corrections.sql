@@ -14,6 +14,7 @@
 --   6. Avis : réservés aux clients ayant reçu le produit.
 --   7. Stockage : types de fichiers et taille maximale imposés.
 --   8. Produits : format des catégories contrôlé.
+--   9. Limite d'appels par client pour le calcul des frais de livraison.
 -- Retour arrière : docs/sql/securite-corrections-retour-arriere.sql
 begin;
 
@@ -30,6 +31,7 @@ create table if not exists public.security_events (
 );
 create index if not exists security_events_time_idx on public.security_events (occurred_at desc);
 create index if not exists security_events_kind_idx on public.security_events (kind, occurred_at desc);
+create index if not exists security_events_actor_idx on public.security_events (actor_id, kind, occurred_at desc);
 alter table public.security_events enable row level security;
 revoke all on public.security_events from anon, authenticated;
 grant select on public.security_events to authenticated;
@@ -44,11 +46,19 @@ language plpgsql
 security definer
 set search_path = ''
 as $$
+declare v_actor uuid := coalesce(p_actor, (select auth.uid()));
 begin
+  -- Anti-saturation : au plus 30 événements du même type par acteur et par
+  -- heure (un attaquant ne peut pas remplir la base en répétant ses essais).
+  if (select count(*) from public.security_events e
+       where e.kind = p_kind and e.actor_id is not distinct from v_actor
+         and e.occurred_at > now() - interval '1 hour') >= 30 then
+    return;
+  end if;
   insert into public.security_events (kind, severity, actor_id, details)
   values (p_kind,
           case when p_severity in ('critical', 'high', 'info') then p_severity else 'info' end,
-          coalesce(p_actor, (select auth.uid())),
+          v_actor,
           coalesce(p_details, '{}'::jsonb));
 exception when others then
   null;
@@ -266,8 +276,10 @@ end;
 $$;
 revoke all on function ezial_private.ensure_delivery_code(uuid) from public, anon, authenticated;
 
--- Tout code écrit dans les colonnes publiques est déplacé dans la table privée.
-create or replace function ezial_private.hide_delivery_code()
+-- Tout code écrit dans les colonnes publiques est déplacé dans la table privée
+-- (une fonction par table : la commande est identifiée par id, la mission
+-- par order_id).
+create or replace function ezial_private.hide_order_delivery_code()
 returns trigger
 language plpgsql
 security definer
@@ -275,15 +287,32 @@ set search_path = ''
 as $$
 begin
   if new.delivery_code is not null then
-    insert into ezial_private.delivery_codes (order_id, code)
-    values (case when tg_table_name = 'orders' then new.id else new.order_id end, new.delivery_code)
+    insert into ezial_private.delivery_codes (order_id, code) values (new.id, new.delivery_code)
     on conflict (order_id) do nothing;
     new.delivery_code := null;
   end if;
   return new;
 end;
 $$;
-revoke all on function ezial_private.hide_delivery_code() from public, anon, authenticated;
+revoke all on function ezial_private.hide_order_delivery_code() from public, anon, authenticated;
+
+create or replace function ezial_private.hide_mission_delivery_code()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  if new.delivery_code is not null then
+    insert into ezial_private.delivery_codes (order_id, code) values (new.order_id, new.delivery_code)
+    on conflict (order_id) do nothing;
+    new.delivery_code := null;
+  end if;
+  return new;
+end;
+$$;
+revoke all on function ezial_private.hide_mission_delivery_code() from public, anon, authenticated;
+drop function if exists ezial_private.hide_delivery_code() cascade;
 
 -- Codes existants : copiés avant que les colonnes publiques soient vidées.
 insert into ezial_private.delivery_codes (order_id, code)
@@ -295,10 +324,10 @@ on conflict (order_id) do nothing;
 
 drop trigger if exists trg_a_hide_delivery_code on public.orders;
 create trigger trg_a_hide_delivery_code before insert or update on public.orders
-  for each row execute function ezial_private.hide_delivery_code();
+  for each row execute function ezial_private.hide_order_delivery_code();
 drop trigger if exists trg_a_hide_delivery_code on public.delivery_missions;
 create trigger trg_a_hide_delivery_code before insert or update on public.delivery_missions
-  for each row execute function ezial_private.hide_delivery_code();
+  for each row execute function ezial_private.hide_mission_delivery_code();
 
 update public.orders set delivery_code = null where delivery_code is not null;
 update public.delivery_missions set delivery_code = null where delivery_code is not null;
@@ -456,6 +485,10 @@ $$;
 revoke all on function public.driver_complete_delivery(uuid, text, text) from public, anon;
 grant execute on function public.driver_complete_delivery(uuid, text, text) to authenticated;
 
+-- Fonctions de déclencheur : jamais appelables directement.
+revoke all on function public.lock_delivery_missions_identity_columns() from public, anon, authenticated;
+revoke all on function public.create_delivery_mission_when_ready() from public, anon, authenticated;
+
 -- Missions disponibles : visibles des seuls livreurs actifs (plus de tout compte connecté).
 drop policy if exists "Drivers can view available or own missions" on public.delivery_missions;
 create policy "Drivers can view available or own missions" on public.delivery_missions for select to authenticated
@@ -483,16 +516,32 @@ create policy reviews_insert_own on public.reviews for insert
          and os.status in ('delivered', 'collected'))
   );
 
+-- Un avis existant ne peut pas être déplacé vers un produit non reçu.
+drop policy if exists reviews_update_own on public.reviews;
+create policy reviews_update_own on public.reviews for update
+  using (user_id = (select auth.uid()))
+  with check (
+    user_id = (select auth.uid())
+    and exists (
+      select 1
+        from public.order_items oi
+        join public.order_shops os on os.id = oi.order_shop_id
+        join public.orders o on o.id = os.order_id
+       where oi.product_id = reviews.product_id
+         and o.customer_id = (select auth.uid())
+         and os.status in ('delivered', 'collected'))
+  );
+
 -- =====================================================================
 -- 7. Stockage : types et tailles imposés par le serveur
 -- =====================================================================
 update storage.buckets
    set file_size_limit = 52428800,
-       allowed_mime_types = array['image/jpeg', 'image/png', 'image/webp', 'video/mp4', 'video/quicktime', 'video/webm']
+       allowed_mime_types = array['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/avif', 'video/mp4', 'video/quicktime', 'video/webm']
  where id = 'product-images';
 update storage.buckets
    set file_size_limit = 10485760,
-       allowed_mime_types = array['image/jpeg', 'image/png', 'image/webp']
+       allowed_mime_types = array['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/avif']
  where id in ('Shop-images', 'secure-photos');
 
 -- =====================================================================
@@ -507,6 +556,51 @@ alter table public.products add constraint products_subcategory_format_check
   check (subcategory is null or subcategory ~ '^[a-z0-9_-]*$') not valid;
 alter table public.products validate constraint products_subcategory_format_check;
 
+-- =====================================================================
+-- 9. Limite d'appels par client (calcul des frais de livraison)
+-- =====================================================================
+create table if not exists ezial_private.api_quotas (
+  user_id uuid not null,
+  bucket text not null,
+  window_start timestamptz not null,
+  used integer not null default 0,
+  primary key (user_id, bucket)
+);
+alter table ezial_private.api_quotas enable row level security;
+revoke all on ezial_private.api_quotas from public, anon, authenticated;
+
+-- Vrai si l'appel est autorisé (et compté) ; faux si le client a dépassé
+-- p_max appels dans la fenêtre. Réservée à la clé serveur (fonctions Edge).
+create or replace function public.consume_api_quota(p_user_id uuid, p_bucket text, p_max integer, p_window_seconds integer)
+returns boolean
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare v_used integer;
+begin
+  if p_user_id is null or coalesce(p_bucket, '') = '' or coalesce(p_max, 0) <= 0 or coalesce(p_window_seconds, 0) <= 0 then
+    return false;
+  end if;
+  insert into ezial_private.api_quotas as q (user_id, bucket, window_start, used)
+  values (p_user_id, p_bucket, now(), 1)
+  on conflict (user_id, bucket) do update
+    set window_start = case when q.window_start <= now() - make_interval(secs => p_window_seconds) then now() else q.window_start end,
+        used = case when q.window_start <= now() - make_interval(secs => p_window_seconds) then 1 else q.used + 1 end
+  returning used into v_used;
+  if v_used > p_max then
+    if v_used = p_max + 1 then
+      perform ezial_private.log_security_event('api_quota_exceeded', 'info',
+        jsonb_build_object('bucket', p_bucket, 'max', p_max), p_user_id);
+    end if;
+    return false;
+  end if;
+  return true;
+end;
+$$;
+revoke all on function public.consume_api_quota(uuid, text, integer, integer) from public, anon, authenticated;
+grant execute on function public.consume_api_quota(uuid, text, integer, integer) to service_role;
+
 -- Fonctions de déclencheur existantes : chemin de recherche figé.
 alter function public.prevent_seller_status_change() set search_path = public;
 alter function public.lock_order_shops_identity_columns() set search_path = public;
@@ -514,7 +608,7 @@ alter function public.lock_reviews_moderation_column() set search_path = public;
 
 commit;
 
--- Vérification : 8 lignes « ok » attendues.
+-- Vérification : 9 lignes « ok » attendues.
 select 'journal des événements de sécurité' as element,
        case when to_regclass('public.security_events') is not null
              and not has_table_privilege('authenticated', 'public.security_events', 'INSERT') then 'ok' else 'À VÉRIFIER' end as etat
@@ -541,4 +635,9 @@ select 'stockage : types et tailles imposés',
        case when not exists (select 1 from storage.buckets where id in ('product-images', 'Shop-images', 'secure-photos') and (file_size_limit is null or allowed_mime_types is null)) then 'ok' else 'À VÉRIFIER' end
 union all
 select 'produits : format des catégories',
-       case when exists (select 1 from pg_constraint where conname = 'products_subcategory_format_check' and convalidated) then 'ok' else 'À VÉRIFIER' end;
+       case when exists (select 1 from pg_constraint where conname = 'products_subcategory_format_check' and convalidated) then 'ok' else 'À VÉRIFIER' end
+union all
+select 'limite d''appels : réservée au serveur',
+       case when has_function_privilege('service_role', 'public.consume_api_quota(uuid, text, integer, integer)', 'execute')
+             and not has_function_privilege('authenticated', 'public.consume_api_quota(uuid, text, integer, integer)', 'execute')
+             and not has_function_privilege('anon', 'public.consume_api_quota(uuid, text, integer, integer)', 'execute') then 'ok' else 'À VÉRIFIER' end;

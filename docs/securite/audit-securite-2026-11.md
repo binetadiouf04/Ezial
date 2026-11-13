@@ -6,6 +6,8 @@ Audit en lecture seule de la production Supabase (`lkqezdrdbogtborgjvlw`), du co
 
 **Périmètre retenu (13 novembre 2026) :** protections natives et automatiques, sans agent de surveillance permanent, sans serveur, sans service payant.
 
+**Suivi à jour de chaque constat :** `docs/securite/suivi-vulnerabilites.md`.
+
 **Aucun système n'est sûr à 100 %.** Ce rapport distingue ce qui est vérifié, ce qui est corrigé, ce qui est préparé et ce qui reste à configurer.
 
 ## Critique
@@ -64,7 +66,7 @@ Aucune faille critique confirmée (pas de clé secrète exposée, pas d'accès a
 
 | Correction | Constats couverts | Où | État |
 |---|---|---|---|
-| Migration SQL de corrections | E2, E3, E4, M1, M3, M4, M7 + journal des tentatives | `docs/sql/securite-corrections.sql` (retour arrière fourni) | Testée sur une base locale reproduisant les politiques de production : 40 contrôles réussis, 0 échec ; rejouable ; retour arrière testé. **Pas exécutée en production.** |
+| Migration SQL de corrections | E2, E3, E4, M1, M3, M4, M7 + journal des tentatives | `docs/sql/securite-corrections.sql` (retour arrière fourni) | Testée sur une base locale reproduisant les politiques de production : 50 contrôles réussis, 0 échec ; rejouable ; retour arrière testé. **Pas exécutée en production.** |
 | Application livreur : le code de livraison n'est plus jamais lu par le navigateur | E2 | `src/lib/supabaseDriverMissions.ts` | Sur la branche de travail. **À publier avant la migration.** |
 | En-têtes de sécurité (CSP en mode rapport, anti-clickjacking, HSTS) | M2 | `public/_headers` | Sur la branche de travail. |
 | Build statique : chemins contrôlés | M4 | `scripts/prerender-seo.mjs`, `scripts/seo/safe-segment.mjs` | Sur la branche de travail. |

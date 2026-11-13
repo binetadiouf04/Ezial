@@ -177,8 +177,11 @@ function getInitialRoute(): string {
   }
   const legacyHash = window.location.hash.replace(/^#/, '');
   if (legacyHash) {
-    const clean = legacyHash.startsWith('/') ? legacyHash : `/${legacyHash}`;
-    window.history.replaceState(null, '', clean);
+    // Un ancien lien « #//x » ou « #/\x » n'est pas un chemin du site :
+    // replaceState le refuserait (page blanche). On retombe sur l'accueil.
+    const candidate = legacyHash.startsWith('/') ? legacyHash : `/${legacyHash}`;
+    const clean = /^\/(?![/\\])/.test(candidate) ? candidate : '/';
+    try { window.history.replaceState(null, '', clean); } catch { return '/'; }
     return clean;
   }
   const path = window.location.pathname.replace(/\/+$/, '') || '/';
@@ -573,6 +576,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setFavorites(loadStoredFavorites());
     setOrders([]);
     setAddresses([]);
+    // Le brouillon de commande (nom, téléphone, e-mail, quartier) ne reste
+    // pas sur l'appareil après la déconnexion.
+    try { localStorage.removeItem('ezial-checkout-draft-v1'); } catch { /* best-effort */ }
     void signOutCustomer();
   }, []);
 

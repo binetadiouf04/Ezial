@@ -186,11 +186,16 @@ create policy "Drivers can view available or own missions" on public.delivery_mi
 drop policy if exists reviews_insert_own on public.reviews;
 create policy reviews_insert_own on public.reviews for insert with check (user_id = auth.uid());
 
+drop policy if exists reviews_update_own on public.reviews;
+create policy reviews_update_own on public.reviews for update using (user_id = auth.uid()) with check (user_id = auth.uid());
+
 update storage.buckets set file_size_limit = null, allowed_mime_types = null
  where id in ('product-images', 'Shop-images', 'secure-photos');
 
 alter table public.products drop constraint if exists products_category_format_check;
 alter table public.products drop constraint if exists products_subcategory_format_check;
+
+drop function if exists public.consume_api_quota(uuid, text, integer, integer);
 
 alter function public.prevent_seller_status_change() reset search_path;
 alter function public.lock_order_shops_identity_columns() reset search_path;
@@ -198,5 +203,10 @@ alter function public.lock_reviews_moderation_column() reset search_path;
 
 commit;
 
-select 'verrous retirés' as verification,
+-- ATTENTION : après ce retour arrière, les failles corrigées sont de nouveau
+-- ouvertes (boutique « officielle » auto-déclarée, rémunération livreur
+-- modifiable, code de livraison lisible et sans limite d'essais, statuts de
+-- commande libres, avis sans achat, stockage sans limite). À ne garder que le
+-- temps de corriger le problème rencontré.
+select 'verrous retirés — FAILLES DE NOUVEAU OUVERTES' as verification,
        case when not exists (select 1 from pg_trigger where tgname in ('trg_lock_shop_privileged_columns', 'trg_lock_delivery_stops_columns', 'trg_guard_order_shop_status', 'trg_a_hide_delivery_code') and not tgisinternal) then 'ok' else 'ERREUR' end as resultat;
