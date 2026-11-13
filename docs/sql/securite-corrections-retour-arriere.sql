@@ -196,6 +196,7 @@ alter table public.products drop constraint if exists products_category_format_c
 alter table public.products drop constraint if exists products_subcategory_format_check;
 
 drop function if exists public.consume_api_quota(uuid, text, integer, integer);
+drop function if exists public.has_received_product(uuid);
 
 alter function public.prevent_seller_status_change() reset search_path;
 alter function public.lock_order_shops_identity_columns() reset search_path;

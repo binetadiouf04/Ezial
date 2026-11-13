@@ -229,6 +229,8 @@ begin
        (old.status = 'confirmed' and new.status = 'preparing')
     or (old.status = 'preparing' and new.status = 'ready' and new.fulfillment_type = 'delivery')
     or (old.status = 'preparing' and new.status = 'ready_for_pickup' and new.fulfillment_type = 'pickup')
+    -- retrait déclaré par la boutique ; le versement reste soumis à la confirmation de l'administration
+    or (old.status = 'ready_for_pickup' and new.status = 'picked_up' and new.fulfillment_type = 'pickup')
   ) then
     perform ezial_private.log_security_event('order_status_rejected', 'high',
       jsonb_build_object('order_shop_id', new.id, 'shop_id', new.shop_id, 'from', old.status, 'to', new.status));
@@ -502,35 +504,44 @@ create policy "Drivers can view available or own missions" on public.delivery_mi
 -- =====================================================================
 -- 6. Avis : réservés aux clients ayant reçu le produit
 -- =====================================================================
+-- « Produit reçu » : livraison confirmée par le serveur (mission livrée), ou
+-- retrait en boutique déclaré. Le statut de la ligne de commande ne passe pas
+-- à « livrée » après une livraison : c'est la mission qui fait foi.
+create or replace function public.has_received_product(p_product_id uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select exists (
+    select 1
+      from public.order_items oi
+      join public.order_shops os on os.id = oi.order_shop_id
+      join public.orders o on o.id = os.order_id
+     where oi.product_id = p_product_id
+       and o.customer_id = (select auth.uid())
+       and os.status is distinct from 'cancelled'
+       and (
+         os.status in ('delivered', 'collected')
+         or (os.fulfillment_type = 'pickup' and os.status = 'picked_up')
+         or (os.fulfillment_type = 'delivery' and exists (
+               select 1 from public.delivery_missions m where m.order_id = o.id and m.status = 'delivered'))
+       )
+  );
+$$;
+revoke all on function public.has_received_product(uuid) from public, anon;
+grant execute on function public.has_received_product(uuid) to authenticated;
+
 drop policy if exists reviews_insert_own on public.reviews;
 create policy reviews_insert_own on public.reviews for insert
-  with check (
-    user_id = (select auth.uid())
-    and exists (
-      select 1
-        from public.order_items oi
-        join public.order_shops os on os.id = oi.order_shop_id
-        join public.orders o on o.id = os.order_id
-       where oi.product_id = reviews.product_id
-         and o.customer_id = (select auth.uid())
-         and os.status in ('delivered', 'collected'))
-  );
+  with check (user_id = (select auth.uid()) and public.has_received_product(product_id));
 
 -- Un avis existant ne peut pas être déplacé vers un produit non reçu.
 drop policy if exists reviews_update_own on public.reviews;
 create policy reviews_update_own on public.reviews for update
   using (user_id = (select auth.uid()))
-  with check (
-    user_id = (select auth.uid())
-    and exists (
-      select 1
-        from public.order_items oi
-        join public.order_shops os on os.id = oi.order_shop_id
-        join public.orders o on o.id = os.order_id
-       where oi.product_id = reviews.product_id
-         and o.customer_id = (select auth.uid())
-         and os.status in ('delivered', 'collected'))
-  );
+  with check (user_id = (select auth.uid()) and public.has_received_product(product_id));
 
 -- =====================================================================
 -- 7. Stockage : types et tailles imposés par le serveur
@@ -629,7 +640,7 @@ select 'codes de livraison privés',
              and position('delivery_codes' in pg_get_functiondef('public.driver_complete_delivery(uuid, text, text)'::regprocedure)) > 0 then 'ok' else 'À VÉRIFIER' end
 union all
 select 'avis réservés aux acheteurs',
-       case when exists (select 1 from pg_policy where polname = 'reviews_insert_own' and pg_get_expr(polwithcheck, polrelid) like '%order_items%') then 'ok' else 'À VÉRIFIER' end
+       case when exists (select 1 from pg_policy where polname = 'reviews_insert_own' and pg_get_expr(polwithcheck, polrelid) like '%has_received_product%') then 'ok' else 'À VÉRIFIER' end
 union all
 select 'stockage : types et tailles imposés',
        case when not exists (select 1 from storage.buckets where id in ('product-images', 'Shop-images', 'secure-photos') and (file_size_limit is null or allowed_mime_types is null)) then 'ok' else 'À VÉRIFIER' end
