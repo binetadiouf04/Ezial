@@ -35,8 +35,6 @@ interface DeliveryMissionRow {
   order_id: string;
   driver_id: string | null;
   status: string;
-  pickup_code: string | null;
-  delivery_code: string | null;
   proof_photo_path: string | null;
   accepted_at: string | null;
   picked_up_at: string | null;
@@ -87,7 +85,7 @@ function fullName(firstName: string | null, lastName: string | null): string {
 export async function fetchDriverMissions(): Promise<Mission[]> {
   const { data: missionRows, error: missionsError } = await supabase
     .from('delivery_missions')
-    .select('id, order_id, driver_id, status, pickup_code, delivery_code, proof_photo_path, accepted_at, picked_up_at, delivered_at, created_at')
+    .select('id, order_id, driver_id, status, proof_photo_path, accepted_at, picked_up_at, delivered_at, created_at')
     .order('created_at', { ascending: false });
   if (missionsError || !missionRows || missionRows.length === 0) return [];
 
@@ -173,7 +171,6 @@ export async function fetchDriverMissions(): Promise<Mission[]> {
       customerName: fullName(order?.first_name ?? null, order?.last_name ?? null),
       customerPhone: order?.phone ?? '',
       date: row.created_at,
-      deliveryCode: row.delivery_code ?? undefined,
       proofPhoto: proofUrlsByMissionId.get(row.id),
       deliveredAt: row.delivered_at ?? undefined,
     };
@@ -213,47 +210,15 @@ export async function startMissionDelivery(missionId: string): Promise<{ error?:
 // image in the app) — never a raw 5-10 Mo phone camera file.
 const PROOF_PHOTO_MAX_DIMENSION = 1280;
 
-// null = pas encore su. Mis à false dès qu'un appel montre que la fonction
-// serveur driver_complete_delivery n'existe pas (migration non exécutée).
-let serverCompletionAvailable: boolean | null = null;
-
-// Ancienne vérification côté navigateur, gardée uniquement comme raccourci
-// quand la fonction serveur est absente : avec elle, c'est le serveur qui
-// vérifie le code.
-async function precheckDeliveryCode(missionId: string, deliveryCode: string): Promise<{ error?: string }> {
-  const { data: missionRow, error: fetchError } = await supabase
-    .from('delivery_missions')
-    .select('delivery_code')
-    .eq('id', missionId)
-    .maybeSingle();
-  if (fetchError || !missionRow) return { error: 'Mission introuvable.' };
-  if ((missionRow.delivery_code as string | null) !== deliveryCode) return { error: 'Code de livraison incorrect.' };
-  return {};
-}
-
-// Ancien enregistrement direct de la livraison (avant la fonction serveur).
-async function markMissionDeliveredDirectly(missionId: string, path: string): Promise<{ error?: string }> {
-  const { data, error } = await supabase
-    .from('delivery_missions')
-    .update({ status: MISSION_STATUS.delivered, delivered_at: new Date().toISOString(), proof_photo_path: path })
-    .eq('id', missionId)
-    .select('id');
-  if (error) return { error: error.message };
-  if ((data?.length ?? 0) === 0) return { error: "Impossible de confirmer la livraison (droits d'accès)." };
-  return {};
-}
-
+// Le code de livraison du client n'est jamais lu par le navigateur du
+// livreur : seul le serveur (driver_complete_delivery) le connaît et le
+// compare, compte les erreurs et bloque après plusieurs codes incorrects.
 export async function completeMissionDelivery(
   missionId: string,
   driverId: string,
   deliveryCode: string,
   proofPhotoFile: File,
 ): Promise<{ error?: string }> {
-  if (serverCompletionAvailable === false) {
-    const precheck = await precheckDeliveryCode(missionId, deliveryCode);
-    if (precheck.error) return precheck;
-  }
-
   const optimized = await optimizeImageFile(proofPhotoFile, PROOF_PHOTO_MAX_DIMENSION);
   const token = Math.random().toString(36).slice(2, 8);
   // The secure-photos bucket's storage policies require the path's first
@@ -263,26 +228,20 @@ export async function completeMissionDelivery(
   const { error: uploadError } = await uploadSecurePhoto(path, optimized);
   if (uploadError) return { error: `Envoi de la preuve photo impossible : ${uploadError}` };
 
-  if (serverCompletionAvailable !== false) {
-    // Le serveur vérifie la mission, le code client et la preuve photo, puis
-    // enregistre la livraison : c'est lui qui décide.
-    const { error } = await supabase.rpc('driver_complete_delivery', {
-      p_mission_id: missionId,
-      p_delivery_code: deliveryCode,
-      p_proof_photo_path: path,
-    });
-    if (!error) {
-      serverCompletionAvailable = true;
-      return {};
-    }
-    if (!isRpcMissing(error)) {
-      return { error: error.code === 'P0001' ? error.message : 'Impossible de confirmer la livraison. Réessayez dans un instant.' };
-    }
-    // Fonction absente (migration non exécutée) : comportement actuel.
-    serverCompletionAvailable = false;
-    const precheck = await precheckDeliveryCode(missionId, deliveryCode);
-    if (precheck.error) return precheck;
+  // Le serveur vérifie la mission, le code client et la preuve photo, puis
+  // enregistre la livraison : c'est lui qui décide.
+  const { data, error } = await supabase.rpc('driver_complete_delivery', {
+    p_mission_id: missionId,
+    p_delivery_code: deliveryCode,
+    p_proof_photo_path: path,
+  });
+  if (error) {
+    if (isRpcMissing(error)) return { error: 'La confirmation de livraison est momentanément indisponible. Contactez Ezial.' };
+    return { error: error.code === 'P0001' ? error.message : 'Impossible de confirmer la livraison. Réessayez dans un instant.' };
   }
-
-  return markMissionDeliveredDirectly(missionId, path);
+  // Code incorrect ou blocage temporaire : le serveur répond sans erreur
+  // technique, avec le message à afficher.
+  const result = (data ?? {}) as { delivered?: boolean; alreadyDelivered?: boolean; error?: string };
+  if (result.delivered === true || result.alreadyDelivered === true) return {};
+  return { error: result.error ?? 'Impossible de confirmer la livraison. Réessayez dans un instant.' };
 }

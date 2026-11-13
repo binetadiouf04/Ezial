@@ -29,6 +29,7 @@ import { createClient } from '@supabase/supabase-js';
 import { buildInfoPages } from './seo/info.mjs';
 import { buildBlogPages } from './seo/blog.mjs';
 import { buildBecomeSellerPage } from './seo/become-seller.mjs';
+import { isSafeSegment, isSafeFilePath, describeValue } from './seo/safe-segment.mjs';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const DIST = `${ROOT}dist`;
@@ -144,11 +145,28 @@ const [shopsRes, productsRes] = await Promise.all([
 if (shopsRes.error) { console.error('prerender-seo: shops query failed —', shopsRes.error.message); process.exit(1); }
 if (productsRes.error) { console.error('prerender-seo: products query failed —', productsRes.error.message); process.exit(1); }
 
-const shops = shopsRes.data;
+// Identifiants et slugs servent de segments de chemin (dist/boutique/<id>/,
+// dist/produit/<slug>/) et de lignes de _redirects : toute valeur qui n'a pas
+// la forme attendue est ignorée (avertissement, le build continue).
+const shops = shopsRes.data.filter((s) => {
+  if (isSafeSegment(s.id)) return true;
+  console.warn(`prerender-seo: boutique ignorée — identifiant inattendu ${describeValue(s.id)}.`);
+  return false;
+});
 const activeShopIds = new Set(shops.map((s) => s.id));
 // Mirrors fetchActiveCatalogFromSupabase (src/lib/supabaseCatalog.ts): a
 // product can be 'active' while its own shop isn't — never shown publicly.
-const products = productsRes.data.filter((p) => activeShopIds.has(p.shop_id));
+const products = productsRes.data.filter((p) => activeShopIds.has(p.shop_id)).filter((p) => {
+  if (!isSafeSegment(p.id)) {
+    console.warn(`prerender-seo: produit ignoré — identifiant inattendu ${describeValue(p.id)}.`);
+    return false;
+  }
+  if (p.slug && !isSafeSegment(p.slug)) {
+    console.warn(`prerender-seo: produit ${p.id} ignoré — slug inattendu ${describeValue(p.slug)}.`);
+    return false;
+  }
+  return true;
+});
 const productIds = products.map((p) => p.id);
 
 // Last real change per product, as a timestamp (ms): the product row itself,
@@ -276,6 +294,12 @@ function breadcrumbJsonLd(items) {
 }
 
 function writeFile(relPath, html) {
+  // Dernier garde-fou, quel que soit le module appelant : jamais d'écriture
+  // hors de dist/ ni à un chemin de forme inattendue.
+  if (!isSafeFilePath(relPath)) {
+    console.warn(`prerender-seo: page ignorée — chemin inattendu ${describeValue(relPath)}.`);
+    return;
+  }
   const full = `${DIST}${relPath}`;
   mkdirSync(full.slice(0, full.lastIndexOf('/')), { recursive: true });
   writeFileSync(full, html, 'utf8');
@@ -390,7 +414,11 @@ for (const shop of shops) {
 // --- Categories + subcategories ------------------------------------------
 for (const [categoryId, categoryLabel] of Object.entries(CATEGORY_LABELS)) {
   const categoryProducts = products.filter((p) => p.category === categoryId);
-  const subIds = [...new Set(categoryProducts.map((p) => p.subcategory).filter(Boolean))];
+  const subIds = [...new Set(categoryProducts.map((p) => p.subcategory).filter(Boolean))].filter((subId) => {
+    if (isSafeSegment(subId)) return true;
+    console.warn(`prerender-seo: sous-catégorie ignorée dans « ${categoryId} » — valeur inattendue ${describeValue(subId)}.`);
+    return false;
+  });
 
   const buildCategoryPage = (subId) => {
     const sub = subId ? (SUBCATEGORY_LABELS[subId] ?? subId) : null;
@@ -415,6 +443,8 @@ for (const [categoryId, categoryLabel] of Object.entries(CATEGORY_LABELS)) {
     sitemapUrls.push({ loc: canonical, lastmod: maxLastMod(scoped.map((p) => lastModByProduct.get(p.id))) });
   };
 
+  // categoryId vient de CATEGORY_LABELS (liste fixe ci-dessus), jamais de la
+  // base : une catégorie inconnue en base ne produit aucune page.
   buildCategoryPage(null);
   for (const subId of subIds) buildCategoryPage(subId);
 }

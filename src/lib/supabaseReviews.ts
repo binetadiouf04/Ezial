@@ -159,6 +159,8 @@ export async function submitReview(userId: string, input: SubmitReviewInput): Pr
     }
   } else {
     const { data, error } = await supabase.from('reviews').insert({ product_id: input.productId, user_id: userId, rating: input.rating, comment: input.comment.trim() || null }).select('id').single();
+    // 42501 : le serveur réserve les avis aux clients ayant reçu le produit.
+    if (error?.code === '42501') return { error: 'Seuls les clients ayant reçu ce produit peuvent laisser un avis.' };
     if (error || !data) return { error: error?.message ?? "Impossible d'enregistrer l'avis." };
     reviewId = data.id as string;
   }
