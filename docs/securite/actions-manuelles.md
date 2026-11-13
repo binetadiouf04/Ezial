@@ -30,8 +30,9 @@ Tout ce qui suit est gratuit et utilise ce qu'Ezial possède déjà : Supabase, 
 **Étapes**
 1. GitHub → dépôt **Ezial** → **Settings** → **General** → tout en bas, **Danger Zone** → **Change repository visibility** → **Change to private** → confirmer (GitHub demande de retaper le nom du dépôt).
 2. Vérifier l'accès de Cloudflare : photo de profil → **Settings** → **Applications** → **Installed GitHub Apps** → **Cloudflare Workers and Pages** → **Configure** → sous **Repository access**, le dépôt Ezial doit figurer dans la liste (ou « All repositories » être coché).
-3. Me dire « c'est fait » : je pousse une modification sans effet sur la branche de travail et je vérifie que Cloudflare lance bien un déploiement d'aperçu. La production n'est pas touchée.
-4. Si le déploiement ne part pas : Cloudflare → Workers & Pages → ezial → Settings → Builds → vérifier le dépôt lié ; au besoin, repasser par l'étape 2. Retour arrière possible à tout moment : même menu, **Change to public**.
+3. Dans la même liste **Installed GitHub Apps**, l'application **Bolt (StackBlitz)** a aussi accès au dépôt (elle commente chaque pull request). Passer en privé ne lui retire pas cet accès : si vous n'utilisez plus Bolt, la retirer (Configure → Uninstall, ou retirer le dépôt de sa liste). Ne pas toucher à l'application Claude ni à celle de Cloudflare.
+4. Me dire « c'est fait » : je pousse une modification sans effet sur la branche de travail et je vérifie que Cloudflare lance bien un déploiement d'aperçu. La production n'est pas touchée.
+5. Si le déploiement ne part pas : Cloudflare → Workers & Pages → ezial → Settings → Builds → vérifier le dépôt lié ; au besoin, repasser par l'étape 2. Retour arrière possible à tout moment : même menu, **Change to public**.
 
 **Double authentification du compte GitHub** : indispensable (Settings → Password and authentication).
 
