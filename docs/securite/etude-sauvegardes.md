@@ -1,6 +1,8 @@
 # Étude — sauvegardes automatiques gratuites de la base Supabase
 
-État : **étude uniquement**. Rien n'est configuré.
+État au 13 novembre 2026 : **scripts préparés et testés localement, rien n'est activé** (aucun dépôt créé, aucun secret, aucune tâche planifiée). Le kit et la marche à suivre sont dans `docs/securite/sauvegardes/`.
+
+Deux choix ont évolué depuis l'étude : la connexion se fait avec un **rôle en lecture seule** (et non le mot de passe principal de la base), et le chiffrement utilise une **phrase secrète** (`gpg`, AES-256) plutôt qu'une paire de clés `age`, plus simple à conserver et à utiliser le jour d'une restauration.
 
 ## Situation
 
@@ -16,8 +18,8 @@
 | Compatibilité avec le projet actuel | Oui. Les serveurs GitHub n'ont pas d'IPv6 et la connexion directe gratuite de Supabase est en IPv6 : il faut utiliser l'adresse « Session pooler » (IPv4, gratuite), visible dans le bouton « Connect » du tableau de bord. La version de `pg_dump` doit être au moins celle du serveur. |
 | Programmation | Oui (`schedule` de GitHub Actions), par exemple chaque nuit. L'heure réelle peut glisser de quelques minutes. |
 | Coût | 0. Dépôt privé : 2 000 minutes d'Actions par mois gratuites ; une sauvegarde prend 1 à 2 minutes. |
-| Identifiants | Le mot de passe de la base est enregistré comme « secret » chiffré du dépôt ; il n'apparaît jamais dans les journaux. Il donne un accès complet à la base : dépôt sans collaborateur et double authentification GitHub obligatoires. |
-| Fichiers | Chiffrés avant stockage avec une clé publique (`age`). La clé privée reste hors ligne chez vous (gestionnaire de mots de passe + copie papier). Même si GitHub était compromis, les sauvegardes resteraient illisibles. Contrepartie : clé privée perdue = sauvegardes inutilisables. |
+| Identifiants | Un rôle dédié `ezial_backup`, en lecture seule, est enregistré comme « secret » chiffré du dépôt ; il n'apparaît jamais dans les journaux. Il ne peut rien modifier, mais il peut tout lire : dépôt sans collaborateur et double authentification GitHub obligatoires. |
+| Fichiers | Chiffrés avant stockage (AES-256) avec une phrase secrète que vous conservez (gestionnaire de mots de passe + copie papier). Contrepartie : phrase perdue = sauvegardes inutilisables. |
 | Stockage, durée, quotas | Artefacts du dépôt privé : conservation réglable de 1 à 90 jours ; 500 Mo gratuits. La base pèse quelques Mo : 30 jours de sauvegardes quotidiennes tiennent largement. |
 | Restauration réelle | Le même workflow peut restaurer chaque sauvegarde dans une base PostgreSQL temporaire et compter les lignes des tables principales : la preuve de restauration est alors refaite à chaque exécution. Une restauration complète vers un projet Supabase vide doit être répétée une fois à la main avant le lancement. |
 | Contenu | Données et structure de la base, comptes compris (mots de passe hachés). Pas les photos : environ 100 Mo aujourd'hui, à copier à part une fois par mois, ou à accepter comme risque (les vendeurs peuvent les renvoyer). |
@@ -36,4 +38,4 @@
 
 ## Recommandation
 
-Un dépôt GitHub **privé** séparé (par exemple `ezial-sauvegardes`), contenant uniquement le workflow : sauvegarde quotidienne chiffrée, conservation 30 jours, test de restauration automatique à chaque exécution. Votre intervention se limiterait à créer le dépôt, coller deux secrets (adresse de connexion, clé publique) et conserver la clé privée. À configurer ensemble quand vous le déciderez.
+Un dépôt GitHub **privé** séparé (par exemple `ezial-sauvegardes`), contenant uniquement le workflow : sauvegarde quotidienne chiffrée, conservation 30 jours, test de restauration automatique à chaque exécution. Votre intervention se limite à créer le dépôt, exécuter un court script SQL (rôle de lecture seule), enregistrer deux secrets et conserver la phrase secrète. Détail : `docs/securite/sauvegardes/README.md`.

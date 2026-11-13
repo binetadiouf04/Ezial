@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+# pg_dump en version 17 (celle de la base Supabase d'Ezial), exécuté dans un
+# conteneur : la machine GitHub n'a que la version 16, qui refuse une base 17.
+# Le dossier courant est monté au même chemin pour que les fichiers se retrouvent.
+exec docker run --rm -i --network host -v "$PWD:$PWD" -w "$PWD" \
+  "${IMAGE_PG:-public.ecr.aws/docker/library/postgres:17}" pg_dump "$@"

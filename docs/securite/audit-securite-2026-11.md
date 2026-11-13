@@ -72,7 +72,7 @@ Aucune faille critique confirmée (pas de clé secrète exposée, pas d'accès a
 | Build statique : chemins contrôlés | M4 | `scripts/prerender-seo.mjs`, `scripts/seo/safe-segment.mjs` | Sur la branche de travail. |
 | Message clair quand un avis est refusé | M7 | `src/lib/supabaseReviews.ts` | Sur la branche de travail. |
 
-Non traités, à faire sur validation : E5 (double authentification admin), M5 et M6 (fonctions Edge à redéployer), M9, constats « Faible ».
+Depuis ce rapport (état au 13 novembre 2026, détail dans `suivi-vulnerabilites.md`) : E5 développée et non activée, E6 préparée et non activée, M5 et M6 corrigées dans le code des fonctions (à redéployer), plusieurs constats « Faible » corrigés. Rien n'est en production.
 
 ## Coûts
 

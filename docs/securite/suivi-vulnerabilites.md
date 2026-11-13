@@ -1,8 +1,8 @@
 # Suivi exhaustif des vulnérabilités — Ezial (13 novembre 2026)
 
-Reprend tous les constats de `audit-securite-2026-11.md`, y compris les faibles, plus trois constats apparus pendant les corrections. Aucune correction n'est en production : « préparé » veut dire présent dans la PR n°21, testé localement, en attente de validation.
+Reprend tous les constats de `audit-securite-2026-11.md`, y compris les faibles, plus quatre constats apparus pendant les corrections : 6 élevés, 10 moyens, 23 faibles, 4 nouveaux. **Aucune correction n'est en production** (vérifié en lecture seule le 13 novembre 2026) : « préparé » veut dire présent dans la PR n°21, testé localement, en attente de validation.
 
-**Statuts** — *Corrigé (PR)* : code prêt dans la PR n°21, actif dès la fusion. *Préparé (SQL)* : dans `docs/sql/securite-corrections.sql`, actif après exécution. *Préparé (fonction)* : code de fonction Edge prêt, actif après redéploiement de la fonction. *Proposé* : étude ou proposition remise, rien de développé. *Non traité* : recommandation seulement.
+**Statuts** — *Corrigé (PR)* : code prêt dans la PR n°21, actif dès la fusion. *Préparé (SQL)* : dans `docs/sql/securite-corrections.sql`, actif après exécution. *Préparé (fonction)* : code de fonction Edge prêt, actif après redéploiement de la fonction. *Développé, non activé* : code et scripts prêts et testés localement, activation en plusieurs étapes à votre main. *Non traité* : recommandation seulement.
 
 **Priorités** — **A** indispensable avant le lancement · **B** recommandé après le lancement · **C** facultatif.
 
@@ -10,12 +10,12 @@ Reprend tous les constats de `audit-securite-2026-11.md`, y compris les faibles,
 
 | # | Vulnérabilité | Impact réel sur Ezial | Statut | Risque restant | Correction recommandée | Coût | Priorité |
 |---|---|---|---|---|---|---|---|
-| E1 | Compte livreur sans NIP prenable avec le nom d'utilisateur | Accès aux missions : nom, téléphone, adresse des clients concernés | Non traité (choix de la propriétaire) | Entier jusqu'à la création du NIP ; réapparaît à chaque nouveau livreur ou réinitialisation | Créer le NIP avec le livreur dès la création du compte (procédure ci-dessous) | 0 | A |
+| E1 | Compte livreur sans NIP prenable avec le nom d'utilisateur | Accès aux missions : nom, téléphone, adresse des clients concernés | Non traité (choix de la propriétaire, maintenu le 13 nov.) ; 1 compte en attente aujourd'hui, 0 mission | Entier jusqu'à la création du NIP ; réapparaît à chaque nouveau livreur ou réinitialisation | Suspendre le compte en attente (bouton de l'admin, réversible), puis créer le NIP avec le livreur (procédure ci-dessous) | 0 | A |
 | E2 | Code de livraison lisible par le livreur, sans limite d'essais | Livraison « confirmée » sans le client, donc versement vendeur déclenché à tort | Préparé (SQL) + Corrigé (PR) | Code à 4 chiffres : 5 essais puis 15 min de blocage | Exécuter la migration après la fusion | 0 | A |
 | E3 | Vendeur qui se déclare « boutique officielle » | Commission 0 %, Ezial Plus permanent, limite de produits levée | Préparé (SQL) | Aucun connu | Exécuter la migration | 0 | A |
 | E4 | Livreur qui modifie sa rémunération et ses statuts | Montants faux dans le suivi des livreurs | Préparé (SQL) | Aucun connu | Exécuter la migration | 0 | A |
-| E5 | Pas de double authentification administrateur | Un mot de passe volé ouvre tout l'espace admin | Proposé (`proposition-double-authentification.md`) | Entier tant que non développé | TOTP Supabase + exigence côté serveur | 0 | A |
-| E6 | Aucune sauvegarde automatique | Perte définitive des données en cas d'erreur ou de compromission | Proposé (`etude-sauvegardes.md`) | Entier | GitHub Actions, sauvegarde chiffrée dans un dépôt privé | 0 | A |
+| E5 | Pas de double authentification administrateur | Un mot de passe volé ouvre tout l'espace admin | Développé, non activé (PR + `securite-mfa-admin.sql` ; parcours dans `proposition-double-authentification.md`) | Entier tant que vous n'avez pas enregistré vos appareils et exécuté le script | Fusion, enregistrement de deux appareils, puis script serveur | 0 | A |
+| E6 | Aucune sauvegarde automatique | Perte définitive des données en cas d'erreur ou de compromission | Développé, non activé (kit testé localement : `sauvegardes/README.md`) | Entier tant que le dépôt privé et les secrets ne sont pas créés | Accord final, puis mise en place en 7 étapes et premier lancement manuel | 0 | A |
 
 ## Gravité moyenne
 
@@ -23,11 +23,11 @@ Reprend tous les constats de `audit-securite-2026-11.md`, y compris les faibles,
 |---|---|---|---|---|---|---|---|
 | M1 | Stockage sans limite de type ni de taille | Hébergement de fichiers malveillants, quota gratuit épuisé | Préparé (SQL) | Faible | Exécuter la migration | 0 | A |
 | M2 | Aucun en-tête de sécurité | Site intégrable dans une page piégée ; pas de filet contre un futur XSS | Corrigé (PR), CSP en mode rapport | La CSP ne bloque rien tant qu'elle est en mode rapport | Passer la CSP en mode blocage après 2 semaines sans écart | 0 | A puis B |
-| M3 | Statut de commande libre pour le vendeur | Fausses notifications au client | Préparé (SQL) | Aucun connu | Exécuter la migration | 0 | A |
+| M3 | Statut de commande libre pour le vendeur | Fausses notifications au client | Préparé (SQL) : seules les étapes réelles sont acceptées, retrait en boutique compris | Aucun connu | Exécuter la migration | 0 | A |
 | M4 | Sous-catégorie produit utilisée comme chemin de fichier | Un vendeur écrase une page du site au build | Préparé (SQL) + Corrigé (PR) | Aucun connu | Fusion puis migration | 0 | A |
 | M5 | Fonctions de notification push ouvertes si le secret est vide | Notifications arbitraires vers n'importe quel utilisateur | Préparé (fonction), testé | Dépend du redéploiement | Redéployer `send-push` et `send-push-campaign` | 0 | A |
 | M6 | Calcul des frais de livraison appelable sans compte ni limite | Quota Google épuisé par un tiers | Préparé (fonction) + Préparé (SQL), testé | Dépend du redéploiement | Redéployer `calculate-delivery-fee` | 0 | A |
-| M7 | Avis sans achat vérifié | Faux avis | Préparé (SQL) + Corrigé (PR) | Aucun connu (création et modification couvertes) | Exécuter la migration | 0 | A |
+| M7 | Avis sans achat vérifié | Faux avis | Préparé (SQL) + Corrigé (PR) : avis réservés aux clients ayant reçu le produit (livraison confirmée ou retrait en boutique) | Aucun connu (création et modification couvertes) | Exécuter la migration | 0 | A |
 | M8 | Force brute : NIP livreur à 4 chiffres, code promo sans limite, noms d'utilisateur livreur devinables | Compte livreur ou code promo deviné à la longue | Non traité (blocages 5 et 10 essais / 15 min déjà en place) | Modéré | Limite d'essais sur les codes promo ; réponse identique pour « introuvable » et « suspendu » | 0 | B |
 | M9 | Deux définitions d'« administrateur » | Fragilité : une future erreur sur `profiles.role` ouvrirait des droits | Partiel : fonction de campagne corrigée (PR) | Faible (rôle protégé, vérifié) | Table `admins` seule dans les politiques restantes | 0 | B |
 | M10 | Protection contre les mots de passe compromis désactivée | Mots de passe faibles acceptés | Non traité | Faible à modéré | Option payante (Supabase Pro) : non retenue. Gratuit : longueur minimale 10 dans les réglages Auth | 0 | A (réglage) |
@@ -64,9 +64,10 @@ Reprend tous les constats de `audit-securite-2026-11.md`, y compris les faibles,
 
 | # | Constat | Impact réel | Statut | Correction recommandée | Coût | Priorité |
 |---|---|---|---|---|---|---|
-| N1 | Le dépôt GitHub est **public** : code, migrations et ce rapport sont lisibles par tous | Les failles non encore corrigées en production sont décrites publiquement | Non traité (décision de la propriétaire) | Passer le dépôt en privé (gratuit, Cloudflare Pages continue de fonctionner) ou, à défaut, déployer les corrections sans attendre | 0 | A |
-| N2 | Tâches de régénération du site en échec depuis leur création | Pages statiques jamais régénérées automatiquement | Instructions remises (`actions-manuelles.md`) | Renseigner le Deploy Hook dans le coffre Supabase | 0 | A |
+| N1 | Le dépôt GitHub est **public** : code, migrations et ce rapport sont lisibles par tous | Les failles non encore corrigées en production sont décrites publiquement | Passage en privé décidé le 13 nov. ; à faire par la propriétaire (guide : `actions-manuelles.md`) | Passer le dépôt en privé, puis vérifier un déploiement Cloudflare | 0 | A |
+| N2 | Tâches de régénération du site en échec depuis leur création (toujours en échec le 13 nov. : l'adresse enregistrée est encore la valeur d'exemple) | Pages statiques jamais régénérées automatiquement | Instructions remises (`actions-manuelles.md`) ; fréquence de 6 heures préparée (`seo-frequence-6h.sql`), non appliquée | Renseigner le Deploy Hook dans le coffre Supabase, puis appliquer la fréquence | 0 | A |
 | N3 | Défaut trouvé dans ma première version de la migration (création de commande bloquée) | Aurait cassé les commandes en production | Corrigé avant toute exécution, grâce au test ajouté | Garder la suite de tests ; test réel après migration | 0 | — |
+| N4 | **Défaut de production, hors sécurité : un client inscrit ne peut pas valider de commande.** La commande exige une ligne `profiles` que l'inscription client ne crée pas | Les 5 clients inscrits sont concernés ; un échec réel figure dans les journaux du 12 nov. ; 0 commande enregistrée à ce jour | Correctif préparé et testé : `docs/sql/commande-profil-client.sql` (indépendant de la PR) | Exécuter ce script en premier | 0 | A |
 
 ## E1 — précisions demandées
 
@@ -79,5 +80,17 @@ Reprend tous les constats de `audit-securite-2026-11.md`, y compris les faibles,
 2. Créer le compte dans l'admin au moment où le livreur est avec vous, ou en ligne avec vous.
 3. Le livreur ouvre l'espace livreur sur son propre téléphone, saisit son nom d'utilisateur et choisit lui-même son NIP, sans le dire ni l'écrire.
 4. Vérifier dans l'admin que le compte n'est plus « en attente de NIP ».
-5. Ne jamais laisser un compte en attente : s'il n'est pas activé tout de suite, le suspendre jusqu'au rendez-vous.
+5. Ne jamais laisser un compte en attente : s'il n'est pas activé tout de suite, le suspendre jusqu'au rendez-vous (Admin → Livreurs → fiche du livreur → **Suspendre** ; vérifié : un compte suspendu ne peut ni créer son NIP ni se connecter, et **Réactiver le livreur** annule la suspension sans rien perdre).
 6. Même règle après « Réinitialiser le NIP ».
+
+## Contrôle de couverture (13 novembre 2026)
+
+| Gravité | Constats | Traités (corrigés, préparés ou développés) | Ouverts par décision ou en attente |
+|---|---|---|---|
+| Critique | 0 | — | — |
+| Élevée | 6 | E2, E3, E4 (préparés) ; E5, E6 (développés, non activés) | E1 (risque accepté) |
+| Moyenne | 10 | M1 à M7 (préparés ou corrigés) ; M9 (partiel) | M8, M10 (réglages et améliorations après lancement) |
+| Faible | 23 | F1, F5, F10 à F13, F15, F16 ; F3 (partiel) | 14 ouvertes, classement inchangé : F2, F4, F6 à F9, F14, F17 à F23 |
+| Apparus en cours | 4 | N3 (corrigé) ; N4 (correctif prêt) | N1, N2 (actions de la propriétaire) |
+
+Aucun constat critique, élevé ou moyen n'est sans réponse : chacun a une correction prête, une décision explicite ou une action manuelle décrite. Aucune fonctionnalité complexe n'est proposée pour les 14 constats faibles ouverts.

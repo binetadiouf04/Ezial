@@ -1,38 +1,53 @@
-# Proposition — double authentification de l'espace administrateur
+# Double authentification de l'espace administrateur
 
-État : **proposition**. Rien n'est développé ni déployé. Gratuit (TOTP de Supabase Auth, sans SMS).
+État au 13 novembre 2026 : **développée et testée sur la branche (PR n°21), non activée en production**. Aucun appareil n'est enregistré, aucun script exécuté. Gratuit : codes TOTP de Supabase Auth, sans SMS.
 
-## Connexion administrateur actuelle (analysée)
+## Ce qui a été développé
 
-- `src/lib/supabaseAdminAuth.ts` : e-mail et mot de passe via Supabase Auth, puis lecture de la table `admins`. Au rechargement, même contrôle sur la session existante.
-- Côté serveur, « administrateur » = présence dans `admins`. 53 politiques RLS et 25 fonctions vérifient cette table ; 2 fonctions Edge aussi (`create-driver`, `send-push-campaign`).
-- Le compte administrateur est dédié : il ne possède ni boutique, ni profil client, ni commande (vérifié). La double authentification ne gênera donc aucun autre usage de ce compte.
-- Aucun facteur n'est enregistré aujourd'hui.
+| Élément | Fichiers |
+|---|---|
+| Écran « Vérification en deux étapes » après le mot de passe | `src/pro/components/AdminMfaChallenge.tsx`, `src/pro/components/LoginForm.tsx`, `src/pro/ProContext.tsx`, `src/lib/supabaseAdminAuth.ts` |
+| Page admin **Sécurité** : activer, ajouter un appareil de secours, retirer un appareil | `src/pro/pages/admin/AdminSecurity.tsx`, `src/pro/components/AdminMfaCard.tsx`, `src/lib/supabaseMfa.ts` |
+| Contrôle par le serveur | `docs/sql/securite-mfa-admin.sql` (retour arrière fourni) |
+| Fonctions serveur réservées à l'administrateur | `create-driver`, `send-push-campaign` |
 
-## Fonctionnement proposé
+Clients, vendeurs et livreurs : **aucun changement**. Leurs écrans de connexion ne sont pas modifiés et le contrôle ne s'applique qu'aux comptes de la table `admins` ayant un appareil vérifié.
 
-1. **Activation** (page admin, carte « Double authentification ») : un QR code à scanner avec une application d'authentification (Google Authenticator, Microsoft Authenticator, 1Password…), puis un premier code à 6 chiffres pour confirmer.
-2. **Connexion** : e-mail et mot de passe, puis écran « Vérification en deux étapes » demandant le code à 6 chiffres. Tant que le code n'est pas validé, aucun écran admin ne s'affiche.
-3. **Contrôle par le serveur** (le point important) : une fonction exécutée avant chaque requête à l'API refuse toute requête d'un administrateur ayant un facteur vérifié tant que sa session n'a pas été validée par le code (niveau `aal2` du jeton). Un seul point de contrôle couvre ainsi les 53 politiques et les 25 fonctions, sans les modifier. Les deux fonctions Edge admin vérifient le même niveau.
-4. **Clients, vendeurs, livreurs** : aucun changement. Le contrôle ne s'applique qu'aux comptes présents dans `admins` avec un facteur vérifié. Leurs écrans de connexion ne sont pas modifiés.
+## Parcours d'inscription de l'appareil (à valider avant activation)
 
-## Perte de l'application d'authentification
+1. Se connecter à l'espace administrateur comme aujourd'hui (e-mail et mot de passe).
+2. Menu **Sécurité** → carte « Double authentification » → **Activer la double authentification**.
+3. Un QR code s'affiche, avec la clé en texte pour une saisie manuelle. Le scanner avec une application d'authentification (Google Authenticator, Microsoft Authenticator, 1Password, Mots de passe d'Apple…).
+4. Saisir le code à 6 chiffres affiché par l'application → message « Appareil enregistré. Le code vous sera demandé à chaque connexion à l'administration. »
+5. **Ajouter tout de suite un appareil de secours** (même carte, « Ajouter un appareil de secours ») : un second téléphone, ou un gestionnaire de mots de passe. Deux appareils au maximum. Pour retirer un appareil : bouton **Retirer**, avec confirmation ; retirer le dernier désactive la double authentification.
+6. Se déconnecter, se reconnecter : après le mot de passe, l'écran « Vérification en deux étapes » demande le code. Tant qu'il n'est pas validé, aucun écran admin ne s'affiche.
+7. Seulement ensuite, exécuter `docs/sql/securite-mfa-admin.sql` (3 lignes « ok ») : le serveur refuse alors toute requête d'une session administrateur non validée par le code.
 
-Supabase ne fournit pas de codes de secours pour le TOTP. Deux protections, gratuites :
+Tant que l'étape 7 n'est pas faite, la protection existe à l'écran mais pas encore côté serveur. Tant que l'étape 2 n'est pas faite, rien ne change.
 
-- **Deux facteurs dès l'activation** : enregistrer le même compte sur deux appareils (ou un téléphone et un gestionnaire de mots de passe). La perte d'un appareil ne bloque rien.
-- **Récupération de dernier recours** : depuis l'éditeur SQL de Supabase (lui-même protégé par le compte Supabase et sa propre double authentification), supprimer le facteur perdu : `delete from auth.mfa_factors where user_id = '<identifiant de l'administrateur>';`. L'administrateur se reconnecte alors avec son mot de passe et réactive la double authentification. Personne d'autre que le titulaire du compte Supabase ne peut le faire.
+## Protection réelle côté serveur
 
-## Étapes de validation proposées
+- Une fonction exécutée par l'API **avant chaque requête** refuse (erreur 403 « mfa_required ») toute requête d'un administrateur ayant un appareil vérifié tant que sa session n'a pas le niveau `aal2`, c'est-à-dire validée par le code.
+- La règle d'accès de la table `admins` exige le même niveau : même en contournant le contrôle préalable, une session sans code n'est pas reconnue comme administrateur par les 53 règles d'accès et les 25 fonctions qui consultent cette table.
+- Les deux fonctions serveur admin vérifient le même niveau.
 
-| Étape | Action | Réversible | Vérification |
-|---|---|---|---|
-| 1 | Je développe l'interface (activation, écran de code) sur la branche | Oui | Tests dans un navigateur de test |
-| 2 | Vous validez, fusion : l'interface est en ligne, rien n'est encore imposé | Oui | Connexion admin inchangée sans facteur |
-| 3 | Vous activez la double authentification sur deux appareils | Oui (désactivable) | Déconnexion, reconnexion avec code |
-| 4 | Vous exécutez un court script SQL qui active le contrôle par le serveur | Oui (une ligne pour le retirer) | Je vérifie qu'une session sans code est refusée et que clients, vendeurs et livreurs fonctionnent |
-| 5 | Redéploiement des deux fonctions Edge admin | Oui | Envoi d'une campagne de test |
+Testé localement sur la structure réelle de production : avec le mot de passe seul, lecture des commandes, fonction admin appelée directement et confirmation de paiement sont refusées ; par contournement, 0 ligne visible et 0 modification ; avec le code, tout fonctionne ; second administrateur sans appareil, client, vendeur, visiteur et fonctions serveur inchangés. 19 contrôles du parcours dans un navigateur de test.
 
-Risque principal : le contrôle de l'étape 4 s'exécute avant chaque requête de tous les utilisateurs. Il est volontairement minimal (aucun effet sans session, une lecture indexée sinon) et retirable immédiatement ; il sera testé localement puis en réel à un moment sans commandes.
+## Récupération d'accès
 
-Limite : à vérifier dans le tableau de bord Supabase que le TOTP est bien activé pour le projet (Authentication → Multi-Factor).
+Supabase ne fournit pas de codes de secours pour le TOTP. Trois niveaux, tous gratuits :
+
+1. **Appareil de secours** (étape 5) : la perte d'un téléphone ne bloque rien. Se connecter avec l'autre appareil, retirer l'appareil perdu dans **Sécurité**, en enregistrer un nouveau.
+2. **Les deux appareils perdus** : dans l'éditeur SQL de Supabase (protégé par votre compte Supabase et sa propre double authentification), supprimer les appareils du compte administrateur :
+   `delete from auth.mfa_factors where user_id = (select user_id from public.admins limit 1);`
+   La connexion redevient « mot de passe seul », puis vous réactivez la double authentification. Seul le titulaire du compte Supabase peut le faire.
+3. **Dernier recours** : `docs/sql/securite-mfa-admin-retour-arriere.sql` retire le contrôle serveur.
+
+Conséquence à connaître : la sécurité de l'espace administrateur repose alors aussi sur celle du compte Supabase. Y activer la double authentification (Supabase → Account → Security).
+
+## Limites
+
+- Un mot de passe administrateur volé **avant** l'activation permettrait à un tiers d'enregistrer son propre appareil. Activer la double authentification rapidement après la fusion, depuis un appareil sûr.
+- Le contrôle serveur s'exécute avant chaque requête de tous les utilisateurs. Il est minimal (aucun effet sans session, une lecture indexée sinon) et retirable immédiatement ; à activer à un moment sans commandes en cours.
+- À vérifier dans Supabase : Authentication → Multi-Factor → TOTP activé (c'est le réglage par défaut).
+- Preuves locales uniquement à ce stade : le comportement réel sera vérifié à chaque étape.
