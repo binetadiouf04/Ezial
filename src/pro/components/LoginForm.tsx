@@ -11,7 +11,7 @@ interface LoginFormProps {
   /** Seller-only: authenticates seller_code + password against Supabase Auth, then checks shop ownership. */
   verifySeller?: (identifier: string, password: string) => Promise<{ shop: { sellerId: string; name: string; supabaseShopId: string; isOfficial: boolean } } | { error: string }>;
   /** Admin-only: authenticates email + password against Supabase Auth, then checks public.admins membership. */
-  verifyAdmin?: (email: string, password: string) => Promise<{ name: string } | { error: string }>;
+  verifyAdmin?: (email: string, password: string) => Promise<{ name: string } | { mfaRequired: true } | { error: string }>;
 }
 
 // Kept complete for every Role even though 'seller' and 'driver' are both
@@ -64,6 +64,10 @@ export default function LoginForm({ role, onBack, onLogin, verifySeller, verifyA
         setError(result?.error ?? 'Connexion impossible.');
         return;
       }
+      // Double authentification active sur ce compte : l'écran « Vérification
+      // en deux étapes » prend le relais (voir ProEntryPage), l'espace admin
+      // ne s'ouvre pas ici.
+      if ('mfaRequired' in result) return;
       onLogin(email.trim(), result.name);
     } else if (role === 'seller') {
       if (!identifier.trim() || !password.trim()) {

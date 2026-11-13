@@ -25,7 +25,9 @@ export function safeHref(raw) {
   if (/^https:\/\/[^\s<>"]+$/i.test(href)) return { href, external: true };
   if (/^mailto:[^\s<>"]+@[^\s<>"]+$/i.test(href)) return { href, external: false };
   if (/^tel:\+?[0-9 ]{6,20}$/i.test(href)) return { href: href.replace(/ /g, ''), external: false };
-  if (/^\/(?!\/)[^\s<>"]*$/.test(href)) return { href, external: false };
+  // Lien interne : « / » suivi d'autre chose que « / » ou « \ » (un navigateur
+  // lit « /\hôte » comme « //hôte », donc comme un site externe).
+  if (/^\/(?![/\\])[^\s<>"\\]*$/.test(href)) return { href, external: false };
   if (/^#[a-z0-9-]+$/i.test(href)) return { href, external: false };
   return null;
 }

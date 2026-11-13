@@ -5,7 +5,7 @@ import { shops as initialShops, products as initialProducts, transactions as ini
 import { assignShopPrefixes, nextReferenceForShop } from '@/utils/reference';
 import { signInSeller, restoreSellerSession, signOutSeller, signUpSeller, requestSellerPasswordReset, resendSellerConfirmation, resendSellerConfirmationForIdentifier, createShopForLoggedInCustomer, type SignUpSellerInput, type SignUpSellerResult } from '@/lib/supabaseSellerAuth';
 import { deleteMyAccount } from '@/lib/supabaseAccountDeletion';
-import { signInAdmin, restoreAdminSession } from '@/lib/supabaseAdminAuth';
+import { signInAdmin, restoreAdminSession, completeAdminMfaChallenge } from '@/lib/supabaseAdminAuth';
 import { checkDriverUsername, createDriverPin, signInDriverWithPin, restoreDriverSession, type DriverLoginStatus } from '@/lib/supabaseDriverAuth';
 import { fetchDriverMissions, acceptDeliveryMission, markStopCollected, startMissionDelivery, completeMissionDelivery } from '@/lib/supabaseDriverMissions';
 import { supabase } from '@/lib/supabaseClient';
@@ -94,6 +94,20 @@ export interface SellerShopInfo {
   isOfficial: boolean;
 }
 
+// Vérification en deux étapes en attente pour un administrateur : le mot de
+// passe (ou la session existante) est valide, mais le code de l'application
+// d'authentification n'a pas encore été vérifié (session pas aal2). Tant que
+// cet état existe, `role` reste null : aucun écran ni aucune donnée de
+// l'administration n'est chargé.
+export interface AdminMfaChallengeState {
+  factorId: string;
+  identifier: string;
+  // true au retour sur une session existante (rechargement) : la page
+  // demandée est conservée après la vérification, comme pour une
+  // restauration de session ordinaire.
+  keepRoute: boolean;
+}
+
 interface ProState extends AuthState {
   route: Route;
   navigate: (r: Route) => void;
@@ -150,7 +164,18 @@ interface ProState extends AuthState {
   // Auth, then verifies the account is listed in public.admins before
   // granting access. Needed so RLS on manually-managed content (Hero,
   // "À découvrir") can actually restrict writes to admins.
-  verifyAdminLogin: (email: string, password: string) => Promise<{ name: string } | { error: string }>;
+  // { mfaRequired } : mot de passe accepté, mais le compte a une double
+  // authentification active — adminMfaChallenge est alors renseigné et
+  // l'écran de vérification remplace le formulaire (rien d'autre à faire
+  // côté appelant).
+  verifyAdminLogin: (email: string, password: string) => Promise<{ name: string } | { mfaRequired: true } | { error: string }>;
+  // Non null tant que la vérification en deux étapes d'un administrateur
+  // est en attente (après le mot de passe, ou au rechargement d'une session
+  // qui n'est pas aal2).
+  adminMfaChallenge: AdminMfaChallengeState | null;
+  // Vérifie le code à 6 chiffres ; en cas de succès, ouvre l'espace admin.
+  // `fatal` : inutile de ressaisir un code, il faut se reconnecter.
+  submitAdminMfaCode: (code: string) => Promise<{ error?: string; fatal?: boolean }>;
   // Driver login — username + NIP (4 digits), never an email/password the
   // driver has to see. checkDriverUsername tells the UI whether to show
   // "create your PIN" or "enter your PIN"; the other two each establish a
@@ -270,6 +295,7 @@ export function ProProvider({ children }: { children: ReactNode }) {
   const [driverVisibleMissions, setDriverVisibleMissions] = useState<Mission[]>([]);
   const [isDriverMissionsLoading, setIsDriverMissionsLoading] = useState(false);
   const [driverActionError, setDriverActionError] = useState<string | null>(null);
+  const [adminMfaChallenge, setAdminMfaChallenge] = useState<AdminMfaChallengeState | null>(null);
 
   // Admin state
   const [allShops, setAllShops] = useState<Shop[]>(initialShops);
@@ -347,6 +373,12 @@ export function ProProvider({ children }: { children: ReactNode }) {
         const admin = await restoreAdminSession();
         if (!admin) {
           sessionStorage.removeItem('ezial-pro-auth');
+          return;
+        }
+        if ('mfaRequired' in admin) {
+          // Session valide mais pas aal2 alors qu'un facteur vérifié est
+          // inscrit : l'espace admin reste fermé (role null) jusqu'au code.
+          setAdminMfaChallenge({ factorId: admin.factorId, identifier: parsed.identifier, keepRoute: true });
           return;
         }
         setRole('admin');
@@ -457,6 +489,7 @@ export function ProProvider({ children }: { children: ReactNode }) {
     setSellerShopIsOfficial(false);
     setDriverVisibleMissions([]);
     setDriverActionError(null);
+    setAdminMfaChallenge(null);
     sessionStorage.removeItem('ezial-pro-auth');
     // Fire-and-forget: the local session is already cleared above regardless
     // of whether the Supabase sign-out call itself succeeds.
@@ -577,11 +610,40 @@ export function ProProvider({ children }: { children: ReactNode }) {
     return {};
   }, [sellerSupabaseShopId, logout]);
 
-  const verifyAdminLogin = useCallback(async (email: string, password: string): Promise<{ name: string } | { error: string }> => {
-    const result = await signInAdmin(email.trim(), password);
+  const verifyAdminLogin = useCallback(async (email: string, password: string): Promise<{ name: string } | { mfaRequired: true } | { error: string }> => {
+    const identifier = email.trim();
+    const result = await signInAdmin(identifier, password);
     if ('error' in result) return { error: result.error };
+    if ('mfaRequired' in result) {
+      setAdminMfaChallenge({ factorId: result.factorId, identifier, keepRoute: false });
+      // Même marqueur qu'une session admin ordinaire, pour qu'un rechargement
+      // pendant la vérification revienne sur l'écran du code (et non sur le
+      // formulaire). Jamais cru seul : restoreAdminSession() revalide tout.
+      sessionStorage.setItem('ezial-pro-auth', JSON.stringify({ role: 'admin', identifier, name: '' }));
+      return { mfaRequired: true };
+    }
     return { name: result.name };
   }, []);
+
+  const submitAdminMfaCode = useCallback(async (code: string): Promise<{ error?: string; fatal?: boolean }> => {
+    if (!adminMfaChallenge) return { error: 'Session expirée. Reconnectez-vous.', fatal: true };
+    const result = await completeAdminMfaChallenge(adminMfaChallenge.factorId, code);
+    if ('error' in result) return { error: result.error, fatal: result.fatal };
+
+    setAdminMfaChallenge(null);
+    setRole('admin');
+    setIdentifier(adminMfaChallenge.identifier);
+    setName(result.name);
+    sessionStorage.setItem('ezial-pro-auth', JSON.stringify({ role: 'admin', identifier: adminMfaChallenge.identifier, name: result.name }));
+    // Même règle que login() et que la restauration de session : après le
+    // mot de passe, toujours le tableau de bord ; au rechargement d'une
+    // sous-page de l'administration, cette sous-page est conservée.
+    if (!adminMfaChallenge.keepRoute || !proSubRouteFromPath().startsWith('/admin')) {
+      setRoute('/admin');
+      writeProRoute('/admin');
+    }
+    return {};
+  }, [adminMfaChallenge]);
 
   const checkDriverUsernameAction = useCallback((username: string) => checkDriverUsername(username), []);
   const createDriverPinAction = useCallback((username: string, pin: string) => createDriverPin(username, pin), []);
@@ -855,6 +917,8 @@ export function ProProvider({ children }: { children: ReactNode }) {
     resendSellerConfirmationEmail,
     deleteSellerAccount,
     verifyAdminLogin,
+    adminMfaChallenge,
+    submitAdminMfaCode,
     checkDriverUsername: checkDriverUsernameAction,
     createDriverPin: createDriverPinAction,
     signInDriverWithPin: signInDriverWithPinAction,

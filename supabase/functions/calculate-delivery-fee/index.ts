@@ -15,9 +15,11 @@
 //
 // Deploy: supabase functions deploy calculate-delivery-fee
 import { createClient } from 'npm:@supabase/supabase-js@2';
+import { parseDeliveryFeeRequest } from '../_shared/guards.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? '';
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
+const ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY') ?? '';
 const GOOGLE_MAPS_SERVER_API_KEY = Deno.env.get('GOOGLE_MAPS_SERVER_API_KEY') ?? '';
 
 const admin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
@@ -35,6 +37,8 @@ function json(body: unknown, status = 200) {
 // sanity cap (reject obviously malformed/abusive requests before spending
 // a Google call), not a real product limit.
 const MAX_SHOPS = 6;
+// Calculs Google (hors cache) autorisés par client et par heure.
+const USER_HOURLY_ROUTE_CALLS = 40;
 // How long a (shop set, rounded client point) result stays reusable —
 // avoids a fresh Google call every time the customer nudges the map pin or
 // re-renders the checkout page.
@@ -86,20 +90,28 @@ Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
   if (req.method !== 'POST') return json({ error: 'Méthode non autorisée.' }, 405);
 
-  let body: { shopIds?: unknown; clientLat?: unknown; clientLng?: unknown };
+  // Réservé aux clients connectés (le compte est obligatoire pour
+  // commander) : l'identité vient du jeton de session, jamais du corps de la
+  // requête. Un visiteur anonyme garde l'estimation affichée par le site.
+  const authHeader = req.headers.get('Authorization') ?? '';
+  if (!authHeader) return json({ error: 'Non authentifié.' }, 401);
+  const asUser = createClient(SUPABASE_URL, ANON_KEY, { global: { headers: { Authorization: authHeader } } });
+  const { data: userData, error: userError } = await asUser.auth.getUser();
+  if (userError || !userData.user) return json({ error: 'Non authentifié.' }, 401);
+  const userId = userData.user.id;
+
+  let raw: unknown;
   try {
-    body = await req.json();
+    raw = await req.json();
   } catch {
     return json({ error: 'Requête invalide.' }, 400);
   }
+  // Identifiants de boutique au format attendu, position dans la zone de
+  // service : sinon aucun calcul n'est lancé.
+  const parsed = parseDeliveryFeeRequest(raw, MAX_SHOPS);
+  if ('error' in parsed) return json({ error: parsed.error }, 400);
+  const { shopIds, clientLat, clientLng } = parsed;
 
-  const shopIds = Array.isArray(body.shopIds) ? body.shopIds.filter((id): id is string => typeof id === 'string' && id.length > 0) : [];
-  const clientLat = typeof body.clientLat === 'number' ? body.clientLat : NaN;
-  const clientLng = typeof body.clientLng === 'number' ? body.clientLng : NaN;
-
-  if (shopIds.length === 0 || shopIds.length > MAX_SHOPS) return json({ error: 'Nombre de boutiques invalide.' }, 400);
-  if (!Number.isFinite(clientLat) || clientLat < -90 || clientLat > 90) return json({ error: 'Latitude invalide.' }, 400);
-  if (!Number.isFinite(clientLng) || clientLng < -180 || clientLng > 180) return json({ error: 'Longitude invalide.' }, 400);
   if (!GOOGLE_MAPS_SERVER_API_KEY) return json({ error: 'Service de livraison indisponible.' }, 500);
 
   // Shop coordinates are always re-read here, in the caller's requested
@@ -134,6 +146,13 @@ Deno.serve(async (req) => {
   if (cacheIsFresh) {
     distanceKm = cached!.distance_km as number;
   } else {
+    // Seuls les calculs réellement envoyés à Google sont comptés : limite
+    // par client et par heure (fonction consume_api_quota). Si la fonction
+    // n'existe pas encore en base, le calcul reste autorisé.
+    const { data: allowed, error: quotaError } = await admin.rpc('consume_api_quota', {
+      p_user_id: userId, p_bucket: 'delivery_fee', p_max: USER_HOURLY_ROUTE_CALLS, p_window_seconds: 3600,
+    });
+    if (!quotaError && allowed === false) return json({ error: 'Trop de calculs de livraison. Réessayez plus tard.' }, 429);
     try {
       distanceKm = await routesApiDistanceKm(shopPoints, { lat: clientLat, lng: clientLng });
     } catch {

@@ -15,6 +15,7 @@
 // every Edge Function already has, to resolve the admin's own JWT.
 import { createClient } from 'npm:@supabase/supabase-js@2';
 import webpush from 'npm:web-push@3.6.7';
+import { adminMfaSatisfied, checkSharedSecret, isUuid, jwtAssuranceLevel, safeInternalPath } from '../_shared/guards.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? '';
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
@@ -84,7 +85,7 @@ async function sendCampaign(campaign: Campaign): Promise<void> {
       }
     }
 
-    const payload = JSON.stringify({ title: campaign.title, body: campaign.body, url: campaign.click_url || '/' });
+    const payload = JSON.stringify({ title: campaign.title, body: campaign.body, url: safeInternalPath(campaign.click_url) });
     let recipientCount = 0;
     let successCount = 0;
     let errorCount = 0;
@@ -122,8 +123,18 @@ async function sendCampaign(campaign: Campaign): Promise<void> {
       error_count: errorCount,
     }).eq('id', campaign.id);
   } catch (err) {
-    await admin.from('push_campaigns').update({ status: 'failed', error_message: (err as Error).message }).eq('id', campaign.id);
+    await admin.from('push_campaigns').update({ status: 'failed', error_message: String((err as Error).message ?? 'erreur').slice(0, 300) }).eq('id', campaign.id);
   }
+}
+
+// Fait passer la campagne à « sending » seulement si elle ne l'est pas déjà
+// (ni envoyée) : la mise à jour conditionnelle est atomique côté base.
+async function claimCampaign(campaignId: string, scheduledOnly: boolean): Promise<Campaign | null> {
+  let query = admin.from('push_campaigns').update({ status: 'sending' }).eq('id', campaignId);
+  query = scheduledOnly ? query.eq('status', 'scheduled') : query.not('status', 'in', '(sending,sent)');
+  const { data, error } = await query.select('*').maybeSingle();
+  if (error || !data) return null;
+  return data as Campaign;
 }
 
 Deno.serve(async (req) => {
@@ -141,32 +152,48 @@ Deno.serve(async (req) => {
     const { data: userData, error: userError } = await asUser.auth.getUser();
     if (userError || !userData.user) return json({ error: 'Non authentifié.' }, 401);
 
-    const [{ data: adminRow }, { data: profileRow }] = await Promise.all([
-      admin.from('admins').select('user_id').eq('user_id', userData.user.id).maybeSingle(),
-      admin.from('profiles').select('role').eq('id', userData.user.id).maybeSingle(),
-    ]);
-    if (!adminRow && profileRow?.role !== 'admin') return json({ error: 'Accès refusé.' }, 403);
+    // Administrateur = présent dans la table admins (seule source de vérité).
+    const { data: adminRow } = await admin.from('admins').select('user_id').eq('user_id', userData.user.id).maybeSingle();
+    if (!adminRow) return json({ error: 'Accès refusé.' }, 403);
 
-    const { data: campaign, error: campaignError } = await admin.from('push_campaigns').select('*').eq('id', body.campaignId).maybeSingle();
-    if (campaignError || !campaign) return json({ error: 'Campagne introuvable.' }, 404);
-    if (campaign.status === 'sending' || campaign.status === 'sent') return json({ error: 'Campagne déjà envoyée.' }, 409);
+  // Double authentification : un administrateur qui a enregistré un appareil
+  // doit avoir validé son code (jeton aal2) pour cette action. Le jeton vient
+  // d'être vérifié par Supabase (getUser ci-dessus).
+  const { data: factorData, error: factorError } = await admin.auth.admin.mfa.listFactors({ userId: userData.user.id });
+  if (factorError) return json({ error: 'Vérification de la double authentification indisponible. Réessayez.' }, 503);
+  const verifiedFactors = (factorData?.factors ?? []).filter((f) => f.status === 'verified').length;
+  if (!adminMfaSatisfied(jwtAssuranceLevel(authHeader), verifiedFactors)) return json({ error: 'mfa_required' }, 403);
+    if (!isUuid(body.campaignId)) return json({ error: 'Campagne introuvable.' }, 404);
 
-    await sendCampaign(campaign as Campaign);
+    // Prise en charge atomique : une seule requête peut faire passer la
+    // campagne à « sending » — un double clic ou deux appels simultanés
+    // n'envoient jamais deux fois la même campagne.
+    const campaign = await claimCampaign(body.campaignId, false);
+    if (!campaign) return json({ error: 'Campagne introuvable ou déjà envoyée.' }, 409);
+
+    await sendCampaign(campaign);
     return json({ ok: true });
   }
 
-  // Dispatch mode — called by pg_cron every few minutes.
-  if (req.headers.get('x-webhook-secret') !== PUSH_WEBHOOK_SECRET) return json({ error: 'Unauthorized' }, 401);
+  // Mode planifié — appelé par pg_cron. Secret partagé obligatoire ; sans
+  // secret configuré, la fonction refuse tout appel.
+  const secretCheck = checkSharedSecret(req.headers.get('x-webhook-secret'), PUSH_WEBHOOK_SECRET);
+  if (secretCheck === 'unconfigured') return json({ error: 'Service indisponible.' }, 503);
+  if (secretCheck !== 'ok') return json({ error: 'Unauthorized' }, 401);
 
   const { data: due } = await admin
     .from('push_campaigns')
-    .select('*')
+    .select('id')
     .eq('status', 'scheduled')
     .lte('scheduled_at', new Date().toISOString());
 
-  for (const campaign of (due ?? []) as Campaign[]) {
+  let dispatched = 0;
+  for (const row of (due ?? []) as { id: string }[]) {
+    const campaign = await claimCampaign(row.id, true);
+    if (!campaign) continue; // déjà prise par un autre appel
     await sendCampaign(campaign);
+    dispatched++;
   }
 
-  return json({ ok: true, dispatched: (due ?? []).length });
+  return json({ ok: true, dispatched });
 });

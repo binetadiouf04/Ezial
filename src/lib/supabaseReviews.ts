@@ -1,4 +1,5 @@
 import { supabase } from './supabaseClient';
+import { isRpcMissing } from './supabaseFeatureDetect';
 import { PRODUCT_IMAGES_BUCKET, resolveImageUrl } from './supabaseCatalog';
 import { optimizeImageFile } from '@/utils/imageOptimize';
 
@@ -120,6 +121,11 @@ export async function checkCanReview(productId: string, userId: string): Promise
 }
 
 async function hasVerifiedPurchase(productId: string, customerId: string): Promise<boolean> {
+  // Le serveur décide (livraison confirmée ou retrait déclaré). Tant que la
+  // fonction n'existe pas en base, l'ancien calcul ci-dessous s'applique.
+  const { data: received, error: receivedError } = await supabase.rpc('has_received_product', { p_product_id: productId });
+  if (!receivedError) return received === true;
+  if (!isRpcMissing(receivedError)) return false;
   const { data: orderRows } = await supabase.from('orders').select('id').eq('customer_id', customerId);
   const orderIds = (orderRows ?? []).map((o) => o.id as string);
   if (orderIds.length === 0) return false;
@@ -159,6 +165,8 @@ export async function submitReview(userId: string, input: SubmitReviewInput): Pr
     }
   } else {
     const { data, error } = await supabase.from('reviews').insert({ product_id: input.productId, user_id: userId, rating: input.rating, comment: input.comment.trim() || null }).select('id').single();
+    // 42501 : le serveur réserve les avis aux clients ayant reçu le produit.
+    if (error?.code === '42501') return { error: 'Seuls les clients ayant reçu ce produit peuvent laisser un avis.' };
     if (error || !data) return { error: error?.message ?? "Impossible d'enregistrer l'avis." };
     reviewId = data.id as string;
   }

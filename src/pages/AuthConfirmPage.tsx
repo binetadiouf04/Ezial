@@ -116,7 +116,9 @@ export default function AuthConfirmPage() {
   // in localStorage by this point, so the fresh load re-reads it
   // immediately, no re-authentication required.
   const goToRoute = (route: string) => {
-    window.location.href = `${window.location.origin}${route}`;
+    // Toujours une page du site : un chemin interne, jamais « //hôte » ni « /\\hôte ».
+    const safe = /^\/(?![/\\])/.test(route) ? route : '/';
+    window.location.href = `${window.location.origin}${safe}`;
   };
 
   const handleResend = async () => {

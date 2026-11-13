@@ -15,6 +15,7 @@
 //                                             Edge Function automatically)
 import { createClient } from 'npm:@supabase/supabase-js@2';
 import webpush from 'npm:web-push@3.6.7';
+import { checkSharedSecret, parsePushPayload } from '../_shared/guards.ts';
 
 const VAPID_PUBLIC_KEY = Deno.env.get('VAPID_PUBLIC_KEY') ?? '';
 const VAPID_PRIVATE_KEY = Deno.env.get('VAPID_PRIVATE_KEY') ?? '';
@@ -29,20 +30,27 @@ const supabase = createClient(
 );
 
 Deno.serve(async (req) => {
-  if (req.headers.get('x-webhook-secret') !== PUSH_WEBHOOK_SECRET) {
-    return new Response('Unauthorized', { status: 401 });
-  }
+  // Appel serveur à serveur uniquement (déclencheur Postgres) : secret
+  // partagé obligatoire. Sans secret configuré, la fonction refuse tout
+  // appel plutôt que d'accepter un en-tête vide.
+  const secretCheck = checkSharedSecret(req.headers.get('x-webhook-secret'), PUSH_WEBHOOK_SECRET);
+  if (secretCheck === 'unconfigured') return new Response('Service unavailable', { status: 503 });
+  if (secretCheck !== 'ok') return new Response('Unauthorized', { status: 401 });
+  if (req.method !== 'POST') return new Response('Method not allowed', { status: 405 });
 
-  const { userId, title, body, url } = await req.json();
-  if (!userId || !title) return new Response('Missing userId/title', { status: 400 });
+  let raw: unknown;
+  try { raw = await req.json(); } catch { return new Response('Bad request', { status: 400 }); }
+  const payloadIn = parsePushPayload(raw);
+  if (!payloadIn) return new Response('Bad request', { status: 400 });
+  const { userId, title, body, url } = payloadIn;
 
   const { data: subs, error } = await supabase
     .from('push_subscriptions')
     .select('endpoint, p256dh, auth')
     .eq('user_id', userId);
-  if (error) return new Response(error.message, { status: 500 });
+  if (error) return new Response('Internal error', { status: 500 });
 
-  const payload = JSON.stringify({ title, body: body ?? '', url: url ?? '/' });
+  const payload = JSON.stringify({ title, body, url });
 
   await Promise.all((subs ?? []).map(async (sub) => {
     try {

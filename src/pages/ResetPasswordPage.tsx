@@ -42,7 +42,9 @@ export default function ResetPasswordPage() {
   // A real app route ('/profil', '/pro') — a different pathname is a
   // genuine cross-document navigation, so the browser reloads on its own.
   const goTo = (route: string) => {
-    window.location.href = `${window.location.origin}${route}`;
+    // Toujours une page du site : un chemin interne, jamais « //hôte » ni « /\\hôte ».
+    const safe = /^\/(?![/\\])/.test(route) ? route : '/';
+    window.location.href = `${window.location.origin}${safe}`;
   };
 
   return (

@@ -1,0 +1,78 @@
+# Sauvegarde quotidienne chiffrée de la base Supabase d'Ezial.
+#
+# À utiliser UNIQUEMENT dans un dépôt GitHub PRIVÉ réservé aux sauvegardes.
+# Secrets attendus (Settings → Secrets and variables → Actions → Secrets) :
+#   SUPABASE_DB_URL    adresse « Session pooler » avec le rôle de lecture seule
+#   BACKUP_PASSPHRASE  phrase secrète de chiffrement (40 caractères ou plus)
+#
+# Déroulé : export en lecture seule → chiffrement AES-256 et contrôle
+# d'intégrité → conservation 30 jours → restauration d'essai dans une base
+# temporaire isolée (jamais la production). Si l'essai échoue, la sauvegarde
+# chiffrée est déjà conservée et GitHub envoie un e-mail d'échec.
+name: Sauvegarde quotidienne de la base
+
+on:
+  schedule:
+    - cron: '23 2 * * *'   # chaque nuit à 02:23 UTC (heure de Dakar)
+  workflow_dispatch: {}     # lancement manuel depuis l'onglet Actions
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sauvegarde-base
+  cancel-in-progress: false
+
+jobs:
+  sauvegarde:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+      BACKUP_PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
+      IMAGE_PG: public.ecr.aws/docker/library/postgres:17
+    steps:
+      - name: Récupérer les scripts
+        uses: actions/checkout@v4
+
+      - name: Vérifier que les secrets sont présents (sans les afficher)
+        run: |
+          set -euo pipefail
+          [ -n "${SUPABASE_DB_URL:-}" ] || { echo "Secret SUPABASE_DB_URL manquant."; exit 1; }
+          [ "${#BACKUP_PASSPHRASE}" -ge 40 ] || { echo "Secret BACKUP_PASSPHRASE manquant ou trop court (40 caractères minimum)."; exit 1; }
+          docker pull -q "$IMAGE_PG" > /dev/null
+
+      - name: Exporter la base (lecture seule)
+        run: |
+          PG_DUMP="$PWD/scripts/pg_dump17" PSQL="$PWD/scripts/psql17" scripts/exporter.sh sauvegarde
+
+      - name: Chiffrer et vérifier l'intégrité
+        id: chiffrement
+        run: |
+          NOM="ezial-base-$(date -u +%Y-%m-%d_%H%M)"
+          scripts/chiffrer.sh sauvegarde "$NOM" a-conserver
+          echo "nom=$NOM" >> "$GITHUB_OUTPUT"
+
+      - name: Conserver la sauvegarde chiffrée (30 jours)
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.chiffrement.outputs.nom }}
+          path: a-conserver/
+          retention-days: 30
+          if-no-files-found: error
+          compression-level: 0
+
+      - name: Restauration d'essai dans une base temporaire isolée
+        env:
+          LOCAL_DB_URL: postgresql://supabase_admin:postgres@127.0.0.1:54322/postgres
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/essai"
+          (cd "$RUNNER_TEMP/essai" && npx --yes supabase@3.1.0 init > /dev/null && npx --yes supabase@3.1.0 db start > /dev/null)
+          PSQL="$PWD/scripts/psql17" scripts/essai-restauration.sh sauvegarde
+
+      - name: Effacer les données en clair et arrêter la base d'essai
+        if: always()
+        run: |
+          rm -rf sauvegarde a-conserver
+          (cd "$RUNNER_TEMP/essai" 2> /dev/null && npx --yes supabase@3.1.0 stop --no-backup > /dev/null 2>&1) || true

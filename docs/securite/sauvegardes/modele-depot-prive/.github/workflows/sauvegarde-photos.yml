@@ -1,0 +1,68 @@
+# Sauvegarde mensuelle chiffrée des photos PUBLIQUES d'Ezial (produits,
+# boutiques, contenus du site). Une sauvegarde de base de données ne contient
+# jamais les fichiers : ils sont traités ici, à part.
+#
+# Mêmes secrets que la sauvegarde de la base, plus une variable
+# (Settings → Secrets and variables → Actions → Variables) :
+#   SUPABASE_URL   adresse publique du projet, de la forme https://xxxx.supabase.co
+#
+# Limite à surveiller : l'offre gratuite de GitHub accorde 500 Mo de stockage
+# aux dépôts privés. Le journal affiche le volume copié à chaque exécution.
+name: Sauvegarde mensuelle des photos
+
+on:
+  schedule:
+    - cron: '41 3 1 * *'   # le 1er de chaque mois à 03:41 UTC
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sauvegarde-photos
+  cancel-in-progress: false
+
+jobs:
+  photos:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+      BACKUP_PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
+      SUPABASE_URL: ${{ vars.SUPABASE_URL }}
+      IMAGE_PG: public.ecr.aws/docker/library/postgres:17
+    steps:
+      - name: Récupérer les scripts
+        uses: actions/checkout@v4
+
+      - name: Vérifier la configuration (sans rien afficher de secret)
+        run: |
+          set -euo pipefail
+          [ -n "${SUPABASE_DB_URL:-}" ] || { echo "Secret SUPABASE_DB_URL manquant."; exit 1; }
+          [ "${#BACKUP_PASSPHRASE}" -ge 40 ] || { echo "Secret BACKUP_PASSPHRASE manquant ou trop court."; exit 1; }
+          [[ "${SUPABASE_URL:-}" =~ ^https://[a-z0-9]+\.supabase\.co$ ]] || { echo "Variable SUPABASE_URL manquante ou invalide."; exit 1; }
+          docker pull -q "$IMAGE_PG" > /dev/null
+
+      - name: Copier les photos publiques et vérifier leur taille
+        run: |
+          PSQL="$PWD/scripts/psql17" scripts/exporter-photos.sh photos
+
+      - name: Chiffrer et vérifier l'intégrité
+        id: chiffrement
+        run: |
+          NOM="ezial-photos-$(date -u +%Y-%m)"
+          scripts/chiffrer.sh photos "$NOM" a-conserver
+          echo "nom=$NOM" >> "$GITHUB_OUTPUT"
+
+      - name: Conserver les photos chiffrées (35 jours)
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.chiffrement.outputs.nom }}-${{ github.run_id }}
+          path: a-conserver/
+          retention-days: 35
+          if-no-files-found: error
+          compression-level: 0
+
+      - name: Effacer les fichiers en clair
+        if: always()
+        run: rm -rf photos a-conserver
