@@ -15,7 +15,7 @@
 // every Edge Function already has, to resolve the admin's own JWT.
 import { createClient } from 'npm:@supabase/supabase-js@2';
 import webpush from 'npm:web-push@3.6.7';
-import { checkSharedSecret, isUuid, safeInternalPath } from '../_shared/guards.ts';
+import { adminMfaSatisfied, checkSharedSecret, isUuid, jwtAssuranceLevel, safeInternalPath } from '../_shared/guards.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? '';
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
@@ -155,6 +155,14 @@ Deno.serve(async (req) => {
     // Administrateur = présent dans la table admins (seule source de vérité).
     const { data: adminRow } = await admin.from('admins').select('user_id').eq('user_id', userData.user.id).maybeSingle();
     if (!adminRow) return json({ error: 'Accès refusé.' }, 403);
+
+  // Double authentification : un administrateur qui a enregistré un appareil
+  // doit avoir validé son code (jeton aal2) pour cette action. Le jeton vient
+  // d'être vérifié par Supabase (getUser ci-dessus).
+  const { data: factorData, error: factorError } = await admin.auth.admin.mfa.listFactors({ userId: userData.user.id });
+  if (factorError) return json({ error: 'Vérification de la double authentification indisponible. Réessayez.' }, 503);
+  const verifiedFactors = (factorData?.factors ?? []).filter((f) => f.status === 'verified').length;
+  if (!adminMfaSatisfied(jwtAssuranceLevel(authHeader), verifiedFactors)) return json({ error: 'mfa_required' }, 403);
     if (!isUuid(body.campaignId)) return json({ error: 'Campagne introuvable.' }, 404);
 
     // Prise en charge atomique : une seule requête peut faire passer la

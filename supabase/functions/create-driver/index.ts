@@ -8,6 +8,7 @@
 // pin_setup_required/is_suspended (and the sensitive-fields protection
 // trigger) to already be applied.
 import { createClient } from 'npm:@supabase/supabase-js@2';
+import { adminMfaSatisfied, jwtAssuranceLevel } from '../_shared/guards.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? '';
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
@@ -41,6 +42,14 @@ Deno.serve(async (req) => {
 
   const { data: adminRow } = await admin.from('admins').select('user_id').eq('user_id', userData.user.id).maybeSingle();
   if (!adminRow) return json({ error: 'Accès refusé.' }, 403);
+
+  // Double authentification : un administrateur qui a enregistré un appareil
+  // doit avoir validé son code (jeton aal2) pour cette action. Le jeton vient
+  // d'être vérifié par Supabase (getUser ci-dessus).
+  const { data: factorData, error: factorError } = await admin.auth.admin.mfa.listFactors({ userId: userData.user.id });
+  if (factorError) return json({ error: 'Vérification de la double authentification indisponible. Réessayez.' }, 503);
+  const verifiedFactors = (factorData?.factors ?? []).filter((f) => f.status === 'verified').length;
+  if (!adminMfaSatisfied(jwtAssuranceLevel(authHeader), verifiedFactors)) return json({ error: 'mfa_required' }, 403);
 
   let body: { firstName?: string; lastName?: string; username?: string; phone?: string };
   try {

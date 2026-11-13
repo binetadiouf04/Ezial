@@ -85,3 +85,31 @@ export function parseDeliveryFeeRequest(input: unknown, maxShops: number): Deliv
   if (!isWithinServiceArea(clientLat, clientLng)) return { error: 'Adresse hors de la zone de livraison.' };
   return { shopIds: shopIds as string[], clientLat: clientLat as number, clientLng: clientLng as number };
 }
+
+// ── Double authentification administrateur ───────────────────────────────────
+
+/**
+ * Niveau d'assurance (« aal1 » ou « aal2 ») inscrit dans le jeton de session.
+ * À n'utiliser qu'après vérification du jeton par Supabase (auth.getUser) :
+ * cette fonction ne vérifie pas la signature.
+ */
+export function jwtAssuranceLevel(authHeader: string | null | undefined): string | null {
+  const token = (authHeader ?? '').replace(/^Bearer\s+/i, '').trim();
+  const part = token.split('.')[1];
+  if (!part) return null;
+  try {
+    const padded = part.replace(/-/g, '+').replace(/_/g, '/').padEnd(Math.ceil(part.length / 4) * 4, '=');
+    const payload = JSON.parse(atob(padded)) as { aal?: unknown };
+    return typeof payload.aal === 'string' ? payload.aal : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Un administrateur qui a au moins un facteur vérifié doit avoir validé son
+ * code (aal2). Sans facteur vérifié, le mot de passe suffit.
+ */
+export function adminMfaSatisfied(aal: string | null, verifiedFactorCount: number): boolean {
+  return verifiedFactorCount <= 0 || aal === 'aal2';
+}

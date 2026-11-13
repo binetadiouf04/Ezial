@@ -3,6 +3,7 @@ import { usePro } from '../ProContext';
 import { useApp } from '@/store/AppContext';
 import type { Role } from '../data';
 import LoginForm from '../components/LoginForm';
+import AdminMfaChallenge from '../components/AdminMfaChallenge';
 import SellerAuthPanel from '../components/SellerAuthPanel';
 import DriverLoginPanel from '../components/DriverLoginPanel';
 import { getStaffSpace } from '@/lib/staffSpace';
@@ -26,7 +27,7 @@ function ProRouteFallback() {
 }
 
 export default function ProEntryPage() {
-  const { role, login, verifySellerLogin, signUpSellerAccount, continueAsSellerWithCurrentAccount, requestSellerPasswordReset, resendSellerConfirmationEmail, resendSellerConfirmationForLogin, verifyAdminLogin, checkDriverUsername, createDriverPin, signInDriverWithPin } = usePro();
+  const { role, adminMfaChallenge, login, verifySellerLogin, signUpSellerAccount, continueAsSellerWithCurrentAccount, requestSellerPasswordReset, resendSellerConfirmationEmail, resendSellerConfirmationForLogin, verifyAdminLogin, checkDriverUsername, createDriverPin, signInDriverWithPin } = usePro();
   const { customerUser, navigate: navigateApp } = useApp();
   // admin.ezial.net → administrateur, livreur.ezial.net → livreur. Ces deux
   // espaces n'existent plus sur le site public : ni lien, ni écran, et une
@@ -43,6 +44,12 @@ export default function ProEntryPage() {
     new URLSearchParams(window.location.search).get('vue') === 'inscription' ? 'signup' : 'login');
 
   const roleAllowedHere = role === 'seller' ? staffSpace === null : role === staffSpace;
+
+  // Connexion administrateur en attente du code à 6 chiffres : rien d'autre
+  // ne s'affiche dans l'espace administrateur tant qu'il n'est pas validé.
+  if (adminMfaChallenge && staffSpace === 'admin') {
+    return <AdminMfaChallenge />;
+  }
 
   // If seller is logged in, render the seller layout
   if (role === 'seller' && roleAllowedHere) {

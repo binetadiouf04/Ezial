@@ -2,7 +2,7 @@
 // Lancer : npm run test:security
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { safeEqual, checkSharedSecret, isUuid, safeInternalPath, parsePushPayload, isWithinServiceArea, parseDeliveryFeeRequest } from './guards.ts';
+import { safeEqual, checkSharedSecret, isUuid, safeInternalPath, parsePushPayload, isWithinServiceArea, parseDeliveryFeeRequest, jwtAssuranceLevel, adminMfaSatisfied } from './guards.ts';
 
 const SECRET = 'un-secret-de-test-assez-long-0123456789';
 const UID = '11111111-2222-4333-8444-555555555555';
@@ -77,4 +77,24 @@ test('frais de livraison : demande validée', () => {
     { shopIds: [`${UID},id.neq.x`], clientLat: 14.7, clientLng: -17.4 },
   ];
   for (const input of bad) assert.ok('error' in parseDeliveryFeeRequest(input, 6), JSON.stringify(input));
+});
+
+const b64url = (o) => Buffer.from(JSON.stringify(o)).toString('base64url');
+const jwt = (payload) => `Bearer ${b64url({ alg: 'HS256', typ: 'JWT' })}.${b64url(payload)}.signature`;
+
+test('double authentification : niveau lu dans le jeton', () => {
+  assert.equal(jwtAssuranceLevel(jwt({ sub: UID, aal: 'aal2' })), 'aal2');
+  assert.equal(jwtAssuranceLevel(jwt({ sub: UID, aal: 'aal1' })), 'aal1');
+  assert.equal(jwtAssuranceLevel(jwt({ sub: UID })), null);
+  assert.equal(jwtAssuranceLevel(jwt({ sub: UID, aal: 2 })), null);
+  for (const bad of [null, undefined, '', 'Bearer', 'Bearer abc', 'Bearer a.%%%.c', 'aal2']) assert.equal(jwtAssuranceLevel(bad), null);
+});
+
+test('double authentification : un administrateur inscrit doit avoir validé son code', () => {
+  assert.equal(adminMfaSatisfied('aal1', 0), true);   // aucun facteur : mot de passe seul
+  assert.equal(adminMfaSatisfied(null, 0), true);
+  assert.equal(adminMfaSatisfied('aal2', 1), true);   // code validé
+  assert.equal(adminMfaSatisfied('aal1', 1), false);  // mot de passe seul alors qu'un facteur existe
+  assert.equal(adminMfaSatisfied(null, 2), false);
+  assert.equal(adminMfaSatisfied('AAL2', 1), false);
 });
