@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { usePro } from '../ProContext';
 import { navigateTo } from '@/store/AppContext';
 import { Home, ShoppingBag, Package, Wallet, Store, LogOut, ArrowLeft, Menu, X, AlertTriangle, Star, Crown, Loader2 } from 'lucide-react';
@@ -23,16 +23,27 @@ import SellerReviews from '../pages/seller/SellerReviews';
 import SmartImage from '@/components/SmartImage';
 import NotificationBell from '@/components/NotificationBell';
 
-const navItems = [
-  { route: '/seller', label: 'Accueil', icon: Home },
-  { route: '/seller/commandes', label: 'Commandes', icon: ShoppingBag },
-  { route: '/seller/reclamations', label: 'Réclamations', icon: AlertTriangle },
-  { route: '/seller/produits', label: 'Produits', icon: Package },
-  { route: '/seller/avis', label: 'Avis', icon: Star },
-  { route: '/seller/finances', label: 'Finances', icon: Wallet },
-  { route: '/seller/abonnement', label: 'Mon abonnement', icon: Crown },
-  { route: '/seller/boutique', label: 'Ma boutique', icon: Store },
+// Regroupées par usage ; « short » sert aux onglets du téléphone.
+const navGroups = [
+  { title: 'Ventes', items: [
+    { route: '/seller', label: 'Accueil', short: 'Accueil', icon: Home },
+    { route: '/seller/commandes', label: 'Commandes', short: 'Commandes', icon: ShoppingBag },
+    { route: '/seller/reclamations', label: 'Réclamations', short: 'Réclamations', icon: AlertTriangle },
+    { route: '/seller/avis', label: 'Avis', short: 'Avis', icon: Star },
+  ] },
+  { title: 'Catalogue et revenus', items: [
+    { route: '/seller/produits', label: 'Produits', short: 'Produits', icon: Package },
+    { route: '/seller/finances', label: 'Finances', short: 'Finances', icon: Wallet },
+  ] },
+  { title: 'Compte', items: [
+    { route: '/seller/abonnement', label: 'Mon abonnement', short: 'Abonnement', icon: Crown },
+    { route: '/seller/boutique', label: 'Ma boutique', short: 'Boutique', icon: Store },
+  ] },
 ];
+// Onglets du téléphone, du plus utilisé au moins utilisé.
+const mobileTabRoutes = ['/seller', '/seller/commandes', '/seller/produits', '/seller/finances', '/seller/boutique', '/seller/reclamations', '/seller/avis', '/seller/abonnement'];
+const allNavItems = navGroups.flatMap((g) => g.items);
+const mobileTabs = mobileTabRoutes.map((r) => allNavItems.find((i) => i.route === r)!);
 
 export default function SellerLayout() {
   const { route, navigate, logout, name, identifier, sellerShop, sellerSupabaseShopId, sellerShopIsOfficial } = usePro();
@@ -51,6 +62,14 @@ export default function SellerLayout() {
   useEffect(() => (sellerSupabaseShopId ? scheduleAutoLightening(sellerSupabaseShopId, setPhotoProgress, (r) => setPhotoReport(describeReport(r))) : undefined), [sellerSupabaseShopId]);
 
   const clean = route.split('?')[0];
+
+  // L'onglet de la rubrique ouverte reste visible dans la barre du téléphone.
+  const tabsRef = useRef<HTMLElement>(null);
+  useEffect(() => {
+    const active = tabsRef.current?.querySelector<HTMLElement>('[data-active]');
+    const bar = tabsRef.current;
+    if (active && bar) bar.scrollTo({ left: active.offsetLeft - (bar.clientWidth - active.offsetWidth) / 2, behavior: 'auto' });
+  }, [clean]);
 
   // Server-persisted, not a client redirect flag — a shop with zero
   // seller_subscriptions row (a genuinely brand-new signup; every
@@ -171,19 +190,28 @@ export default function SellerLayout() {
             <NotificationBell onNavigate={(url) => navigate(url.replace(/^\/pro/, ''))} />
           </div>
         </div>
-        <nav className="flex-1 overflow-y-auto p-3 space-y-1">
-          {navItems.map((item) => {
-            const Icon = item.icon;
-            return (
-              <button
-                key={item.route}
-                onClick={() => navigate(item.route)}
-                className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${isActive(item.route) ? 'bg-burgundy/10 text-burgundy' : 'text-ink/60 hover:bg-cream hover:text-ink'}`}
-              >
-                <Icon size={18} /> {item.label}
-              </button>
-            );
-          })}
+        <nav className="flex-1 space-y-4 overflow-y-auto p-3">
+          {navGroups.map((group) => (
+            <div key={group.title}>
+              <p className="px-3 pb-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-ink/35">{group.title}</p>
+              <div className="space-y-0.5">
+                {group.items.map((item) => {
+                  const Icon = item.icon;
+                  const active = isActive(item.route);
+                  return (
+                    <button
+                      key={item.route}
+                      onClick={() => navigate(item.route)}
+                      aria-current={active ? 'page' : undefined}
+                      className={`flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${active ? 'bg-burgundy/10 text-burgundy' : 'text-ink/60 hover:bg-cream hover:text-ink'}`}
+                    >
+                      <Icon size={17} /> {item.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
         </nav>
         <div className="p-3 border-t border-line space-y-1">
           <button onClick={() => (isOnProductForm ? navigate('/seller/produits') : goToMarketplace())} className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-ink/50 hover:bg-cream hover:text-ink transition-colors">
@@ -199,7 +227,8 @@ export default function SellerLayout() {
           at every width, compact text on phone); Déconnexion lives as an
           explicit text entry in the mobile menu drawer below, never as a
           bare icon anyone could miss. */}
-      <div className="lg:hidden sticky top-0 z-20 border-b border-line bg-white px-3 py-2.5 flex items-center justify-between gap-2">
+      <div className="lg:hidden sticky top-0 z-20 border-b border-line bg-white">
+      <div className="px-3 py-2 flex items-center justify-between gap-2">
         <div className="flex min-w-0 items-center gap-2">
           <button onClick={() => setMenuOpen(true)} aria-label="Ouvrir le menu" className="-ml-1 flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full text-ink hover:bg-cream">
             <Menu size={22} />
@@ -225,6 +254,27 @@ export default function SellerLayout() {
           </button>
         </div>
       </div>
+        {/* Onglets du téléphone : toutes les rubriques à portée de pouce, sans
+            ouvrir le menu. Ils restent sous la barre du haut, donc ne
+            recouvrent jamais le contenu de la page. */}
+        <nav ref={tabsRef} aria-label="Rubriques" className="flex gap-1 overflow-x-auto px-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          {mobileTabs.map((item) => {
+            const Icon = item.icon;
+            const active = isActive(item.route);
+            return (
+              <button
+                key={item.route}
+                onClick={() => navigate(item.route)}
+                data-active={active || undefined}
+                aria-current={active ? 'page' : undefined}
+                className={`flex flex-shrink-0 items-center gap-1.5 border-b-2 px-2.5 pb-2 pt-1.5 text-[13px] font-medium transition-colors ${active ? 'border-burgundy text-burgundy' : 'border-transparent text-ink/55 hover:text-ink'}`}
+              >
+                <Icon size={15} aria-hidden="true" /> {item.short}
+              </button>
+            );
+          })}
+        </nav>
+      </div>
 
       {/* Mobile menu drawer — replaces the old fixed bottom nav; carries the
           same 5 destinations (Accueil, Commandes, Produits, Finances, Ma
@@ -246,20 +296,28 @@ export default function SellerLayout() {
                 <X size={20} />
               </button>
             </div>
-            <nav className="flex-1 space-y-1 overflow-y-auto p-3">
-              {navItems.map((item) => {
-                const Icon = item.icon;
-                const active = isActive(item.route);
-                return (
-                  <button
-                    key={item.route}
-                    onClick={() => goTo(item.route)}
-                    className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${active ? 'bg-burgundy/10 text-burgundy' : 'text-ink/60 hover:bg-cream hover:text-ink'}`}
-                  >
-                    <Icon size={18} /> {item.label}
-                  </button>
-                );
-              })}
+            <nav className="flex-1 space-y-4 overflow-y-auto p-3">
+              {navGroups.map((group) => (
+                <div key={group.title}>
+                  <p className="px-3 pb-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-ink/35">{group.title}</p>
+                  <div className="space-y-0.5">
+                    {group.items.map((item) => {
+                      const Icon = item.icon;
+                      const active = isActive(item.route);
+                      return (
+                        <button
+                          key={item.route}
+                          onClick={() => goTo(item.route)}
+                          aria-current={active ? 'page' : undefined}
+                          className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${active ? 'bg-burgundy/10 text-burgundy' : 'text-ink/60 hover:bg-cream hover:text-ink'}`}
+                        >
+                          <Icon size={18} /> {item.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
             </nav>
             {/* Explicit text entries — never hidden, never icon-only — so
                 both actions are always reachable from the mobile menu. */}
@@ -294,7 +352,7 @@ export default function SellerLayout() {
             Optimisation de vos photos en cours ({photoProgress.done}/{photoProgress.total}) : gardez cette page ouverte.
           </div>
         )}
-        <main className="p-4 sm:p-6 lg:p-8 max-w-5xl mx-auto pb-8">
+        <main className="mx-auto max-w-5xl p-4 pb-8 sm:p-6 lg:px-8 lg:py-7">
           {renderPage()}
         </main>
       </div>
