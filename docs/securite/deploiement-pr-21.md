@@ -10,7 +10,8 @@ Ce document distingue ce qui est prouvé localement de ce qui est vérifié en r
 | PR n°21 fusionnée dans `main` (commit `edd52a7`) | **Fusionnée** | Aperçu Cloudflare du même code vert ; déploiement Production à confirmer dans Cloudflare par la propriétaire |
 | Corrections de sécurité (`securite-corrections.sql`) | **En production** | 9 lignes « ok » ; les 15 fonctions installées sont identiques à l'octet près à celles testées localement ; rapport de sécurité Supabase sans erreur |
 | Fonctions serveur `send-push`, `send-push-campaign`, `calculate-delivery-fee`, `create-driver` | **En production** | Démarrage et refus testés localement avec Deno, puis en réel : appel sans secret ou sans session refusé, appel de la tâche planifiée accepté |
-| Commande de test complète en réel | À faire | — |
+| Statistiques du tableau de bord administrateur (`admin-statistiques.sql`) | **En production** (14 nov.) | 2 lignes « ok » ; résultats identiques aux sommes directes sur les 2 commandes réelles ; refusé pour un compte non administrateur et pour un visiteur. Le site correspondant n'est pas encore publié. |
+| Commande de test complète en réel | Faite le 14 nov. (2 commandes livrées, mauvais code puis bon code, avis) | Détail dans le suivi |
 | Deploy Hook et fréquence SEO de 6 heures | À faire | Les deux tâches échouent encore |
 | Double authentification administrateur | À activer par la propriétaire | Aucun appareil enregistré ; script serveur non exécuté |
 | Sauvegardes | Non activées | Kit prêt |
