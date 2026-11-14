@@ -1,6 +1,22 @@
 # PR n°21 — validation finale et plan de déploiement
 
-État au 13 novembre 2026 : **rien n'est fusionné, exécuté ni déployé en production**. Ce document distingue ce qui est prouvé localement de ce qui ne peut être vérifié qu'en réel.
+Ce document distingue ce qui est prouvé localement de ce qui est vérifié en réel. Le reste du document décrit la validation faite avant la fusion (13 novembre 2026).
+
+## État de déploiement au 14 novembre 2026
+
+| Étape | État | Vérification |
+|---|---|---|
+| Correctif des commandes clients (`commande-profil-client.sql`) | **En production** | 2 lignes « ok » ; les 5 clients inscrits ont leur ligne de profil ; déclencheur actif |
+| PR n°21 fusionnée dans `main` (commit `edd52a7`) | **Fusionnée** | Aperçu Cloudflare du même code vert ; déploiement Production à confirmer dans Cloudflare par la propriétaire |
+| Corrections de sécurité (`securite-corrections.sql`) | **En production** | 9 lignes « ok » ; les 15 fonctions installées sont identiques à l'octet près à celles testées localement ; rapport de sécurité Supabase sans erreur |
+| Fonctions serveur `send-push`, `send-push-campaign`, `calculate-delivery-fee`, `create-driver` | **En production** | Démarrage et refus testés localement avec Deno, puis en réel : appel sans secret ou sans session refusé, appel de la tâche planifiée accepté |
+| Commande de test complète en réel | À faire | — |
+| Deploy Hook et fréquence SEO de 6 heures | À faire | Les deux tâches échouent encore |
+| Double authentification administrateur | À activer par la propriétaire | Aucun appareil enregistré ; script serveur non exécuté |
+| Sauvegardes | Non activées | Kit prêt |
+| Dépôt GitHub en privé | À faire par la propriétaire | — |
+
+Note de déploiement des fonctions serveur : chaque fonction est déployée avec son `index.ts` et une copie de `_shared/guards.ts` placée à côté (`./guards.ts`). C'est la seule différence avec les fichiers du dépôt. La fonction `create-driver` est déployée sous le nom `bright-function`.
 
 ## Conclusion
 
