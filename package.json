@@ -10,7 +10,7 @@
     "preview": "vite preview",
     "typecheck": "tsc --noEmit -p tsconfig.app.json",
     "check:supabase": "node scripts/check-supabase.mjs",
-    "test:security": "node --experimental-strip-types --test supabase/functions/_shared/guards.test.mjs"
+    "test:security": "node --experimental-strip-types --test supabase/functions/_shared/guards.test.mjs src/data/payments.test.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.57.4",

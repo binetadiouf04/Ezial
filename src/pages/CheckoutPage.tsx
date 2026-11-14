@@ -20,7 +20,7 @@ import SmartImage from '@/components/SmartImage';
 
 const InfoSheet = lazy(() => import('@/components/info/InfoSheet'));
 
-const paymentIcons: Record<string, typeof Smartphone> = { wave: Smartphone, orange: Smartphone };
+const paymentIcons: Record<string, typeof Smartphone> = { wave: Smartphone, orange_money: Smartphone };
 const paymentMethods = paymentMethodsData.map((p) => ({ ...p, icon: paymentIcons[p.id] ?? Smartphone }));
 
 // Mirrors create_order()'s own fixed amount — for display only. The real
