@@ -8,7 +8,7 @@ import { paymentLabels } from '@/data/payments';
 import { CheckCircle2, Truck, Store, MapPin, Smartphone, Clock, KeySquare } from 'lucide-react';
 import SmartImage from '@/components/SmartImage';
 
-const paymentIcons: Record<string, typeof Smartphone> = { wave: Smartphone, orange: Smartphone };
+const paymentIcons: Record<string, typeof Smartphone> = { wave: Smartphone, orange_money: Smartphone };
 
 export default function OrderConfirmationPage({ orderId }: { orderId: string }) {
   const { orders, navigate, catalogProducts } = useApp();
