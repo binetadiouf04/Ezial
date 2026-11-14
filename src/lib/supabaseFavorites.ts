@@ -16,7 +16,10 @@ export async function fetchFavoriteIds(userId: string): Promise<string[]> {
 
 export async function addFavorite(userId: string, productId: string): Promise<void> {
   if (!isRealCatalogId(productId)) return;
-  await supabase.from('favorites').upsert({ user_id: userId, product_id: productId }, { onConflict: 'user_id,product_id' });
+  // « Ne rien faire si le favori existe déjà » : la table n'a pas de règle
+  // d'accès pour la mise à jour, donc un upsert classique échouait (erreur
+  // « new row violates row-level security policy ») sur un favori présent.
+  await supabase.from('favorites').upsert({ user_id: userId, product_id: productId }, { onConflict: 'user_id,product_id', ignoreDuplicates: true });
 }
 
 export async function removeFavorite(userId: string, productId: string): Promise<void> {
