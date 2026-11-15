@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import ShopLinkCard from '../../components/ShopLinkCard';
 import { usePro } from '../../ProContext';
 import { supabase } from '@/lib/supabaseClient';
 import { fetchSellerFinances } from '@/lib/supabaseSellerFinances';
@@ -214,6 +215,8 @@ export default function SellerDashboard() {
       </nav>
 
       {/* Recent orders */}
+      <ShopLinkCard shopId={sellerSupabaseShopId} compact />
+
       <section aria-labelledby="recent-orders-title">
         <div className="mb-2 flex items-center justify-between">
           <h2 id="recent-orders-title" className="text-sm font-semibold text-ink">Commandes récentes</h2>

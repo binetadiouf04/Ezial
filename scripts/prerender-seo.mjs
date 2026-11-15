@@ -46,6 +46,13 @@ function productPath(p) {
   return `/produit/${p.slug || p.id}/`;
 }
 
+// A shop's public URL: its short name (shops.slug, unique, set at creation —
+// /boutique/tiass-brand/), or its id when the slug is missing or unusable as a
+// path segment. Kept identical to shopPublicPath() in src/lib/shopUrl.ts.
+function shopPath(shop) {
+  return `/boutique/${shop.slug || shop.id}/`;
+}
+
 function loadEnvLocal() {
   const path = `${ROOT}.env.local`;
   if (!existsSync(path)) return {};
@@ -145,13 +152,21 @@ const [shopsRes, productsRes] = await Promise.all([
 if (shopsRes.error) { console.error('prerender-seo: shops query failed —', shopsRes.error.message); process.exit(1); }
 if (productsRes.error) { console.error('prerender-seo: products query failed —', productsRes.error.message); process.exit(1); }
 
-// Identifiants et slugs servent de segments de chemin (dist/boutique/<id>/,
+// Identifiants et slugs servent de segments de chemin (dist/boutique/<slug>/,
 // dist/produit/<slug>/) et de lignes de _redirects : toute valeur qui n'a pas
 // la forme attendue est ignorée (avertissement, le build continue).
 const shops = shopsRes.data.filter((s) => {
-  if (isSafeSegment(s.id)) return true;
-  console.warn(`prerender-seo: boutique ignorée — identifiant inattendu ${describeValue(s.id)}.`);
-  return false;
+  if (!isSafeSegment(s.id)) {
+    console.warn(`prerender-seo: boutique ignorée — identifiant inattendu ${describeValue(s.id)}.`);
+    return false;
+  }
+  // Un nom court inutilisable comme chemin n'écarte pas la boutique : elle
+  // reste publiée à son adresse par identifiant.
+  if (s.slug && !isSafeSegment(s.slug)) {
+    console.warn(`prerender-seo: boutique ${s.id} — nom court inattendu ${describeValue(s.slug)}, adresse par identifiant utilisée.`);
+    s.slug = null;
+  }
+  return true;
 });
 const activeShopIds = new Set(shops.map((s) => s.id));
 // Mirrors fetchActiveCatalogFromSupabase (src/lib/supabaseCatalog.ts): a
@@ -336,7 +351,7 @@ for (const p of products) {
     offers: {
       '@type': 'Offer', price, priceCurrency: 'XOF', availability: `https://schema.org/${inStock ? 'InStock' : 'OutOfStock'}`, url: canonical,
       priceValidUntil: promoEnd,
-      seller: shop ? { '@type': 'Organization', name: shop.name, url: `${SITE_URL}/boutique/${shop.id}/` } : undefined,
+      seller: shop ? { '@type': 'Organization', name: shop.name, url: `${SITE_URL}${shopPath(shop)}` } : undefined,
     },
     ...(stats && stats.count > 0 ? { aggregateRating: { '@type': 'AggregateRating', ratingValue: stats.average, reviewCount: stats.count } } : {}),
   };
@@ -345,7 +360,7 @@ for (const p of products) {
     ${breadcrumbNav(breadcrumbItems)}
     <main>
       <h1>${esc(p.name)}</h1>
-      ${shop ? `<p><a href="${esc(`${SITE_URL}/boutique/${shop.id}/`)}">${esc(shop.name)}</a></p>` : ''}
+      ${shop ? `<p><a href="${esc(`${SITE_URL}${shopPath(shop)}`)}">${esc(shop.name)}</a></p>` : ''}
       ${images.map((url, i) => `<img src="${esc(url)}" alt="${esc(p.name)}"${i === 0 ? ' fetchpriority="high"' : ' loading="lazy"'} />`).join('')}
       <p>${price.toLocaleString('fr-FR')} FCFA</p>
       <p>${inStock ? 'En stock' : 'Rupture de stock'}</p>
@@ -361,7 +376,7 @@ for (const p of products) {
 
 // --- Shops --------------------------------------------------------------
 for (const shop of shops) {
-  const canonical = `${SITE_URL}/boutique/${shop.id}/`;
+  const canonical = `${SITE_URL}${shopPath(shop)}`;
   const shopProducts = products.filter((p) => p.shop_id === shop.id);
   const title = `${shop.name} — Boutique Ezial`;
   const description = (shop.description || `Découvrez la boutique ${shop.name} sur Ezial.`).slice(0, 160);
@@ -379,7 +394,7 @@ for (const shop of shops) {
       <ul>${shopProducts.map((p) => `<li><a href="${esc(`${SITE_URL}${productPath(p)}`)}">${esc(p.name)}</a></li>`).join('')}</ul>
     </main>`;
 
-  writeFile(`/boutique/${shop.id}/index.html`, renderPage({
+  writeFile(`${shopPath(shop)}index.html`, renderPage({
     title, description, canonical, ogImage: logoUrl, bodyHtml,
     jsonLd: [
       { '@context': 'https://schema.org', '@type': 'Organization', name: shop.name, description: shop.description || undefined, url: canonical, logo: logoUrl },
@@ -392,7 +407,7 @@ for (const shop of shops) {
 // --- Shop listing -----------------------------------------------------------
 // /boutiques existed only as a client-rendered SPA view with no real HTML a
 // crawler could see — a real, indexable page here, linking to the
-// already-generated /boutique/<id>/ pages above.
+// already-generated /boutique/<slug>/ pages above.
 {
   const canonical = `${SITE_URL}/boutiques/`;
   const title = 'Toutes les boutiques';
@@ -401,7 +416,7 @@ for (const shop of shops) {
     ${breadcrumbNav(breadcrumbItems)}
     <main>
       <h1>${esc(title)}</h1>
-      <ul>${shops.map((s) => `<li><a href="${esc(`${SITE_URL}/boutique/${s.id}/`)}">${esc(s.name)}</a>${s.description ? ` — ${esc(s.description)}` : ''}</li>`).join('')}</ul>
+      <ul>${shops.map((s) => `<li><a href="${esc(`${SITE_URL}${shopPath(s)}`)}">${esc(s.name)}</a>${s.description ? ` — ${esc(s.description)}` : ''}</li>`).join('')}</ul>
     </main>`;
   writeFile('/boutiques/index.html', renderPage({
     title: `${title} | Ezial`,
@@ -477,7 +492,7 @@ const sitemapXml = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http:
 writeFileSync(`${DIST}/sitemap.xml`, sitemapXml, 'utf8');
 
 // --- Permanent redirects (Cloudflare Pages _redirects) ----------------------
-// Old id-based product URLs (/produit/<uuid>) and the removed
+// Old id-based product and shop URLs (/produit/<uuid>, /boutique/<uuid>) and the removed
 // /boutiques-premium page answer with a real 301 to their current URL, so
 // links already shared or indexed keep working and pass on to the new page.
 // No catch-all rule here: Pages already serves the SPA for unknown paths, and
@@ -486,6 +501,12 @@ const redirectLines = ['/boutiques-premium /boutiques/ 301', '/boutiques-premium
 for (const p of products) {
   if (!p.slug) continue;
   redirectLines.push(`/produit/${p.id} ${productPath(p)} 301`, `/produit/${p.id}/ ${productPath(p)} 301`);
+}
+// Old id-based shop URLs (/boutique/<uuid>) answer with a 301 to the shop's
+// short-name URL, like the product ones above.
+for (const shop of shops) {
+  if (!shop.slug) continue;
+  redirectLines.push(`/boutique/${shop.id} ${shopPath(shop)} 301`, `/boutique/${shop.id}/ ${shopPath(shop)} 301`);
 }
 // Pages honours at most 2,000 static redirect rules; past that, the oldest
 // products would need a Bulk Redirect list or a Pages Function instead.

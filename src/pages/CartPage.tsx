@@ -1,4 +1,5 @@
 import { useApp } from '@/store/AppContext';
+import { shopPath } from '@/lib/shopUrl';
 import { productPath } from '@/lib/productUrl';
 import { formatFCFA, isRealCatalogId, getVariantPrice } from '@/data/products';
 import { fabricQuantityRules, fabricSaleModeUnit, formatFabricQuantity } from '@/data/categories';
@@ -43,7 +44,7 @@ export default function CartPage() {
               return (
                 <div key={shopId} className="card p-5">
                   {shop && (
-                    <button onClick={() => navigate(`/boutique/${shop.id}`)} className="mb-4 block text-[11px] font-semibold uppercase tracking-wider text-ink/50 hover:text-burgundy">
+                    <button onClick={() => navigate(shopPath(shop))} className="mb-4 block text-[11px] font-semibold uppercase tracking-wider text-ink/50 hover:text-burgundy">
                       {shop.name}
                     </button>
                   )}

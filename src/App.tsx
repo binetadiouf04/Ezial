@@ -6,6 +6,7 @@ import type { Product } from '@/data/products';
 import type { Shop } from '@/data/shops';
 import { categoryMap, type CategoryId } from '@/data/categories';
 import { findProductByKey, productPublicPath } from '@/lib/productUrl';
+import { findShopByKey, shopPublicPath } from '@/lib/shopUrl';
 import {
   applyHeadTags, absoluteUrl, SITE_URL as SEO_SITE_URL, DEFAULT_OG_TITLE, DEFAULT_OG_DESCRIPTION, DEFAULT_OG_IMAGE, type HeadTags,
 } from '@/lib/seoHead';
@@ -130,7 +131,7 @@ function RouteView() {
   // Shop: /boutique/:id
   if (clean.startsWith('/boutique/')) {
     const shopId = clean.split('/')[2];
-    if (shopId) return <ShopPage shopId={shopId} />;
+    if (shopId) return <ShopPage shopKey={shopId} />;
   }
 
   // Shops listing: /boutiques — the former /boutiques-premium page is
@@ -235,11 +236,11 @@ function headTagsFor(route: string, { catalogProducts, catalogShops }: CatalogFo
   }
 
   if (parts[1] === 'boutique' && parts[2]) {
-    const s = catalogShops.find((item) => item.id === parts[2]);
+    const s = findShopByKey(catalogShops, parts[2]);
     if (s) {
       const description = (s.description || `Découvrez la boutique ${s.name} sur Ezial.`).slice(0, 160);
       const logo = /^https?:\/\//.test(s.logo) ? s.logo : DEFAULT_OG_IMAGE;
-      return pageTags(`${s.name} — Boutique ${SITE_TITLE}`, description, `/boutique/${s.id}/`, logo);
+      return pageTags(`${s.name} — Boutique ${SITE_TITLE}`, description, shopPublicPath(s), logo);
     }
     return null;
   }
