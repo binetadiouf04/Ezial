@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { usePro } from '../ProContext';
 import { navigateTo } from '@/store/AppContext';
 import { Home, ShoppingBag, Package, Wallet, Store, LogOut, ArrowLeft, Menu, X, AlertTriangle, Star, Crown, Loader2 } from 'lucide-react';
@@ -40,11 +40,6 @@ const navGroups = [
     { route: '/seller/boutique', label: 'Ma boutique', short: 'Boutique', icon: Store },
   ] },
 ];
-// Onglets du téléphone, du plus utilisé au moins utilisé.
-const mobileTabRoutes = ['/seller', '/seller/commandes', '/seller/produits', '/seller/finances', '/seller/boutique', '/seller/reclamations', '/seller/avis', '/seller/abonnement'];
-const allNavItems = navGroups.flatMap((g) => g.items);
-const mobileTabs = mobileTabRoutes.map((r) => allNavItems.find((i) => i.route === r)!);
-
 export default function SellerLayout() {
   const { route, navigate, logout, name, identifier, sellerShop, sellerSupabaseShopId, sellerShopIsOfficial } = usePro();
   const [menuOpen, setMenuOpen] = useState(false);
@@ -62,14 +57,6 @@ export default function SellerLayout() {
   useEffect(() => (sellerSupabaseShopId ? scheduleAutoLightening(sellerSupabaseShopId, setPhotoProgress, (r) => setPhotoReport(describeReport(r))) : undefined), [sellerSupabaseShopId]);
 
   const clean = route.split('?')[0];
-
-  // L'onglet de la rubrique ouverte reste visible dans la barre du téléphone.
-  const tabsRef = useRef<HTMLElement>(null);
-  useEffect(() => {
-    const active = tabsRef.current?.querySelector<HTMLElement>('[data-active]');
-    const bar = tabsRef.current;
-    if (active && bar) bar.scrollTo({ left: active.offsetLeft - (bar.clientWidth - active.offsetWidth) / 2, behavior: 'auto' });
-  }, [clean]);
 
   // Server-persisted, not a client redirect flag — a shop with zero
   // seller_subscriptions row (a genuinely brand-new signup; every
@@ -227,8 +214,7 @@ export default function SellerLayout() {
           at every width, compact text on phone); Déconnexion lives as an
           explicit text entry in the mobile menu drawer below, never as a
           bare icon anyone could miss. */}
-      <div className="lg:hidden sticky top-0 z-20 border-b border-line bg-white">
-      <div className="px-3 py-2 flex items-center justify-between gap-2">
+      <div className="lg:hidden sticky top-0 z-20 border-b border-line bg-white px-3 py-2.5 flex items-center justify-between gap-2">
         <div className="flex min-w-0 items-center gap-2">
           <button onClick={() => setMenuOpen(true)} aria-label="Ouvrir le menu" className="-ml-1 flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full text-ink hover:bg-cream">
             <Menu size={22} />
@@ -253,27 +239,6 @@ export default function SellerLayout() {
             )}
           </button>
         </div>
-      </div>
-        {/* Onglets du téléphone : toutes les rubriques à portée de pouce, sans
-            ouvrir le menu. Ils restent sous la barre du haut, donc ne
-            recouvrent jamais le contenu de la page. */}
-        <nav ref={tabsRef} aria-label="Rubriques" className="flex gap-1 overflow-x-auto px-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-          {mobileTabs.map((item) => {
-            const Icon = item.icon;
-            const active = isActive(item.route);
-            return (
-              <button
-                key={item.route}
-                onClick={() => navigate(item.route)}
-                data-active={active || undefined}
-                aria-current={active ? 'page' : undefined}
-                className={`flex flex-shrink-0 items-center gap-1.5 border-b-2 px-2.5 pb-2 pt-1.5 text-[13px] font-medium transition-colors ${active ? 'border-burgundy text-burgundy' : 'border-transparent text-ink/55 hover:text-ink'}`}
-              >
-                <Icon size={15} aria-hidden="true" /> {item.short}
-              </button>
-            );
-          })}
-        </nav>
       </div>
 
       {/* Mobile menu drawer — replaces the old fixed bottom nav; carries the
