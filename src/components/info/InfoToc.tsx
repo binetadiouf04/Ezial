@@ -101,7 +101,7 @@ export default function InfoToc({ headings }: { headings: MarkdownHeading[] }) {
 
       {/* Desktop: sticky sidebar. */}
       <aside className="hidden lg:block">
-        <nav aria-label="Sommaire" className="sticky top-32 max-h-[calc(100vh-9rem)] overflow-y-auto pb-6 pr-2">
+        <nav aria-label="Sommaire" className="sticky top-24 max-h-[calc(100vh-7rem)] overflow-y-auto pb-6 pr-2">
           <p className="mb-3 text-xs font-semibold uppercase tracking-[0.14em] text-ink/45">Sommaire</p>
           {links('side')}
         </nav>

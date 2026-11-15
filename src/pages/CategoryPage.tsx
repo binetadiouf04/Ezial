@@ -138,7 +138,7 @@ export default function CategoryPage({ categoryId, subId }: { categoryId: string
           {/* Shown from md (tablet) up, not just lg — on an iPad-width
              screen the content column has plenty of room for this and the
              3-column grid together; only phones need the drawer instead. */}
-          <div className="hidden md:block w-[220px] flex-shrink-0"><div className="sticky top-[140px]"><FilterPanel filters={allFilters} selected={selectedFilters} onChange={setSelectedFilters} onClear={() => setSelectedFilters({})} /></div></div>
+          <div className="hidden md:block w-[220px] flex-shrink-0"><div className="sticky top-[96px]"><FilterPanel filters={allFilters} selected={selectedFilters} onChange={setSelectedFilters} onClear={() => setSelectedFilters({})} /></div></div>
           <div className="min-w-0 flex-1">
             {catalogLoading ? <p className="py-16 text-center text-sm text-ink/45">Chargement des produits…</p> : <ProductGrid products={filtered} columns={4} />}
           </div>
