@@ -66,7 +66,7 @@ export default function MobileCategoryDrawer() {
                   « Mon compte » (buyer: orders, details, addresses). */}
               <nav className="divide-y divide-line border-t border-line">
                 <button onClick={() => void openMyShop()} disabled={shopLoading} className="flex w-full items-center gap-3 px-4 py-4 text-left hover:bg-cream disabled:opacity-60">
-                  <Store size={19} strokeWidth={1.5} className="text-ink/60" /><span className="flex-1 text-[15px] font-medium text-ink">Ma boutique</span>
+                  <Store size={19} strokeWidth={1.5} className="text-burgundy-ruby" /><span className="flex-1 text-[15px] font-semibold text-burgundy-ruby">Ma boutique</span>
                   {shopLoading && <Loader2 size={16} className="animate-spin text-ink/40" />}
                 </button>
                 <button onClick={() => navigate('/profil')} className="flex w-full items-center gap-3 px-4 py-4 text-left hover:bg-cream">
