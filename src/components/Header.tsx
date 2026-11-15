@@ -48,6 +48,9 @@ export default function Header() {
   };
 
   return (
+    <>
+    {/* Seule la rangée du haut reste collée à l'écran ; la barre des catégories
+        (ordinateur) défile normalement avec la page. */}
     <header className="sticky top-0 z-40 border-b border-line bg-white/95 backdrop-blur-md">
       <div className="container-pro">
         <div className="flex h-16 items-center gap-3 lg:h-[68px] lg:gap-6">
@@ -97,13 +100,14 @@ export default function Header() {
           </div>
         </div>
       </div>
-      <div className="hidden lg:block border-t border-line bg-white">
+    </header>
+      <div className="hidden border-b border-line bg-white lg:block">
         <div className="container-pro">
           <nav className="flex items-center gap-6 h-11 overflow-x-auto no-scrollbar">
             {desktopNavLinks.map((link) => <button key={link.route} onClick={() => navigate(link.route)} className="whitespace-nowrap text-sm font-medium text-ink/70 hover:text-burgundy transition-colors">{link.label}</button>)}
           </nav>
         </div>
       </div>
-    </header>
+    </>
   );
 }
