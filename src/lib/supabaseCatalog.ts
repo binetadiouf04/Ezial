@@ -137,6 +137,7 @@ export interface SupabaseCatalogResult {
 function mapShop(row: ShopRow, premiumShopIds?: Set<string>): Shop {
   return {
     id: row.id,
+    slug: row.slug ?? undefined,
     name: row.name,
     banner: row.cover_url ?? '',
     logo: row.logo_url ?? '',

@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import ShopLinkCard from '../../components/ShopLinkCard';
 import { usePro } from '../../ProContext';
 import VendorNoticeBanner, { type VendorNotice } from '../../components/VendorNoticeBanner';
 import GoogleLocationPickerMap from '@/components/GoogleLocationPickerMap';
@@ -286,6 +287,8 @@ export default function SellerShop() {
       </div>
 
       {latestModeration && <VendorNoticeBanner entry={latestModeration} />}
+
+      <ShopLinkCard shopId={sellerSupabaseShopId} />
 
       {authUserId && <NotificationOptIn userId={authUserId} label="Notifications de nouvelles commandes" />}
 

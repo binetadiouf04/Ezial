@@ -1,4 +1,5 @@
 import { useApp } from '@/store/AppContext';
+import { shopPath } from '@/lib/shopUrl';
 import type { Product } from '@/data/products';
 import PriceDisplay from './PriceDisplay';
 import Rating from './Rating';
@@ -48,7 +49,7 @@ export default function ProductCard({ product, priority = false }: { product: Pr
            handler from running but NOT the browser's own default action of
            following that outer <a>'s href (defaultPrevented is only ever
            set by a handler that actually runs). */}
-        {shop && <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); navigate(`/boutique/${shop.id}`); }} className="text-xs text-ink/50 hover:text-burgundy transition-colors">{shop.name}</button>}
+        {shop && <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); navigate(shopPath(shop)); }} className="text-xs text-ink/50 hover:text-burgundy transition-colors">{shop.name}</button>}
         <PriceDisplay price={product.price} oldPrice={product.oldPrice} size="sm" />
         {product.rating && product.reviewCount ? <Rating rating={product.rating} count={product.reviewCount} /> : null}
         {lowStock && <p className="text-[11px] font-medium text-burgundy/80">Plus que {product.stock} disponibles</p>}

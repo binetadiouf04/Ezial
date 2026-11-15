@@ -177,3 +177,12 @@ export async function uploadShopAsset(shopId: string, kind: 'logo' | 'cover', fi
 
   return { url: data.publicUrl };
 }
+
+export interface ShopLinkData { name: string; slug: string; status: ShopWorkflowStatus }
+
+/** Nom, nom court et statut de la boutique : de quoi construire le lien à partager. */
+export async function fetchShopLink(shopId: string): Promise<ShopLinkData | null> {
+  const { data, error } = await supabase.from('shops').select('name, slug, status').eq('id', shopId).maybeSingle();
+  if (error || !data) return null;
+  return { name: (data.name as string) ?? '', slug: (data.slug as string) ?? '', status: ((data.status as ShopWorkflowStatus) ?? 'draft') };
+}

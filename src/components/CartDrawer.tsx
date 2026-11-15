@@ -1,4 +1,5 @@
 import { X, ShoppingBag, Plus, Minus, Trash2 } from 'lucide-react';
+import { shopPath } from '@/lib/shopUrl';
 import { useApp, type CartItem } from '@/store/AppContext';
 import { formatFCFA, getVariantPrice } from '@/data/products';
 import { fabricQuantityRules, fabricSaleModeUnit, formatFabricQuantity } from '@/data/categories';
@@ -35,7 +36,7 @@ export default function CartDrawer() {
                 const shop = getShop(shopId);
                 return (
                   <div key={shopId}>
-                    {shop && <button onClick={() => { setCartOpen(false); navigate(`/boutique/${shop.id}`); }} className="mb-3 block text-[11px] font-semibold uppercase tracking-wider text-ink/50 hover:text-burgundy">{shop.name}</button>}
+                    {shop && <button onClick={() => { setCartOpen(false); navigate(shopPath(shop)); }} className="mb-3 block text-[11px] font-semibold uppercase tracking-wider text-ink/50 hover:text-burgundy">{shop.name}</button>}
                     <div className="space-y-3">
                       {items.map((item) => { const product = catalogProducts.find((p) => p.id === item.productId); if (!product) return null;
                         const unitPrice = item.unitPrice ?? product.price;

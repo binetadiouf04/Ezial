@@ -29,9 +29,12 @@ type SortId = (typeof sortOptions)[number]['id'];
 
 interface ShopFilters { enStock: boolean; enPromotion: boolean }
 
-export default function ShopPage({ shopId }: { shopId: string }) {
+// La clé de l'adresse est le nom court de la boutique (/boutique/tiass-brand)
+// ou, pour les anciens liens, son identifiant (/boutique/<uuid>).
+export default function ShopPage({ shopKey }: { shopKey: string }) {
   const { catalogProducts, catalogLoading, customerUser, navigate } = useApp();
-  const shop = getShop(shopId);
+  const shop = getShop(shopKey);
+  const shopId = shop?.id ?? shopKey;
   const [tab, setTab] = useState<Tab>('Accueil');
   const [following, setFollowing] = useState(false);
   const [sort, setSort] = useState<SortId>('recent');

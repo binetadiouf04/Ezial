@@ -1,4 +1,5 @@
 import type { Shop } from '@/data/shops';
+import { shopPath, shopPublicPath } from '@/lib/shopUrl';
 import { useApp } from '@/store/AppContext';
 import Rating from './Rating';
 import { ShopCover, ShopAvatar } from './ShopAvatar';
@@ -11,7 +12,7 @@ export default function ShopCard({ shop }: { shop: Shop }) {
     // discover and follow this link to the shop's static SEO page
     // (scripts/prerender-seo.mjs) — preventDefault keeps the click itself
     // on the existing in-app (hash) navigation, unchanged for visitors.
-    <a href={`/boutique/${shop.id}/`} onClick={(e) => { e.preventDefault(); navigate(`/boutique/${shop.id}`); }} className="group flex flex-col overflow-hidden rounded-xl border border-line bg-white text-left transition-all hover:card-shadow">
+    <a href={shopPublicPath(shop)} onClick={(e) => { e.preventDefault(); navigate(shopPath(shop)); }} className="group flex flex-col overflow-hidden rounded-xl border border-line bg-white text-left transition-all hover:card-shadow">
       <div className="relative h-28 w-full overflow-hidden bg-cream"><ShopCover src={shop.banner} alt={shop.name} className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-105" /></div>
       <div className="flex items-center gap-3 p-4">
         <ShopAvatar src={shop.logo} alt={shop.name} name={shop.name} className="h-12 w-12 flex-shrink-0 rounded-full border-2 border-white object-cover -mt-8 text-base shadow-sm" />

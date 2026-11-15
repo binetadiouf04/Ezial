@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect } from 'react';
+import { shopPath } from '@/lib/shopUrl';
 import { recordProductView } from '@/lib/browsingHistory';
 import { useApp } from '@/store/AppContext';
 import { getProduct, getVariantPrice, getProductsFromSameShop, getSimilarProducts, isRealCatalogId } from '@/data/products';
@@ -282,7 +283,7 @@ export default function ProductPage({ productId }: { productId: string }) {
             {shop && (
               <p className="mt-1.5 text-sm text-ink/55">
                 Vendu par{' '}
-                <button type="button" onClick={() => navigate(`/boutique/${shop.id}`)} className="font-medium text-ink/75 underline-offset-2 transition-colors hover:text-burgundy hover:underline">{shop.name}</button>
+                <button type="button" onClick={() => navigate(shopPath(shop))} className="font-medium text-ink/75 underline-offset-2 transition-colors hover:text-burgundy hover:underline">{shop.name}</button>
               </p>
             )}
             <div className="mt-1.5"><CopyReference reference={product.reference} /></div>
@@ -507,7 +508,7 @@ export default function ProductPage({ productId }: { productId: string }) {
       )}
       {sameShopProducts.length > 0 && shop && (
         <section className="mt-16">
-          <div className="mb-5 flex items-center justify-between"><h2 className="section-title">Aussi chez {shop.name}</h2><button onClick={() => navigate(`/boutique/${shop.id}`)} className="text-sm font-medium text-burgundy hover:underline">Voir la boutique</button></div>
+          <div className="mb-5 flex items-center justify-between"><h2 className="section-title">Aussi chez {shop.name}</h2><button onClick={() => navigate(shopPath(shop))} className="text-sm font-medium text-burgundy hover:underline">Voir la boutique</button></div>
           <ProductCarousel products={sameShopProducts} />
         </section>
       )}

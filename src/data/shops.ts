@@ -1,5 +1,11 @@
+import { findShopByKey } from '@/lib/shopUrl';
+
 export interface Shop {
-  id: string; name: string; banner: string; logo: string;
+  id: string;
+  // From Supabase shops.slug — nom court unique utilisé dans l'adresse à
+  // partager (/boutique/tiass-brand/). Absent des boutiques de démonstration.
+  slug?: string;
+  name: string; banner: string; logo: string;
   followers: number; description: string; city: string; rating: number; reviewCount: number;
   address: string; pickupEnabled: boolean; pickupEta: string;
   // From Supabase shops.is_official — never set on the static mock shops
@@ -47,4 +53,4 @@ export function registerSupabaseShops(fetchedShops: Shop[]): void {
 // check. Falling back to it used to mean an old bookmarked/indexed link
 // using one of those slugs rendered a fully convincing fake shop profile
 // forever, with no network call and no way to tell it isn't real.
-export const getShop = (id: string): Shop | undefined => supabaseShopMap[id];
+export const getShop = (key: string): Shop | undefined => supabaseShopMap[key] ?? findShopByKey(Object.values(supabaseShopMap), key);
