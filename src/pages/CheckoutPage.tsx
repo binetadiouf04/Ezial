@@ -517,8 +517,10 @@ export default function CheckoutPage() {
           )}
           <p className="text-xs text-ink/55">Quantité : {p.saleMode ? `${formatFabricQuantity(item.quantity)} ${fabricSaleModeUnit[p.saleMode]}` : item.quantity}</p>
           {shop && <p className="mt-0.5 text-[11px] text-ink/40">Vendu par {shop.name}</p>}
+          {/* Le prix reste dans la colonne du texte : en promo (prix, ancien prix
+              barré et pastille) il ne doit pas écraser le nom ni les détails. */}
+          <div className="mt-1.5"><PriceDisplay price={price * item.quantity} oldPrice={unitOldPrice ? unitOldPrice * item.quantity : undefined} size="sm" /></div>
         </div>
-        <div className="flex-shrink-0 text-right"><PriceDisplay price={price * item.quantity} oldPrice={unitOldPrice ? unitOldPrice * item.quantity : undefined} size="sm" /></div>
       </div>
     );
   });

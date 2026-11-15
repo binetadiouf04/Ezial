@@ -123,7 +123,7 @@ export default function AdminLayout() {
   return (
     <div className="min-h-screen bg-cream/30 lg:flex">
       {/* Sidebar — desktop */}
-      <aside className="hidden lg:flex w-64 flex-shrink-0 flex-col border-r border-line bg-white lg:sticky lg:top-0 lg:h-screen lg:self-start">
+      <aside className="hidden lg:flex w-64 flex-shrink-0 flex-col border-r border-line bg-white lg:sticky lg:top-0 lg:z-30 lg:h-screen lg:self-start">
         <div className="p-5 border-b border-line">
           <div className="flex items-center gap-3">
             <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-burgundy text-white">
