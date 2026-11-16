@@ -21,8 +21,11 @@ export async function fetchShopLocation(shopId: string): Promise<ShopLocation | 
 }
 
 export async function updateShopLocation(shopId: string, latitude: number, longitude: number): Promise<{ error?: string }> {
-  const { error } = await supabase.from('shops').update({ latitude, longitude }).eq('id', shopId);
+  // .select('id') : sans lui, une mise à jour qui ne touche aucune ligne (accès refusé par
+  // la RLS, mauvaise boutique) répond « succès » sans rien enregistrer.
+  const { data, error } = await supabase.from('shops').update({ latitude, longitude }).eq('id', shopId).select('id');
   if (error) return { error: `Impossible d'enregistrer la localisation : ${error.message}` };
+  if (!data || data.length === 0) return { error: "Impossible d'enregistrer la localisation : aucune boutique n'a été mise à jour. Reconnectez-vous puis réessayez." };
   return {};
 }
 
