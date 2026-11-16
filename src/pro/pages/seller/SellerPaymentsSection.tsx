@@ -11,12 +11,12 @@ import { Loader2, Check, Clock, Smartphone } from 'lucide-react';
 // la seule action est l'envoi d'un numéro Wave / Orange Money, validé ensuite
 // par l'équipe Ezial.
 
-export function SellerPaymentCards({ summary, commissionHint }: { summary: SellerPaymentSummary; commissionHint: string }) {
-  const cards: { label: string; value: number; hint?: string; accent?: boolean }[] = [
-    { label: 'Total des ventes', value: summary.grossSales },
-    { label: 'Commissions prélevées', value: summary.commissions, hint: commissionHint },
-    { label: 'Net gagné', value: summary.netEarned, accent: true },
-    { label: 'En attente', value: summary.pending, hint: 'Paiement ou livraison à confirmer' },
+// « Total des ventes » = ce que le vendeur a réellement gagné, commission Ezial
+// déjà déduite (summary.netEarned, calculé par le serveur). Les montants bruts,
+// la commission et « en attente » ne sont plus détaillés ici : les cartes
+// suivantes montrent où en est l'argent (à verser, en transfert, versé, annulé).
+export function SellerPaymentCards({ summary }: { summary: SellerPaymentSummary }) {
+  const cards: { label: string; value: number }[] = [
     { label: 'Disponible au versement', value: summary.available },
     { label: 'En cours de transfert', value: summary.inTransfer },
     { label: 'Déjà versé', value: summary.paidOut },
@@ -25,12 +25,16 @@ export function SellerPaymentCards({ summary, commissionHint }: { summary: Selle
   return (
     <section className="space-y-3">
       <h2 className="text-sm font-semibold text-ink">Mes paiements</h2>
+      <div className="card bg-burgundy/5 p-4 sm:p-5">
+        <p className="text-xs font-medium text-ink/50">Total des ventes</p>
+        <p className="mt-1.5 font-display text-3xl font-semibold text-burgundy">{formatFCFA(summary.netEarned)}</p>
+        <p className="mt-1 text-[11px] leading-snug text-ink/45">Ce que vous avez gagné, commission Ezial déduite</p>
+      </div>
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         {cards.map((c) => (
-          <div key={c.label} className={`card p-4 ${c.accent ? 'bg-burgundy/5' : ''}`}>
+          <div key={c.label} className="card p-4">
             <p className="text-xs font-medium text-ink/50">{c.label}</p>
-            <p className={`mt-1.5 font-display text-xl font-semibold ${c.accent ? 'text-burgundy' : 'text-ink'}`}>{formatFCFA(c.value)}</p>
-            {c.hint && <p className="mt-1 text-[11px] leading-snug text-ink/40">{c.hint}</p>}
+            <p className="mt-1.5 font-display text-xl font-semibold text-ink">{formatFCFA(c.value)}</p>
           </div>
         ))}
       </div>

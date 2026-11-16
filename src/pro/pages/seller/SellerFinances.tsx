@@ -128,7 +128,7 @@ export default function SellerFinances() {
       {/* Summary — remplacé par « Mes paiements » (calculé par le serveur)
           une fois le module paiements installé. */}
       {payments.kind === 'ready' && payments.summary ? (
-        <SellerPaymentCards summary={payments.summary} commissionHint={commissionHint} />
+        <SellerPaymentCards summary={payments.summary} />
       ) : (
         <FinanceSummary
           rows={[
