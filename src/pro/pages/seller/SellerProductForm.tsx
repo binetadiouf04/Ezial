@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect } from 'react';
+import { isRealGoldJewelry, GOLD_JEWELRY_MESSAGE, GOLD_JEWELRY_HINT } from '@/lib/goldJewelry';
 import { usePro } from '../../ProContext';
 import {
   categories, categoryMap, type CategoryId,
@@ -1049,6 +1050,8 @@ export default function SellerProductForm({ productId }: { productId?: string })
       if (promoStart && promoEnd && promoStart > promoEnd) e.promoEnd = 'La date de fin doit être après la date de début.';
     }
     if (status === 'published' && !images.some((img) => img.kind === 'image')) e.images = 'Ajoutez au moins une photo.';
+    // Pas de bijoux en or véritable (la base le refuse aussi : règle non contournable).
+    if (isRealGoldJewelry({ category: categoryId, name, description, descriptiveAttributes: buildDescriptiveAttributes() })) e.gold = GOLD_JEWELRY_MESSAGE;
     if (isTissus) {
       if (!fabricType) e.fabricType = 'Le type de tissu est obligatoire';
       if (!saleMode) e.saleMode = 'Le mode de vente est obligatoire';
@@ -1125,6 +1128,10 @@ export default function SellerProductForm({ productId }: { productId?: string })
       // only inline next to each field — the field itself may be scrolled
       // out of view, which previously made a correctly-blocked submit look
       // like the button was simply unresponsive.
+      if (validationErrors.gold) {
+        setSubmitError(`${GOLD_JEWELRY_MESSAGE} ${GOLD_JEWELRY_HINT}`);
+        return;
+      }
       const missing = Object.keys(validationErrors).map((key) => VALIDATION_FIELD_LABELS[key] ?? key);
       setSubmitError(`Impossible d'enregistrer : vérifiez ${missing.join(', ')}.`);
       return;
@@ -1456,6 +1463,12 @@ export default function SellerProductForm({ productId }: { productId?: string })
           </div>
           {errors.category && <p className="mt-1 text-xs text-burgundy">{errors.category}</p>}
         </div>
+        {categoryId === 'bijoux' && (
+          <div className={`rounded-lg px-3.5 py-3 text-xs leading-relaxed ${errors.gold ? 'bg-burgundy/5 text-burgundy' : 'bg-amber-50 text-amber-900'}`} role={errors.gold ? 'alert' : undefined}>
+            <p className="font-semibold">{GOLD_JEWELRY_MESSAGE}</p>
+            <p className="mt-0.5 opacity-90">{GOLD_JEWELRY_HINT}</p>
+          </div>
+        )}
         {selectedCategory && selectedCategory.subcategories.length > 0 && (
           <div>
             <label className="block text-xs font-medium text-ink/60 mb-1.5">Sous-catégorie</label>
