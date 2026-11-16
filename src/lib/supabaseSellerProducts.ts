@@ -1,4 +1,5 @@
 import { supabase } from './supabaseClient';
+import { GOLD_JEWELRY_MESSAGE } from '@/lib/goldJewelry';
 import { PRODUCT_IMAGES_BUCKET, resolveImageUrl } from './supabaseCatalog';
 import { assignShopPrefixes, formatReference } from '@/utils/reference';
 import { generateThumbnail } from '@/utils/imageOptimize';
@@ -363,6 +364,7 @@ export async function createProductInSupabase(
       if (isReferenceConflict(lastError)) {
         return { error: "Impossible de générer une référence produit disponible après plusieurs tentatives (conflit concurrent). Réessayez." };
       }
+      if (lastError?.message?.includes(GOLD_JEWELRY_MESSAGE)) return { error: GOLD_JEWELRY_MESSAGE };
       return { error: `Impossible de créer le produit : ${lastError?.message ?? 'erreur inconnue'}.` };
     }
     productId = productRow.id;
@@ -794,7 +796,10 @@ export async function updateProductInSupabase(productId: string, input: UpdatePr
       availability_status: input.availabilityStatus,
     })
     .eq('id', productId);
-  if (productError) return { error: `Impossible de mettre à jour le produit : ${productError.message}` };
+  if (productError) {
+    if (productError.message.includes(GOLD_JEWELRY_MESSAGE)) return { error: GOLD_JEWELRY_MESSAGE };
+    return { error: `Impossible de mettre à jour le produit : ${productError.message}` };
+  }
 
   const { data: existingVariants, error: fetchError } = await supabase
     .from('product_variants')

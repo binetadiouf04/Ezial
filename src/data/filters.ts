@@ -33,7 +33,11 @@ const allFragranceNotes = [...new Set([...parfumsFemmeNotes, ...parfumsHommeNote
 
 const encensMaisonTypes = ['Encens', 'Diffuseur', 'Bougie', 'Huile à brûler', 'Parfum d\'ambiance'];
 
-const jewelryMaterials = ['Or', 'Argent', 'Plaqué or', 'Acier inoxydable', 'Perles'];
+// Pas d'« Or » : la vente de bijoux en or véritable n'est pas autorisée sur Ezial
+// (voir src/lib/goldJewelry.ts). « Plaqué or », « Fantaisie » et « Acier
+// inoxydable » restent proposés. Ces options alimentent à la fois le filtre
+// client et le formulaire vendeur.
+const jewelryMaterials = ['Argent', 'Plaqué or', 'Acier inoxydable', 'Perles', 'Fantaisie'];
 const jewelryColors = [
   'Doré', 'Argenté', 'Or rose', 'Noir', 'Blanc', 'Ivoire', 'Crème', 'Beige', 'Marron',
   'Rouge', 'Bordeaux', 'Rose', 'Mauve', 'Violet', 'Bleu', 'Bleu marine', 'Vert', 'Turquoise',
