@@ -580,12 +580,18 @@ export default function SellerShop() {
                 <GoogleLocationPickerMap position={manualPosition} onChange={handleMapPick} />
                 <p className="text-xs text-ink/40">Cliquez sur la carte ou faites glisser le repère pour ajuster précisément l'emplacement réel de la boutique.</p>
                 {manualError && <p className="text-xs text-burgundy">{manualError}</p>}
-                <div className="flex items-center gap-3">
-                  <button type="button" onClick={() => void handleSaveManualLocation()} disabled={manualSaving || !manualPosition || manualPositionIsSaved} className="btn-primary">
-                    {manualSaving ? <><Loader2 size={15} className="animate-spin" /> Enregistrement...</> : 'Enregistrer cette position'}
-                  </button>
-                  {manualPositionIsSaved && <span className="flex items-center gap-1 text-sm text-green-600"><Check size={14} /> Position enregistrée</span>}
-                </div>
+                {manualPositionIsSaved ? (
+                  <div className="rounded-lg bg-green-50 px-3.5 py-3 text-sm text-green-800">
+                    <p className="flex items-center gap-1.5 font-medium"><Check size={15} /> Cette position est déjà enregistrée.</p>
+                    <p className="mt-0.5 text-xs text-green-800/80">Pour la changer, cherchez une autre adresse ou déplacez le repère sur la carte : le bouton « Enregistrer cette position » reviendra.</p>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-3">
+                    <button type="button" onClick={() => void handleSaveManualLocation()} disabled={manualSaving || !manualPosition} className="btn-primary">
+                      {manualSaving ? <><Loader2 size={15} className="animate-spin" /> Enregistrement...</> : 'Enregistrer cette position'}
+                    </button>
+                  </div>
+                )}
               </div>
             )}
           </>
