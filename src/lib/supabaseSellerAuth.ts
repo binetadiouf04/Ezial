@@ -1,4 +1,5 @@
 import { supabase } from './supabaseClient';
+import { forgetThisDeviceOnSignOut } from './supabasePush';
 import { mapAuthErrorMessage, isValidEmail } from './authErrors';
 
 // Sellers log in with their username (`seller_code`) or their email, plus
@@ -297,6 +298,9 @@ export async function restoreSellerSession(): Promise<SellerAuthShop | null> {
 }
 
 export async function signOutSeller(): Promise<void> {
+  // Avant la déconnexion (la RLS exige encore la session) : cet appareil ne
+  // recevra plus les notifications de ce compte.
+  await forgetThisDeviceOnSignOut();
   await supabase.auth.signOut();
 }
 

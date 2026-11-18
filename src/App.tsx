@@ -143,7 +143,8 @@ function RouteView() {
   if (clean === '/panier') return <CartPage />;
   if (clean === '/checkout') return <CheckoutPage />;
   if (clean === '/profil') return <ProfilePage />;
-  if (clean === '/commandes') return <ProfilePage />;
+  // /compte/commandes : adresse utilisée par les notifications acheteur (base de données).
+  if (clean === '/commandes' || clean === '/compte/commandes') return <ProfilePage />;
 
   // Order confirmation: /commande/:id
   if (clean.startsWith('/commande/')) {
@@ -271,7 +272,7 @@ function headTagsFor(route: string, { catalogProducts, catalogShops }: CatalogFo
   if (clean.startsWith('/suivi/')) return plainTags(`Suivi de commande — ${SITE_TITLE}`, DEFAULT_DESCRIPTION);
   if (clean.startsWith('/compte/commande/')) return plainTags(`Détail de commande — ${SITE_TITLE}`, DEFAULT_DESCRIPTION);
   if (clean === '/favoris') return plainTags(`Favoris — ${SITE_TITLE}`, DEFAULT_DESCRIPTION);
-  if (clean === '/profil' || clean === '/commandes') return plainTags(`Mon compte — ${SITE_TITLE}`, DEFAULT_DESCRIPTION);
+  if (clean === '/profil' || clean === '/commandes' || clean === '/compte/commandes') return plainTags(`Mon compte — ${SITE_TITLE}`, DEFAULT_DESCRIPTION);
   if (clean === '/promos') return plainTags(`Promotions — ${SITE_TITLE}`, 'Toutes les offres et promotions en cours sur Ezial.');
   if (clean === '/tendances') return plainTags(`Tendances — ${SITE_TITLE}`, 'Les produits les plus aimés sur Ezial.');
   if (clean === '/pour-vous') return plainTags(`Vous aimerez — ${SITE_TITLE}`, 'Des produits choisis selon vos envies parmi le catalogue Ezial.');

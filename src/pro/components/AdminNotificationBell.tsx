@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Bell, Check } from 'lucide-react';
+import { restoreDeviceForCurrentSession } from '@/lib/supabasePush';
 import {
   fetchAdminNotifications, fetchUnreadAdminNotificationCount, markAdminNotificationRead, markAllAdminNotificationsRead,
   type AdminNotification,
@@ -27,6 +28,8 @@ export default function AdminNotificationBell({ onNavigate }: { onNavigate: (url
   }, []);
 
   useEffect(() => { refreshCount(); }, [refreshCount]);
+  // Compte revenu sur un appareil où il avait activé les notifications.
+  useEffect(() => { void restoreDeviceForCurrentSession(); }, []);
 
   useEffect(() => {
     if (!open) return;

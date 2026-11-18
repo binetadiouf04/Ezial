@@ -24,6 +24,19 @@ https://:project.pages.dev/*
 https://:version.:project.pages.dev/*
   X-Robots-Tag: noindex
 
+# Application installable : le service worker et l'identifiant de version
+# doivent toujours être revérifiés auprès du serveur, sinon un téléphone peut
+# garder une ancienne version (le JS/CSS versionné de /assets reste, lui, en
+# cache un an : chaque déploiement produit de nouveaux noms de fichiers).
+/sw.js
+  Cache-Control: no-cache
+/version.json
+  Cache-Control: no-store
+/manifest.webmanifest
+  Cache-Control: no-cache
+/offline.html
+  Cache-Control: no-cache
+
 # Fichiers JS/CSS du build : leur nom contient l'empreinte de leur contenu
 # (ex. index-DkrLOtgS.js), ils ne changent donc jamais. Le navigateur peut les
 # garder un an sans redemander au serveur ; un nouveau déploiement produit de

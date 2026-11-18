@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Bell, Check } from 'lucide-react';
+import { restoreDeviceForCurrentSession } from '@/lib/supabasePush';
 import {
   fetchNotifications, fetchUnreadNotificationCount, markNotificationRead, markAllNotificationsRead,
   type AppNotification,
@@ -38,6 +39,8 @@ export default function NotificationBell({ onNavigate }: { onNavigate: (url: str
   }, []);
 
   useEffect(() => { refreshCount(); }, [refreshCount]);
+  // Compte revenu sur un appareil où il avait activé les notifications.
+  useEffect(() => { void restoreDeviceForCurrentSession(); }, []);
 
   useEffect(() => {
     if (!open) return;

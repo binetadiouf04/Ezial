@@ -8,3 +8,6 @@ interface ImportMetaEnv {
 interface ImportMeta {
   readonly env: ImportMetaEnv;
 }
+
+/** Identifiant de la version construite (vite.config.ts) ; « dev » en développement. */
+declare const __EZIAL_BUILD_ID__: string;
