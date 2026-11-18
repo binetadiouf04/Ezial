@@ -7,7 +7,13 @@
     <title>Ezial — Mode, beauté & lifestyle à Dakar</title>
     <meta name="description" content="Ezial est une marketplace qui réunit des boutiques de mode, beauté, cheveux, bijoux et parfums à Dakar, avec livraison ou retrait en boutique." />
     <link rel="canonical" href="https://ezial.net/" />
-    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <!-- Icône d'écran d'accueil (logo officiel). iPhone / iPad : apple-touch-icon 180 px ;
+         Android : manifeste (192, 512 et adaptative). Le manifeste garde « display: browser » :
+         Ezial reste un site web, aucune installation n'est proposée. -->
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <meta name="apple-mobile-web-app-title" content="Ezial" />
+    <meta name="application-name" content="Ezial" />
     <meta name="theme-color" content="#5A0D1E" />
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="Ezial" />
