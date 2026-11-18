@@ -13,6 +13,17 @@
   body {
     @apply bg-white text-ink font-sans antialiased;
     line-height: 1.5;
+    /* viewport-fit=cover (index.html) : en paysage sur iPhone, le contenu
+       reste hors de l'encoche. Vaut 0 partout ailleurs. */
+    padding-left: env(safe-area-inset-left, 0px);
+    padding-right: env(safe-area-inset-right, 0px);
+  }
+  /* Barre d'achat fixée en bas (MobileBuyBar) : sa hauteur réelle est
+     réservée sous le pied de page, qui n'est donc jamais caché derrière. */
+  @media (max-width: 1023.98px) {
+    html.has-mobile-buy-bar body {
+      padding-bottom: var(--mobile-buy-bar-h, 0px);
+    }
   }
   h1, h2, h3, h4 {
     line-height: 1.2;

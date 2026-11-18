@@ -58,6 +58,13 @@ export interface Product {
   fabricType?: string;
   saleMode?: 'metre' | 'kilogramme' | 'piece';
   availabilityStatus?: 'unique' | 'limite' | 'disponible' | 'gros_stock';
+  // Fournisseur public (nom affiché aux clients, distinct de la boutique qui
+  // vend) et disponibilité déclarée par le vendeur — voir
+  // src/lib/productAvailability.ts. Absents = en stock, aucun fournisseur affiché.
+  publicSupplier?: string;
+  availabilityMode?: 'in_stock' | 'on_order';
+  /** Délai de préparation (jours) — uniquement pour un produit sur commande. */
+  preparationDays?: number;
 }
 
 const I = {

@@ -9,6 +9,7 @@ import { fabricSaleModeUnit, formatFabricQuantity } from '@/data/categories';
 import { StatusChip } from '../../components/StatusChip';
 import { ArrowLeft, Truck, Store, Phone, Check, Package, Loader2, AlertCircle, Clock, MessageSquare, Gift } from 'lucide-react';
 import SmartImage from '@/components/SmartImage';
+import { formatDays } from '@/lib/productAvailability';
 
 function formatDateTime(iso: string): string {
   if (!iso) return '';
@@ -118,6 +119,9 @@ export default function SellerOrderDetail({ orderId }: { orderId: string }) {
                 )}
                 <p className="text-xs text-ink/50 mt-0.5">Quantité : {item.saleMode ? `${formatFabricQuantity(item.quantity)} ${fabricSaleModeUnit[item.saleMode as keyof typeof fabricSaleModeUnit]}` : item.quantity}</p>
                 <p className="text-xs text-ink/40 mt-0.5">Prix unitaire : {formatFCFA(item.unitPrice)}</p>
+                {item.preparationDays && (
+                  <p className="mt-1 inline-flex rounded-md bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-800">Sur commande · délai annoncé au client : {formatDays(item.preparationDays)}</p>
+                )}
               </div>
               <span className="text-sm font-semibold text-ink flex-shrink-0">{formatFCFA(item.lineTotal)}</span>
             </div>

@@ -127,6 +127,54 @@ export interface CreateProductInput {
   fabricType: string | null;
   saleMode: string | null;
   availabilityStatus: string | null;
+  // Fournisseur public + disponibilité (toutes catégories) — voir ProductAvailabilityInput.
+  availability: ProductAvailabilityInput;
+}
+
+// === Fournisseur public et disponibilité (docs/sql/fournisseur-public-disponibilite.sql) ===
+// Colonnes products.public_supplier / availability_mode / preparation_days.
+// Tant que la migration n'est pas exécutée, un produit « en stock sans
+// fournisseur public » (le cas par défaut) s'enregistre exactement comme
+// avant ; seule une valeur non par défaut renvoie un message clair.
+export interface ProductAvailabilityInput {
+  publicSupplier: string | null;
+  availabilityMode: 'in_stock' | 'on_order';
+  preparationDays: number | null;
+}
+
+export const DEFAULT_AVAILABILITY: ProductAvailabilityInput = { publicSupplier: null, availabilityMode: 'in_stock', preparationDays: null };
+
+function availabilityColumns(a: ProductAvailabilityInput) {
+  return {
+    public_supplier: a.publicSupplier,
+    availability_mode: a.availabilityMode,
+    preparation_days: a.availabilityMode === 'on_order' ? a.preparationDays : null,
+  };
+}
+
+function isDefaultAvailability(a: ProductAvailabilityInput): boolean {
+  return !a.publicSupplier && a.availabilityMode === 'in_stock';
+}
+
+// Colonne inconnue : 42703 (Postgres) ou PGRST204 (cache de schéma PostgREST).
+function isMissingAvailabilityColumn(error: { code?: string; message?: string } | null | undefined): boolean {
+  if (!error) return false;
+  const mentions = /public_supplier|availability_mode|preparation_days/.test(error.message ?? '');
+  return (error.code === '42703' || error.code === 'PGRST204') && mentions;
+}
+
+const AVAILABILITY_NOT_READY = 'Le fournisseur public et la disponibilité « Sur commande » seront disponibles après une mise à jour de la base de données. Enregistrez le produit « En stock » sans fournisseur public en attendant.';
+
+const AVAILABILITY_CONSTRAINT_MESSAGES: Record<string, string> = {
+  products_public_supplier_check: 'Le nom du fournisseur ne doit contenir ni e-mail, ni lien, ni numéro de téléphone (2 à 80 caractères).',
+  products_preparation_days_check: 'Pour un produit sur commande, indiquez un délai de préparation entre 1 et 60 jours.',
+  products_availability_mode_check: 'Disponibilité invalide.',
+};
+
+function availabilityConstraintMessage(error: { message?: string } | null | undefined): string | null {
+  const msg = error?.message ?? '';
+  for (const [name, text] of Object.entries(AVAILABILITY_CONSTRAINT_MESSAGES)) if (msg.includes(name)) return text;
+  return null;
 }
 
 export interface CreateProductResult {
@@ -326,9 +374,10 @@ export async function createProductInSupabase(
 
     for (let attempt = 0; attempt < MAX_REFERENCE_ATTEMPTS; attempt++) {
       reference = await nextAvailableReference(input.shopId, input.shopName);
-      const { data, error } = await supabase
+      const insertRow = (withAvailability: boolean) => supabase
         .from('products')
         .insert({
+          ...(withAvailability ? availabilityColumns(input.availability) : {}),
           shop_id: input.shopId,
           reference,
           name: input.name,
@@ -348,6 +397,11 @@ export async function createProductInSupabase(
         })
         .select('id')
         .single();
+      let { data, error } = await insertRow(true);
+      if (isMissingAvailabilityColumn(error)) {
+        if (!isDefaultAvailability(input.availability)) return { error: AVAILABILITY_NOT_READY };
+        ({ data, error } = await insertRow(false));
+      }
 
       if (!error && data) {
         productRow = data as { id: string };
@@ -365,6 +419,8 @@ export async function createProductInSupabase(
         return { error: "Impossible de générer une référence produit disponible après plusieurs tentatives (conflit concurrent). Réessayez." };
       }
       if (lastError?.message?.includes(GOLD_JEWELRY_MESSAGE)) return { error: GOLD_JEWELRY_MESSAGE };
+      const availabilityError = availabilityConstraintMessage(lastError);
+      if (availabilityError) return { error: availabilityError };
       return { error: `Impossible de créer le produit : ${lastError?.message ?? 'erreur inconnue'}.` };
     }
     productId = productRow.id;
@@ -692,19 +748,26 @@ export interface EditableProduct {
   fabricType: string | null;
   saleMode: string | null;
   availabilityStatus: string | null;
+  // Fournisseur public + disponibilité (toutes catégories) — voir ProductAvailabilityInput.
+  availability: ProductAvailabilityInput;
 }
 
 // Scoped to the seller's own shop (like fetchSellerProducts) so editing
 // never reads — let alone later updates — a product belonging to a
 // different shop, on top of whatever RLS already enforces.
 export async function fetchProductForEdit(productId: string, shopId: string): Promise<EditableProduct | null> {
-  const { data: row, error } = await supabase
+  const BASE_COLUMNS = 'id, shop_id, reference, name, description, category, subcategory, base_price, status, descriptive_attributes, is_promo, promo_price, promo_start, promo_end, fabric_type, sale_mode, availability_status';
+  const readRow = (columns: string) => supabase
     .from('products')
-    .select('id, shop_id, reference, name, description, category, subcategory, base_price, status, descriptive_attributes, is_promo, promo_price, promo_start, promo_end, fabric_type, sale_mode, availability_status')
+    .select(columns)
     .eq('id', productId)
     .eq('shop_id', shopId)
     .maybeSingle();
-  if (error || !row) return null;
+  let { data: rawRow, error } = await readRow(`${BASE_COLUMNS}, public_supplier, availability_mode, preparation_days`);
+  // Migration pas encore exécutée : lecture sans les nouvelles colonnes.
+  if (isMissingAvailabilityColumn(error)) ({ data: rawRow, error } = await readRow(BASE_COLUMNS));
+  if (error || !rawRow) return null;
+  const row = rawRow as unknown as Record<string, unknown>;
 
   const [{ data: variantRows }, images] = await Promise.all([
     supabase.from('product_variants').select('id, attributes, price, stock').eq('product_id', productId),
@@ -736,6 +799,11 @@ export async function fetchProductForEdit(productId: string, shopId: string): Pr
     fabricType: (row.fabric_type as string | null) ?? null,
     saleMode: (row.sale_mode as string | null) ?? null,
     availabilityStatus: (row.availability_status as string | null) ?? null,
+    availability: {
+      publicSupplier: (row.public_supplier as string | null) ?? null,
+      availabilityMode: row.availability_mode === 'on_order' ? 'on_order' : 'in_stock',
+      preparationDays: row.availability_mode === 'on_order' ? ((row.preparation_days as number | null) ?? null) : null,
+    },
   };
 }
 
@@ -755,6 +823,8 @@ export interface UpdateProductInput {
   fabricType: string | null;
   saleMode: string | null;
   availabilityStatus: string | null;
+  // Fournisseur public + disponibilité (toutes catégories) — voir ProductAvailabilityInput.
+  availability: ProductAvailabilityInput;
 }
 
 // A variant's attributes, as a stable key for matching "the same variant"
@@ -777,9 +847,10 @@ function variantAttributesKey(attributes: Record<string, string>): string {
 // resetting untouched variants' stock to 0 — the previous delete-all/
 // insert-all approach lost every variant's identity on every save.
 export async function updateProductInSupabase(productId: string, input: UpdateProductInput): Promise<{ error?: string }> {
-  const { error: productError } = await supabase
+  const updateRow = (withAvailability: boolean) => supabase
     .from('products')
     .update({
+      ...(withAvailability ? availabilityColumns(input.availability) : {}),
       name: input.name,
       description: input.description,
       category: input.category,
@@ -796,8 +867,15 @@ export async function updateProductInSupabase(productId: string, input: UpdatePr
       availability_status: input.availabilityStatus,
     })
     .eq('id', productId);
+  let { error: productError } = await updateRow(true);
+  if (isMissingAvailabilityColumn(productError)) {
+    if (!isDefaultAvailability(input.availability)) return { error: AVAILABILITY_NOT_READY };
+    ({ error: productError } = await updateRow(false));
+  }
   if (productError) {
     if (productError.message.includes(GOLD_JEWELRY_MESSAGE)) return { error: GOLD_JEWELRY_MESSAGE };
+    const availabilityError = availabilityConstraintMessage(productError);
+    if (availabilityError) return { error: availabilityError };
     return { error: `Impossible de mettre à jour le produit : ${productError.message}` };
   }
 

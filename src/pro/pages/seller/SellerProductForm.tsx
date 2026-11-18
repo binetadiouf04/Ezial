@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect } from 'react';
 import { isRealGoldJewelry, GOLD_JEWELRY_MESSAGE, GOLD_JEWELRY_HINT } from '@/lib/goldJewelry';
 import { allowsCustomColorCombos, addCustomColor, CUSTOM_COLOR_MAX_LENGTH } from '@/lib/variantValues';
+import { validatePreparationDays, validatePublicSupplier, PREPARATION_DAYS_MAX, PUBLIC_SUPPLIER_MAX_LENGTH, type AvailabilityMode } from '@/lib/productAvailability';
 import { usePro } from '../../ProContext';
 import {
   categories, categoryMap, type CategoryId,
@@ -198,6 +199,8 @@ const VALIDATION_FIELD_LABELS: Record<string, string> = {
   fabricType: 'Type de tissu',
   saleMode: 'Mode de vente',
   availabilityStatus: 'Disponibilité',
+  preparationDays: 'Délai de préparation',
+  publicSupplier: 'Fournisseur affiché aux clients',
 };
 
 // Maquillage: the color/teinte palette depends on the type of product chosen —
@@ -452,6 +455,13 @@ export default function SellerProductForm({ productId }: { productId?: string })
   // customers or other shops. See fetchProductSupplier/saveProductSupplier.
   const [supplier, setSupplier] = useState('');
 
+  // Disponibilité et fournisseur PUBLIC (toutes boutiques, toutes catégories) —
+  // products.availability_mode / preparation_days / public_supplier, voir
+  // src/lib/productAvailability.ts. Distinct du fournisseur interne ci-dessus.
+  const [availabilityMode, setAvailabilityMode] = useState<AvailabilityMode>('in_stock');
+  const [preparationDays, setPreparationDays] = useState('');
+  const [publicSupplier, setPublicSupplier] = useState('');
+
   // "Fait à la main" — a product-wide characteristic, independent of
   // category/subcategory (never replaces either). Stored the same way as
   // every other descriptive characteristic, under its own fixed
@@ -520,6 +530,9 @@ export default function SellerProductForm({ productId }: { productId?: string })
       setFabricType(data.fabricType ?? '');
       setSaleMode((data.saleMode as FabricSaleMode | null) ?? '');
       setAvailabilityStatus((data.availabilityStatus as FabricAvailabilityStatus | null) ?? '');
+      setAvailabilityMode(data.availability.availabilityMode);
+      setPreparationDays(data.availability.preparationDays != null ? String(data.availability.preparationDays) : '');
+      setPublicSupplier(data.availability.publicSupplier ?? '');
       setImages(data.images.map((img) => ({
         key: img.id,
         kind: img.mediaType === 'video' ? 'video' as const : 'image' as const,
@@ -1065,6 +1078,10 @@ export default function SellerProductForm({ productId }: { productId?: string })
       if (!saleMode) e.saleMode = 'Le mode de vente est obligatoire';
       if (!availabilityStatus) e.availabilityStatus = 'La disponibilité est obligatoire';
     }
+    const daysError = validatePreparationDays(availabilityMode, preparationDays);
+    if (daysError) e.preparationDays = daysError;
+    const supplierCheck = validatePublicSupplier(publicSupplier);
+    if (supplierCheck.error) e.publicSupplier = supplierCheck.error;
     setErrors(e);
     return e;
   };
@@ -1184,6 +1201,13 @@ export default function SellerProductForm({ productId }: { productId?: string })
         availabilityStatus: isTissus ? (availabilityStatus || null) : null,
       };
 
+      // Déclaré par le vendeur, jamais déduit du fournisseur.
+      const availability = {
+        publicSupplier: validatePublicSupplier(publicSupplier).value,
+        availabilityMode,
+        preparationDays: availabilityMode === 'on_order' ? Number(preparationDays) : null,
+      };
+
       if (existingProductId) {
         // === True edit: UPDATE the same products row — same id, same
         // reference, same shop_id, all three left untouched by the update
@@ -1200,6 +1224,7 @@ export default function SellerProductForm({ productId }: { productId?: string })
           variants: buildVariantRows(),
           ...promoPayload,
           ...fabricPayload,
+          availability,
         });
         if (updateResult.error) {
           setSubmitError(updateResult.error);
@@ -1236,6 +1261,7 @@ export default function SellerProductForm({ productId }: { productId?: string })
           images: newMediaWithPosition.map((x) => x.media),
           ...promoPayload,
           ...fabricPayload,
+          availability,
         });
         if ('error' in supabaseResult) {
           setSubmitError(supabaseResult.error);
@@ -1308,7 +1334,10 @@ export default function SellerProductForm({ productId }: { productId?: string })
   const renderColorSwatches = (group: FilterGroup) => {
     const selected = selections[group.id] ?? [];
     const showAll = showAllColors[group.id] ?? false;
-    const availableColors = group.options
+    // Une couleur déjà enregistrée sous un ancien nom (ex. « Kaki », devenu
+    // « Vert kaki ») reste affichée et sélectionnée : son stock est conservé.
+    const legacySelected = selected.filter((name) => !group.options.includes(name) && getColor(name));
+    const availableColors = [...legacySelected, ...group.options]
       .map((name) => getColor(name))
       .filter((c): c is NonNullable<typeof c> => c !== undefined);
     const visible = showAll ? availableColors : availableColors.slice(0, COLOR_PREVIEW_COUNT);
@@ -1630,14 +1659,14 @@ export default function SellerProductForm({ productId }: { productId?: string })
         </div>
         {sellerShopIsOfficial && (
           <div>
-            <label className="block text-xs font-medium text-ink/60 mb-1.5">Fournisseur</label>
+            <label className="block text-xs font-medium text-ink/60 mb-1.5">Fournisseur interne</label>
             <input
               className="input-field"
               placeholder={'Ex. "Fournisseur Dakar", "Boutique Aminata" — ou "Ezial" si le stock vient directement d\'EZIAL'}
               value={supplier}
               onChange={(e) => setSupplier(e.target.value)}
             />
-            <p className="mt-1 text-xs text-ink/45">Visible uniquement en interne (EZIAL) — jamais affiché aux clients ni aux autres boutiques.</p>
+            <p className="mt-1 text-xs text-ink/45">Visible uniquement en interne (EZIAL) — jamais affiché aux clients ni aux autres boutiques. Pour montrer un fournisseur sur la fiche produit, utilisez « Fournisseur affiché aux clients » plus bas.</p>
           </div>
         )}
       </div>
@@ -1657,6 +1686,63 @@ export default function SellerProductForm({ productId }: { productId?: string })
           <span className="text-sm font-medium text-ink">Fait à la main</span>
         </label>
         <p className="mt-1.5 text-xs text-ink/45">Produit artisanal, fabriqué à la main. N'affecte pas la catégorie — apparaît aussi dans « Made in Sénégal ».</p>
+      </div>
+
+      {/* 4ter. Disponibilité + fournisseur public — toutes catégories.
+          Déclarés par le vendeur : un fournisseur renseigné ne rend jamais le
+          produit « sur commande » (voir src/lib/productAvailability.ts). */}
+      <div className="card p-5 space-y-4">
+        <div>
+          <h2 className="text-sm font-semibold text-ink">Disponibilité</h2>
+          <p className="mt-1 text-xs text-ink/45">L’article est-il déjà chez vous, ou doit-il être approvisionné ou fabriqué après la commande ?</p>
+        </div>
+        <div className="grid gap-2 sm:grid-cols-2" role="radiogroup" aria-label="Disponibilité">
+          {([
+            { id: 'in_stock' as const, label: 'En stock', hint: 'Physiquement disponible chez vous.' },
+            { id: 'on_order' as const, label: 'Sur commande', hint: 'À approvisionner ou fabriquer après la commande.' },
+          ]).map((opt) => (
+            <button
+              key={opt.id}
+              type="button"
+              role="radio"
+              aria-checked={availabilityMode === opt.id}
+              onClick={() => { setAvailabilityMode(opt.id); setErrors((prev) => { const next = { ...prev }; delete next.preparationDays; return next; }); }}
+              className={`rounded-lg border px-3.5 py-2.5 text-left transition-colors ${availabilityMode === opt.id ? 'border-burgundy bg-burgundy/5' : 'border-line hover:border-ink/30'}`}
+            >
+              <span className={`block text-sm font-medium ${availabilityMode === opt.id ? 'text-burgundy' : 'text-ink'}`}>{opt.label}</span>
+              <span className="mt-0.5 block text-xs text-ink/50">{opt.hint}</span>
+            </button>
+          ))}
+        </div>
+        {availabilityMode === 'on_order' && (
+          <div>
+            <label htmlFor="preparation-days" className="block text-xs font-medium text-ink/60 mb-1.5">Délai de préparation (jours)</label>
+            <input
+              id="preparation-days"
+              className="input-field max-w-[10rem]"
+              type="text"
+              inputMode="numeric"
+              placeholder="Ex. 7"
+              value={preparationDays}
+              onChange={(e) => setPreparationDays(e.target.value.replace(/[^0-9]/g, '').slice(0, 2))}
+            />
+            {errors.preparationDays && <p className="mt-1 text-xs text-burgundy">{errors.preparationDays}</p>}
+            <p className="mt-1 text-xs text-ink/45">Délai réaliste entre la commande et le moment où l’article est prêt à être livré (1 à {PREPARATION_DAYS_MAX} jours). Il est affiché au client avant le paiement ; la livraison s’ajoute ensuite. Le stock indique la quantité que vous pouvez fournir.</p>
+          </div>
+        )}
+        <div className="border-t border-line pt-4">
+          <label htmlFor="public-supplier" className="block text-xs font-medium text-ink/60 mb-1.5">Fournisseur affiché aux clients <span className="font-normal text-ink/40">(facultatif)</span></label>
+          <input
+            id="public-supplier"
+            className="input-field"
+            placeholder="Ex. Atelier Ndeye, Thiès"
+            maxLength={PUBLIC_SUPPLIER_MAX_LENGTH}
+            value={publicSupplier}
+            onChange={(e) => setPublicSupplier(e.target.value)}
+          />
+          {errors.publicSupplier && <p className="mt-1 text-xs text-burgundy">{errors.publicSupplier}</p>}
+          <p className="mt-1 text-xs text-ink/45">Nom seulement, visible sur la fiche produit. Votre boutique reste le vendeur responsable. N’indiquez ni téléphone, ni e-mail, ni lien. Renseigner un fournisseur ne rend pas le produit « sur commande ».</p>
+        </div>
       </div>
 
       {/* 5. Photos & vidéo */}

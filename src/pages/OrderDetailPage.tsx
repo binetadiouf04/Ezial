@@ -9,6 +9,7 @@ import { deliveryStatusLabels, pickupStepLabels, computeDeliveryStepStatus } fro
 import { paymentLabels } from '@/data/payments';
 import { Package, Truck, Store, MapPin, Smartphone, Clock, Check, KeySquare, ArrowLeft, CheckCircle2, AlertTriangle, RotateCcw } from 'lucide-react';
 import SmartImage from '@/components/SmartImage';
+import { formatDays } from '@/lib/productAvailability';
 import ClaimModal from '@/components/ClaimModal';
 
 const deliveryStatusColors: Record<DeliveryStepStatus, string> = {
@@ -112,6 +113,7 @@ export default function OrderDetailPage({ orderId }: { orderId: string }) {
                         <p className="text-xs text-ink/50 mt-0.5">{Object.entries(item.variants).map(([k, v]) => `${k} : ${v}`).join(' · ')}</p>
                       )}
                       <p className="text-xs text-ink/50">Quantité : {p?.saleMode ? `${formatFabricQuantity(item.quantity)} ${fabricSaleModeUnit[p.saleMode]}` : item.quantity}</p>
+                      {item.preparationDays && <p className="text-[11px] font-medium text-amber-800">Sur commande · préparation {formatDays(item.preparationDays)} environ</p>}
                       <div className="flex items-center gap-2 mt-0.5">
                         {shop && <p className="text-[11px] text-ink/35">Vendu par {shop.name}</p>}
                         {isPickup && <span className="text-[11px] text-ink/40 flex items-center gap-0.5"><Store size={10} /> Retrait</span>}

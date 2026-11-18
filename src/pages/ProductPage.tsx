@@ -21,8 +21,10 @@ import Rating from '@/components/Rating';
 import FavoriteButton from '@/components/FavoriteButton';
 import ProductCarousel from '@/components/ProductCarousel';
 import SmartImage from '@/components/SmartImage';
+import MobileBuyBar from '@/components/MobileBuyBar';
 import { CopyReference, ShareProduct } from '@/components/ProductShareActions';
 import { DELIVERY } from '@/shared/siteInfo';
+import { availabilityLabel, formatDays } from '@/lib/productAvailability';
 import { ChevronRight, Store, Plus, Minus, Check, Star, Camera, X, ShieldCheck, Loader2, Truck, ShoppingBag } from 'lucide-react';
 
 const tabs = ['Description', 'Avis'] as const;
@@ -242,6 +244,9 @@ export default function ProductPage({ productId }: { productId: string }) {
   const cat = categoryMap[product.category];
   const outOfStock = product.stock === 0;
   const lowStock = product.stock > 0 && product.stock <= 3;
+  // Déclaré par le vendeur (jamais déduit du fournisseur) ; un délai est
+  // toujours présent pour un produit sur commande (contrainte en base).
+  const onOrder = product.availabilityMode === 'on_order' && Boolean(product.preparationDays);
   const sameShopProducts = getProductsFromSameShop(product, catalogProducts);
   const relatedIds = sameShopProducts.map((p) => p.id);
   const similarProducts = getSimilarProducts(product, catalogProducts, relatedIds, SIMILAR_PREVIEW_LIMIT);
@@ -263,7 +268,7 @@ export default function ProductPage({ productId }: { productId: string }) {
   };
 
   return (
-    <div className="container-pro pb-28 pt-4 lg:py-8">
+    <div className="container-pro pb-8 pt-4 lg:py-8">
       <nav aria-label="Fil d'Ariane" className="mb-4 flex flex-wrap items-center gap-1.5 text-[11px] text-ink/45 lg:mb-6">
         <button onClick={() => navigate('/')} className="hover:text-burgundy">Accueil</button><ChevronRight size={11} aria-hidden="true" />
         {cat && <><button onClick={() => navigate(`/categorie/${cat.id}`)} className="hover:text-burgundy">{cat.label}</button><ChevronRight size={11} aria-hidden="true" /></>}
@@ -286,6 +291,10 @@ export default function ProductPage({ productId }: { productId: string }) {
                 <button type="button" onClick={() => navigate(shopPath(shop))} className="font-medium text-ink/75 underline-offset-2 transition-colors hover:text-burgundy hover:underline">{shop.name}</button>
               </p>
             )}
+            {/* Fournisseur public : nom seul, distinct de la boutique qui vend. */}
+            {product.publicSupplier && (
+              <p className="mt-1 text-sm text-ink/55">Fournisseur : <span className="font-medium text-ink/75">{product.publicSupplier}</span></p>
+            )}
             <div className="mt-1.5"><CopyReference reference={product.reference} /></div>
             {isRealCatalogId(product.id) ? (
               reviewStats.count > 0 && <div className="mt-2.5"><Rating rating={reviewStats.average} count={reviewStats.count} size="md" /></div>
@@ -300,7 +309,17 @@ export default function ProductPage({ productId }: { productId: string }) {
               {fabricAvailabilityLabels[product.availabilityStatus]}
             </span>
           )}
-          {outOfStock ? <p className="text-sm font-medium text-ink/50">Rupture de stock</p> : (lowStock && !product.saleMode) ? <p className="text-sm font-medium text-burgundy">Plus que {product.stock} disponibles</p> : null}
+          {outOfStock ? <p className="text-sm font-medium text-ink/50">Rupture de stock</p> : onOrder ? (
+            <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
+              <span className="inline-flex items-center rounded-md bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-800">{availabilityLabel('on_order', { handmade: product.handmade })}</span>
+              <span className="text-ink/65">Préparation : {formatDays(product.preparationDays!)} environ</span>
+            </p>
+          ) : (
+            <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
+              {!product.saleMode && <span className="inline-flex items-center rounded-md bg-green-50 px-2.5 py-1 text-xs font-semibold text-green-800">En stock</span>}
+              {lowStock && !product.saleMode && <span className="font-medium text-burgundy">Plus que {product.stock} disponibles</span>}
+            </p>
+          )}
           {product.variants.length > 0 && <div className="border-t border-ink/10 pt-5"><VariantSelector variants={product.variants} selected={variants} onChange={handleVariant} /></div>}
           <div className="space-y-4">
             <div>
@@ -350,21 +369,25 @@ export default function ProductPage({ productId }: { productId: string }) {
             {product.saleMode && qtyError && <p className="text-sm text-burgundy">{qtyError}</p>}
             {error && <p className="text-sm text-burgundy">{error}</p>}
           </div>
-          {/* Barre d'achat : fixée en bas de l'écran sur mobile (zone de
-              sécurité respectée), intégrée à la page sur ordinateur. */}
-          <div className="fixed inset-x-0 bottom-0 z-30 border-t border-ink/10 bg-white/95 px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 backdrop-blur lg:static lg:z-auto lg:border-0 lg:bg-transparent lg:p-0 lg:backdrop-blur-none">
-            <div className="mx-auto flex max-w-[480px] gap-2.5 lg:max-w-none">
-              <button onClick={() => handleAdd(false)} disabled={outOfStock || fabricQtyInvalid} className="btn-shop min-w-0 flex-1 whitespace-nowrap !px-3 !text-sm sm:!text-[15px]">{added ? <><Check size={17} /> Ajouté</> : <><ShoppingBag size={17} aria-hidden="true" /> Ajouter au panier</>}</button>
-              <button onClick={() => handleAdd(true)} disabled={outOfStock || fabricQtyInvalid} className="btn-shop-line flex-none whitespace-nowrap !px-4 !text-sm sm:!text-[15px]">Acheter maintenant</button>
-            </div>
-          </div>
+          {/* Barre d'achat : fixée en bas de l'écran sur mobile (stable,
+              masquée pendant la saisie), intégrée à la page sur ordinateur. */}
+          <MobileBuyBar>
+            <button onClick={() => handleAdd(false)} disabled={outOfStock || fabricQtyInvalid} className="btn-shop min-w-0 flex-1 whitespace-nowrap !px-3 !text-sm sm:!text-[15px]">{added ? <><Check size={17} /> Ajouté</> : <><ShoppingBag size={17} aria-hidden="true" /> Ajouter au panier</>}</button>
+            <button onClick={() => handleAdd(true)} disabled={outOfStock || fabricQtyInvalid} className="btn-shop-line flex-none whitespace-nowrap !px-4 !text-sm sm:!text-[15px]">Acheter maintenant</button>
+          </MobileBuyBar>
           {/* Delivery promise (src/shared/siteInfo.js) — information only,
               the order flow and delivery fee are unchanged. */}
           <div className="flex items-center gap-3 rounded-lg border border-ink/10 bg-cream/50 px-3.5 py-3">
             <Truck size={18} className="flex-shrink-0 text-burgundy" aria-hidden="true" />
-            <p className="text-sm leading-snug text-ink/70">
-              <span className="font-semibold text-ink">Livraison en {DELIVERY.delay}</span> à {DELIVERY.area}
-            </p>
+            {onOrder ? (
+              <p className="text-sm leading-snug text-ink/70">
+                <span className="font-semibold text-ink">{product.handmade ? 'Fabrication' : 'Approvisionnement'} en {formatDays(product.preparationDays!)} environ</span> après la commande, puis livraison en {DELIVERY.delay} à {DELIVERY.area}.
+              </p>
+            ) : (
+              <p className="text-sm leading-snug text-ink/70">
+                <span className="font-semibold text-ink">Livraison en {DELIVERY.delay}</span> à {DELIVERY.area}
+              </p>
+            )}
           </div>
           {product.pickup && (
             <div className="rounded-lg border border-ink/10 px-3.5 py-3">

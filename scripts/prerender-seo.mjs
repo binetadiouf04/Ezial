@@ -343,15 +343,24 @@ for (const p of products) {
   ];
 
   const inStock = stockFor(p.id) > 0;
+  // Disponibilité déclarée par le vendeur (docs/sql/fournisseur-public-disponibilite.sql) ;
+  // colonnes absentes avant la migration → en stock, aucun fournisseur affiché.
+  const onOrder = inStock && p.availability_mode === 'on_order' && Number(p.preparation_days) > 0;
+  const prepDays = onOrder ? Number(p.preparation_days) : 0;
+  const publicSupplier = typeof p.public_supplier === 'string' && p.public_supplier.trim() ? p.public_supplier.trim() : null;
+  const availabilityText = !inStock ? 'Rupture de stock'
+    : onOrder ? `Sur commande : préparation en ${prepDays} jour${prepDays > 1 ? 's' : ''} environ après la commande, puis livraison à Dakar.`
+    : 'En stock';
   const promoEnd = isPromoActive(p) && p.promo_end ? isoDate(new Date(p.promo_end).getTime()) : undefined;
   const productJsonLd = {
     '@context': 'https://schema.org', '@type': 'Product',
     name: p.name, description: p.description || undefined, image: images, sku: p.reference || p.id, url: canonical,
     category: p.category ? (subLabel ? `${categoryLabel} > ${subLabel}` : categoryLabel) : undefined,
     offers: {
-      '@type': 'Offer', price, priceCurrency: 'XOF', availability: `https://schema.org/${inStock ? 'InStock' : 'OutOfStock'}`, url: canonical,
+      '@type': 'Offer', price, priceCurrency: 'XOF', availability: `https://schema.org/${!inStock ? 'OutOfStock' : onOrder ? 'MadeToOrder' : 'InStock'}`, url: canonical,
       priceValidUntil: promoEnd,
       seller: shop ? { '@type': 'Organization', name: shop.name, url: `${SITE_URL}${shopPath(shop)}` } : undefined,
+      ...(onOrder ? { deliveryLeadTime: { '@type': 'QuantitativeValue', value: prepDays, unitCode: 'DAY' } } : {}),
     },
     ...(stats && stats.count > 0 ? { aggregateRating: { '@type': 'AggregateRating', ratingValue: stats.average, reviewCount: stats.count } } : {}),
   };
@@ -360,10 +369,11 @@ for (const p of products) {
     ${breadcrumbNav(breadcrumbItems)}
     <main>
       <h1>${esc(p.name)}</h1>
-      ${shop ? `<p><a href="${esc(`${SITE_URL}${shopPath(shop)}`)}">${esc(shop.name)}</a></p>` : ''}
+      ${shop ? `<p>Vendu par <a href="${esc(`${SITE_URL}${shopPath(shop)}`)}">${esc(shop.name)}</a></p>` : ''}
+      ${publicSupplier ? `<p>Fournisseur : ${esc(publicSupplier)}</p>` : ''}
       ${images.map((url, i) => `<img src="${esc(url)}" alt="${esc(p.name)}"${i === 0 ? ' fetchpriority="high"' : ' loading="lazy"'} />`).join('')}
       <p>${price.toLocaleString('fr-FR')} FCFA</p>
-      <p>${inStock ? 'En stock' : 'Rupture de stock'}</p>
+      <p>${esc(availabilityText)}</p>
       ${p.description ? `<p>${esc(p.description)}</p>` : ''}
     </main>`;
 

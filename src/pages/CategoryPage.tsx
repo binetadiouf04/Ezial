@@ -3,6 +3,7 @@ import { useApp } from '@/store/AppContext';
 import { categoryMap, type CategoryId } from '@/data/categories';
 import { variantNameMatchesFilterGroup, type Product } from '@/data/products';
 import { getFilters, type FilterGroup } from '@/data/filters';
+import { canonicalColorName } from '@/data/colors';
 import { fabricSaleModeLabels } from '@/data/categories';
 import ProductGrid from '@/components/ProductGrid';
 import CategorySidebar from '@/components/CategorySidebar';
@@ -60,7 +61,7 @@ export default function CategoryPage({ categoryId, subId }: { categoryId: string
 
   const allFilters: FilterGroup[] = useMemo(() => [
     ...categoryFilters,
-    { id: 'disponibilite', label: 'Disponibilité', options: ['En stock'] },
+    { id: 'disponibilite', label: 'Disponibilité', options: ['En stock', 'Sur commande'] },
     { id: 'promotions', label: 'Promotions', options: ['En promotion'] },
     ...(shopNamesPresent.length > 1 ? [{ id: 'boutique', label: 'Boutique', options: shopNamesPresent, collapsible: true }] : []),
   ], [categoryFilters, shopNamesPresent]);
@@ -72,7 +73,14 @@ export default function CategoryPage({ categoryId, subId }: { categoryId: string
     Object.entries(selectedFilters).forEach(([group, values]) => {
       if (!values?.length) return;
       if (group === 'prix') { result = result.filter((p) => matchesPrice(p.price, values)); }
-      else if (group === 'disponibilite') { result = result.filter((p) => p.stock > 0); }
+      else if (group === 'disponibilite') {
+        // « En stock » = physiquement disponible ; « Sur commande » = déclaré
+        // par le vendeur (approvisionnement ou fabrication après la commande).
+        result = result.filter((p) => p.stock > 0 && (
+          (values.includes('En stock') && p.availabilityMode !== 'on_order') ||
+          (values.includes('Sur commande') && p.availabilityMode === 'on_order')
+        ));
+      }
       else if (group === 'promotions') { result = result.filter((p) => p.isPromo); }
       else if (group === 'boutique') {
         const shopIdsByName = new Map(catalogShops.map((s) => [s.name, s.id]));
@@ -83,7 +91,7 @@ export default function CategoryPage({ categoryId, subId }: { categoryId: string
         result = result.filter((p) => {
           // variantNameMatchesFilterGroup also matches "Couleur / Imprimé"
           // (colours and prints as one dimension) and "Motif / Imprimé".
-          const variantMatch = p.variants.some((v) => (norm(v.name) === gnorm || variantNameMatchesFilterGroup(v.name, group)) && v.values.some((val) => values.includes(val)));
+          const variantMatch = p.variants.some((v) => (norm(v.name) === gnorm || variantNameMatchesFilterGroup(v.name, group)) && v.values.some((val) => values.some((f) => canonicalColorName(f) === canonicalColorName(val))));
           const detailMatch = p.details.some((d) => {
             const dnorm = norm(d.label);
             return (dnorm === gnorm || dnorm === gnorm.replace(/produit$/, '') || dnorm === gnorm.replace(/decheveu$/, '')) && values.some((val) => d.value.toLowerCase().includes(val.toLowerCase()));

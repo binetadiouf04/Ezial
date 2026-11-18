@@ -1,3 +1,4 @@
+import { normalizeAvailabilityMode } from '@/lib/productAvailability';
 import { supabase } from './supabaseClient';
 import { isProductUuid } from './productUrl';
 import type { Product, VariantOption, VariantPrice } from '@/data/products';
@@ -97,6 +98,11 @@ interface ProductRow {
   fabric_type?: string | null;
   sale_mode?: string | null;
   availability_status?: string | null;
+  // Fournisseur public et disponibilité (docs/sql/fournisseur-public-disponibilite.sql).
+  // Absents tant que la migration n'est pas exécutée : le produit reste « En stock ».
+  public_supplier?: string | null;
+  availability_mode?: string | null;
+  preparation_days?: number | null;
 }
 
 interface ProductImageRow {
@@ -305,6 +311,9 @@ function mapProduct(row: ProductRow, imageRows: ProductImageRow[], variantRows: 
     fabricType: row.fabric_type ?? undefined,
     saleMode: (row.sale_mode as Product['saleMode']) ?? undefined,
     availabilityStatus: (row.availability_status as Product['availabilityStatus']) ?? undefined,
+    publicSupplier: row.public_supplier?.trim() || undefined,
+    availabilityMode: normalizeAvailabilityMode(row.availability_mode),
+    preparationDays: normalizeAvailabilityMode(row.availability_mode) === 'on_order' && row.preparation_days ? row.preparation_days : undefined,
   };
 }
 
