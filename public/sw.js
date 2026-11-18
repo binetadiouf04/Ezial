@@ -1,24 +1,70 @@
-// Service worker for browser notifications only. Ezial is a classic website
-// (no installable app, no offline mode): this worker exists solely so the
-// browser can display Web Push notifications — order, mission and admin
-// alerts — and open the right page when one is clicked. It never intercepts
-// a network request (no 'fetch' listener): pages, assets and Supabase calls
-// all go straight to the network, exactly as on a site without a worker.
+// Service worker d'Ezial (application web installable).
+//
+// Rôle volontairement limité :
+//   1. notifications Web Push (affichage + ouverture de la bonne page) —
+//      comportement identique à la version précédente ;
+//   2. page « hors connexion » quand une NAVIGATION échoue faute de réseau.
+//
+// Ce qu'il ne fait JAMAIS : mettre en cache les pages, le JavaScript, le CSS,
+// les images ou les réponses Supabase (comptes, sessions, paiements, commandes).
+// Toutes ces requêtes vont directement au réseau, exactement comme sans service
+// worker ; les fichiers /assets/* sont versionnés par Vite et gérés par le cache
+// HTTP de Cloudflare Pages (voir public/_headers). Le seul fichier gardé est
+// /offline.html, une page statique sans aucune donnée personnelle.
+//
+// Mises à jour : un nouveau sw.js s'installe et s'active tout de suite
+// (skipWaiting + clients.claim) sans recharger aucune page. C'est sans risque
+// parce qu'il ne sert aucun fichier de l'application ; la mise à jour de
+// l'application elle-même est proposée à l'utilisateur par la page
+// (src/lib/appUpdate.ts), jamais imposée.
 
-// Caches written by the earlier version of this worker (cache-first copy of
-// build assets). Deleted on activation so no browser keeps them around.
-const OBSOLETE_CACHE_PREFIX = 'ezial-static-';
+const OFFLINE_CACHE = 'ezial-offline-v1';
+const OFFLINE_URL = '/offline.html';
+// Caches d'anciennes versions du worker (copie des fichiers du site) : supprimés.
+const OBSOLETE_PREFIXES = ['ezial-static-', 'ezial-offline-'];
 
-self.addEventListener('install', () => {
-  self.skipWaiting();
+self.addEventListener('install', (event) => {
+  event.waitUntil(
+    caches.open(OFFLINE_CACHE)
+      .then((cache) => cache.add(new Request(OFFLINE_URL, { cache: 'reload' })))
+      // Sans réseau à l'installation : le worker s'installe quand même
+      // (notifications), la page hors ligne sera simplement absente.
+      .catch(() => {})
+      .then(() => self.skipWaiting()),
+  );
 });
 
 self.addEventListener('activate', (event) => {
-  event.waitUntil(
-    caches.keys()
-      .then((keys) => Promise.all(keys.filter((k) => k.startsWith(OBSOLETE_CACHE_PREFIX)).map((k) => caches.delete(k))))
-      .then(() => self.clients.claim()),
-  );
+  event.waitUntil((async () => {
+    const keys = await caches.keys();
+    await Promise.all(keys
+      .filter((k) => k !== OFFLINE_CACHE && OBSOLETE_PREFIXES.some((p) => k.startsWith(p)))
+      .map((k) => caches.delete(k)));
+    // Le préchargement de navigation évite tout délai dû au démarrage du worker.
+    if (self.registration.navigationPreload) {
+      try { await self.registration.navigationPreload.enable(); } catch { /* facultatif */ }
+    }
+    await self.clients.claim();
+  })());
+});
+
+// Uniquement les navigations GET (ouverture d'une page) : réseau d'abord,
+// page hors ligne seulement si le réseau échoue. Aucune autre requête n'est
+// interceptée (API, paiements, fichiers, images, autres domaines).
+self.addEventListener('fetch', (event) => {
+  const { request } = event;
+  if (request.mode !== 'navigate' || request.method !== 'GET') return;
+  if (new URL(request.url).origin !== self.location.origin) return;
+  event.respondWith((async () => {
+    try {
+      const preloaded = await event.preloadResponse;
+      if (preloaded) return preloaded;
+      return await fetch(request);
+    } catch {
+      const cached = await caches.match(OFFLINE_URL, { cacheName: OFFLINE_CACHE });
+      return cached || Response.error();
+    }
+  })());
 });
 
 // Web Push — the payload is whatever JSON the send-push / send-push-campaign
@@ -29,15 +75,17 @@ self.addEventListener('push', (event) => {
   if (!event.data) return;
   let payload;
   try { payload = event.data.json(); } catch { return; }
-  const { title, body, url } = payload;
-  event.waitUntil(
-    self.registration.showNotification(title || 'Ezial', {
-      body: body || '',
-      icon: '/icons/icon-192.png',
-      badge: '/icons/icon-192.png',
-      data: { url: url || '/' },
-    }),
-  );
+  const { title, body, url, tag } = payload;
+  const options = {
+    body: body || '',
+    icon: '/icons/icon-192.png',
+    badge: '/icons/icon-192.png',
+    data: { url: url || '/' },
+  };
+  // Même « tag » = la notification remplace la précédente au lieu de s'empiler
+  // (anti-doublon côté appareil). Facultatif : absent des envois actuels.
+  if (typeof tag === 'string' && tag) options.tag = tag;
+  event.waitUntil(self.registration.showNotification(title || 'Ezial', options));
 });
 
 // Same-origin absolute URL of the page a notification points to. Anything
@@ -52,8 +100,8 @@ function targetUrlFor(path) {
   }
 }
 
-// Focuses an already-open Ezial tab and loads the page there, or opens a new
-// tab when none is open (or the open one cannot be navigated).
+// Focuses an already-open Ezial window (tab or installed app) and loads the
+// page there, or opens a new one when none is open (or it cannot be navigated).
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
   const targetUrl = targetUrlFor(event.notification.data?.url);
@@ -66,7 +114,7 @@ self.addEventListener('notificationclick', (event) => {
           if ('navigate' in client) await client.navigate(targetUrl);
           return;
         } catch {
-          break; // fall back to a new tab below
+          break; // fall back to a new window below
         }
       }
       return self.clients.openWindow(targetUrl);

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
-import { getPushSupportStatus, subscribeToPush, unsubscribeFromPush, type PushSupportStatus } from '@/lib/supabasePush';
-import { Bell, Check, AlertCircle, Loader2 } from 'lucide-react';
+import { getPushSupportStatus, isDeviceRegisteredForUser, subscribeToPush, unsubscribeFromPush, type PushSupportStatus } from '@/lib/supabasePush';
+import { Bell, Check, AlertCircle, Loader2, Share, SquarePlus } from 'lucide-react';
 
 // Explicit opt-in only — Web Push never subscribes silently. Reused for
 // the customer account page, the seller "Ma boutique" page, the driver
@@ -11,7 +11,17 @@ export default function NotificationOptIn({ userId, label }: { userId: string; l
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  useEffect(() => { setStatus(getPushSupportStatus()); }, []);
+  useEffect(() => {
+    let cancelled = false;
+    const browserStatus = getPushSupportStatus();
+    if (browserStatus !== 'granted') { setStatus(browserStatus); return; }
+    // Autorisation déjà donnée par le navigateur : encore faut-il que CET
+    // appareil soit enregistré pour CE compte (appareil partagé, déconnexion).
+    void isDeviceRegisteredForUser().then((registered) => {
+      if (!cancelled) setStatus(registered ? 'granted' : 'default');
+    });
+    return () => { cancelled = true; };
+  }, [userId]);
 
   const handleEnable = async () => {
     setError('');
@@ -30,6 +40,22 @@ export default function NotificationOptIn({ userId, label }: { userId: string; l
   };
 
   if (status === 'unsupported') return null; // no browser notifications on this browser/device
+
+  // iPhone / iPad dans Safari : les notifications n'existent que pour Ezial
+  // ajouté à l'écran d'accueil. Simple explication, aucune fenêtre imposée.
+  if (status === 'ios-install-required') {
+    return (
+      <div className="card flex items-start gap-3 p-4">
+        <span className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-burgundy/10 text-burgundy"><Bell size={16} /></span>
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-medium text-ink">{label}</p>
+          <p className="mt-0.5 text-xs leading-relaxed text-ink/60">
+            Sur iPhone, les notifications fonctionnent avec l’application Ezial : touchez <Share size={12} className="inline align-[-2px]" aria-label="Partager" /> Partager, puis <SquarePlus size={12} className="inline align-[-2px]" aria-hidden="true" /> « Sur l’écran d’accueil », et ouvrez Ezial depuis son icône.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   // Undecided (status === 'default') gets a deliberately bolder treatment —
   // this is the one state a seller/driver might otherwise never notice or

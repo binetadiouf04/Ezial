@@ -1,4 +1,5 @@
 import { supabase } from './supabaseClient';
+import { forgetThisDeviceOnSignOut } from './supabasePush';
 import { mapAuthErrorMessage, isValidEmail } from './authErrors';
 
 // Real customer accounts — email + mot de passe (Supabase Auth). Téléphone
@@ -151,6 +152,9 @@ export async function restoreCustomerSession(): Promise<CustomerProfile | null> 
 }
 
 export async function signOutCustomer(): Promise<void> {
+  // Avant la déconnexion (la RLS exige encore la session) : cet appareil ne
+  // recevra plus les notifications de ce compte.
+  await forgetThisDeviceOnSignOut();
   await supabase.auth.signOut();
 }
 

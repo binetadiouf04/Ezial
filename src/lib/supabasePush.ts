@@ -1,17 +1,17 @@
 import { supabase } from './supabaseClient';
+import { isRpcMissing } from './supabaseFeatureDetect';
 
-// Web Push opt-in — real browser Push API, never a home-made polling
-// system. Subscriptions are stored per Supabase Auth user (customer or
-// seller — same auth.users id space) in public.push_subscriptions (see the
-// migration this feature ships with), so the sending side (an Edge
-// Function, invoked by a database trigger — see supabase/functions/
-// send-push/index.ts) can look up "who to notify" for a given order/shop
-// without ever touching the frontend again.
+// Web Push (norme W3C + VAPID) — jamais d'interrogation régulière maison.
+// Chaque appareil abonné est une ligne de public.push_subscriptions liée au
+// compte Supabase (auth.uid()) : un même compte peut avoir plusieurs appareils.
+// L'envoi est fait côté serveur (fonction Supabase send-push, appelée par
+// public.push_notify) avec la clé VAPID privée, qui ne quitte jamais Supabase.
+// Seule la clé PUBLIQUE est dans le site (VITE_VAPID_PUBLIC_KEY).
 //
-// Ezial is a website, not an installable app: a browser that has no Push
-// API in a regular tab (e.g. Safari on iPhone/iPad) is simply reported as
-// 'unsupported' and the opt-in is not shown there — installing anything is
-// never presented as a condition for receiving notifications.
+// iPhone / iPad : Safari n'autorise les notifications qu'à une application
+// ajoutée à l'écran d'accueil (iOS 16.4 et plus) et ouverte depuis son icône.
+// Dans un onglet Safari, l'état est 'ios-install-required' : on l'explique, on
+// ne force rien.
 
 const VAPID_PUBLIC_KEY = import.meta.env.VITE_VAPID_PUBLIC_KEY as string | undefined;
 
@@ -22,15 +22,108 @@ function urlBase64ToUint8Array(base64String: string): Uint8Array {
   return Uint8Array.from([...rawData].map((c) => c.charCodeAt(0)));
 }
 
-export type PushSupportStatus = 'unsupported' | 'default' | 'granted' | 'denied';
+export type PushSupportStatus = 'unsupported' | 'ios-install-required' | 'default' | 'granted' | 'denied';
+
+function isIOS(): boolean {
+  const ua = navigator.userAgent || '';
+  return /iPad|iPhone|iPod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+}
+
+/** Vrai quand Ezial est ouvert comme application installée (icône d'écran d'accueil). */
+export function isStandaloneApp(): boolean {
+  return window.matchMedia?.('(display-mode: standalone)').matches
+    || (navigator as Navigator & { standalone?: boolean }).standalone === true;
+}
 
 export function getPushSupportStatus(): PushSupportStatus {
-  if (!('serviceWorker' in navigator) || !('PushManager' in window) || !VAPID_PUBLIC_KEY) return 'unsupported';
+  if (!VAPID_PUBLIC_KEY) return 'unsupported';
+  if (!('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)) {
+    return isIOS() && !isStandaloneApp() ? 'ios-install-required' : 'unsupported';
+  }
   return Notification.permission as PushSupportStatus;
 }
 
+async function currentSubscription(): Promise<PushSubscription | null> {
+  if (!('serviceWorker' in navigator)) return null;
+  const registration = await navigator.serviceWorker.getRegistration('/');
+  return registration ? registration.pushManager.getSubscription() : null;
+}
+
+/**
+ * Cet appareil reçoit-il les notifications de CE compte ? (autorisation du
+ * navigateur accordée ET abonnement enregistré pour l'utilisateur connecté).
+ * Sur un appareil partagé, l'autorisation donnée par un autre compte ne suffit pas.
+ */
+export async function isDeviceRegisteredForUser(): Promise<boolean> {
+  try {
+    const sub = await currentSubscription();
+    if (!sub) return false;
+    // RLS : on ne voit que ses propres abonnements.
+    const { data } = await supabase.from('push_subscriptions').select('id').eq('endpoint', sub.endpoint).maybeSingle();
+    return Boolean(data);
+  } catch {
+    return false;
+  }
+}
+
+// Compte qui a lui-même cliqué « Activer » sur cet appareil. Après une
+// déconnexion puis reconnexion de CE compte, l'appareil est réabonné sans
+// redemander ; un autre compte sur le même appareil doit cliquer lui-même.
+const DEVICE_OWNER_KEY = 'ezial-push-device-owner';
+function readDeviceOwner(): string | null {
+  try { return localStorage.getItem(DEVICE_OWNER_KEY); } catch { return null; }
+}
+function writeDeviceOwner(userId: string | null): void {
+  try {
+    if (userId) localStorage.setItem(DEVICE_OWNER_KEY, userId);
+    else localStorage.removeItem(DEVICE_OWNER_KEY);
+  } catch { /* facultatif */ }
+}
+
+async function saveSubscription(userId: string, subscription: PushSubscription): Promise<{ error?: string }> {
+  const json = subscription.toJSON();
+  // Fonction serveur (docs/sql/push-appareils.sql) : rattache l'appareil au
+  // compte connecté, même s'il était lié à un autre compte auparavant.
+  const rpc = await supabase.rpc('register_push_subscription', {
+    p_endpoint: json.endpoint,
+    p_p256dh: json.keys?.p256dh,
+    p_auth: json.keys?.auth,
+    p_user_agent: navigator.userAgent.slice(0, 300),
+  });
+  if (!rpc.error) { writeDeviceOwner(userId); return {}; }
+  if (!isRpcMissing(rpc.error)) return { error: 'Impossible d’enregistrer cet appareil. Réessayez.' };
+  // Fonction pas encore installée : enregistrement direct (comportement actuel).
+  const { error } = await supabase.from('push_subscriptions').upsert({
+    user_id: userId,
+    endpoint: json.endpoint,
+    p256dh: json.keys?.p256dh,
+    auth: json.keys?.auth,
+  }, { onConflict: 'endpoint' });
+  if (error) return { error: 'Impossible d’enregistrer cet appareil. Réessayez.' };
+  writeDeviceOwner(userId);
+  return {};
+}
+
+/**
+ * Au retour d'un compte qui avait lui-même activé les notifications sur cet
+ * appareil (puis s'était déconnecté) : réabonnement silencieux, sans nouvelle
+ * demande d'autorisation. Ne fait rien pour un autre compte.
+ */
+export async function restoreDeviceForReturningUser(userId: string): Promise<void> {
+  try {
+    if (!userId || readDeviceOwner() !== userId || getPushSupportStatus() !== 'granted') return;
+    const subscription = await currentSubscription();
+    if (!subscription) return;
+    if (await isDeviceRegisteredForUser()) return;
+    await saveSubscription(userId, subscription);
+  } catch { /* sans effet sur la page */ }
+}
+
+/** Abonnement : uniquement après un clic explicite (« Activer »). */
 export async function subscribeToPush(userId: string): Promise<{ error?: string }> {
-  if (getPushSupportStatus() === 'unsupported') return { error: 'Les notifications ne sont pas prises en charge sur cet appareil/navigateur.' };
+  const status = getPushSupportStatus();
+  if (status === 'ios-install-required') return { error: 'Sur iPhone, ajoutez d’abord Ezial à l’écran d’accueil, puis ouvrez-le depuis son icône.' };
+  if (status === 'unsupported') return { error: 'Les notifications ne sont pas prises en charge sur cet appareil/navigateur.' };
 
   const permission = await Notification.requestPermission();
   if (permission !== 'granted') return { error: 'Autorisation refusée.' };
@@ -41,25 +134,39 @@ export async function subscribeToPush(userId: string): Promise<{ error?: string 
     userVisibleOnly: true,
     applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY as string),
   });
-
-  const json = subscription.toJSON();
-  const { error } = await supabase.from('push_subscriptions').upsert({
-    user_id: userId,
-    endpoint: json.endpoint,
-    p256dh: json.keys?.p256dh,
-    auth: json.keys?.auth,
-  }, { onConflict: 'endpoint' });
-
-  return error ? { error: error.message } : {};
+  return saveSubscription(userId, subscription);
 }
 
 export async function unsubscribeFromPush(userId: string): Promise<void> {
-  const registration = await navigator.serviceWorker.ready;
-  const subscription = await registration.pushManager.getSubscription();
+  writeDeviceOwner(null); // désactivation volontaire : pas de réabonnement automatique
+  const subscription = await currentSubscription();
   if (subscription) {
     await supabase.from('push_subscriptions').delete().eq('endpoint', subscription.endpoint);
     await subscription.unsubscribe();
   } else {
     await supabase.from('push_subscriptions').delete().eq('user_id', userId);
   }
+}
+
+/**
+ * À la déconnexion : cet appareil ne reçoit plus les notifications du compte
+ * qui se déconnecte (appareil partagé). L'autorisation du navigateur reste :
+ * le prochain compte devra cliquer « Activer » pour recevoir les siennes.
+ * Ne bloque jamais la déconnexion (1,5 s au plus, erreurs ignorées).
+ */
+export async function forgetThisDeviceOnSignOut(): Promise<void> {
+  const work = (async () => {
+    const subscription = await currentSubscription();
+    if (subscription) await supabase.from('push_subscriptions').delete().eq('endpoint', subscription.endpoint);
+  })().catch(() => {});
+  await Promise.race([work, new Promise((resolve) => setTimeout(resolve, 1500))]);
+}
+
+/** Même chose, pour le compte de la session en cours (appelé à l'ouverture des cloches de notification). */
+export async function restoreDeviceForCurrentSession(): Promise<void> {
+  try {
+    const { data } = await supabase.auth.getSession();
+    const userId = data.session?.user.id;
+    if (userId) await restoreDeviceForReturningUser(userId);
+  } catch { /* sans effet sur la page */ }
 }
