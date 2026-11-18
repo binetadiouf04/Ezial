@@ -1,4 +1,3 @@
-import { normalizeAvailabilityMode } from '@/lib/productAvailability';
 import { supabase } from './supabaseClient';
 import { isProductUuid } from './productUrl';
 import type { Product, VariantOption, VariantPrice } from '@/data/products';
@@ -98,11 +97,6 @@ interface ProductRow {
   fabric_type?: string | null;
   sale_mode?: string | null;
   availability_status?: string | null;
-  // Fournisseur public et disponibilité (docs/sql/fournisseur-public-disponibilite.sql).
-  // Absents tant que la migration n'est pas exécutée : le produit reste « En stock ».
-  public_supplier?: string | null;
-  availability_mode?: string | null;
-  preparation_days?: number | null;
 }
 
 interface ProductImageRow {
@@ -311,9 +305,6 @@ function mapProduct(row: ProductRow, imageRows: ProductImageRow[], variantRows: 
     fabricType: row.fabric_type ?? undefined,
     saleMode: (row.sale_mode as Product['saleMode']) ?? undefined,
     availabilityStatus: (row.availability_status as Product['availabilityStatus']) ?? undefined,
-    publicSupplier: row.public_supplier?.trim() || undefined,
-    availabilityMode: normalizeAvailabilityMode(row.availability_mode),
-    preparationDays: normalizeAvailabilityMode(row.availability_mode) === 'on_order' && row.preparation_days ? row.preparation_days : undefined,
   };
 }
 
@@ -415,6 +406,20 @@ export interface SupabaseProductDetailResult {
  * above — a draft/flagged/disabled product must never be reachable by
  * guessing or sharing its URL, on top of whatever RLS already enforces.
  */
+/**
+ * Nom du fournisseur d'un produit, affiché sur la fiche (Ezial Boutique
+ * uniquement). Lu par une fonction serveur qui ne renvoie QUE le nom, pour un
+ * produit actif de la boutique officielle : jamais la table interne
+ * product_suppliers, jamais d'autres informations. Tant que la fonction n'est
+ * pas installée (docs/sql/fournisseur-public.sql), aucun fournisseur n'est affiché.
+ */
+export async function fetchPublicProductSupplier(productId: string): Promise<string | null> {
+  const { data, error } = await supabase.rpc('public_product_suppliers', { p_product_ids: [productId] });
+  if (error || !Array.isArray(data) || data.length === 0) return null;
+  const name = (data[0] as { supplier?: string | null }).supplier;
+  return typeof name === 'string' && name.trim() ? name.trim() : null;
+}
+
 export async function fetchProductDetailFromSupabase(productKey: string): Promise<SupabaseProductDetailResult> {
   const { data: productRow, error: productError } = await supabase
     .from('products')

@@ -52,10 +52,6 @@ interface OrderItemRow {
   quantity: number;
   unit_price: number;
   line_total: number;
-  // Copie au moment de la commande (docs/sql/fournisseur-public-disponibilite.sql) ;
-  // absente pour les commandes antérieures ou avant la migration.
-  availability_mode?: string | null;
-  preparation_days?: number | null;
 }
 
 function firstString(...values: unknown[]): string | null {
@@ -146,8 +142,6 @@ export interface SellerOrderItem {
   // Tissus category only — read from the live products row (order_items
   // itself never snapshots this), null for every other line.
   saleMode: string | null;
-  /** Délai de préparation annoncé au client si l'article était « sur commande » au moment de l'achat. */
-  preparationDays: number | null;
 }
 
 export interface SellerOrderDetail {
@@ -253,7 +247,6 @@ export async function fetchSellerOrderDetail(shopId: string, orderShopId: string
       unitPrice: it.unit_price ?? 0,
       lineTotal: it.line_total ?? 0,
       saleMode: saleModeByProduct.get(it.product_id) ?? null,
-      preparationDays: it.availability_mode === 'on_order' && it.preparation_days ? it.preparation_days : null,
     })),
   };
 }

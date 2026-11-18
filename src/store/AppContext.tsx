@@ -39,8 +39,6 @@ export interface CartItem {
   // placed/fetched order (never for a cart line), needed to target a
   // claim/return at this exact line (see ClaimModal).
   orderItemId?: string;
-  // Délai de préparation annoncé à l'achat (article « sur commande ») — commandes passées uniquement.
-  preparationDays?: number;
 }
 export interface SavedItem { productId: string; shopId: string; quantity: number; variants: Record<string, string>; unitPrice?: number; variantId?: string; }
 

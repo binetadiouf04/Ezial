@@ -17,7 +17,6 @@ import PhoneField from '@/components/PhoneField';
 import CustomerAuthPanel from '@/components/CustomerAuthPanel';
 import { Check, Truck, Store, Smartphone, Clock, Loader2, AlertCircle, AlertTriangle, MapPin, Navigation, Search, ArrowLeft, Gift, UserCheck, ChevronDown, Wallet, FileText, Lock } from 'lucide-react';
 import SmartImage from '@/components/SmartImage';
-import { maxPreparationDays, earliestDeliveryDateISO, formatDays, availabilityLabel } from '@/lib/productAvailability';
 
 const InfoSheet = lazy(() => import('@/components/info/InfoSheet'));
 
@@ -400,21 +399,9 @@ export default function CheckoutPage() {
     };
   };
 
-  // Articles sur commande (déclarés par le vendeur) : le délai de préparation
-  // est affiché avant le paiement et une date de livraison souhaitée ne peut
-  // pas tomber avant la fin de la préparation. Les montants ne changent pas.
-  const productsInCart = cart.map((item) => catalogProducts.find((cp) => cp.id === item.productId)).filter((p): p is NonNullable<typeof p> => Boolean(p));
-  const cartPreparationDays = maxPreparationDays(productsInCart);
-  const localToday = (() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; })();
-  const minPreferredDate = cartPreparationDays > 0 ? earliestDeliveryDateISO(localToday, cartPreparationDays) : tomorrowISO();
-
   const placeOrder = async () => {
     if (hasDeliveryShops && !location) {
       setSubmitError('Position de livraison manquante. Autorisez la géolocalisation ou choisissez le retrait en boutique.');
-      return;
-    }
-    if (hasDeliveryShops && preference.type === 'preferred' && preference.date && preference.date < minPreferredDate) {
-      setSubmitError(`Votre commande contient un article sur commande : choisissez une date de livraison à partir du ${new Date(`${minPreferredDate}T12:00:00`).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' })}.`);
       return;
     }
     setSubmitError('');
@@ -529,9 +516,6 @@ export default function CheckoutPage() {
             <p className="mt-0.5 text-xs text-ink/55">{Object.entries(item.variants).map(([k, v]) => `${k} : ${v}`).join(' · ')}</p>
           )}
           <p className="text-xs text-ink/55">Quantité : {p.saleMode ? `${formatFabricQuantity(item.quantity)} ${fabricSaleModeUnit[p.saleMode]}` : item.quantity}</p>
-          {p.availabilityMode === 'on_order' && p.preparationDays ? (
-            <p className="mt-0.5 text-[11px] font-medium text-amber-800">{availabilityLabel('on_order', { handmade: p.handmade })} · préparation {formatDays(p.preparationDays)} environ</p>
-          ) : null}
           {shop && <p className="mt-0.5 text-[11px] text-ink/40">Vendu par {shop.name}</p>}
           {/* Le prix reste dans la colonne du texte : en promo (prix, ancien prix
               barré et pastille) il ne doit pas écraser le nom ni les détails. */}
@@ -545,11 +529,6 @@ export default function CheckoutPage() {
 
   const summaryTotals = (
     <div className="space-y-2 text-sm">
-      {cartPreparationDays > 0 && (
-        <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-relaxed text-amber-900">
-          <span className="font-semibold">Article sur commande :</span> préparation estimée à {formatDays(cartPreparationDays)} après votre commande. La livraison ou le retrait suit une fois l’article prêt.
-        </p>
-      )}
       <div className="flex justify-between"><span className="text-ink/60">Produits</span><span className="font-medium text-ink">{formatFCFA(cartSubtotal)}</span></div>
       <div className="flex justify-between gap-3"><span className="text-ink/60">{hasDeliveryShops && deliveryFeeKnown ? 'Livraison Ezial (estimation)' : 'Livraison Ezial'}</span><span className="text-right font-medium text-ink">{!hasDeliveryShops ? 'Gratuit' : deliveryFeeKnown ? formatFCFA(effectiveDeliveryFeeEstimate) : `À partir de ${formatFCFA(DELIVERY_FEE_FLOOR)}`}</span></div>
       {isGift && giftWrap && <div className="flex justify-between"><span className="text-ink/60">Emballage cadeau</span><span className="font-medium text-ink">{formatFCFA(GIFT_WRAP_FEE)}</span></div>}
@@ -695,7 +674,6 @@ export default function CheckoutPage() {
               {anyShopOffersPickup && shopsInCart.map((shop) => {
                 const current = getShopFulfillment(shop.id);
                 const shopItems = cart.filter((i) => i.shopId === shop.id);
-                const shopPreparationDays = maxPreparationDays(shopItems.map((i) => catalogProducts.find((cp) => cp.id === i.productId)).filter((p): p is NonNullable<typeof p> => Boolean(p)));
                 return (
                   <div key={shop.id} className="space-y-3 rounded-lg border border-ink/15 p-4">
                     <div className="flex items-center gap-2.5">
@@ -706,7 +684,7 @@ export default function CheckoutPage() {
                     <div className="space-y-2">
                       <button onClick={() => setShopFulfillments({ ...shopFulfillments, [shop.id]: 'delivery' })} className={`opt-row ${current === 'delivery' ? 'opt-row-active' : ''}`}>
                         <Truck size={17} className={`mt-px flex-shrink-0 ${current === 'delivery' ? 'text-burgundy' : 'text-ink/40'}`} />
-                        <div><p className="text-sm font-medium text-ink">Livraison</p><p className="text-xs text-ink/55">{shopPreparationDays > 0 ? `Dakar sous 4–48 h après la préparation (${formatDays(shopPreparationDays)} environ)` : 'Dakar sous 4–48 h'}</p></div>
+                        <div><p className="text-sm font-medium text-ink">Livraison</p><p className="text-xs text-ink/55">Dakar sous 4–48 h</p></div>
                         <Radio active={current === 'delivery'} />
                       </button>
                       {shop.pickupEnabled && (
@@ -736,7 +714,7 @@ export default function CheckoutPage() {
                     <Truck size={19} className="flex-shrink-0 text-burgundy" aria-hidden="true" />
                     <div>
                       <p className="text-sm font-semibold text-ink">Livraison Ezial</p>
-                      <p className="text-xs text-ink/60">{cartPreparationDays > 0 ? `Dakar sous 4–48 h après la préparation (${formatDays(cartPreparationDays)} environ)` : 'Dakar sous 4–48 h'} · {deliveryFeeText}</p>
+                      <p className="text-xs text-ink/60">Dakar sous 4–48 h · {deliveryFeeText}</p>
                     </div>
                   </div>
                   <p className="mt-2.5 text-xs leading-relaxed text-ink/50">Ezial regroupe vos articles des différentes boutiques en une seule livraison vers votre adresse. Le frais exact est calculé à la validation, selon la distance réelle.</p>
@@ -881,7 +859,7 @@ export default function CheckoutPage() {
                       <span className="text-sm font-medium text-ink">Sans préférence</span>
                       <Radio active={preference.type === 'none'} />
                     </button>
-                    <button onClick={() => setPreference({ type: 'preferred', date: minPreferredDate, window: deliveryWindows[0] })} className={`opt-row items-center ${preference.type === 'preferred' ? 'opt-row-active' : ''}`}>
+                    <button onClick={() => setPreference({ type: 'preferred', date: tomorrowISO(), window: deliveryWindows[0] })} className={`opt-row items-center ${preference.type === 'preferred' ? 'opt-row-active' : ''}`}>
                       <Clock size={16} className={preference.type === 'preferred' ? 'text-burgundy' : 'text-ink/40'} />
                       <span className="text-sm font-medium text-ink">Avec préférence</span>
                       <Radio active={preference.type === 'preferred'} />
@@ -892,8 +870,7 @@ export default function CheckoutPage() {
                       <div className="grid gap-3 sm:grid-cols-2">
                         <div>
                           <label className="co-label">Date souhaitée</label>
-                          <input type="date" className="co-input" min={minPreferredDate} value={preference.date} onChange={(e) => setPreference({ ...preference, date: e.target.value })} />
-                          {cartPreparationDays > 0 && <p className="mt-1 text-[11px] text-ink/50">À partir du {new Date(`${minPreferredDate}T12:00:00`).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' })} (article sur commande).</p>}
+                          <input type="date" className="co-input" min={tomorrowISO()} value={preference.date} onChange={(e) => setPreference({ ...preference, date: e.target.value })} />
                         </div>
                         <div>
                           <label className="co-label">Créneau préféré</label>

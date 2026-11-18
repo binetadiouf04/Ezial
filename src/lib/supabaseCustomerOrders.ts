@@ -46,9 +46,6 @@ interface OrderItemRow {
   selected_options: Record<string, string> | null;
   quantity: number;
   unit_price: number;
-  // Copie au moment de la commande (absente pour les commandes antérieures).
-  availability_mode?: string | null;
-  preparation_days?: number | null;
 }
 
 // Real order_shops.status spans the full delivery/pickup flow — collapsed
@@ -125,7 +122,6 @@ export async function fetchCustomerOrders(customerId: string): Promise<Order[]> 
         // case).
         productName: it.product_name,
         orderItemId: it.id,
-        preparationDays: it.availability_mode === 'on_order' && it.preparation_days ? it.preparation_days : undefined,
       })),
       subtotal: o.products_subtotal,
       discount: o.discount_amount ?? 0,

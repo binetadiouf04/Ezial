@@ -4,7 +4,7 @@ import { recordProductView } from '@/lib/browsingHistory';
 import { useApp } from '@/store/AppContext';
 import { getProduct, getVariantPrice, getProductsFromSameShop, getSimilarProducts, isRealCatalogId } from '@/data/products';
 import { getShop, registerSupabaseShops } from '@/data/shops';
-import { fetchProductDetailFromSupabase } from '@/lib/supabaseCatalog';
+import { fetchProductDetailFromSupabase, fetchPublicProductSupplier } from '@/lib/supabaseCatalog';
 import { useNoIndex } from '@/lib/seoHead';
 import { isProductUuid, productPath } from '@/lib/productUrl';
 import { fetchProductReviews, checkCanReview, submitReview, deleteReview, createReviewReport, type Review, type ReviewReportReason } from '@/lib/supabaseReviews';
@@ -24,7 +24,6 @@ import SmartImage from '@/components/SmartImage';
 import MobileBuyBar from '@/components/MobileBuyBar';
 import { CopyReference, ShareProduct } from '@/components/ProductShareActions';
 import { DELIVERY } from '@/shared/siteInfo';
-import { availabilityLabel, formatDays } from '@/lib/productAvailability';
 import { ChevronRight, Store, Plus, Minus, Check, Star, Camera, X, ShieldCheck, Loader2, Truck, ShoppingBag } from 'lucide-react';
 
 const tabs = ['Description', 'Avis'] as const;
@@ -63,6 +62,17 @@ export default function ProductPage({ productId }: { productId: string }) {
   }, [productId]);
 
   const product = supabaseProduct;
+
+  // Nom du fournisseur (Ezial Boutique uniquement) : lu par une fonction serveur
+  // qui ne renvoie que le nom — voir fetchPublicProductSupplier.
+  const [supplierName, setSupplierName] = useState<string | null>(null);
+  useEffect(() => {
+    setSupplierName(null);
+    if (!product?.id || !isRealCatalogId(product.id)) return;
+    let cancelled = false;
+    fetchPublicProductSupplier(product.id).then((name) => { if (!cancelled) setSupplierName(name); });
+    return () => { cancelled = true; };
+  }, [product?.id]);
 
   // An old id-based link (/produit/<uuid>) shows the product's descriptive
   // URL in the address bar once it is known — same page, no new history
@@ -244,9 +254,6 @@ export default function ProductPage({ productId }: { productId: string }) {
   const cat = categoryMap[product.category];
   const outOfStock = product.stock === 0;
   const lowStock = product.stock > 0 && product.stock <= 3;
-  // Déclaré par le vendeur (jamais déduit du fournisseur) ; un délai est
-  // toujours présent pour un produit sur commande (contrainte en base).
-  const onOrder = product.availabilityMode === 'on_order' && Boolean(product.preparationDays);
   const sameShopProducts = getProductsFromSameShop(product, catalogProducts);
   const relatedIds = sameShopProducts.map((p) => p.id);
   const similarProducts = getSimilarProducts(product, catalogProducts, relatedIds, SIMILAR_PREVIEW_LIMIT);
@@ -292,8 +299,8 @@ export default function ProductPage({ productId }: { productId: string }) {
               </p>
             )}
             {/* Fournisseur public : nom seul, distinct de la boutique qui vend. */}
-            {product.publicSupplier && (
-              <p className="mt-1 text-sm text-ink/55">Fournisseur : <span className="font-medium text-ink/75">{product.publicSupplier}</span></p>
+            {supplierName && (
+              <p className="mt-1 text-sm text-ink/55">Fournisseur : <span className="font-medium text-ink/75">{supplierName}</span></p>
             )}
             <div className="mt-1.5"><CopyReference reference={product.reference} /></div>
             {isRealCatalogId(product.id) ? (
@@ -309,17 +316,7 @@ export default function ProductPage({ productId }: { productId: string }) {
               {fabricAvailabilityLabels[product.availabilityStatus]}
             </span>
           )}
-          {outOfStock ? <p className="text-sm font-medium text-ink/50">Rupture de stock</p> : onOrder ? (
-            <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
-              <span className="inline-flex items-center rounded-md bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-800">{availabilityLabel('on_order', { handmade: product.handmade })}</span>
-              <span className="text-ink/65">Préparation : {formatDays(product.preparationDays!)} environ</span>
-            </p>
-          ) : (
-            <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
-              {!product.saleMode && <span className="inline-flex items-center rounded-md bg-green-50 px-2.5 py-1 text-xs font-semibold text-green-800">En stock</span>}
-              {lowStock && !product.saleMode && <span className="font-medium text-burgundy">Plus que {product.stock} disponibles</span>}
-            </p>
-          )}
+          {outOfStock ? <p className="text-sm font-medium text-ink/50">Rupture de stock</p> : (lowStock && !product.saleMode) ? <p className="text-sm font-medium text-burgundy">Plus que {product.stock} disponibles</p> : null}
           {product.variants.length > 0 && <div className="border-t border-ink/10 pt-5"><VariantSelector variants={product.variants} selected={variants} onChange={handleVariant} /></div>}
           <div className="space-y-4">
             <div>
@@ -379,15 +376,9 @@ export default function ProductPage({ productId }: { productId: string }) {
               the order flow and delivery fee are unchanged. */}
           <div className="flex items-center gap-3 rounded-lg border border-ink/10 bg-cream/50 px-3.5 py-3">
             <Truck size={18} className="flex-shrink-0 text-burgundy" aria-hidden="true" />
-            {onOrder ? (
-              <p className="text-sm leading-snug text-ink/70">
-                <span className="font-semibold text-ink">{product.handmade ? 'Fabrication' : 'Approvisionnement'} en {formatDays(product.preparationDays!)} environ</span> après la commande, puis livraison en {DELIVERY.delay} à {DELIVERY.area}.
-              </p>
-            ) : (
-              <p className="text-sm leading-snug text-ink/70">
-                <span className="font-semibold text-ink">Livraison en {DELIVERY.delay}</span> à {DELIVERY.area}
-              </p>
-            )}
+            <p className="text-sm leading-snug text-ink/70">
+              <span className="font-semibold text-ink">Livraison en {DELIVERY.delay}</span> à {DELIVERY.area}
+            </p>
           </div>
           {product.pickup && (
             <div className="rounded-lg border border-ink/10 px-3.5 py-3">
