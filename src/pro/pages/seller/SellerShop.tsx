@@ -8,6 +8,7 @@ import {
   submitShopForReview, activateShopIfReady, uploadShopAsset, removeShopAsset, setShopPaused, type ShopOnboardingData,
 } from '@/lib/supabaseSellerShop';
 import ImageCropModal from '@/components/ImageCropModal';
+import LogoCropModal from '../../components/LogoCropModal';
 import { fetchModerationFlags, latestUnresolvedFlag } from '@/lib/supabaseModeration';
 import { type GeocodeResult } from '@/lib/geocoding';
 import { useAddressSearch } from '@/lib/useAddressSearch';
@@ -363,7 +364,7 @@ export default function SellerShop() {
           <div className="flex items-center gap-3">
             <div className="h-16 w-16 flex-shrink-0 overflow-hidden rounded-lg border border-line bg-cream">
               {form.logoUrl ? (
-                <SmartImage src={form.logoUrl} alt="" className="h-full w-full object-cover" />
+                <SmartImage src={form.logoUrl} alt="" className="h-full w-full bg-white object-contain" />
               ) : (
                 <div className="flex h-full w-full items-center justify-center text-ink/25"><ImageIcon size={20} /></div>
               )}
@@ -402,11 +403,19 @@ export default function SellerShop() {
             )}
           </div>
         </div>
-        {cropPending && (
+        {/* Logo : cadrage automatique (logo entier, centré) ; couverture : recadrage classique, inchangé. */}
+        {cropPending?.kind === 'logo' && (
+          <LogoCropModal
+            file={cropPending.file}
+            onCancel={() => setCropPending(null)}
+            onConfirm={(f) => void confirmCrop(f)}
+          />
+        )}
+        {cropPending?.kind === 'cover' && (
           <ImageCropModal
             file={cropPending.file}
-            aspect={cropPending.kind === 'logo' ? 1 : 3}
-            title={cropPending.kind === 'logo' ? 'Ajuster le logo' : "Ajuster l'image de couverture"}
+            aspect={3}
+            title="Ajuster l'image de couverture"
             onCancel={() => setCropPending(null)}
             onConfirm={(f) => void confirmCrop(f)}
           />

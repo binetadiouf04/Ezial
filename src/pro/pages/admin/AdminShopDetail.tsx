@@ -119,7 +119,7 @@ export default function AdminShopDetail({ shopId }: { shopId: string }) {
       <div className="card overflow-hidden">
         {shop.bannerUrl && <SmartImage src={shop.bannerUrl} alt="" className="h-28 w-full object-cover" />}
         <div className="p-5 flex items-center gap-4">
-          {shop.logoUrl && <SmartImage src={shop.logoUrl} alt="" className="h-16 w-16 rounded-xl object-cover flex-shrink-0" />}
+          {shop.logoUrl && <SmartImage src={shop.logoUrl} alt="" className="h-16 w-16 rounded-xl bg-white object-contain flex-shrink-0" />}
           <div className="flex-1 min-w-0">
             <h1 className="font-display text-lg font-semibold text-ink truncate">{shop.name}</h1>
             {shop.sellerCode && <p className="text-xs text-ink/45 font-mono mt-0.5">{shop.sellerCode}</p>}

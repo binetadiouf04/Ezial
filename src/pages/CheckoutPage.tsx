@@ -677,7 +677,7 @@ export default function CheckoutPage() {
                 return (
                   <div key={shop.id} className="space-y-3 rounded-lg border border-ink/15 p-4">
                     <div className="flex items-center gap-2.5">
-                      <SmartImage src={shop.logo} alt="" className="h-8 w-8 rounded-full object-cover" />
+                      <SmartImage src={shop.logo} alt="" className="h-8 w-8 rounded-full bg-white object-contain" />
                       <p className="text-sm font-semibold text-ink">{shop.name}</p>
                       <span className="ml-auto text-xs text-ink/45">{shopItems.length} article{shopItems.length > 1 ? 's' : ''}</span>
                     </div>

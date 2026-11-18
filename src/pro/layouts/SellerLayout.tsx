@@ -169,7 +169,7 @@ export default function SellerLayout() {
       <aside className="hidden lg:flex w-64 flex-shrink-0 flex-col border-r border-line bg-white lg:sticky lg:top-0 lg:z-30 lg:h-screen lg:self-start">
         <div className="p-5 border-b border-line">
           <div className="flex items-center gap-3">
-            {sellerShop && <SmartImage src={sellerShop.logo} alt="" className="h-10 w-10 rounded-lg object-cover" />}
+            {sellerShop && <SmartImage src={sellerShop.logo} alt="" className="h-10 w-10 rounded-lg bg-white object-contain" />}
             <div className="min-w-0 flex-1">
               <p className="text-sm font-semibold text-ink truncate">{sellerShop?.name ?? name}</p>
               <p className="text-xs text-ink/40 font-mono">{identifier}</p>
@@ -219,7 +219,7 @@ export default function SellerLayout() {
           <button onClick={() => setMenuOpen(true)} aria-label="Ouvrir le menu" className="-ml-1 flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full text-ink hover:bg-cream">
             <Menu size={22} />
           </button>
-          {sellerShop && <SmartImage src={sellerShop.logo} alt="" className="h-8 w-8 flex-shrink-0 rounded-lg object-cover" />}
+          {sellerShop && <SmartImage src={sellerShop.logo} alt="" className="h-8 w-8 flex-shrink-0 rounded-lg bg-white object-contain" />}
           <span className="truncate text-sm font-semibold text-ink">{sellerShop?.name ?? name}</span>
         </div>
         <div className="flex flex-shrink-0 items-center gap-1.5">
@@ -251,7 +251,7 @@ export default function SellerLayout() {
           <div className="absolute left-0 top-0 h-full w-[82%] max-w-xs bg-white slide-up flex flex-col">
             <div className="flex items-center justify-between border-b border-line px-4 py-4">
               <div className="flex min-w-0 items-center gap-3">
-                {sellerShop && <SmartImage src={sellerShop.logo} alt="" className="h-9 w-9 rounded-lg object-cover" />}
+                {sellerShop && <SmartImage src={sellerShop.logo} alt="" className="h-9 w-9 rounded-lg bg-white object-contain" />}
                 <div className="min-w-0">
                   <p className="truncate text-sm font-semibold text-ink">{sellerShop?.name ?? name}</p>
                   <p className="truncate text-xs text-ink/40 font-mono">{identifier}</p>

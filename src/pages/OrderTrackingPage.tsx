@@ -104,7 +104,7 @@ export default function OrderTrackingPage({ orderId }: { orderId: string }) {
                 const isPickup = sf.type === 'pickup';
                 return (
                   <div key={sf.shopId} className="flex items-start gap-3">
-                    <SmartImage src={shop?.logo ?? ''} alt="" className="h-10 w-10 rounded-full object-cover flex-shrink-0" />
+                    <SmartImage src={shop?.logo ?? ''} alt="" className="h-10 w-10 rounded-full bg-white object-contain flex-shrink-0" />
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center justify-between">
                         <p className="text-sm font-medium text-ink">{shop?.name}</p>
