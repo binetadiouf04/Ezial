@@ -67,7 +67,8 @@ export default function CategoryPage({ categoryId, subId }: { categoryId: string
 
   const filtered = useMemo(() => {
     let result = [...baseProducts];
-    const norm = (s: string) => s.toLowerCase().replace(/[^a-z]/g, '');
+    // Accents retirés avant comparaison : « Matière du bracelet » ↔ matieredubracelet.
+    const norm = (s: string) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z]/g, '');
     Object.entries(selectedFilters).forEach(([group, values]) => {
       if (!values?.length) return;
       if (group === 'prix') { result = result.filter((p) => matchesPrice(p.price, values)); }

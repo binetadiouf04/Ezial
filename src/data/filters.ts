@@ -151,6 +151,25 @@ const encensMaisonFilters: FilterGroup[] = [
   globalPriceFilter,
 ];
 
+// Montres : quatre caractéristiques simples (choix unique, facultatives) à la
+// place de « Matière ». Les identifiants reprennent le libellé sans accents ni
+// espaces : c'est ce qui relie le filtre client à la caractéristique
+// enregistrée (descriptive_attributes, clé = libellé). Couleur et motif
+// restent les variantes habituelles (stock par variante) ; pour les montres,
+// le vendeur peut aussi saisir ses combinaisons (« Cadran blanc / Bracelet
+// noir », voir src/lib/variantValues.ts). Rien de technique (mouvement,
+// étanchéité…) : le vendeur le précise librement dans la description.
+export const WATCH_GROUP_IDS = ['typedemontre', 'matieredubracelet', 'formeducadran', 'public'] as const;
+const montresFilters: FilterGroup[] = [
+  { id: 'typedemontre', label: 'Type de montre', options: ['Analogique', 'Numérique', 'Connectée'] },
+  { id: 'matieredubracelet', label: 'Matière du bracelet', options: ['Métal', 'Cuir', 'Silicone', 'Autre'] },
+  { id: 'formeducadran', label: 'Forme du cadran', options: ['Rond', 'Carré', 'Rectangulaire', 'Autre'] },
+  { id: 'public', label: 'Public', options: ['Homme', 'Femme', 'Mixte'] },
+  { id: 'couleur', label: 'Couleur', options: jewelryColors, collapsible: true },
+  { id: 'motif', label: 'Motif / Imprimé', options: commonPrints, collapsible: true },
+  globalPriceFilter,
+];
+
 export const subcategoryFilters: Record<string, FilterGroup[]> = {
   'beaute/maquillage': makeupFilters,
   'beaute/skincare': skincareFilters,
@@ -165,6 +184,7 @@ export const subcategoryFilters: Record<string, FilterGroup[]> = {
   'parfums/parfums-homme': parfumsHommeFilters,
   'parfums/huiles-brumes': huilesBrumesFilters,
   'parfums/encens-parfums-maison': encensMaisonFilters,
+  'bijoux/montres': montresFilters,
 };
 
 export const filterConfig: Record<CategoryId, FilterGroup[]> = {

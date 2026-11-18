@@ -1,5 +1,6 @@
 import { useState, useMemo, useEffect } from 'react';
 import { isRealGoldJewelry, GOLD_JEWELRY_MESSAGE, GOLD_JEWELRY_HINT } from '@/lib/goldJewelry';
+import { allowsCustomColorCombos, addCustomColor, CUSTOM_COLOR_MAX_LENGTH } from '@/lib/variantValues';
 import { usePro } from '../../ProContext';
 import {
   categories, categoryMap, type CategoryId,
@@ -7,7 +8,7 @@ import {
   fabricAvailabilityStatuses, fabricAvailabilityLabels,
   type FabricSaleMode, type FabricAvailabilityStatus,
 } from '@/data/categories';
-import { getFilters, type FilterGroup } from '@/data/filters';
+import { getFilters, WATCH_GROUP_IDS, type FilterGroup } from '@/data/filters';
 import { discountPercent, COLOR_PRINT_VARIANT_KEY } from '@/data/products';
 import { getColor } from '@/data/colors';
 import VendorNoticeBanner, { type VendorNotice } from '../../components/VendorNoticeBanner';
@@ -34,7 +35,7 @@ import {
 import { resolveImageUrl } from '@/lib/supabaseCatalog';
 import ImageCropModal from '../../components/ImageCropModal';
 import LogoOverlayModal, { type OverlayResult } from '../../components/LogoOverlayModal';
-import { X, Package, ChevronDown, Check, Camera, Star, Video, ArrowUp, ArrowDown, Sparkles, Crop, RefreshCw } from 'lucide-react';
+import { X, Package, ChevronDown, Check, Camera, Star, Video, ArrowUp, ArrowDown, Sparkles, Crop, RefreshCw, Plus } from 'lucide-react';
 
 // products.status in Supabase only accepts draft/active/flagged/disabled —
 // there is no 'published' value there. The form's own draft/published
@@ -57,7 +58,7 @@ const blurOnWheel = (e: React.WheelEvent<HTMLInputElement>) => e.currentTarget.b
 // Which filter groups are single-choice (radio-like) vs descriptive multi-choice
 // (checkbox-like, but never split stock) vs true variant dimensions (checkbox-like
 // AND generate one stock/price line per selected value).
-const SINGLE_CHOICE_IDS = new Set(['type', 'style', 'texture', 'matiere', 'peau', 'typeproduit', 'longueurongles']);
+const SINGLE_CHOICE_IDS = new Set(['type', 'style', 'texture', 'matiere', 'peau', 'typeproduit', 'longueurongles', ...WATCH_GROUP_IDS]);
 // The one exception to 'type' being single-choice: for Vêtements (Femme and
 // Homme), several clothing types can describe the same product (e.g. "Robes"
 // and "Grande taille", or "T-shirts" and "Tenues de sport") — a product must
@@ -432,6 +433,9 @@ export default function SellerProductForm({ productId }: { productId?: string })
   // Options state: which values are selected per option group
   const [selections, setSelections] = useState<OptionSelection>({});
   const [showAllColors, setShowAllColors] = useState<Record<string, boolean>>({});
+  // Montres : combinaison de couleurs saisie par le vendeur (« Cadran blanc / Bracelet noir »).
+  const [customColorInput, setCustomColorInput] = useState('');
+  const [customColorError, setCustomColorError] = useState('');
   // Old colour × print product being edited — see buildStockDimensions.
   const [crossColorPrint, setCrossColorPrint] = useState(false);
 
@@ -585,7 +589,7 @@ export default function SellerProductForm({ productId }: { productId?: string })
           if (inColors) colorValues.add(val);
           if (inPrints) printValues.add(val);
           if (!inColors && !inPrints) {
-            if (colorGroup && (getColor(val) || !printGroup)) colorValues.add(val);
+            if (colorGroup && (getColor(val) || !printGroup || allowsCustomColorCombos(data.category ?? '', data.subcategory ?? ''))) colorValues.add(val);
             else printValues.add(val);
           }
         }
@@ -1012,6 +1016,8 @@ export default function SellerProductForm({ productId }: { productId?: string })
     setCategoryId(newCatId);
     setSubId('');
     setSelections({});
+    setCustomColorInput('');
+    setCustomColorError('');
     setComboData({});
     setShowAllColors({});
     setCustomVolumeMl('');
@@ -1021,6 +1027,8 @@ export default function SellerProductForm({ productId }: { productId?: string })
   const handleSubCategoryChange = (newSubId: string) => {
     setSubId(newSubId);
     setSelections({});
+    setCustomColorInput('');
+    setCustomColorError('');
     setComboData({});
     setCustomVolumeMl('');
     setCrossColorPrint(false);
@@ -1051,7 +1059,7 @@ export default function SellerProductForm({ productId }: { productId?: string })
     }
     if (status === 'published' && !images.some((img) => img.kind === 'image')) e.images = 'Ajoutez au moins une photo.';
     // Pas de bijoux en or véritable (la base le refuse aussi : règle non contournable).
-    if (isRealGoldJewelry({ category: categoryId, name, description, descriptiveAttributes: buildDescriptiveAttributes() })) e.gold = GOLD_JEWELRY_MESSAGE;
+    if (isRealGoldJewelry({ category: categoryId, name, description, descriptiveAttributes: { ...buildDescriptiveAttributes(), Couleur: selections.couleur ?? [] } })) e.gold = GOLD_JEWELRY_MESSAGE;
     if (isTissus) {
       if (!fabricType) e.fabricType = 'Le type de tissu est obligatoire';
       if (!saleMode) e.saleMode = 'Le mode de vente est obligatoire';
@@ -1251,6 +1259,52 @@ export default function SellerProductForm({ productId }: { productId?: string })
 
   // === Color swatch rendering ===
 
+  // Montres : combinaisons de couleurs libres. Chacune est une variante comme
+  // une pastille (même stock, même prix éventuel, mêmes photos du produit).
+  const renderCustomColorCombos = (groupId: string) => {
+    const selected = selections[groupId] ?? [];
+    const customs = selected.filter((v) => !getColor(v));
+    const add = () => {
+      const { values, added } = addCustomColor(selected, customColorInput);
+      if (!added) {
+        setCustomColorError(customColorInput.trim() ? 'Combinaison déjà ajoutée ou invalide (40 caractères maximum).' : '');
+        return;
+      }
+      setSelections((prev) => ({ ...prev, [groupId]: values }));
+      setCustomColorInput('');
+      setCustomColorError('');
+    };
+    return (
+      <div className="mt-4 space-y-2">
+        <p className="text-xs text-ink/55">Autre combinaison (cadran / bracelet) : chacune a son propre stock.</p>
+        {customs.length > 0 && (
+          <div className="flex flex-wrap gap-2">
+            {customs.map((v) => (
+              <span key={v} className="inline-flex items-center gap-1.5 rounded-full border border-burgundy bg-burgundy/5 py-1 pl-3 pr-1.5 text-xs font-medium text-burgundy">
+                {v}
+                <button type="button" onClick={() => toggleMultiChoice(groupId, v)} aria-label={`Retirer ${v}`} className="rounded-full p-0.5 hover:bg-burgundy/10"><X size={12} /></button>
+              </span>
+            ))}
+          </div>
+        )}
+        <div className="flex items-center gap-2">
+          <input
+            className="input-field min-w-0 flex-1 text-sm"
+            placeholder="Ex. Cadran blanc / Bracelet noir"
+            maxLength={CUSTOM_COLOR_MAX_LENGTH}
+            value={customColorInput}
+            onChange={(e) => { setCustomColorInput(e.target.value); setCustomColorError(''); }}
+            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); add(); } }}
+          />
+          <button type="button" onClick={add} disabled={!customColorInput.trim()} className="inline-flex h-11 flex-shrink-0 items-center gap-1 rounded-lg border border-line bg-white px-3 text-xs font-medium text-burgundy hover:border-burgundy/40 disabled:opacity-40">
+            <Plus size={14} /> Ajouter
+          </button>
+        </div>
+        {customColorError && <p className="text-xs text-burgundy">{customColorError}</p>}
+      </div>
+    );
+  };
+
   const renderColorSwatches = (group: FilterGroup) => {
     const selected = selections[group.id] ?? [];
     const showAll = showAllColors[group.id] ?? false;
@@ -1291,6 +1345,7 @@ export default function SellerProductForm({ productId }: { productId?: string })
             Voir plus de couleurs <ChevronDown size={13} />
           </button>
         )}
+        {group.id === 'couleur' && allowsCustomColorCombos(categoryId, subId) && renderCustomColorCombos(group.id)}
       </div>
     );
   };
