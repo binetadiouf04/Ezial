@@ -66,8 +66,12 @@ export default function VariantSelector({ variants, selected, onChange }: { vari
         const isColorPrint = v.name === COLOR_PRINT_VARIANT_KEY;
 
         if (isColor || isColorPrint) {
-          const colorValues = isColorPrint ? v.values.filter((val) => !isPrintValue(val)) : v.values;
-          const printValues = isColorPrint ? v.values.filter(isPrintValue) : [];
+          // Pastille pour une couleur de la palette ; texte pour un imprimé ou une
+          // combinaison saisie par le vendeur (montres : « Cadran blanc / Bracelet
+          // noir »), qui n'a pas de couleur unique à montrer.
+          const asText = (val: string) => isPrintValue(val) || !getColor(val);
+          const colorValues = v.values.filter((val) => !asText(val));
+          const printValues = v.values.filter(asText);
           return (
             <div key={v.name}>
               <div className="mb-2.5 flex items-center gap-1.5">
