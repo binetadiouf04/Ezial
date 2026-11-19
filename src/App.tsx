@@ -12,6 +12,7 @@ import {
 } from '@/lib/seoHead';
 import Header from '@/components/Header';
 import BackBar from '@/components/BackBar';
+import CustomerNotificationPrompt from '@/components/CustomerNotificationPrompt';
 import MobileCategoryDrawer from '@/components/MobileCategoryDrawer';
 import CartDrawer from '@/components/CartDrawer';
 import Footer from '@/components/Footer';
@@ -335,6 +336,7 @@ function Layout() {
       )}
 
       <Footer />
+      <CustomerNotificationPrompt />
     </div>
   );
 }
