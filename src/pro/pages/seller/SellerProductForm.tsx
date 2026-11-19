@@ -2,6 +2,7 @@ import { useState, useMemo, useEffect } from 'react';
 import { isRealGoldJewelry, GOLD_JEWELRY_MESSAGE, GOLD_JEWELRY_HINT } from '@/lib/goldJewelry';
 import { allowsCustomColorCombos, addCustomColor, CUSTOM_COLOR_MAX_LENGTH } from '@/lib/variantValues';
 import { supplierNameError, SUPPLIER_NAME_MAX_LENGTH } from '@/lib/supplierName';
+import { isWaistMeasureSupported } from '@/lib/waistSupport';
 import { usePro } from '../../ProContext';
 import {
   categories, categoryMap, type CategoryId,
@@ -453,6 +454,14 @@ export default function SellerProductForm({ productId }: { productId?: string })
   // in its own RLS-protected table (product_suppliers), never shown to
   // customers or other shops. See fetchProductSupplier/saveProductSupplier.
   const [supplier, setSupplier] = useState('');
+
+  // Baya : proposée seulement quand la base enregistre le tour de taille (voir waistSupport.ts).
+  const [waistSupported, setWaistSupported] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    void isWaistMeasureSupported().then((ok) => { if (!cancelled) setWaistSupported(ok); });
+    return () => { cancelled = true; };
+  }, []);
 
   // "Fait à la main" — a product-wide characteristic, independent of
   // category/subcategory (never replaces either). Stored the same way as
@@ -1537,7 +1546,7 @@ export default function SellerProductForm({ productId }: { productId?: string })
           <div>
             <label className="block text-xs font-medium text-ink/60 mb-1.5">Sous-catégorie</label>
             <div className="flex flex-wrap gap-2">
-              {selectedCategory.subcategories.map((s) => (
+              {selectedCategory.subcategories.filter((s) => s.id !== 'baya' || waistSupported || subId === 'baya').map((s) => (
                 <SelectableChip key={s.id} label={s.label} selected={subId === s.id} onClick={() => handleSubCategoryChange(s.id)} />
               ))}
             </div>
