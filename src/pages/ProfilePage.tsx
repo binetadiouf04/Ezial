@@ -327,7 +327,7 @@ export default function ProfilePage() {
         {authStep === 'entry' ? (
           <AccountEntryPage onChoose={setAuthStep} />
         ) : (
-          <CustomerAuthPanel onBack={() => setAuthStep('entry')} initialView={authStep} />
+          <CustomerAuthPanel initialView={authStep} />
         )}
       </div>
     );

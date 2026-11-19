@@ -27,8 +27,8 @@ function ProRouteFallback() {
 }
 
 export default function ProEntryPage() {
-  const { role, adminMfaChallenge, login, verifySellerLogin, signUpSellerAccount, continueAsSellerWithCurrentAccount, requestSellerPasswordReset, resendSellerConfirmationEmail, resendSellerConfirmationForLogin, verifyAdminLogin, checkDriverUsername, createDriverPin, signInDriverWithPin } = usePro();
-  const { customerUser, navigate: navigateApp } = useApp();
+  const { role, adminMfaChallenge, login, verifySellerLogin, signUpSellerAccount, requestSellerPasswordReset, resendSellerConfirmationEmail, resendSellerConfirmationForLogin, verifyAdminLogin, checkDriverUsername, createDriverPin, signInDriverWithPin } = usePro();
+  const { navigate: navigateApp } = useApp();
   // admin.ezial.net → administrateur, livreur.ezial.net → livreur. Ces deux
   // espaces n'existent plus sur le site public : ni lien, ni écran, et une
   // session de ce type n'y ouvre rien. Le site public n'ouvre que l'espace
@@ -76,8 +76,9 @@ export default function ProEntryPage() {
           onLogin={(id, name, shopInfo) => login('seller', id, name, shopInfo)}
           verifySeller={verifySellerLogin}
           signUpSeller={signUpSellerAccount}
-          loggedInCustomer={customerUser ? { label: customerUser.firstName || customerUser.email || customerUser.phone || 'votre compte' } : null}
-          continueWithCurrentAccount={continueAsSellerWithCurrentAccount}
+          // Le compte client connecté n'est PAS proposé pour la boutique : rien ne dit
+          // que la personne veut utiliser la même adresse e-mail. L'espace vendeur
+          // a toujours son propre compte (connexion ou création avec son e-mail).
           requestPasswordReset={requestSellerPasswordReset}
           resendConfirmationEmail={resendSellerConfirmationEmail}
           resendConfirmationForLogin={resendSellerConfirmationForLogin}
