@@ -30,6 +30,8 @@ import { buildInfoPages } from './seo/info.mjs';
 import { buildBlogPages } from './seo/blog.mjs';
 import { buildBecomeSellerPage } from './seo/become-seller.mjs';
 import { isSafeSegment, isSafeFilePath, describeValue } from './seo/safe-segment.mjs';
+import { COMPANY, CONTACT, SEO } from '../src/shared/siteInfo.js';
+import { categoryDescription, productFallbackDescription, shopFallbackDescription, SHOPS_INDEX_DESCRIPTION } from '../src/shared/seoText.js';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const DIST = `${ROOT}dist`;
@@ -297,6 +299,8 @@ function renderPage({ title, description, canonical, ogImage, jsonLd, bodyHtml, 
   html = html.replace(/<link rel="canonical"[^>]*>/, `<link rel="canonical" href="${esc(canonical)}" />`);
   html = html.replace(/<meta property="og:title"[^>]*>/, `<meta property="og:title" content="${esc(title)}" />`);
   html = html.replace(/<meta property="og:description"[^>]*>/, `<meta property="og:description" content="${esc(description)}" />`);
+  html = html.replace(/<meta name="twitter:title"[^>]*>/, `<meta name="twitter:title" content="${esc(title)}" />`);
+  html = html.replace(/<meta name="twitter:description"[^>]*>/, `<meta name="twitter:description" content="${esc(description)}" />`);
   html = html.replace(/<meta property="og:url"[^>]*>/, `<meta property="og:url" content="${esc(canonical)}" />`);
   if (ogImage) {
     html = html.replace(/<meta property="og:image"[^>]*>/, `<meta property="og:image" content="${esc(ogImage)}" />`);
@@ -344,7 +348,7 @@ for (const p of products) {
   const price = priceFor(p);
   const stats = statsByProduct.get(p.id);
   const title = `${p.name} — ${price.toLocaleString('fr-FR')} FCFA | Ezial`;
-  const description = (p.description || `${p.name} disponible sur Ezial, marketplace mode, beauté et accessoires au Sénégal.`).slice(0, 160);
+  const description = (p.description || productFallbackDescription(p.name)).slice(0, 160);
 
   const breadcrumbItems = [
     { name: 'Accueil', url: `${SITE_URL}/` },
@@ -391,7 +395,7 @@ for (const shop of shops) {
   const canonical = `${SITE_URL}${shopPath(shop)}`;
   const shopProducts = products.filter((p) => p.shop_id === shop.id);
   const title = `${shop.name} — Boutique Ezial`;
-  const description = (shop.description || `Découvrez la boutique ${shop.name} sur Ezial.`).slice(0, 160);
+  const description = (shop.description || shopFallbackDescription(shop.name)).slice(0, 160);
   const logoUrl = shop.logo_url ? resolveImageUrl(shop.logo_url) : undefined;
 
   const breadcrumbItems = [{ name: 'Accueil', url: `${SITE_URL}/` }, { name: shop.name, url: canonical }];
@@ -432,7 +436,7 @@ for (const shop of shops) {
     </main>`;
   writeFile('/boutiques/index.html', renderPage({
     title: `${title} | Ezial`,
-    description: 'Toutes les boutiques actives sur Ezial, la marketplace mode, beauté et accessoires au Sénégal.',
+    description: SHOPS_INDEX_DESCRIPTION,
     canonical, bodyHtml, jsonLd: [breadcrumbJsonLd(breadcrumbItems)],
   }));
   sitemapUrls.push({ loc: canonical, lastmod: maxLastMod(shops.map((s) => lastModByShop.get(s.id))) });
@@ -452,7 +456,7 @@ for (const [categoryId, categoryLabel] of Object.entries(CATEGORY_LABELS)) {
     const canonical = sub ? `${SITE_URL}/categorie/${categoryId}/${subId}/` : `${SITE_URL}/categorie/${categoryId}/`;
     const scoped = subId ? categoryProducts.filter((p) => p.subcategory === subId) : categoryProducts;
     const title = sub ? `${sub} — ${categoryLabel} au Sénégal | Ezial` : `${categoryLabel} au Sénégal | Ezial`;
-    const description = `Découvrez les produits ${sub ? `${sub.toLowerCase()} de la catégorie ${categoryLabel.toLowerCase()}` : categoryLabel.toLowerCase()} sur Ezial, marketplace mode, beauté et accessoires au Sénégal.`.slice(0, 160);
+    const description = categoryDescription(categoryLabel, sub);
     const breadcrumbItems = [
       { name: 'Accueil', url: `${SITE_URL}/` },
       { name: categoryLabel, url: `${SITE_URL}/categorie/${categoryId}/` },
@@ -492,8 +496,14 @@ await buildBlogPages(seoContext);
 // --- Organization + WebSite JSON-LD on the homepage itself --------------
 {
   const homeJsonLd = [
-    { '@context': 'https://schema.org', '@type': 'Organization', name: 'Ezial', url: `${SITE_URL}/`, logo: `${SITE_URL}/apple-touch-icon.png` },
-    { '@context': 'https://schema.org', '@type': 'WebSite', name: 'Ezial', url: `${SITE_URL}/` },
+    {
+      '@context': 'https://schema.org', '@type': 'Organization', name: COMPANY.name, url: `${SITE_URL}/`, logo: `${SITE_URL}/apple-touch-icon.png`,
+      description: SEO.homeDescription,
+      areaServed: 'Dakar',
+      address: { '@type': 'PostalAddress', streetAddress: COMPANY.streetAddress, addressLocality: 'Dakar', addressCountry: 'SN' },
+      contactPoint: [{ '@type': 'ContactPoint', contactType: 'customer service', email: CONTACT.email, telephone: CONTACT.phone, availableLanguage: 'fr' }],
+    },
+    { '@context': 'https://schema.org', '@type': 'WebSite', name: COMPANY.name, url: `${SITE_URL}/`, description: SEO.homeDescription, inLanguage: 'fr' },
   ];
   let html = BASE_TEMPLATE.replace('</head>', `<script type="application/ld+json">${JSON.stringify(homeJsonLd)}</script>\n  </head>`);
   writeFileSync(`${DIST}/index.html`, html, 'utf8');

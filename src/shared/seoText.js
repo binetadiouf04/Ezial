@@ -1,0 +1,60 @@
+// Descriptions des pages publiques qui n'ont pas de texte propre (catégories,
+// sous-catégories, liste des boutiques, produit ou boutique sans description,
+// pages utilitaires). Partagées par le site (src/App.tsx) et le HTML statique
+// (scripts/prerender-seo.mjs) : un robot qui exécute le JavaScript lit le même
+// texte que celui du HTML initial. JavaScript simple pour que Node l'importe.
+//
+// Chaque description nomme la page (catégorie, boutique, produit...) : aucune
+// n'est identique à une autre. Les titres propres aux produits, catégories et
+// boutiques ne sont pas ici : ils restent ceux de chaque page.
+import { DELIVERY } from './siteInfo.js';
+
+export const DESCRIPTION_MAX = 160;
+
+/** Coupe à 160 caractères au dernier mot entier, avec « … ». */
+export function clipDescription(text, max = DESCRIPTION_MAX) {
+  const value = String(text).replace(/\s+/g, ' ').trim();
+  if (value.length <= max) return value;
+  const cut = value.slice(0, max - 1);
+  const atWord = cut.slice(0, cut.lastIndexOf(' '));
+  return `${atWord.replace(/[\s,;:.\-–—]+$/, '')}…`;
+}
+
+const DELIVERY_SENTENCE = `Livraison dès ${DELIVERY.fromFeeLabel} en ${DELIVERY.delay}.`;
+
+export function categoryDescription(categoryLabel, subLabel) {
+  return clipDescription(subLabel
+    ? `${subLabel} (${categoryLabel}) à ${DELIVERY.area} sur Ezial : plusieurs boutiques, un seul panier. ${DELIVERY_SENTENCE}`
+    : `${categoryLabel} à ${DELIVERY.area} sur Ezial, marketplace 100 % en ligne : découvrez les produits de plusieurs boutiques. ${DELIVERY_SENTENCE}`);
+}
+
+export function productFallbackDescription(name) {
+  return clipDescription(`${name} sur Ezial, marketplace 100 % en ligne à ${DELIVERY.area}. ${DELIVERY_SENTENCE}`);
+}
+
+export function shopFallbackDescription(name) {
+  return clipDescription(`Découvrez la boutique ${name} sur Ezial, marketplace 100 % en ligne à ${DELIVERY.area}. ${DELIVERY_SENTENCE}`);
+}
+
+export const SHOPS_INDEX_DESCRIPTION = clipDescription(
+  `Les boutiques d'Ezial, marketplace 100 % en ligne à ${DELIVERY.area} : mode, beauté, parfumerie et accessoires. ${DELIVERY_SENTENCE}`,
+);
+
+// Pages sans adresse propre pour les moteurs de recherche (panier, compte,
+// suivi...) : leur balise canonique pointe vers l'accueil. Chacune a quand même
+// sa description. Aucune ne parle de moyens de paiement : le paiement en ligne
+// est décrit uniquement sur sa page (/info/paiement/).
+export const UTILITY_DESCRIPTIONS = {
+  panier: clipDescription(`Votre panier Ezial : vérifiez les articles de plusieurs boutiques avant de commander. ${DELIVERY_SENTENCE}`),
+  commande: 'Finalisez votre commande sur Ezial : vos coordonnées, la livraison ou le retrait en boutique, puis le récapitulatif avant confirmation.',
+  confirmation: 'Votre commande Ezial est enregistrée : retrouvez son récapitulatif, son numéro et le suivi de la livraison.',
+  suivi: 'Suivez votre commande Ezial étape par étape : préparation, livraison ou retrait en boutique.',
+  detailCommande: 'Le détail de votre commande Ezial : articles, boutiques, livraison, paiement et facture.',
+  favoris: 'Vos produits favoris sur Ezial, la marketplace 100 % en ligne de plusieurs boutiques à Dakar.',
+  compte: 'Votre compte Ezial : commandes, favoris, adresses et informations personnelles.',
+  recherche: 'Recherchez un produit ou une boutique parmi la mode, la beauté, la parfumerie et les accessoires d\'Ezial à Dakar.',
+  promos: 'Promotions Ezial : les offres en cours des boutiques de Dakar sur la mode, la beauté, la parfumerie et les accessoires.',
+  tendances: 'Tendances Ezial : les produits les plus aimés des clients parmi les boutiques de Dakar.',
+  pourVous: 'Une sélection de produits Ezial choisie selon vos envies, parmi les boutiques de Dakar.',
+  pro: "L'espace privé des administrateurs, vendeurs et livreurs de la marketplace Ezial.",
+};

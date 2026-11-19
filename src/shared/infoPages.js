@@ -65,7 +65,7 @@ const aPropos = {
   title: 'À propos d’Ezial',
   breadcrumb: 'À propos',
   metaTitle: 'À propos — Ezial',
-  description: 'Ezial, marketplace sénégalaise de mode et de beauté : des boutiques et créateurs du Sénégal, un seul panier, une livraison en 4 à 48 h à Dakar.',
+  description: `Ezial, marketplace 100 % en ligne de plusieurs boutiques à Dakar : mode, beauté, parfumerie, accessoires, un seul panier. Livraison dès ${DELIVERY.fromFeeLabel} en ${DELIVERY.delay}.`,
   intro: 'Ezial est une marketplace sénégalaise dédiée à la mode et à la beauté. Elle réunit sur un même site des boutiques et des créateurs du Sénégal, pour que chacun puisse découvrir leurs produits, commander simplement et être livré à Dakar.',
   jsonLdType: 'AboutPage',
   blocks: {
@@ -208,8 +208,8 @@ const livraison = {
   slug: 'livraison',
   layout: 'simple',
   title: 'Livraison & retrait',
-  metaTitle: 'Livraison et retrait — Ezial',
-  description: 'Livraison Ezial en 4 à 48 h à Dakar, frais calculés selon la distance et affichés avant validation, ou retrait en boutique.',
+  metaTitle: 'Livraison et retrait à Dakar — Ezial',
+  description: `Livraison Ezial à Dakar dès ${DELIVERY.fromFeeLabel}, en ${DELIVERY.delay} : frais calculés selon la distance et affichés avant validation, ou retrait en boutique.`,
   intro: 'Faites-vous livrer à Dakar, ou retirez votre commande directement en boutique lorsque celle-ci le propose.',
   blocks: {
     livraison: {
