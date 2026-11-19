@@ -4,6 +4,7 @@ import { getStaffSpace } from '@/lib/staffSpace';
 import { type Product } from '@/data/products';
 import { registerSupabaseShops, type Shop } from '@/data/shops';
 import { fetchActiveCatalogFromSupabase } from '@/lib/supabaseCatalog';
+import { loadCatalogSnapshot, saveCatalogSnapshot } from '@/lib/catalogSnapshot';
 import {
   signUpCustomer, signInCustomer, restoreCustomerSession, signOutCustomer,
   updateCustomerProfile, requestCustomerPasswordReset, resendCustomerConfirmation, changeCustomerPassword,
@@ -388,6 +389,15 @@ function publicProductsFrom(supabaseProducts: Product[], publicShops: Shop[]): P
   return supabaseProducts.filter((p) => publicShopIds.has(p.shopId));
 }
 
+// Catalogue affiché dès le premier rendu : la copie du dernier chargement réel.
+function readInitialCatalog(): { shops: Shop[]; products: Product[] } | null {
+  const snapshot = loadCatalogSnapshot();
+  if (!snapshot) return null;
+  registerSupabaseShops(snapshot.shops);
+  const shops = publicShopsFrom(snapshot.shops);
+  return { shops, products: publicProductsFrom(snapshot.products, shops) };
+}
+
 // Merges a real Supabase order-history fetch into whatever's already in
 // local state (e.g. an order just placed this same session, via addOrder,
 // slightly ahead of the fetch) — the fetched copy always wins for any id
@@ -407,9 +417,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // (a loader, not this empty array) — the demo catalog is only ever used
   // as a genuine last-resort fallback (see publicShopsFrom/publicProductsFrom
   // and the fetch failure handler below), never as an initial placeholder.
-  const [catalogProducts, setCatalogProducts] = useState<Product[]>([]);
-  const [catalogShops, setCatalogShops] = useState<Shop[]>([]);
-  const [catalogLoading, setCatalogLoading] = useState(true);
+  //
+  // Exception : la copie du DERNIER catalogue réel (catalogSnapshot.ts), s'il
+  // existe, est affichée tout de suite à la place du chargeur, puis remplacée
+  // par la liste à jour dès qu'elle arrive. Données réelles, jamais de démo.
+  const [initialCatalog] = useState(readInitialCatalog);
+  const [catalogProducts, setCatalogProducts] = useState<Product[]>(initialCatalog?.products ?? []);
+  const [catalogShops, setCatalogShops] = useState<Shop[]>(initialCatalog?.shops ?? []);
+  const [catalogLoading, setCatalogLoading] = useState(!initialCatalog);
+  // Vrai une fois la liste À JOUR reçue (ou en échec) : tant que seule la copie
+  // locale est affichée, le panier n'est jamais nettoyé d'après elle.
+  const [catalogFresh, setCatalogFresh] = useState(false);
   const [favorites, setFavorites] = useState<string[]>(loadStoredFavorites);
   const [cart, setCart] = useState<CartItem[]>(loadStoredCart);
   const [savedItems, setSavedItems] = useState<SavedItem[]>([]);
@@ -478,11 +496,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
         // registerSupabaseShops keeps every real shop resolvable by id
         // (a seller viewing their own shop, an admin, a direct link) — the
         // official-only gate below only decides what's publicly *listed*.
+        // Lecture en échec sans aucun produit alors qu'une copie existe : on
+        // garde la copie affichée plutôt que de la vider.
+        if (result.errors.length > 0 && result.products.length === 0 && initialCatalog) {
+          setCatalogLoading(false);
+          return;
+        }
         registerSupabaseShops(result.shops);
         const publicShops = publicShopsFrom(result.shops);
         const publicProducts = publicProductsFrom(result.products, publicShops);
         setCatalogProducts(publicProducts);
         setCatalogShops(publicShops);
+        if (result.errors.length === 0) saveCatalogSnapshot({ shops: result.shops, products: result.products });
 
         // Real review stats enrich the (already-rendered) catalog in a
         // second pass — never blocks the initial catalog paint, and a
@@ -495,6 +520,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
               const s = stats.get(p.id);
               return s ? { ...p, rating: s.average, reviewCount: s.count } : p;
             }));
+            // La copie locale garde les notes : pas de scintillement au retour.
+            if (result.errors.length === 0) {
+              saveCatalogSnapshot({
+                shops: result.shops,
+                products: result.products.map((p) => { const s = stats.get(p.id); return s ? { ...p, rating: s.average, reviewCount: s.count } : p; }),
+              });
+            }
           });
         }
         setCatalogLoading(false);
@@ -505,7 +537,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         // "Aucun produit trouvé." empty state) rather than ever painting
         // the old demo catalog as if it were real marketplace content.
         setCatalogLoading(false);
-      });
+      })
+      .finally(() => { if (!cancelled) setCatalogFresh(true); });
     return () => { cancelled = true; };
   }, []);
 
@@ -517,12 +550,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // here once the real catalog is loaded keeps the badge and the page in
   // sync, and also applies if a product is deactivated later mid-session.
   useEffect(() => {
-    if (catalogLoading) return;
+    if (catalogLoading || !catalogFresh) return;
     setCart((prev) => {
       const pruned = prev.filter((item) => catalogProducts.some((p) => p.id === item.productId));
       return pruned.length === prev.length ? prev : pruned;
     });
-  }, [catalogLoading, catalogProducts]);
+  }, [catalogLoading, catalogFresh, catalogProducts]);
 
   const navigate = useCallback((r: string) => {
     window.history.pushState({ ezialIdx: currentHistoryIndex() + 1 }, '', r);

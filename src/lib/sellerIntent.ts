@@ -68,10 +68,15 @@ export function useSellerEntry() {
     }
   }, []);
 
-  /** « Ma boutique »: seller space, sign-in, or « Devenir vendeur ». */
+  /** « Ma boutique » : l'espace vendeur si le compte connecté a une boutique,
+   * sinon la connexion vendeur — comme pour un visiteur non connecté. Un
+   * client connecté n'est JAMAIS renvoyé vers la page « Devenir vendeur » : il
+   * peut avoir sa boutique sous un autre compte (autre adresse e-mail). La
+   * création d'une boutique reste proposée depuis la connexion vendeur et
+   * depuis les liens « Devenir vendeur ». */
   const openMyShop = useCallback(async () => {
     if (!customerUser) { navigate(SELLER_LOGIN_ROUTE); return; }
-    navigate((await ownsShop()) ? '/pro' : BECOME_SELLER_ROUTE);
+    navigate((await ownsShop()) ? '/pro' : SELLER_LOGIN_ROUTE);
   }, [customerUser, navigate, ownsShop]);
 
   /** A « Créer ma boutique » / plan button of « Devenir vendeur ». A seller
