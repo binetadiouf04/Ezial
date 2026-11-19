@@ -427,6 +427,38 @@ export async function fetchPublicProductSupplier(productId: string): Promise<str
 }
 
 export async function fetchProductDetailFromSupabase(productKey: string): Promise<SupabaseProductDetailResult> {
+  // One round trip instead of three in a row (product, then photos / variants /
+  // shop): the product, its photos, its variants and its shop come back
+  // together, and the list of Premium shops is asked at the same time. If the
+  // server refuses this grouped read for any reason, the previous step-by-step
+  // read below is used unchanged.
+  const premiumPromise = supabase.rpc('active_premium_shop_ids');
+  const grouped = await supabase
+    .from('products')
+    .select('*, product_images(*), product_variants(*), shops(*)')
+    .eq(isProductUuid(productKey) ? 'id' : 'slug', productKey)
+    .eq('status', 'active')
+    .maybeSingle();
+  if (!grouped.error) {
+    if (!grouped.data) return { product: null, shop: null };
+    const { product_images, product_variants, shops: embeddedShop, ...productFields } = grouped.data as unknown as ProductRow & {
+      product_images?: ProductImageRow[] | null;
+      product_variants?: ProductVariantRow[] | null;
+      shops?: ShopRow | ShopRow[] | null;
+    };
+    const shopRow = (Array.isArray(embeddedShop) ? embeddedShop[0] : embeddedShop) ?? null;
+    // Same rule as the step-by-step read: never reachable when the shop is not active.
+    if (!shopRow || shopRow.status !== 'active') return { product: null, shop: null };
+    const premiumShopIds = new Set(((await premiumPromise).data ?? []) as string[]);
+    return {
+      product: mapProduct(productFields as ProductRow, product_images ?? [], product_variants ?? []),
+      shop: mapShop(shopRow, premiumShopIds),
+    };
+  }
+  return fetchProductDetailStepByStep(productKey);
+}
+
+async function fetchProductDetailStepByStep(productKey: string): Promise<SupabaseProductDetailResult> {
   const { data: productRow, error: productError } = await supabase
     .from('products')
     .select('*')
