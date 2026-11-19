@@ -124,22 +124,63 @@ export async function restoreDeviceForReturningUser(userId: string): Promise<voi
   } catch { /* sans effet sur la page */ }
 }
 
+class StepTimeout extends Error {
+  constructor(public step: string) { super(step); }
+}
+
+/** Une étape qui ne répond pas ne doit jamais laisser un bouton tourner sans fin. */
+function withTimeout<T>(promise: Promise<T>, ms: number, step: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = window.setTimeout(() => reject(new StepTimeout(step)), ms);
+    promise.then(
+      (value) => { window.clearTimeout(timer); resolve(value); },
+      (error) => { window.clearTimeout(timer); reject(error); },
+    );
+  });
+}
+
+/** Le service worker de notifications, enregistré au besoin puis activé. */
+async function readyServiceWorker(): Promise<ServiceWorkerRegistration> {
+  let registration = await navigator.serviceWorker.getRegistration('/');
+  if (!registration) registration = await navigator.serviceWorker.register('/sw.js', { scope: '/', updateViaCache: 'none' });
+  if (registration.active) return registration;
+  return navigator.serviceWorker.ready;
+}
+
 /** Abonnement : uniquement après un clic explicite (« Activer »). */
 export async function subscribeToPush(userId: string): Promise<{ error?: string }> {
   const status = getPushSupportStatus();
   if (status === 'ios-install-required') return { error: 'Sur iPhone, ajoutez d’abord Ezial à l’écran d’accueil, puis ouvrez-le depuis son icône.' };
   if (status === 'unsupported') return { error: 'Les notifications ne sont pas prises en charge sur cet appareil/navigateur.' };
 
-  const permission = await Notification.requestPermission();
-  if (permission !== 'granted') return { error: 'Autorisation refusée.' };
+  try {
+    // Étape 1 : la demande d'autorisation du téléphone (appelée directement au clic).
+    // Pas de limite de temps : la personne peut mettre du temps à répondre.
+    const permission = status === 'granted' ? 'granted' : await Notification.requestPermission();
+    if (permission !== 'granted') return { error: 'Autorisation refusée.' };
 
-  const registration = await navigator.serviceWorker.ready;
-  const existing = await registration.pushManager.getSubscription();
-  const subscription = existing ?? await registration.pushManager.subscribe({
-    userVisibleOnly: true,
-    applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY as string),
-  });
-  return saveSubscription(userId, subscription);
+    // Étape 2 : le service de notifications de l'application.
+    const registration = await withTimeout(readyServiceWorker(), 10_000, 'service');
+    // Étape 3 : l'abonnement auprès du service de notifications du téléphone.
+    const existing = await registration.pushManager.getSubscription();
+    const subscription = existing ?? await withTimeout(registration.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY as string),
+    }), 20_000, 'abonnement');
+    // Étape 4 : l'enregistrement de cet appareil pour le compte.
+    return await withTimeout(saveSubscription(userId, subscription), 15_000, 'enregistrement');
+  } catch (e) {
+    if (e instanceof StepTimeout) {
+      const where = e.step === 'service'
+        ? 'Le service de notifications de l’application ne répond pas. Fermez complètement Ezial, rouvrez-le depuis son icône, puis réessayez.'
+        : e.step === 'abonnement'
+          ? 'Le téléphone n’a pas répondu à la demande d’abonnement. Vérifiez votre connexion, puis réessayez.'
+          : 'L’enregistrement de cet appareil a pris trop de temps. Réessayez.';
+      return { error: where };
+    }
+    const detail = e instanceof Error && e.name ? ` (${e.name})` : '';
+    return { error: `Impossible d’activer les notifications sur cet appareil${detail}. Réessayez.` };
+  }
 }
 
 export async function unsubscribeFromPush(userId: string): Promise<void> {
