@@ -110,7 +110,7 @@ export default function NotificationBell({ onNavigate, audience = 'customer' }: 
               </button>
             )}
           </div>
-          <BellPushStatus />
+          <BellPushStatus audience={audience} />
           <BellPreferences audience={audience} />
           {notifications.length === 0 ? (
             <p className="p-6 text-center text-sm text-ink/45">Aucune notification.</p>

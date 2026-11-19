@@ -14,10 +14,7 @@ import { type GeocodeResult } from '@/lib/geocoding';
 import { useAddressSearch } from '@/lib/useAddressSearch';
 import { quartiers, navigateTo } from '@/store/AppContext';
 import { categories } from '@/data/categories';
-import { supabase } from '@/lib/supabaseClient';
 import { ownsCustomerProfileForDeletionWarning } from '@/lib/supabaseAccountDeletion';
-import NotificationOptIn from '@/components/NotificationOptIn';
-import WhatsAppConsentToggle from '@/components/WhatsAppConsentToggle';
 import { Check, Image as ImageIcon, Camera, MapPin, Loader2, AlertTriangle, AlertCircle, Navigation, Pencil, Search, Send, Trash2, PauseCircle, PlayCircle } from 'lucide-react';
 import SmartImage from '@/components/SmartImage';
 
@@ -89,13 +86,6 @@ export default function SellerShop() {
     });
     return () => { cancelled = true; };
   }, [sellerSupabaseShopId]);
-
-  // Push notifications are keyed by auth.uid(), not the shop id — fetched
-  // once here since ProContext doesn't otherwise expose the raw user id.
-  const [authUserId, setAuthUserId] = useState<string | null>(null);
-  useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => setAuthUserId(data.user?.id ?? null));
-  }, []);
 
   // Shop location (shops.latitude/longitude) — read/written directly on the
   // real Supabase shop row via sellerSupabaseShopId, never through the mock
@@ -291,8 +281,6 @@ export default function SellerShop() {
 
       <ShopLinkCard shopId={sellerSupabaseShopId} />
 
-      {authUserId && <NotificationOptIn userId={authUserId} label="Notifications de nouvelles commandes" />}
-
       {/* Onboarding status — a normal signup never goes through admin
           review any more: saving the required fields (ci-dessous) active
           la boutique automatiquement via activate_shop_if_ready() (see
@@ -447,12 +435,6 @@ export default function SellerShop() {
           <label className="block text-xs font-medium text-ink/60 mb-1.5">Téléphone</label>
           <input className="input-field" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
           <p className="mt-1 text-xs text-ink/40">Numéro permettant à Ezial de vous contacter.</p>
-          <WhatsAppConsentToggle
-            source="boutique"
-            variant="inline"
-            label="Recevoir sur WhatsApp mes nouvelles commandes et un rappel si une commande attend depuis 24 h"
-            description="Au numéro de téléphone de la boutique. Jamais de publicité."
-          />
         </div>
 
         <div>

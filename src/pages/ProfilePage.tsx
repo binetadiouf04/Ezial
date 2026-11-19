@@ -5,10 +5,7 @@ import { fetchOrderDeliveryMissionStatuses } from '@/lib/supabaseOrders';
 import { formatFCFA } from '@/data/products';
 import ProductGrid from '@/components/ProductGrid';
 import SmartImage from '@/components/SmartImage';
-import NotificationOptIn from '@/components/NotificationOptIn';
 import CustomerAuthPanel from '@/components/CustomerAuthPanel';
-import MarketingPushToggle from '@/components/MarketingPushToggle';
-import WhatsAppConsentToggle from '@/components/WhatsAppConsentToggle';
 import PasswordField from '@/components/PasswordField';
 import PhoneField from '@/components/PhoneField';
 import { capitalizeFirst } from '@/lib/authErrors';
@@ -436,14 +433,6 @@ export default function ProfilePage() {
       {/* === MES INFORMATIONS === */}
       {tab === 'info' && (
         <div className="space-y-6">
-          <NotificationOptIn userId={customerUser.id} label="Notifications de suivi de commande" />
-          <MarketingPushToggle />
-          <WhatsAppConsentToggle
-            source="compte"
-            label="Recevoir sur WhatsApp la confirmation de mes commandes et l'avis de livraison en cours"
-            description="2 messages maximum par commande, au numéro indiqué lors de la commande. Jamais de publicité. Vous pouvez désactiver à tout moment."
-          />
-
           {/* Informations personnelles */}
           <div className="card p-5 space-y-4">
             <h2 className="text-sm font-semibold text-ink">Informations personnelles</h2>
