@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { SEO } from '@/shared/siteInfo';
+import { overrideShareTags } from './pwaIdentity.ts';
 
 // Client-side <head> updates. The formats below must stay identical to
 // scripts/prerender-seo.mjs: a crawler that runs JavaScript must end up
@@ -53,7 +54,9 @@ export function absoluteUrl(url: string): string {
   }
 }
 
-export function applyHeadTags(tags: HeadTags) {
+export function applyHeadTags(input: HeadTags) {
+  // admin.ezial.net : titre, description et image d'aperçu propres à l'application Admin.
+  const tags = { ...input, ...overrideShareTags(input, window.location.hostname, window.location.origin) };
   document.title = tags.title;
   upsertMeta('name', 'description', tags.description);
   setCanonical(tags.canonical);

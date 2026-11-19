@@ -13,6 +13,9 @@ export interface PwaIdentity {
   /** Favicon par taille (attribut sizes de <link rel="icon">). */
   favicons: Record<string, string>;
   appName: string;
+  /** Aperçu d'un lien partagé (feuille de partage iPhone, WhatsApp...) : adresse relative de l'image. */
+  shareImage: string;
+  shareDescription: string;
 }
 
 // « ?v=2 » : nouvelle adresse pour les navigateurs qui gardent les favicons en cache.
@@ -25,10 +28,30 @@ const ADMIN_IDENTITY: PwaIdentity = {
     '16x16': '/icons/admin/favicon-16x16.png?v=2',
   },
   appName: 'Ezial Admin',
+  // Sans cela, l'aperçu d'un lien admin.ezial.net reprenait l'image de remplacement
+  // du site (« EZIAL — Image indisponible »). Même icône que l'application.
+  shareImage: '/icons/admin/icon-512.png?v=2',
+  shareDescription: "Espace privé d'administration de la marketplace Ezial.",
 };
 
 export function pwaIdentityForHostname(hostname: string): PwaIdentity | null {
   return staffSpaceFromHostname(hostname) === 'admin' ? ADMIN_IDENTITY : null;
+}
+
+/** Remplace titre, description et image d'aperçu par ceux de l'application (admin seulement). */
+export function overrideShareTags(tags: {
+  title: string; description: string; ogTitle: string; ogDescription: string; ogImage: string;
+}, hostname: string, origin: string) {
+  const identity = pwaIdentityForHostname(hostname);
+  if (!identity) return tags;
+  return {
+    ...tags,
+    title: identity.appName,
+    description: identity.shareDescription,
+    ogTitle: identity.appName,
+    ogDescription: identity.shareDescription,
+    ogImage: `${origin}${identity.shareImage}`,
+  };
 }
 
 /** À appeler au tout début du démarrage (src/main.tsx), avant l'affichage. */
@@ -47,4 +70,12 @@ export function applyPwaIdentity(): void {
   });
   set('meta[name="apple-mobile-web-app-title"]', 'content', identity.appName);
   set('meta[name="application-name"]', 'content', identity.appName);
+  const image = `${window.location.origin}${identity.shareImage}`;
+  document.title = identity.appName;
+  set('meta[name="description"]', 'content', identity.shareDescription);
+  for (const [selector, value] of [
+    ['meta[property="og:title"]', identity.appName], ['meta[name="twitter:title"]', identity.appName],
+    ['meta[property="og:description"]', identity.shareDescription], ['meta[name="twitter:description"]', identity.shareDescription],
+    ['meta[property="og:image"]', image], ['meta[name="twitter:image"]', image],
+  ] as const) set(selector, 'content', value);
 }
