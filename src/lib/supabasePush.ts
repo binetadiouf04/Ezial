@@ -1,3 +1,4 @@
+import { checkVapidPublicKey, cleanVapidKey, VAPID_PUBLIC_KEY_LENGTH } from './vapidKey';
 import { supabase } from './supabaseClient';
 import { isRpcMissing } from './supabaseFeatureDetect';
 
@@ -13,7 +14,7 @@ import { isRpcMissing } from './supabaseFeatureDetect';
 // Dans un onglet Safari, l'état est 'ios-install-required' : on l'explique, on
 // ne force rien.
 
-const VAPID_PUBLIC_KEY = import.meta.env.VITE_VAPID_PUBLIC_KEY as string | undefined;
+const VAPID_PUBLIC_KEY = cleanVapidKey(import.meta.env.VITE_VAPID_PUBLIC_KEY as string | undefined) || undefined;
 
 function urlBase64ToUint8Array(base64String: string): Uint8Array {
   const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
@@ -152,6 +153,13 @@ export async function subscribeToPush(userId: string): Promise<{ error?: string 
   const status = getPushSupportStatus();
   if (status === 'ios-install-required') return { error: 'Sur iPhone, ajoutez d’abord Ezial à l’écran d’accueil, puis ouvrez-le depuis son icône.' };
   if (status === 'unsupported') return { error: 'Les notifications ne sont pas prises en charge sur cet appareil/navigateur.' };
+
+  // Clé publique recopiée de travers dans Cloudflare : on le dit clairement,
+  // avant de déranger la personne avec la demande d'autorisation.
+  const keyCheck = checkVapidPublicKey(VAPID_PUBLIC_KEY);
+  if (!keyCheck.ok) {
+    return { error: `La clé de notifications publiée sur le site est ${keyCheck.reason} (${keyCheck.length} caractères, ${VAPID_PUBLIC_KEY_LENGTH} attendus${keyCheck.ignored ? `, ${keyCheck.ignored} caractère${keyCheck.ignored > 1 ? 's' : ''} parasite${keyCheck.ignored > 1 ? 's' : ''} ignoré${keyCheck.ignored > 1 ? 's' : ''}` : ''}). Corrigez VITE_VAPID_PUBLIC_KEY dans Cloudflare, puis relancez le déploiement.` };
+  }
 
   try {
     // Étape 1 : la demande d'autorisation du téléphone (appelée directement au clic).
