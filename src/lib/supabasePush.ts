@@ -158,7 +158,7 @@ export async function subscribeToPush(userId: string): Promise<{ error?: string 
   // avant de déranger la personne avec la demande d'autorisation.
   const keyCheck = checkVapidPublicKey(VAPID_PUBLIC_KEY);
   if (!keyCheck.ok) {
-    return { error: `La clé de notifications publiée sur le site est ${keyCheck.reason} (${keyCheck.length} caractères, ${VAPID_PUBLIC_KEY_LENGTH} attendus). Corrigez VITE_VAPID_PUBLIC_KEY dans Cloudflare, puis relancez le déploiement.` };
+    return { error: `La clé de notifications publiée sur le site est ${keyCheck.reason} (${keyCheck.length} caractères, ${VAPID_PUBLIC_KEY_LENGTH} attendus${keyCheck.ignored ? `, ${keyCheck.ignored} caractère${keyCheck.ignored > 1 ? 's' : ''} parasite${keyCheck.ignored > 1 ? 's' : ''} ignoré${keyCheck.ignored > 1 ? 's' : ''}` : ''}). Corrigez VITE_VAPID_PUBLIC_KEY dans Cloudflare, puis relancez le déploiement.` };
   }
 
   try {
