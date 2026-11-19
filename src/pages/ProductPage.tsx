@@ -36,20 +36,37 @@ const SIMILAR_PREVIEW_LIMIT = 9;
 
 export default function ProductPage({ productId }: { productId: string }) {
   const { navigate, addToCart, catalogProducts, customerUser } = useApp();
-  const [supabaseProduct, setSupabaseProduct] = useState<ReturnType<typeof getProduct>>(undefined);
-  const [supabaseShop, setSupabaseShop] = useState<ReturnType<typeof getShop>>(undefined);
-  const [loading, setLoading] = useState(true);
+  // The product is usually already in the catalogue the home page loaded (or
+  // in its local copy): it is shown at once, and the detail read below only
+  // refreshes it in the background. Only a direct link opened on a cold start
+  // waits for the server.
+  const catalogRef = useRef(catalogProducts);
+  catalogRef.current = catalogProducts;
+  const findInCatalog = (key: string) => catalogRef.current.find((p) => p.id === key || p.slug === key);
+  const [initialHit] = useState(() => findInCatalog(productId));
+  const [supabaseProduct, setSupabaseProduct] = useState<ReturnType<typeof getProduct>>(initialHit);
+  const [supabaseShop, setSupabaseShop] = useState<ReturnType<typeof getShop>>(initialHit ? getShop(initialHit.shopId) : undefined);
+  const [loading, setLoading] = useState(!(initialHit && getShop(initialHit.shopId)));
   const [loadError, setLoadError] = useState('');
 
   useEffect(() => {
     let cancelled = false;
-    setLoading(true);
     setLoadError('');
-    setSupabaseProduct(undefined);
-    setSupabaseShop(undefined);
+    const hit = findInCatalog(productId);
+    const hitShop = hit ? getShop(hit.shopId) : undefined;
+    if (hit && hitShop) {
+      setSupabaseProduct(hit);
+      setSupabaseShop(hitShop);
+      setLoading(false);
+    } else {
+      setLoading(true);
+      setSupabaseProduct(undefined);
+      setSupabaseShop(undefined);
+    }
     fetchProductDetailFromSupabase(productId).then(({ product, shop, error }) => {
       if (cancelled) return;
-      if (error) { setLoadError(error); setLoading(false); return; }
+      // A failed refresh never replaces a product that is already displayed.
+      if (error) { if (!(hit && hitShop)) setLoadError(error); setLoading(false); return; }
       // Registered so getShop() (used elsewhere on this same page, and by
       // any other component reached afterward) can resolve this shop too —
       // without this, a shop only ever known via this direct product fetch
@@ -60,6 +77,7 @@ export default function ProductPage({ productId }: { productId: string }) {
       setLoading(false);
     });
     return () => { cancelled = true; };
+    // findInCatalog reads the latest catalogue through a ref: it must not restart the read.
   }, [productId]);
 
   const product = supabaseProduct;

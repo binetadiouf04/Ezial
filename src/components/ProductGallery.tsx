@@ -70,7 +70,15 @@ export default function ProductGallery({ media, alt }: { media: GalleryMediaItem
             preload="metadata"
           />
         ) : (
-          <SmartImage key={active} src={current.url} alt={alt} className="h-full w-full object-cover fade-in" loading="eager" fetchPriority="high" />
+          <>
+            {/* The small crop (already in the browser from the product card) is shown,
+               blurred, right away while the full photo downloads: the page never
+               shows an empty box. The full photo then fades in over it. */}
+            {current.thumbnailUrl && (
+              <img src={current.thumbnailUrl} alt="" aria-hidden="true" decoding="async" className="absolute inset-0 h-full w-full scale-110 object-cover blur-md" />
+            )}
+            <SmartImage key={active} src={current.url} alt={alt} className="relative h-full w-full object-cover fade-in" loading="eager" fetchPriority="high" />
+          </>
         )}
 
         {count > 1 && (
