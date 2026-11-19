@@ -330,17 +330,31 @@ function mapProduct(row: ProductRow, imageRows: ProductImageRow[], variantRows: 
 export async function fetchActiveCatalogFromSupabase(): Promise<SupabaseCatalogResult> {
   const errors: string[] = [];
 
+  // Une SEULE étape réseau : les produits arrivent avec leurs photos et leurs
+  // variantes (relations product_images / product_variants), en parallèle des
+  // boutiques. Avant, le catalogue enchaînait produits, puis photos et
+  // variantes, puis avis : chaque étape coûte un aller-retour complet sur
+  // téléphone. Les avis (notes) sont ajoutés juste après l'affichage par
+  // AppContext (fetchReviewStatsForProducts), ils ne bloquent plus la page.
+  // Si la lecture groupée est refusée, on retombe sur l'ancienne lecture.
   const [shopsRes, productsRes, premiumRes] = await Promise.all([
     supabase.from('shops').select('*').eq('status', 'active'),
-    supabase.from('products').select('*').eq('status', 'active'),
+    supabase.from('products').select('*, product_images(*), product_variants(*)').eq('status', 'active'),
     // Non-fatal on its own: a seller_subscriptions row or a stale deploy
     // of this RPC never blocks the rest of the catalog — every shop just
     // falls back to isPremium = false until it resolves.
     supabase.rpc('active_premium_shop_ids'),
   ]);
 
+  let productsData = productsRes.data as (ProductRow & { product_images?: ProductImageRow[]; product_variants?: ProductVariantRow[] })[] | null;
+  const groupedRead = !productsRes.error && Array.isArray(productsData);
+  if (!groupedRead) {
+    // Repli : lecture simple des produits, puis photos et variantes à part.
+    const plain = await supabase.from('products').select('*').eq('status', 'active');
+    if (plain.error) errors.push(`products: ${plain.error.message}`);
+    productsData = (plain.data ?? []) as ProductRow[];
+  }
   if (shopsRes.error) errors.push(`shops: ${shopsRes.error.message}`);
-  if (productsRes.error) errors.push(`products: ${productsRes.error.message}`);
   if (premiumRes.error) errors.push(`active_premium_shop_ids: ${premiumRes.error.message}`);
   const premiumShopIds = new Set((premiumRes.data ?? []) as string[]);
 
@@ -348,36 +362,28 @@ export async function fetchActiveCatalogFromSupabase(): Promise<SupabaseCatalogR
   const activeShopIds = new Set(shopRows.map((s) => s.id));
   // A product's own status can be 'active' while its shop isn't (still in
   // onboarding, suspended...) — never shown publicly either way.
-  const productRows = ((productsRes.data ?? []) as ProductRow[]).filter((p) => activeShopIds.has(p.shop_id));
+  const productRows = (productsData ?? []).filter((p) => activeShopIds.has(p.shop_id));
   const productIds = productRows.map((p) => p.id);
 
   let imageRows: ProductImageRow[] = [];
   let variantRows: ProductVariantRow[] = [];
-  let reviewStats = new Map<string, ReviewStats>();
+  // Notes : ajoutées après l'affichage (voir plus haut), jamais dans cette étape.
+  const reviewStats = new Map<string, ReviewStats>();
 
-  if (productIds.length > 0) {
-    const [imagesRes, variantsRes, reviewsRes] = await Promise.all([
+  if (groupedRead) {
+    for (const row of productRows as { product_images?: ProductImageRow[]; product_variants?: ProductVariantRow[] }[]) {
+      if (row.product_images) imageRows.push(...row.product_images);
+      if (row.product_variants) variantRows.push(...row.product_variants);
+    }
+  } else if (productIds.length > 0) {
+    const [imagesRes, variantsRes] = await Promise.all([
       supabase.from('product_images').select('*').in('product_id', productIds),
       supabase.from('product_variants').select('*').in('product_id', productIds),
-      // RLS already scopes this to is_hidden = false for a normal customer
-      // session — a moderated review never reaches this aggregate.
-      supabase.from('reviews').select('product_id, rating').in('product_id', productIds),
     ]);
     if (imagesRes.error) errors.push(`product_images: ${imagesRes.error.message}`);
     if (variantsRes.error) errors.push(`product_variants: ${variantsRes.error.message}`);
     imageRows = (imagesRes.data ?? []) as ProductImageRow[];
     variantRows = (variantsRes.data ?? []) as ProductVariantRow[];
-
-    const ratingsByProduct = new Map<string, number[]>();
-    for (const row of (reviewsRes.data ?? []) as { product_id: string; rating: number }[]) {
-      const list = ratingsByProduct.get(row.product_id) ?? [];
-      list.push(row.rating);
-      ratingsByProduct.set(row.product_id, list);
-    }
-    reviewStats = new Map([...ratingsByProduct].map(([productId, ratings]) => [
-      productId,
-      { average: ratings.reduce((s, r) => s + r, 0) / ratings.length, count: ratings.length },
-    ]));
   }
 
   return {
