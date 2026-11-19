@@ -17,7 +17,8 @@ type AuthView = 'login' | 'signup' | 'forgot' | 'pending_confirmation';
 // confirmation email is sent from here. The checkout passes '/checkout' so
 // a brand-new customer lands straight back on their order, cart intact.
 export default function CustomerAuthPanel({ onBack, initialView = 'login', subtitle, resumeRouteAfterConfirmation }: {
-  onBack: () => void;
+  /** Bouton « Retour » du panneau — à n'afficher que sans barre « Retour » globale (paiement). */
+  onBack?: () => void;
   initialView?: 'login' | 'signup';
   subtitle?: string;
   resumeRouteAfterConfirmation?: string;
@@ -103,9 +104,11 @@ export default function CustomerAuthPanel({ onBack, initialView = 'login', subti
 
   return (
     <div className="mx-auto max-w-sm py-10">
-      <button onClick={onBack} className="mb-4 flex items-center gap-1.5 text-sm text-ink/50 hover:text-ink">
-        <ArrowLeft size={16} /> Retour
-      </button>
+      {onBack && (
+        <button onClick={onBack} className="mb-4 flex items-center gap-1.5 text-sm text-ink/50 hover:text-ink">
+          <ArrowLeft size={16} /> Retour
+        </button>
+      )}
 
       {view !== 'pending_confirmation' && (
         <div className="mb-6 text-center">

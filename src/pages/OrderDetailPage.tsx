@@ -8,7 +8,7 @@ import { ensureOrderDeliveryCode, fetchOrderDeliveryMissionStatus } from '@/lib/
 import { DeliveryTimeline, PickupTimeline } from '@/components/OrderTimeline';
 import { deliveryStatusLabels, pickupStepLabels, computeDeliveryStepStatus } from '@/data/orderStatusLabels';
 import { paymentLabels } from '@/data/payments';
-import { Package, Truck, Store, MapPin, Smartphone, Clock, Check, KeySquare, ArrowLeft, CheckCircle2, AlertTriangle, RotateCcw } from 'lucide-react';
+import { Package, Truck, Store, MapPin, Smartphone, Clock, Check, KeySquare, CheckCircle2, AlertTriangle, RotateCcw } from 'lucide-react';
 import SmartImage from '@/components/SmartImage';
 import ClaimModal from '@/components/ClaimModal';
 
@@ -74,11 +74,6 @@ export default function OrderDetailPage({ orderId }: { orderId: string }) {
 
   return (
     <div className="container-pro py-8 max-w-3xl">
-      {/* Back link */}
-      <button onClick={() => navigate('/profil')} className="flex items-center gap-1.5 text-sm text-ink/50 hover:text-ink transition-colors mb-6">
-        <ArrowLeft size={16} /> Mes commandes
-      </button>
-
       {/* Order header */}
       <div className="flex items-start justify-between mb-6 flex-wrap gap-3">
         <div>
