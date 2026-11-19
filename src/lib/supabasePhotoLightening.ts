@@ -54,6 +54,30 @@ async function upload(path: string, blob: Blob, contentType: string): Promise<bo
   return !error;
 }
 
+// Photos already examined and found fine (light enough, or no real gain from
+// re-encoding) are remembered on this device, so they are never downloaded
+// again at each visit. A failure is NOT remembered: it is retried next time.
+const CHECKED_KEY = 'ezial-photo-checked-v1';
+const CHECKED_MAX = 3000;
+
+function readChecked(): Set<string> {
+  try {
+    const raw = localStorage.getItem(CHECKED_KEY);
+    const parsed: unknown = raw ? JSON.parse(raw) : [];
+    return new Set(Array.isArray(parsed) ? parsed.filter((x): x is string => typeof x === 'string') : []);
+  } catch {
+    return new Set();
+  }
+}
+
+function rememberChecked(paths: string[]): void {
+  if (paths.length === 0) return;
+  try {
+    const all = [...readChecked(), ...paths];
+    localStorage.setItem(CHECKED_KEY, JSON.stringify(all.slice(-CHECKED_MAX)));
+  } catch { /* storage unavailable: the photo is simply re-checked next time */ }
+}
+
 async function lightenOne(uid: string, row: ImageRow): Promise<number> {
   const response = await fetch(resolveImageUrl(row.storage_path), { cache: 'no-store' });
   if (!response.ok) throw new Error(`lecture de la photo refusée (${response.status})`);
@@ -67,6 +91,19 @@ async function lightenOne(uid: string, row: ImageRow): Promise<number> {
   const ext = extFor(next.type);
   const mainPath = `${uid}/${row.product_id}/opt-${token}.${ext}`;
   if (!(await upload(mainPath, next.blob, next.type))) throw new Error('envoi de la photo allégée refusé');
+
+  // The original is only ever replaced once the new file is confirmed readable
+  // online and complete (same size as what was sent). Otherwise the new file
+  // is removed and the original stays exactly as it was.
+  let verified = false;
+  try {
+    const check = await fetch(resolveImageUrl(mainPath), { cache: 'no-store' });
+    verified = check.ok && (await check.blob()).size === next.blob.size;
+  } catch { verified = false; }
+  if (!verified) {
+    await supabase.storage.from(PRODUCT_IMAGES_BUCKET).remove([mainPath]);
+    throw new Error('vérification de la photo allégée échouée');
+  }
 
   let thumbPath: string | null = null;
   const thumb = await generateThumbnail(new File([next.blob], `photo.${ext}`, { type: next.type }));
@@ -136,8 +173,10 @@ export async function lightenShopProductPhotos(
   // Only photos in the seller's own folder (the only ones RLS lets them
   // replace), never one with a logo overlay, and never one this tool already
   // produced (its name starts with "opt-").
+  const alreadyChecked = readChecked();
   const candidates = ((rows ?? []) as ImageRow[]).filter(
-    (r) => r.storage_path?.startsWith(`${uid}/`) && !r.original_storage_path && !/\/opt-[^/]*$/.test(r.storage_path),
+    (r) => r.storage_path?.startsWith(`${uid}/`) && !r.original_storage_path && !/\/opt-[^/]*$/.test(r.storage_path)
+      && !alreadyChecked.has(r.storage_path),
   );
 
   // No Storage listing: listing a folder runs a heavy query on the database,
@@ -157,6 +196,7 @@ export async function lightenShopProductPhotos(
       try {
         const saved = await lightenOne(uid, row);
         if (saved > 0) { result.lightened += 1; result.savedBytes += saved; }
+        else rememberChecked([row.storage_path]);
       } catch (e) {
         result.failed += 1;
         result.firstError ??= e instanceof Error ? e.message : String(e);
