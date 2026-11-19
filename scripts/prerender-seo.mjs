@@ -253,7 +253,7 @@ if (productIds.length > 0) {
 function imagesForProduct(productId) {
   const rows = (imagesByProduct.get(productId) ?? []).filter((r) => r.media_type !== 'video');
   const urls = rows.map((r) => resolveImageUrl(r.storage_path)).filter(Boolean);
-  return urls.length > 0 ? urls : [`${SITE_URL}/ezial-fallback.webp`];
+  return urls.length > 0 ? urls : [`${SITE_URL}/ezial-partage.png`];
 }
 
 function isPromoActive(p) {
