@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { SEO } from '@/shared/siteInfo';
 
 // Client-side <head> updates. The formats below must stay identical to
 // scripts/prerender-seo.mjs: a crawler that runs JavaScript must end up
@@ -8,8 +9,8 @@ export const SITE_URL = 'https://ezial.net';
 
 // Same values as index.html — what a fresh load of any non-prerendered
 // route carries.
-export const DEFAULT_OG_TITLE = 'Ezial — Mode, beauté & lifestyle à Dakar';
-export const DEFAULT_OG_DESCRIPTION = 'Découvrez des boutiques de mode, beauté, cheveux, bijoux et parfums à Dakar, avec livraison ou retrait en boutique.';
+export const DEFAULT_OG_TITLE = SEO.homeTitle;
+export const DEFAULT_OG_DESCRIPTION = SEO.homeDescription;
 export const DEFAULT_OG_IMAGE = `${SITE_URL}/ezial-fallback.webp`;
 
 export interface HeadTags {
@@ -58,6 +59,8 @@ export function applyHeadTags(tags: HeadTags) {
   setCanonical(tags.canonical);
   upsertMeta('property', 'og:title', tags.ogTitle);
   upsertMeta('property', 'og:description', tags.ogDescription);
+  upsertMeta('name', 'twitter:title', tags.ogTitle);
+  upsertMeta('name', 'twitter:description', tags.ogDescription);
   upsertMeta('property', 'og:url', tags.canonical);
   upsertMeta('property', 'og:image', tags.ogImage);
   upsertMeta('property', 'og:type', tags.ogType);

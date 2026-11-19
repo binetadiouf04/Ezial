@@ -177,7 +177,7 @@ export default function Footer() {
             <div className="space-y-3">
               <BrandLink />
               <p className="text-sm text-white/75 leading-relaxed max-w-xs">
-                Votre marketplace mode, beauté & lifestyle au Sénégal.
+                Votre marketplace mode, beauté, parfumerie et accessoires à Dakar.
               </p>
               <SocialIcons />
             </div>
@@ -197,7 +197,7 @@ export default function Footer() {
             <div className="space-y-2.5 mb-4">
               <BrandLink />
               <p className="text-sm text-white/75 leading-relaxed">
-                Votre marketplace mode, beauté & lifestyle au Sénégal.
+                Votre marketplace mode, beauté, parfumerie et accessoires à Dakar.
               </p>
               <SocialIcons size={18} wrapSize="h-10 w-10" />
             </div>

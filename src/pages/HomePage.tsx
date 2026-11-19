@@ -1,3 +1,4 @@
+import { SEO } from '@/shared/siteInfo';
 import { Suspense, lazy, useEffect, useMemo, useRef, useState } from 'react';
 import { useApp } from '@/store/AppContext';
 import { searchProducts, type Product } from '@/data/products';
@@ -225,7 +226,7 @@ export default function HomePage() {
 
   return (
     <div>
-      <h1 className="sr-only">Ezial — Mode, beauté & lifestyle à Dakar</h1>
+      <h1 className="sr-only">{SEO.homeTitle}</h1>
 
       {/* Hero + À découvrir intentionally share a tighter rhythm than the
           rest of the page — the goal was to close the gap right under the

@@ -4,7 +4,11 @@ import App from './App.tsx';
 import UpdateBanner from './components/UpdateBanner.tsx';
 import AppErrorBoundary from './components/AppErrorBoundary.tsx';
 import { startAppUpdates } from './lib/appUpdate';
+import { applyPwaIdentity } from './lib/pwaIdentity';
 import './index.css';
+
+// Nom et icône de l'application installée : propres à admin.ezial.net.
+applyPwaIdentity();
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

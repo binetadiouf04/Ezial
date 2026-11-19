@@ -6,8 +6,8 @@
 
 export const BLOG_NAME = 'Blog Ezial';
 export const BLOG_PAGE_SIZE = 12;
-export const BLOG_INDEX_TITLE = 'Blog Ezial — Conseils mode, beauté et lifestyle';
-export const BLOG_INDEX_DESCRIPTION = 'Les articles du blog Ezial : conseils, tendances et actualités de la marketplace mode, beauté et lifestyle à Dakar.';
+export const BLOG_INDEX_TITLE = 'Blog Ezial, conseils mode, beauté et accessoires';
+export const BLOG_INDEX_DESCRIPTION = 'Les articles du blog Ezial : conseils, tendances et actualités de la marketplace mode, beauté, parfumerie et accessoires à Dakar.';
 export const BLOG_INTRO = "Conseils, tendances et actualités de la marketplace Ezial, rédigés par l'équipe Ezial.";
 export const BLOG_AUTHOR_LABEL = "l'équipe Ezial";
 

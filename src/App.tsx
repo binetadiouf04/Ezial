@@ -1,5 +1,7 @@
 import { useEffect, useState, Suspense, lazy } from 'react';
 import { getStaffSpace } from '@/lib/staffSpace';
+import { SEO } from '@/shared/siteInfo';
+import { categoryDescription, productFallbackDescription, shopFallbackDescription, SHOPS_INDEX_DESCRIPTION, UTILITY_DESCRIPTIONS } from '@/shared/seoText';
 import { AppProvider, useApp } from '@/store/AppContext';
 import { ProProvider } from '@/pro/ProContext';
 import type { Product } from '@/data/products';
@@ -187,9 +189,9 @@ function RouteView() {
 }
 
 const SITE_TITLE = 'Ezial';
-// Same text as index.html's meta description (what the homepage serves).
-const DEFAULT_DESCRIPTION = "Ezial est une marketplace qui réunit des boutiques de mode, beauté, cheveux, bijoux et parfums à Dakar, avec livraison ou retrait en boutique.";
-const DEFAULT_TITLE = `${SITE_TITLE} — Mode, beauté & lifestyle à Dakar`;
+// Same texts as index.html (what the homepage serves): src/shared/siteInfo.js.
+const DEFAULT_DESCRIPTION = SEO.homeDescription;
+const DEFAULT_TITLE = SEO.homeTitle;
 
 // A route without a page of its own for search engines (cart, account,
 // Ezial Pro...): the same tags as a fresh load of index.html, i.e. the
@@ -220,7 +222,7 @@ function headTagsFor(route: string, { catalogProducts, catalogShops }: CatalogFo
   if (clean === '/' || clean === '') {
     return plainTags(DEFAULT_TITLE, DEFAULT_DESCRIPTION);
   }
-  if (clean === '/pro' || clean.startsWith('/pro/')) return plainTags(`Ezial Pro — Espace de gestion`, "L'espace privé pour les administrateurs, vendeurs et livreurs de la marketplace Ezial.");
+  if (clean === '/pro' || clean.startsWith('/pro/')) return plainTags('Ezial Pro, espace de gestion', UTILITY_DESCRIPTIONS.pro);
 
   // Blog pages set their own tags once their article / category is loaded.
   if (clean === '/blog' || clean.startsWith('/blog/')) return null;
@@ -231,7 +233,7 @@ function headTagsFor(route: string, { catalogProducts, catalogShops }: CatalogFo
     const p = findProductByKey(catalogProducts, parts[2]);
     if (p) {
       const title = `${p.name} — ${p.price.toLocaleString('fr-FR')} FCFA | ${SITE_TITLE}`;
-      const description = (p.description || `${p.name} disponible sur Ezial, marketplace mode, beauté et accessoires au Sénégal.`).slice(0, 160);
+      const description = (p.description || productFallbackDescription(p.name)).slice(0, 160);
       return pageTags(title, description, productPublicPath(p), p.images[0] ? absoluteUrl(p.images[0]) : DEFAULT_OG_IMAGE, 'product');
     }
     return null;
@@ -240,7 +242,7 @@ function headTagsFor(route: string, { catalogProducts, catalogShops }: CatalogFo
   if (parts[1] === 'boutique' && parts[2]) {
     const s = findShopByKey(catalogShops, parts[2]);
     if (s) {
-      const description = (s.description || `Découvrez la boutique ${s.name} sur Ezial.`).slice(0, 160);
+      const description = (s.description || shopFallbackDescription(s.name)).slice(0, 160);
       const logo = /^https?:\/\//.test(s.logo) ? s.logo : DEFAULT_OG_IMAGE;
       return pageTags(`${s.name} — Boutique ${SITE_TITLE}`, description, shopPublicPath(s), logo);
     }
@@ -253,31 +255,31 @@ function headTagsFor(route: string, { catalogProducts, catalogShops }: CatalogFo
       const subId = parts[3];
       const sub = subId ? (cat.subcategories.find((item) => item.id === subId)?.label ?? subId) : null;
       const title = sub ? `${sub} — ${cat.label} au Sénégal | ${SITE_TITLE}` : `${cat.label} au Sénégal | ${SITE_TITLE}`;
-      const description = `Découvrez les produits ${sub ? `${sub.toLowerCase()} de la catégorie ${cat.label.toLowerCase()}` : cat.label.toLowerCase()} sur Ezial, marketplace mode, beauté et accessoires au Sénégal.`.slice(0, 160);
+      const description = categoryDescription(cat.label, sub);
       return pageTags(title, description, sub ? `/categorie/${cat.id}/${subId}/` : `/categorie/${cat.id}/`);
     }
     return plainTags(DEFAULT_TITLE, DEFAULT_DESCRIPTION);
   }
 
   if (clean === '/boutiques' || clean === '/boutiques-premium') {
-    return pageTags(`Toutes les boutiques | ${SITE_TITLE}`, 'Toutes les boutiques actives sur Ezial, la marketplace mode, beauté et accessoires au Sénégal.', '/boutiques/');
+    return pageTags(`Toutes les boutiques | ${SITE_TITLE}`, SHOPS_INDEX_DESCRIPTION, '/boutiques/');
   }
 
   // Info pages set their own tags (InfoPage), like the blog — their texts
   // stay out of the main bundle. Same for « Devenir vendeur ».
   if (parts[1] === 'info' || clean === '/devenir-vendeur') return null;
 
-  if (clean === '/panier') return plainTags(`Panier — ${SITE_TITLE}`, DEFAULT_DESCRIPTION);
-  if (clean === '/checkout') return plainTags(`Commande — ${SITE_TITLE}`, DEFAULT_DESCRIPTION);
-  if (clean.startsWith('/commande/')) return plainTags(`Confirmation de commande — ${SITE_TITLE}`, DEFAULT_DESCRIPTION);
-  if (clean.startsWith('/suivi/')) return plainTags(`Suivi de commande — ${SITE_TITLE}`, DEFAULT_DESCRIPTION);
-  if (clean.startsWith('/compte/commande/')) return plainTags(`Détail de commande — ${SITE_TITLE}`, DEFAULT_DESCRIPTION);
-  if (clean === '/favoris') return plainTags(`Favoris — ${SITE_TITLE}`, DEFAULT_DESCRIPTION);
-  if (clean === '/profil' || clean === '/commandes' || clean === '/compte/commandes') return plainTags(`Mon compte — ${SITE_TITLE}`, DEFAULT_DESCRIPTION);
-  if (clean === '/promos') return plainTags(`Promotions — ${SITE_TITLE}`, 'Toutes les offres et promotions en cours sur Ezial.');
-  if (clean === '/tendances') return plainTags(`Tendances — ${SITE_TITLE}`, 'Les produits les plus aimés sur Ezial.');
-  if (clean === '/pour-vous') return plainTags(`Vous aimerez — ${SITE_TITLE}`, 'Des produits choisis selon vos envies parmi le catalogue Ezial.');
-  if (clean.startsWith('/recherche')) return plainTags(`Recherche — ${SITE_TITLE}`, DEFAULT_DESCRIPTION);
+  if (clean === '/panier') return plainTags(`Panier — ${SITE_TITLE}`, UTILITY_DESCRIPTIONS.panier);
+  if (clean === '/checkout') return plainTags(`Commande — ${SITE_TITLE}`, UTILITY_DESCRIPTIONS.commande);
+  if (clean.startsWith('/commande/')) return plainTags(`Confirmation de commande — ${SITE_TITLE}`, UTILITY_DESCRIPTIONS.confirmation);
+  if (clean.startsWith('/suivi/')) return plainTags(`Suivi de commande — ${SITE_TITLE}`, UTILITY_DESCRIPTIONS.suivi);
+  if (clean.startsWith('/compte/commande/')) return plainTags(`Détail de commande — ${SITE_TITLE}`, UTILITY_DESCRIPTIONS.detailCommande);
+  if (clean === '/favoris') return plainTags(`Favoris — ${SITE_TITLE}`, UTILITY_DESCRIPTIONS.favoris);
+  if (clean === '/profil' || clean === '/commandes' || clean === '/compte/commandes') return plainTags(`Mon compte — ${SITE_TITLE}`, UTILITY_DESCRIPTIONS.compte);
+  if (clean === '/promos') return plainTags(`Promotions — ${SITE_TITLE}`, UTILITY_DESCRIPTIONS.promos);
+  if (clean === '/tendances') return plainTags(`Tendances — ${SITE_TITLE}`, UTILITY_DESCRIPTIONS.tendances);
+  if (clean === '/pour-vous') return plainTags(`Vous aimerez — ${SITE_TITLE}`, UTILITY_DESCRIPTIONS.pourVous);
+  if (clean.startsWith('/recherche')) return plainTags(`Recherche — ${SITE_TITLE}`, UTILITY_DESCRIPTIONS.recherche);
   return plainTags(DEFAULT_TITLE, DEFAULT_DESCRIPTION);
 }
 
