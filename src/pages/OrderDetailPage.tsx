@@ -11,6 +11,7 @@ import { paymentLabels } from '@/data/payments';
 import { Package, Truck, Store, MapPin, Smartphone, Clock, Check, KeySquare, CheckCircle2, AlertTriangle, RotateCcw } from 'lucide-react';
 import SmartImage from '@/components/SmartImage';
 import ClaimModal from '@/components/ClaimModal';
+import InvoiceButton from '@/components/InvoiceButton';
 
 const deliveryStatusColors: Record<DeliveryStepStatus, string> = {
   confirmed: 'bg-blue-50 text-blue-700', preparing: 'bg-amber-50 text-amber-700', ready: 'bg-green-50 text-green-700',
@@ -232,6 +233,7 @@ export default function OrderDetailPage({ orderId }: { orderId: string }) {
               </span>
               <span className="text-sm font-semibold text-ink">{formatFCFA(order.total)}</span>
             </div>
+            <div className="pt-2"><InvoiceButton order={order} /></div>
           </div>
 
           {/* Retours / signalement — jamais bloqués par un délai côté
