@@ -1,4 +1,5 @@
 import { supabase } from './supabaseClient';
+import { normalizeStoredWaist } from '@/lib/waistMeasure';
 import { isDeletedShop, DELETED_SHOP_NAME } from './deletedShop';
 import { resolveImageUrl } from './supabaseCatalog';
 
@@ -118,6 +119,8 @@ export interface AdminOrderItem {
   // Tissus category only — read from the live products row (order_items
   // itself never snapshots this), null for every other line.
   saleMode: string | null;
+  /** Tour de taille (Baya), en cm — null pour tout autre article. */
+  waistCm: number | null;
 }
 
 export interface AdminOrderShopGroup {
@@ -204,6 +207,7 @@ export async function fetchAdminOrderDetail(orderId: string): Promise<AdminOrder
         unitPrice: (it.unit_price as number) ?? 0,
         lineTotal: (it.line_total as number) ?? 0,
         saleMode: saleModeByProduct.get(it.product_id as string) ?? null,
+        waistCm: normalizeStoredWaist(it.waist_cm) ?? null,
       })),
   }));
 

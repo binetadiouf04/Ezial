@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { shopPath } from '@/lib/shopUrl';
 import { recordProductView } from '@/lib/browsingHistory';
 import { useApp } from '@/store/AppContext';
@@ -22,6 +22,7 @@ import FavoriteButton from '@/components/FavoriteButton';
 import ProductCarousel from '@/components/ProductCarousel';
 import SmartImage from '@/components/SmartImage';
 import MobileBuyBar from '@/components/MobileBuyBar';
+import { isBayaProduct, parseWaistCm, waistError, WAIST_LABEL, WAIST_HINT } from '@/lib/waistMeasure';
 import { CopyReference, ShareProduct } from '@/components/ProductShareActions';
 import { DELIVERY } from '@/shared/siteInfo';
 import { ChevronRight, Store, Plus, Minus, Check, Star, Camera, X, ShieldCheck, Loader2, Truck, ShoppingBag } from 'lucide-react';
@@ -92,6 +93,12 @@ export default function ProductPage({ productId }: { productId: string }) {
   const [tab, setTab] = useState<Tab>('Description');
   const [added, setAdded] = useState(false);
   const [error, setError] = useState('');
+  // Baya : tour de taille du client (texte saisi + message). Une personnalisation
+  // de la ligne, jamais une variante : le prix ne dépend pas de la mesure.
+  const [waistText, setWaistText] = useState('');
+  const [waistMsg, setWaistMsg] = useState('');
+  const waistRef = useRef<HTMLInputElement>(null);
+  useEffect(() => { setWaistText(''); setWaistMsg(''); }, [productId]);
 
   // Real reviews (Supabase) — only ever fetched for a real catalog product
   // (mock demo products keep their static mock reviews, rendered further
@@ -267,10 +274,23 @@ export default function ProductPage({ productId }: { productId: string }) {
   // (empty, or failed validateFabricQuantity).
   const fabricQtyInvalid = Boolean(product.saleMode) && (qtyText.trim() === '' || qtyError !== '');
 
+  const isBaya = isBayaProduct(product);
+
   const handleAdd = (buyNow = false) => {
+    let waistCm: number | undefined;
+    if (isBaya) {
+      const parsed = parseWaistCm(waistText);
+      if (parsed === null) {
+        setWaistMsg(waistError(waistText) ?? '');
+        waistRef.current?.focus();
+        waistRef.current?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+        return;
+      }
+      waistCm = parsed;
+    }
     if (!allSelected) { setError('Veuillez sélectionner: ' + requiredVariants.filter((v) => !variants[v]).join(', ')); return; }
     if (fabricQtyInvalid) return;
-    addToCart({ productId: product.id, shopId: product.shopId, quantity: qty, variants, unitPrice: dynamicPrice.price, variantId: dynamicPrice.variantId });
+    addToCart({ productId: product.id, shopId: product.shopId, quantity: qty, variants, unitPrice: dynamicPrice.price, variantId: dynamicPrice.variantId, ...(waistCm !== undefined ? { waistCm } : {}) });
     if (buyNow) navigate('/checkout'); else { setAdded(true); setTimeout(() => setAdded(false), 2000); }
   };
 
@@ -319,6 +339,29 @@ export default function ProductPage({ productId }: { productId: string }) {
           {outOfStock ? <p className="text-sm font-medium text-ink/50">Rupture de stock</p> : (lowStock && !product.saleMode) ? <p className="text-sm font-medium text-burgundy">Plus que {product.stock} disponibles</p> : null}
           {product.variants.length > 0 && <div className="border-t border-ink/10 pt-5"><VariantSelector variants={product.variants} selected={variants} onChange={handleVariant} /></div>}
           <div className="space-y-4">
+            {isBaya && (
+              <div>
+                <label htmlFor="waist-cm" className="mb-1.5 block text-xs font-semibold text-ink/70">{WAIST_LABEL} <span className="text-burgundy" aria-hidden="true">*</span></label>
+                <input
+                  id="waist-cm"
+                  ref={waistRef}
+                  type="text"
+                  inputMode="decimal"
+                  autoComplete="off"
+                  required
+                  aria-required="true"
+                  aria-invalid={waistMsg ? 'true' : 'false'}
+                  aria-describedby="waist-cm-hint"
+                  placeholder="Ex. 82"
+                  value={waistText}
+                  onChange={(e) => { setWaistText(e.target.value); setWaistMsg(''); }}
+                  onBlur={() => { if (waistText.trim()) setWaistMsg(waistError(waistText) ?? ''); }}
+                  className={`w-40 rounded-lg border bg-white px-3 py-2.5 text-base text-ink focus:outline-none focus:ring-2 focus:ring-burgundy/20 ${waistMsg ? 'border-burgundy' : 'border-ink/20 focus:border-burgundy'}`}
+                />
+                <p id="waist-cm-hint" className="mt-1.5 text-xs leading-relaxed text-ink/55">{WAIST_HINT}</p>
+                {waistMsg && <p role="alert" className="mt-1 text-sm text-burgundy">{waistMsg}</p>}
+              </div>
+            )}
             <div>
               <span className="mb-1.5 block text-xs font-semibold text-ink/70">Quantité</span>
               {product.saleMode ? (

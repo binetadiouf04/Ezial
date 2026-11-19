@@ -1,4 +1,5 @@
 import { lazy, Suspense, useEffect, useState } from 'react';
+import { optionsLine, lineNeedsWaist, normalizeStoredWaist } from '@/lib/waistMeasure';
 import { useApp, type Order, type ShopFulfillment, type DeliveryPreference, type DeliveryStepStatus, quartierToZone, deliveryWindows } from '@/store/AppContext';
 import { formatFCFA, isRealCatalogId, getVariantPrice } from '@/data/products';
 import { fabricSaleModeUnit, formatFabricQuantity } from '@/data/categories';
@@ -384,6 +385,7 @@ export default function CheckoutPage() {
         variants: it.selected_options ?? {},
         unitPrice: it.unit_price,
         variantId: it.variant_id ?? undefined,
+        waistCm: normalizeStoredWaist(it.waist_cm),
         // Snapshotted now, from the live catalog, so this line still shows
         // its real name later even if the product is archived by then.
         productName: catalogProducts.find((cp) => cp.id === it.product_id)?.name,
@@ -400,6 +402,11 @@ export default function CheckoutPage() {
   };
 
   const placeOrder = async () => {
+    // Baya : la mesure est obligatoire (le serveur la revérifie dans create_order).
+    if (cart.some((item) => lineNeedsWaist(item, catalogProducts.find((cp) => cp.id === item.productId)))) {
+      setSubmitError('Le tour de taille de votre baya est manquant ou invalide. Renseignez-le dans votre panier avant de payer.');
+      return;
+    }
     if (hasDeliveryShops && !location) {
       setSubmitError('Position de livraison manquante. Autorisez la géolocalisation ou choisissez le retrait en boutique.');
       return;
@@ -462,6 +469,7 @@ export default function CheckoutPage() {
           productId: item.productId,
           variantId: item.variantId ?? null,
           selectedOptions: item.variants,
+          ...(item.waistCm !== undefined ? { waistCm: item.waistCm } : {}),
           quantity: item.quantity,
         })),
       };
@@ -512,9 +520,7 @@ export default function CheckoutPage() {
         <SmartImage src={p.thumbnailUrl || p.images[0]} alt="" className="h-[72px] w-[58px] flex-shrink-0 rounded-md object-cover" />
         <div className="min-w-0 flex-1">
           <p className="line-clamp-2 text-[13px] font-medium leading-snug text-ink">{p.name}</p>
-          {Object.entries(item.variants).length > 0 && (
-            <p className="mt-0.5 text-xs text-ink/55">{Object.entries(item.variants).map(([k, v]) => `${k} : ${v}`).join(' · ')}</p>
-          )}
+          {optionsLine(item.variants, item.waistCm) && (<p className="mt-0.5 text-xs text-ink/55">{optionsLine(item.variants, item.waistCm)}</p>)}
           <p className="text-xs text-ink/55">Quantité : {p.saleMode ? `${formatFabricQuantity(item.quantity)} ${fabricSaleModeUnit[p.saleMode]}` : item.quantity}</p>
           {shop && <p className="mt-0.5 text-[11px] text-ink/40">Vendu par {shop.name}</p>}
           {/* Le prix reste dans la colonne du texte : en promo (prix, ancien prix

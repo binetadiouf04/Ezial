@@ -128,7 +128,7 @@ const SUBCATEGORY_LABELS = {
   'sacs-a-main': 'Sacs à main', 'sacs-bandouliere': 'Sacs bandoulière', pochette: 'Pochette', portefeuilles: 'Portefeuilles', 'sacs-a-dos': 'Sacs à dos',
   maquillage: 'Maquillage', skincare: 'Skincare', 'soins-capillaires': 'Soins capillaires', hygiene: 'Hygiène & soins corporels', 'mains-et-pieds': 'Manucure & Pédicure',
   'parfums-femme': 'Parfums Femme', 'parfums-homme': 'Parfums Homme', 'huiles-brumes': 'Huiles & Brumes', 'encens-parfums-maison': 'Encens & Parfums de maison',
-  colliers: 'Colliers', bracelets: 'Bracelets', bagues: 'Bagues', 'boucles-oreilles': "Boucles d'oreilles", montres: 'Montres', lunettes: 'Lunettes', 'bijoux-de-taille': 'Bijou de taille', 'ensemble-parure': 'Ensemble / Parure',
+  colliers: 'Colliers', bracelets: 'Bracelets', bagues: 'Bagues', 'boucles-oreilles': "Boucles d'oreilles", montres: 'Montres', lunettes: 'Lunettes', 'bijoux-de-taille': 'Bijou de taille', baya: 'Baya', 'ensemble-parure': 'Ensemble / Parure',
   pyjamas: 'Pyjamas', lingerie: 'Lingerie', 'sous-vetements': 'Sous-vêtements', 'vetements-de-nuit': 'Vêtements de nuit',
 };
 
