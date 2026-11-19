@@ -10,7 +10,6 @@ import { fetchSellerSubscription, fetchSubscriptionPayments, summarizeCurrentPla
 import { formatFCFA, formatDateTime, formatDate } from '../../data';
 import { StatusChip } from '../../components/StatusChip';
 import GiftAccessNotice from '../../components/GiftAccessNotice';
-import NotificationOptIn from '@/components/NotificationOptIn';
 import NotificationGateModal from '@/components/NotificationGateModal';
 import { ShoppingBag, Package, Wallet, ChevronRight, Truck, Store, Loader2, ArrowRight, Crown, Plus } from 'lucide-react';
 
@@ -117,12 +116,7 @@ export default function SellerDashboard() {
         </button>
       )}
 
-      {authUserId && (
-        <>
-          <NotificationGateModal userId={authUserId} label="Notifications de nouvelles commandes" />
-          <NotificationOptIn userId={authUserId} label="Notifications de nouvelles commandes" />
-        </>
-      )}
+      {authUserId && <NotificationGateModal userId={authUserId} label="Notifications de nouvelles commandes" />}
 
       <div className="grid gap-3 lg:grid-cols-5">
         {/* Solde disponible — fond bordeaux satiné de l'identité Ezial. */}
