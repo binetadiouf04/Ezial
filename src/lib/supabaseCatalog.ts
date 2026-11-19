@@ -1,4 +1,5 @@
 import { supabase } from './supabaseClient';
+import { fetchAllRows, chunk, ID_BATCH } from './supabasePaging';
 import { isProductUuid } from './productUrl';
 import type { Product, VariantOption, VariantPrice } from '@/data/products';
 import type { Shop } from '@/data/shops';
@@ -337,36 +338,40 @@ export async function fetchActiveCatalogFromSupabase(): Promise<SupabaseCatalogR
   // téléphone. Les avis (notes) sont ajoutés juste après l'affichage par
   // AppContext (fetchReviewStatsForProducts), ils ne bloquent plus la page.
   // Si la lecture groupée est refusée, on retombe sur l'ancienne lecture.
+  // Lecture PAR PAGES (voir supabasePaging.ts) : Supabase s'arrête sans erreur à
+  // 1 000 lignes par réponse, le catalogue serait tronqué en silence au-delà.
+  // Tri stable (date puis identifiant) pour que les pages ne se chevauchent pas.
   const [shopsRes, productsRes, premiumRes] = await Promise.all([
-    supabase.from('shops').select('*').eq('status', 'active'),
-    supabase.from('products').select('*, product_images(*), product_variants(*)').eq('status', 'active'),
+    fetchAllRows<ShopRow>((from, to) => supabase.from('shops').select('*').eq('status', 'active').order('created_at').order('id').range(from, to)),
+    fetchAllRows<ProductRow & { product_images?: ProductImageRow[]; product_variants?: ProductVariantRow[] }>((from, to) =>
+      supabase.from('products').select('*, product_images(*), product_variants(*)').eq('status', 'active').order('created_at').order('id').range(from, to)),
     // Non-fatal on its own: a seller_subscriptions row or a stale deploy
     // of this RPC never blocks the rest of the catalog — every shop just
     // falls back to isPremium = false until it resolves.
     supabase.rpc('active_premium_shop_ids'),
   ]);
 
-  let productsData = productsRes.data as (ProductRow & { product_images?: ProductImageRow[]; product_variants?: ProductVariantRow[] })[] | null;
-  const groupedRead = !productsRes.error && Array.isArray(productsData);
+  let productsData: (ProductRow & { product_images?: ProductImageRow[]; product_variants?: ProductVariantRow[] })[] = productsRes.data;
+  const groupedRead = !productsRes.error;
   if (!groupedRead) {
-    // Repli : lecture simple des produits, puis photos et variantes à part.
-    const plain = await supabase.from('products').select('*').eq('status', 'active');
+    // Repli : lecture simple des produits (par pages), puis photos et variantes à part.
+    const plain = await fetchAllRows<ProductRow>((from, to) => supabase.from('products').select('*').eq('status', 'active').order('created_at').order('id').range(from, to));
     if (plain.error) errors.push(`products: ${plain.error.message}`);
-    productsData = (plain.data ?? []) as ProductRow[];
+    productsData = plain.data;
   }
   if (shopsRes.error) errors.push(`shops: ${shopsRes.error.message}`);
   if (premiumRes.error) errors.push(`active_premium_shop_ids: ${premiumRes.error.message}`);
   const premiumShopIds = new Set((premiumRes.data ?? []) as string[]);
 
-  const shopRows = (shopsRes.data ?? []) as ShopRow[];
+  const shopRows = shopsRes.data;
   const activeShopIds = new Set(shopRows.map((s) => s.id));
   // A product's own status can be 'active' while its shop isn't (still in
   // onboarding, suspended...) — never shown publicly either way.
   const productRows = (productsData ?? []).filter((p) => activeShopIds.has(p.shop_id));
   const productIds = productRows.map((p) => p.id);
 
-  let imageRows: ProductImageRow[] = [];
-  let variantRows: ProductVariantRow[] = [];
+  const imageRows: ProductImageRow[] = [];
+  const variantRows: ProductVariantRow[] = [];
   // Notes : ajoutées après l'affichage (voir plus haut), jamais dans cette étape.
   const reviewStats = new Map<string, ReviewStats>();
 
@@ -376,14 +381,14 @@ export async function fetchActiveCatalogFromSupabase(): Promise<SupabaseCatalogR
       if (row.product_variants) variantRows.push(...row.product_variants);
     }
   } else if (productIds.length > 0) {
+    // Lots d'identifiants : jamais une adresse de requête démesurée.
+    const batches = chunk(productIds, ID_BATCH);
     const [imagesRes, variantsRes] = await Promise.all([
-      supabase.from('product_images').select('*').in('product_id', productIds),
-      supabase.from('product_variants').select('*').in('product_id', productIds),
+      Promise.all(batches.map((ids) => supabase.from('product_images').select('*').in('product_id', ids))),
+      Promise.all(batches.map((ids) => supabase.from('product_variants').select('*').in('product_id', ids))),
     ]);
-    if (imagesRes.error) errors.push(`product_images: ${imagesRes.error.message}`);
-    if (variantsRes.error) errors.push(`product_variants: ${variantsRes.error.message}`);
-    imageRows = (imagesRes.data ?? []) as ProductImageRow[];
-    variantRows = (variantsRes.data ?? []) as ProductVariantRow[];
+    for (const r of imagesRes) { if (r.error) errors.push(`product_images: ${r.error.message}`); else imageRows.push(...((r.data ?? []) as ProductImageRow[])); }
+    for (const r of variantsRes) { if (r.error) errors.push(`product_variants: ${r.error.message}`); else variantRows.push(...((r.data ?? []) as ProductVariantRow[])); }
   }
 
   return {
