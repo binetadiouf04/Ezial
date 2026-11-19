@@ -18,9 +18,32 @@ Sorties (dans public/) :
                                             pour rester dans la zone sûre (cercle
                                             de 80 %) quel que soit le masque
 
+Variante Ezial Admin (python3 scripts/generate-app-icons.py --admin) : mêmes
+formes, couleurs inversées (fond crème #F8F3EE uni, symbole bordeaux #5A0D1E
+uni, aucune inscription, aucun dégradé). Le symbole vient du même fichier
+officiel (même masque de transparence, même taille relative que l'icône d'Ezial
+Marketplace) ; seules les couleurs changent, celles de la charte. Sorties dans public/icons/admin/ ; les fichiers de
+l'application Marketplace ne sont pas touchés.
+
+  public/icons/admin/apple-touch-icon.png  180 x 180
+  public/icons/admin/icon-192.png          192 x 192
+  public/icons/admin/icon-512.png          512 x 512
+  public/icons/admin/icon-maskable-512.png 512 x 512  (symbole dans la zone sûre)
+
+Favicons des onglets, favoris et résultats de recherche
+(python3 scripts/generate-app-icons.py --favicons) : même symbole officiel, un
+peu plus grand dans le carré pour rester lisible à 16 px.
+  Marketplace (papillon crème sur fond bordeaux) : public/favicon.ico,
+    favicon-16x16.png, favicon-32x32.png, favicon-48x48.png
+  Admin (papillon bordeaux sur fond crème) : public/icons/admin/favicon.ico,
+    favicon-16x16.png, favicon-32x32.png, favicon-48x48.png
+
 Usage (Pillow et numpy requis) :
-  python3 scripts/generate-app-icons.py
+  python3 scripts/generate-app-icons.py            # Ezial Marketplace (icônes existantes)
+  python3 scripts/generate-app-icons.py --admin    # Ezial Admin
+  python3 scripts/generate-app-icons.py --favicons # favicons Marketplace et Admin
 """
+import sys
 from pathlib import Path
 
 import numpy as np
@@ -32,6 +55,10 @@ OUT = ROOT / 'public'
 MASTER = 2048            # taille de travail, réduite ensuite (qualité)
 SYMBOL_SCALE_ANY = 1.0   # symbole à la taille de l'image source (68,5 % de la largeur)
 SAFE_RADIUS = 0.39       # zone sûre « maskable » : cercle de rayon 40 % (marge de 1 %)
+# Ezial Admin : couleurs de la charte (CLAUDE.md), fond et symbole unis.
+ADMIN_CREAM = (248, 243, 238)      # #F8F3EE
+ADMIN_BURGUNDY = (90, 13, 30)      # #5A0D1E
+FAVICON_SYMBOL_RATIO = 0.80        # part de la largeur occupée par le symbole dans un favicon
 
 
 def load_source():
@@ -126,13 +153,45 @@ def symbol_max_radius_ratio(symbol, sym_bbox, width_ratio):
     return r * (width_ratio / (bx1 - bx0))
 
 
+def compose_inverted(symbol, sym_bbox, width_ratio, cream, burgundy, side=MASTER):
+    """Carré plein crème + symbole bordeaux uni, même cadrage que compose()."""
+    canvas = Image.new('RGBA', (side, side), tuple(int(round(c)) for c in cream) + (255,))
+    # Aplat : le symbole officiel (crème) a des reflets satinés qui donnent une
+    # transparence partielle à l'intérieur ; on la rend pleine (la position des
+    # bords, à 50 %, ne bouge pas) pour obtenir un symbole uni, sans effet.
+    alpha = np.clip((np.asarray(symbol)[..., 3].astype(np.float64) / 255 - 0.25) / 0.5, 0, 1) * 255
+    alpha = alpha.round().astype(np.uint8)
+    solid = np.zeros(alpha.shape + (4,), dtype=np.uint8)
+    solid[..., :3] = np.round(burgundy).astype(np.uint8)
+    solid[..., 3] = alpha
+    layer = Image.fromarray(solid, 'RGBA')
+    bx0, by0, bx1, by1 = sym_bbox
+    scale = width_ratio * side / (bx1 - bx0)
+    resized = layer.resize((round(layer.width * scale), round(layer.height * scale)), Image.LANCZOS)
+    ox = round(side / 2 - (bx0 + bx1) / 2 * scale)
+    oy = round(side / 2 - (by0 + by1) / 2 * scale)
+    canvas.alpha_composite(resized, (ox, oy))
+    return canvas.convert('RGB')
+
+
 def save(img, path, size):
     path.parent.mkdir(parents=True, exist_ok=True)
     img.resize((size, size), Image.LANCZOS).save(path, 'PNG', optimize=True)
     print(f'{path.relative_to(ROOT)}  {size}x{size}  {path.stat().st_size} octets')
 
 
+def save_favicons(master, out_dir):
+    """favicon-16/32/48 en PNG et favicon.ico (16, 32 et 48 dans un seul fichier)."""
+    for size in (16, 32, 48):
+        save(master, out_dir / f'favicon-{size}x{size}.png', size)
+    ico = out_dir / 'favicon.ico'
+    master.resize((256, 256), Image.LANCZOS).save(ico, format='ICO', sizes=[(16, 16), (32, 32), (48, 48)])
+    print(f'{ico.relative_to(ROOT)}  16+32+48  {ico.stat().st_size} octets')
+
+
 def main():
+    admin = '--admin' in sys.argv[1:]
+    favicons = '--favicons' in sys.argv[1:]
     im = load_source()
     info = analyse(im)
     symbol, sym_bbox, ratio = extract_symbol(im, info)
@@ -142,6 +201,21 @@ def main():
     width_mask = width_any * min(1.0, SAFE_RADIUS / r_any)
     print(f'symbole : {width_any:.3f} de la largeur (icône standard), {width_mask:.3f} (adaptative) ; '
           f'rayon max {r_any:.3f} -> {symbol_max_radius_ratio(symbol, sym_bbox, width_mask):.3f}')
+    if favicons:
+        cream, burgundy = np.array(ADMIN_CREAM, dtype=np.float64), np.array(ADMIN_BURGUNDY, dtype=np.float64)
+        save_favicons(compose(symbol, sym_bbox, info, FAVICON_SYMBOL_RATIO, info['plane'], side=1024), OUT)
+        save_favicons(compose_inverted(symbol, sym_bbox, FAVICON_SYMBOL_RATIO, cream, burgundy, side=1024), OUT / 'icons' / 'admin')
+        return
+    if admin:
+        cream, burgundy = np.array(ADMIN_CREAM, dtype=np.float64), np.array(ADMIN_BURGUNDY, dtype=np.float64)
+        out = OUT / 'icons' / 'admin'
+        icon_any = compose_inverted(symbol, sym_bbox, width_any, cream, burgundy)
+        icon_mask = compose_inverted(symbol, sym_bbox, width_mask, cream, burgundy)
+        save(icon_any, out / 'apple-touch-icon.png', 180)
+        save(icon_any, out / 'icon-192.png', 192)
+        save(icon_any, out / 'icon-512.png', 512)
+        save(icon_mask, out / 'icon-maskable-512.png', 512)
+        return
     icon_any = compose(symbol, sym_bbox, info, width_any, info['plane'])
     icon_mask = compose(symbol, sym_bbox, info, width_mask, info['plane'])
     save(icon_any, OUT / 'apple-touch-icon.png', 180)

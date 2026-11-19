@@ -34,8 +34,20 @@ https://:version.:project.pages.dev/*
   Cache-Control: no-store
 /manifest.webmanifest
   Cache-Control: no-cache
+/manifest-admin.webmanifest
+  Cache-Control: no-cache
 /offline.html
   Cache-Control: no-cache
+# Favicons : un jour de cache seulement (les adresses portent « ?v=… », une
+# nouvelle version de l'icône est vue dès le lendemain au plus tard).
+/favicon.ico
+  Cache-Control: public, max-age=86400
+/favicon-*.png
+  Cache-Control: public, max-age=86400
+/apple-touch-icon.png
+  Cache-Control: public, max-age=86400
+/icons/*
+  Cache-Control: public, max-age=86400
 
 # Fichiers JS/CSS du build : leur nom contient l'empreinte de leur contenu
 # (ex. index-DkrLOtgS.js), ils ne changent donc jamais. Le navigateur peut les

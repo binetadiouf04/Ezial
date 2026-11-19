@@ -20,6 +20,51 @@ Sous-domaines `admin.ezial.net` et `livreur.ezial.net` : même build, donc même
 manifeste ; chacun est une application distincte pour le navigateur (origine
 différente), qui s'ouvre sur son espace.
 
+### Ezial Admin : icône et favicon propres (19 nov. 2026)
+
+`admin.ezial.net` reçoit sa propre identité, pour ne pas être confondue avec Ezial
+Marketplace une fois installée : papillon **bordeaux sur fond crème** (Marketplace :
+papillon crème sur fond bordeaux). Même symbole officiel (`docs/identite/logo-ezial-source.png`),
+jamais redessiné ; seules les couleurs changent (charte : crème `#F8F3EE`, bordeaux `#5A0D1E`,
+fond et symbole unis, aucune inscription).
+
+| Élément | Marketplace (inchangé) | Admin |
+| --- | --- | --- |
+| Manifeste | `/manifest.webmanifest` (« Ezial Marketplace ») | `/manifest-admin.webmanifest` (« Ezial Admin ») |
+| Icônes | `/icons/icon-192.png`, `icon-512.png`, `icon-maskable-512.png` | `/icons/admin/icon-192.png`, `icon-512.png`, `icon-maskable-512.png` |
+| iPhone / iPad | `/apple-touch-icon.png` | `/icons/admin/apple-touch-icon.png` |
+| Favicon | `/favicon.ico` (16, 32, 48 px), `/favicon-32x32.png`, `/favicon-16x16.png` | `/icons/admin/favicon.ico`, `favicon-32x32.png`, `favicon-16x16.png` |
+
+- Choix de l'identité : `src/lib/pwaIdentity.ts`, appelé au démarrage (`src/main.tsx`) ;
+  seul l'hôte `admin.*` change les balises `<link rel="manifest">`, `rel="icon"`,
+  `rel="apple-touch-icon"` et les titres d'application. Tout autre hôte (www.ezial.net,
+  livreur.ezial.net, aperçus Cloudflare, local) garde l'identité d'origine. Aucun effet sur
+  l'interface, les fonctions ni les droits.
+- Génération : `python3 scripts/generate-app-icons.py --admin` (icônes d'application Admin) et
+  `--favicons` (favicons Marketplace et Admin). Sans option, le script régénère les icônes
+  Marketplace existantes (non modifiées).
+- Favicon : pas de `favicon.svg`. Un SVG fidèle demanderait de redessiner le symbole ; le
+  fichier officiel est un PNG. Le navigateur utilise l'ICO / le PNG, que Google accepte
+  (multiple de 48 px, adresse indiquée par `<link rel="icon">` dans la page d'accueil).
+- Icône des notifications Web Push : inchangée (`/icons/icon-192.png`, dans `public/sw.js`).
+
+#### Actualiser l'icône sur les appareils déjà équipés
+
+Les nouvelles adresses portent `?v=2` (favicons, apple-touch-icon) et l'icône Admin est un
+nouveau fichier : aucun cache du site ne retient l'ancienne. L'icône d'écran d'accueil, elle,
+est une copie enregistrée par le téléphone au moment de l'ajout :
+- **iPhone / iPad** : supprimer l'icône « Ezial » (Admin) de l'écran d'accueil (appui long,
+  « Supprimer l'app »), ouvrir `admin.ezial.net` dans Safari, Partager, « Sur l'écran d'accueil ».
+  Le nom proposé est « Ezial Admin ».
+- **Android (Chrome)** : l'application installée se met à jour seule sous 1 à 3 jours ; pour
+  l'avoir tout de suite, la désinstaller puis la réinstaller depuis le menu de Chrome.
+- **Favicon dans les onglets** : si l'ancienne lettre « E » s'affiche encore, fermer l'onglet,
+  vider le cache du navigateur pour le site, ou ouvrir `admin.ezial.net/favicon.ico?v=2`.
+- **Google** : l'actualisation du favicon dans les résultats de recherche prend de quelques
+  jours à quelques semaines ; on peut demander une nouvelle exploration de la page d'accueil
+  dans la Search Console.
+
+
 ## 2. Mises à jour sans réinstallation
 
 - Chaque build porte un identifiant (`CF_PAGES_COMMIT_SHA`, sinon l'heure),
