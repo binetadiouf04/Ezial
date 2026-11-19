@@ -102,22 +102,17 @@ export async function createInvoicePdf(invoice: Invoice): Promise<{ blob: Blob; 
   text(new Date(invoice.date).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' }), RIGHT, 28.5, { size: 9, color: GREY, align: 'right' });
   doc.setDrawColor(...BURGUNDY); doc.setLineWidth(0.6); doc.line(MARGIN, 37, RIGHT, 37);
 
-  // ── Qui vend, qui achète, comment ─────────────────────────────────────
+  // ── Qui est facturé, comment ──────────────────────────────────────────
   y = 47;
-  const COL2 = 92;
-  const COL3 = 150;
-  label('VENDU PAR', MARGIN, y);
-  label('FACTURÉ À', COL2, y);
-  label('PAIEMENT', COL3, y);
+  const COL2 = 120;
+  label('FACTURÉ À', MARGIN, y);
+  label('PAIEMENT', COL2, y);
   y += 5.5;
-  const sold = wrap(invoice.soldBy, COL2 - MARGIN - 6, 10, true);
-  let ya = y;
-  for (const part of sold) { text(part, MARGIN, ya, { size: 10, bold: true }); ya += 4.8; }
   let yb = y;
-  text(invoice.buyer.name, COL2, yb, { size: 10, bold: true }); yb += 4.8;
-  for (const line of invoice.buyer.details) { text(line, COL2, yb, { size: 8.5, color: GREY }); yb += 4.2; }
-  text(invoice.paymentLabel, COL3, y, { size: 10, bold: true });
-  y = Math.max(ya, yb) + 7;
+  text(invoice.buyer.name, MARGIN, yb, { size: 10, bold: true }); yb += 4.8;
+  for (const line of invoice.buyer.details) { text(line, MARGIN, yb, { size: 8.5, color: GREY }); yb += 4.2; }
+  text(invoice.paymentLabel, COL2, y, { size: 10, bold: true });
+  y = yb + 7;
 
   // ── Tableau des articles ──────────────────────────────────────────────
   const COL_QTY = 134;
@@ -134,7 +129,6 @@ export async function createInvoicePdf(invoice: Invoice): Promise<{ blob: Blob; 
   const newPage = () => { doc.addPage(); y = 22; tableHeader(); };
   tableHeader();
 
-  const multiShop = invoice.groups.length > 1;
   const groupHeader = (group: Invoice['groups'][number], continued: boolean) => {
     doc.setFillColor(...CREAM);
     doc.rect(MARGIN, y, RIGHT - MARGIN, 6.5, 'F');
@@ -142,10 +136,8 @@ export async function createInvoicePdf(invoice: Invoice): Promise<{ blob: Blob; 
     y += 9;
   };
   for (const group of invoice.groups) {
-    if (multiShop) {
-      if (y + 20 > BOTTOM) newPage();
-      groupHeader(group, false);
-    }
+    if (y + 20 > BOTTOM) newPage();
+    groupHeader(group, false);
     for (const line of group.lines) {
       const hasImage = Boolean(line.imageUrl && images.has(line.imageUrl));
       const textX = hasImage ? MARGIN + IMAGE_W + 4 : MARGIN;
@@ -153,7 +145,7 @@ export async function createInvoicePdf(invoice: Invoice): Promise<{ blob: Blob; 
       const optionLines = line.options ? wrap(line.options, COL_QTY - textX - 16, 8) : [];
       const textH = nameLines.length * 4.6 + optionLines.length * 3.9;
       const rowH = Math.max(hasImage ? IMAGE_H : 0, textH) + 5;
-      if (y + rowH > BOTTOM) { newPage(); if (multiShop) groupHeader(group, true); }
+      if (y + rowH > BOTTOM) { newPage(); groupHeader(group, true); }
       if (hasImage) doc.addImage(images.get(line.imageUrl as string) as string, 'JPEG', MARGIN, y, IMAGE_W, IMAGE_H);
       let ty = y + 3.6;
       for (const part of nameLines) { text(part, textX, ty, { size: 9.5, bold: true }); ty += 4.6; }
@@ -164,7 +156,7 @@ export async function createInvoicePdf(invoice: Invoice): Promise<{ blob: Blob; 
       y += rowH;
       hair(y - 2.5);
     }
-    if (multiShop) y += 2;
+    y += 2;
   }
 
   // ── Totaux : le total en dernier, bien visible ────────────────────────
