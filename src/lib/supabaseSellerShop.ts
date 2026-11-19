@@ -140,7 +140,8 @@ const SHOP_ASSETS_BUCKET = 'product-images';
 // header, wider but still nowhere near a phone camera's native resolution —
 // both are resized and re-encoded as WebP before upload (see
 // optimizeImageFile), instead of storing the picked file as-is.
-const ASSET_MAX_DIMENSION: Record<'logo' | 'cover', number> = { logo: 512, cover: 1600 };
+// (A logo is shown at 112 px at most: 384 px stays sharp on a 3x phone screen.)
+export const ASSET_MAX_DIMENSION: Record<'logo' | 'cover', number> = { logo: 384, cover: 1600 };
 
 // A previous logo/cover is never referenced again once replaced (the shop
 // row's *_url column is overwritten with the new one) — deleting it here
@@ -164,7 +165,7 @@ export async function removeShopAsset(url: string): Promise<void> {
 }
 
 export async function uploadShopAsset(shopId: string, kind: 'logo' | 'cover', file: File, previousUrl?: string): Promise<{ url?: string; error?: string }> {
-  const optimized = await optimizeImageFile(file, ASSET_MAX_DIMENSION[kind]);
+  const optimized = await optimizeImageFile(file, ASSET_MAX_DIMENSION[kind], 0.82, { flatten: kind === 'cover' });
   const ext = optimized.type === 'image/webp' ? 'webp' : optimized.type === 'image/png' ? 'png' : 'jpg';
   const path = `shops/${shopId}/${kind}-${Date.now()}.${ext}`;
   // Immutable — the timestamp in the path guarantees a brand-new file every

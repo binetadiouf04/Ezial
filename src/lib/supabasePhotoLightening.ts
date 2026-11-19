@@ -1,6 +1,7 @@
 import { supabase } from './supabaseClient';
 import { PRODUCT_IMAGES_BUCKET, resolveImageUrl } from './supabaseCatalog';
-import { encodeCanvasForWeb, generateThumbnail } from '@/utils/imageOptimize';
+import { encodeCanvasForWeb, generateThumbnail, optimizeImageFile } from '@/utils/imageOptimize';
+import { ASSET_MAX_DIMENSION } from './supabaseSellerShop';
 
 // Automatic clean-up (run in the background by the seller space, see
 // useAutoLightenProductPhotos) for product photos uploaded before the iPad
@@ -143,6 +144,82 @@ async function lightenOne(uid: string, row: ImageRow): Promise<number> {
   return source.size - next.blob.size;
 }
 
+// Shop logo and cover (same idea, same safety): uploaded before the PNG fix,
+// a cover can weigh ~1 MB and a logo 300+ KB, loaded on the home page and on
+// every shop card. The image is re-encoded (cover: flattened JPEG/WebP; logo:
+// kept as PNG only if it really has transparent pixels), uploaded under a NEW
+// name, checked online, and only then does shops.logo_url / cover_url point
+// at it. The old file is deliberately left in place: Google, link previews
+// and the catalogue copy kept on visitors' devices may still show its URL for
+// a few hours. Only the seller's own shop, under their own rights (RLS).
+const ASSET_HEAVY_BYTES: Record<'logo' | 'cover', number> = { logo: 80 * 1024, cover: 200 * 1024 };
+
+async function lightenShopAsset(shopId: string, kind: 'logo' | 'cover', url: string): Promise<{ newUrl: string; saved: number } | null> {
+  const marker = `/object/public/${PRODUCT_IMAGES_BUCKET}/`;
+  const i = url.indexOf(marker);
+  if (i === -1) return null;
+  const oldPath = decodeURIComponent(url.slice(i + marker.length).split('?')[0]);
+  if (!oldPath.startsWith(`shops/${shopId}/`)) return null;
+
+  const response = await fetch(url, { cache: 'no-store' });
+  if (!response.ok) throw new Error(`lecture du ${kind === 'logo' ? 'logo' : 'de la couverture'} refusée (${response.status})`);
+  const source = await response.blob();
+  if (source.size < ASSET_HEAVY_BYTES[kind]) return null;
+
+  const optimized = await optimizeImageFile(
+    new File([source], `${kind}.${source.type === 'image/png' ? 'png' : 'img'}`, { type: source.type }),
+    ASSET_MAX_DIMENSION[kind],
+    0.82,
+    { flatten: kind === 'cover' },
+  );
+  if (optimized.size >= source.size * MIN_GAIN || !['image/webp', 'image/jpeg', 'image/png'].includes(optimized.type)) return null;
+
+  const ext = optimized.type === 'image/webp' ? 'webp' : optimized.type === 'image/png' ? 'png' : 'jpg';
+  const path = `shops/${shopId}/${kind}-${Date.now()}.${ext}`;
+  if (!(await upload(path, optimized, optimized.type))) throw new Error('envoi de l\'image allégée refusé');
+
+  const newUrl = supabase.storage.from(PRODUCT_IMAGES_BUCKET).getPublicUrl(path).data.publicUrl;
+  let verified = false;
+  try {
+    const check = await fetch(newUrl, { cache: 'no-store' });
+    verified = check.ok && (await check.blob()).size === optimized.size;
+  } catch { verified = false; }
+  if (!verified) {
+    await supabase.storage.from(PRODUCT_IMAGES_BUCKET).remove([path]);
+    throw new Error('vérification de l\'image allégée échouée');
+  }
+
+  const column = kind === 'logo' ? 'logo_url' : 'cover_url';
+  // .eq(column, url): never overwrite a logo/cover the seller replaced meanwhile.
+  const { data, error } = await supabase.from('shops').update({ [column]: newUrl }).eq('id', shopId).eq(column, url).select('id');
+  if (error || !data || data.length === 0) {
+    await supabase.storage.from(PRODUCT_IMAGES_BUCKET).remove([path]);
+    if (error) throw new Error('mise à jour de la boutique refusée');
+    return null;
+  }
+  return { newUrl, saved: source.size - optimized.size };
+}
+
+export async function lightenShopAssets(shopId: string): Promise<{ lightened: number; savedBytes: number; failed: number; firstError?: string }> {
+  const out: { lightened: number; savedBytes: number; failed: number; firstError?: string } = { lightened: 0, savedBytes: 0, failed: 0 };
+  const { data, error } = await supabase.from('shops').select('logo_url, cover_url').eq('id', shopId).maybeSingle();
+  if (error || !data) return out;
+  const alreadyChecked = readChecked();
+  for (const kind of ['logo', 'cover'] as const) {
+    const url = (data[kind === 'logo' ? 'logo_url' : 'cover_url'] as string | null) ?? '';
+    if (!url || alreadyChecked.has(url)) continue;
+    try {
+      const result = await lightenShopAsset(shopId, kind, url);
+      if (result) { out.lightened += 1; out.savedBytes += result.saved; rememberChecked([result.newUrl]); }
+      else rememberChecked([url]);
+    } catch (e) {
+      out.failed += 1;
+      out.firstError ??= e instanceof Error ? e.message : String(e);
+    }
+  }
+  return out;
+}
+
 // maxHeavy: how many heavy photos to convert in this run (light photos are
 // skipped from Storage metadata alone, without downloading them). Lets the
 // automatic background run spread a large backlog over several visits.
@@ -233,7 +310,18 @@ export function scheduleAutoLightening(
     // Once started, the run goes on even if the seller moves to another page
     // of the site (the app stays loaded): leaving the seller space after a
     // few seconds used to cut it short.
-    void lightenShopProductPhotos(shopId, { maxHeavy: AUTO_BATCH, onProgress: (p) => { if (p.total > 0) onProgress?.(p); } })
+    // Logo and cover first (two small files at most, no progress banner), then
+    // the product photos; both results are reported together.
+    const assetsPromise = lightenShopAssets(shopId).catch(() => ({ lightened: 0, savedBytes: 0, failed: 0 } as Awaited<ReturnType<typeof lightenShopAssets>>));
+    void assetsPromise
+      .then((assets) => lightenShopProductPhotos(shopId, { maxHeavy: AUTO_BATCH, onProgress: (p) => { if (p.total > 0) onProgress?.(p); } })
+        .then((r): LightenResult | { error: string } => ('error' in r ? r : {
+          ...r,
+          lightened: r.lightened + assets.lightened,
+          savedBytes: r.savedBytes + assets.savedBytes,
+          failed: r.failed + assets.failed,
+          firstError: r.firstError ?? assets.firstError,
+        })))
       .then((result) => {
         if (!('error' in result) && result.failed === 0) {
           try { sessionStorage.setItem(key, '1'); } catch { /* ignore */ }

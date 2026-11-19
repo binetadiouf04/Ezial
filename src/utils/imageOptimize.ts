@@ -39,7 +39,24 @@ export async function encodeCanvasForWeb(canvas: HTMLCanvasElement, quality = 0.
 
 const withExtension = (name: string, ext: string, suffix = '') => `${name.replace(/\.[^.]+$/, '')}${suffix}.${ext}`;
 
-export async function optimizeImageFile(file: File, maxDimension: number, quality = 0.82): Promise<File> {
+// True when at least one pixel is not fully opaque. A PNG with no transparency
+// at all (a screenshot, a banner exported as PNG) is stored as JPEG/WebP
+// instead: several times lighter, identical to the eye. If the pixels cannot
+// be read, assume transparency (the safe side: PNG is kept).
+function hasTransparentPixels(ctx: CanvasRenderingContext2D, width: number, height: number): boolean {
+  try {
+    const data = ctx.getImageData(0, 0, width, height).data;
+    for (let i = 3; i < data.length; i += 4) if (data[i] < 250) return true;
+    return false;
+  } catch {
+    return true;
+  }
+}
+
+// flatten: the image is never shown over anything but a solid background
+// (a shop cover): transparent areas are painted white and the result is never
+// kept as a heavy PNG.
+export async function optimizeImageFile(file: File, maxDimension: number, quality = 0.82, options: { flatten?: boolean } = {}): Promise<File> {
   if (!file.type.startsWith('image/') || file.type === 'image/svg+xml') return file;
 
   try {
@@ -53,10 +70,15 @@ export async function optimizeImageFile(file: File, maxDimension: number, qualit
     canvas.height = height;
     const ctx = canvas.getContext('2d');
     if (!ctx) return file;
+    if (options.flatten) {
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, width, height);
+    }
     ctx.drawImage(bitmap, 0, 0, width, height);
     bitmap.close?.();
 
-    const encoded = await encodeCanvasForWeb(canvas, quality, file.type === 'image/png' || file.type === 'image/gif');
+    const mayBeTransparent = !options.flatten && (file.type === 'image/png' || file.type === 'image/gif');
+    const encoded = await encodeCanvasForWeb(canvas, quality, mayBeTransparent && hasTransparentPixels(ctx, width, height));
     if (!encoded) return file;
     // Never replace a web-ready original with something heavier (a small
     // PNG logo re-encoded as PNG can come out larger than it went in). A
