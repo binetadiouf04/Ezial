@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { formatWaistCm } from '@/lib/waistMeasure';
 import { usePro } from '../../ProContext';
 import {
   fetchSellerOrderDetail, advanceOrderShopStatus, nextSellerStatus, sellerActionLabel,
@@ -115,6 +116,9 @@ export default function SellerOrderDetail({ orderId }: { orderId: string }) {
                 <p className="text-sm font-medium text-ink">{item.productName}</p>
                 {Object.entries(item.selectedOptions).length > 0 && (
                   <p className="text-xs text-ink/50 mt-0.5">{Object.entries(item.selectedOptions).map(([k, v]) => `${k} : ${v}`).join(' · ')}</p>
+                )}
+                {item.waistCm !== null && (
+                  <p className="mt-1 inline-flex rounded-md bg-burgundy/10 px-2 py-0.5 text-xs font-semibold text-burgundy">Tour de taille : {formatWaistCm(item.waistCm)} — à respecter pour la préparation</p>
                 )}
                 <p className="text-xs text-ink/50 mt-0.5">Quantité : {item.saleMode ? `${formatFabricQuantity(item.quantity)} ${fabricSaleModeUnit[item.saleMode as keyof typeof fabricSaleModeUnit]}` : item.quantity}</p>
                 <p className="text-xs text-ink/40 mt-0.5">Prix unitaire : {formatFCFA(item.unitPrice)}</p>

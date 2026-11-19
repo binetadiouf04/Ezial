@@ -7,12 +7,15 @@ import FavoriteButton from './FavoriteButton';
 import { getShop } from '@/data/shops';
 import SmartImage from './SmartImage';
 import { productPath, productPublicPath } from '@/lib/productUrl';
+import { stockBadge } from '@/lib/stockBadge';
 
 export default function ProductCard({ product, priority = false }: { product: Product; priority?: boolean }) {
   const { navigate } = useApp();
   const shop = getShop(product.shopId);
-  const outOfStock = product.stock === 0;
-  const lowStock = product.stock > 0 && product.stock <= 3;
+  // Badge posé sur la photo : « Épuisé » (stock nul) ou « Plus que X ! »
+  // (1 à 3 unités, toutes variantes confondues) — voir src/lib/stockBadge.ts.
+  const badge = stockBadge(product);
+  const outOfStock = badge?.kind === 'out';
 
   return (
     // A real href (not just an onClick) so Google's own rendering pass can
@@ -40,9 +43,14 @@ export default function ProductCard({ product, priority = false }: { product: Pr
         />
         <div className="absolute right-2.5 top-2.5"><FavoriteButton productId={product.id} /></div>
         {product.isNew && !product.isPromo && <span className="absolute left-2.5 top-2.5 rounded-full bg-white/95 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-ink">Nouveau</span>}
-        {outOfStock && <div className="absolute inset-0 flex items-center justify-center"><span className="rounded-full bg-ink/80 px-4 py-2 text-xs font-semibold uppercase tracking-wider text-white">Rupture de stock</span></div>}
+        {/* Discret, en bas à gauche : ne masque pas le produit. */}
+        {badge && (
+          <span className={`pointer-events-none absolute bottom-2 left-2 rounded-full px-2.5 py-1 text-[10px] font-semibold leading-none shadow-sm ${badge.kind === 'out' ? 'bg-white/95 text-ink/70' : 'bg-burgundy text-white'}`}>
+            {badge.label}
+          </span>
+        )}
       </div>
-      <div className="mt-3 space-y-1">
+      <div className="mt-2.5 space-y-1">
         <h3 className="text-sm font-medium text-ink leading-snug line-clamp-2 group-hover:text-burgundy transition-colors">{product.name}</h3>
         {/* preventDefault too, not just stopPropagation — now that the card
            itself is a real <a>, stopPropagation alone would stop the outer
@@ -50,9 +58,8 @@ export default function ProductCard({ product, priority = false }: { product: Pr
            following that outer <a>'s href (defaultPrevented is only ever
            set by a handler that actually runs). */}
         {shop && <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); navigate(shopPath(shop)); }} className="text-xs text-ink/50 hover:text-burgundy transition-colors">{shop.name}</button>}
-        <PriceDisplay price={product.price} oldPrice={product.oldPrice} size="sm" />
+        <PriceDisplay price={product.price} oldPrice={product.oldPrice} size="card" />
         {product.rating && product.reviewCount ? <Rating rating={product.rating} count={product.reviewCount} /> : null}
-        {lowStock && <p className="text-[11px] font-medium text-burgundy/80">Plus que {product.stock} disponibles</p>}
       </div>
     </a>
   );

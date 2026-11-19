@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { formatWaistCm } from '@/lib/waistMeasure';
 import { usePro } from '../../ProContext';
 import { fetchAdminOrderDetail, type AdminOrderDetail as AdminOrderDetailData } from '@/lib/supabaseAdminData';
 import { formatFCFA } from '../../data';
@@ -157,6 +158,7 @@ export default function AdminOrderDetail({ orderId }: { orderId: string }) {
                       {Object.entries(item.selectedOptions).length > 0 && (
                         <p className="text-xs text-ink/40">{Object.entries(item.selectedOptions).map(([k, v]) => `${k} : ${v}`).join(' · ')}</p>
                       )}
+                      {item.waistCm !== null && <p className="text-xs text-ink/55">Tour de taille : {formatWaistCm(item.waistCm)}</p>}
                     </div>
                     <span className="text-xs text-ink/50 flex-shrink-0">x{item.saleMode ? `${formatFabricQuantity(item.quantity)} ${fabricSaleModeUnit[item.saleMode as keyof typeof fabricSaleModeUnit]}` : item.quantity}</span>
                     <span className="text-sm font-medium text-ink flex-shrink-0 w-20 text-right">{formatFCFA(item.lineTotal)}</span>

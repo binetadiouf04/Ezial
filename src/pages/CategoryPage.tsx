@@ -3,6 +3,7 @@ import { useApp } from '@/store/AppContext';
 import { categoryMap, type CategoryId } from '@/data/categories';
 import { variantNameMatchesFilterGroup, type Product } from '@/data/products';
 import { getFilters, type FilterGroup } from '@/data/filters';
+import { canonicalColorName } from '@/data/colors';
 import { fabricSaleModeLabels } from '@/data/categories';
 import ProductGrid from '@/components/ProductGrid';
 import CategorySidebar from '@/components/CategorySidebar';
@@ -83,7 +84,7 @@ export default function CategoryPage({ categoryId, subId }: { categoryId: string
         result = result.filter((p) => {
           // variantNameMatchesFilterGroup also matches "Couleur / Imprimé"
           // (colours and prints as one dimension) and "Motif / Imprimé".
-          const variantMatch = p.variants.some((v) => (norm(v.name) === gnorm || variantNameMatchesFilterGroup(v.name, group)) && v.values.some((val) => values.includes(val)));
+          const variantMatch = p.variants.some((v) => (norm(v.name) === gnorm || variantNameMatchesFilterGroup(v.name, group)) && v.values.some((val) => values.some((f) => canonicalColorName(f) === canonicalColorName(val))));
           const detailMatch = p.details.some((d) => {
             const dnorm = norm(d.label);
             return (dnorm === gnorm || dnorm === gnorm.replace(/produit$/, '') || dnorm === gnorm.replace(/decheveu$/, '')) && values.some((val) => d.value.toLowerCase().includes(val.toLowerCase()));

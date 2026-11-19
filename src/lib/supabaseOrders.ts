@@ -15,6 +15,9 @@ export interface CreateOrderItemInput {
   // falls back to matching selectedOptions by value when it's absent.
   variantId?: string | null;
   selectedOptions: Record<string, string>;
+  // Baya : tour de taille du client (cm). Personnalisation de la ligne, jamais
+  // une variante ; create_order() la revalide (40 à 200 cm) et l'enregistre.
+  waistCm?: number;
   quantity: number;
 }
 

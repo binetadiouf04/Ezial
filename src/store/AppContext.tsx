@@ -1,3 +1,4 @@
+import { normalizeStoredWaist, sameCartLine } from '@/lib/waistMeasure';
 import { createContext, useContext, useEffect, useState, useCallback, type ReactNode } from 'react';
 import { getStaffSpace } from '@/lib/staffSpace';
 import { type Product } from '@/data/products';
@@ -39,8 +40,12 @@ export interface CartItem {
   // placed/fetched order (never for a cart line), needed to target a
   // claim/return at this exact line (see ClaimModal).
   orderItemId?: string;
+  // Baya (Bijoux) : tour de taille du client en cm — une personnalisation de la
+  // ligne, jamais une variante (aucun effet sur le prix ni le stock). Deux
+  // lignes de mesures différentes ne fusionnent jamais (src/lib/waistMeasure.ts).
+  waistCm?: number;
 }
-export interface SavedItem { productId: string; shopId: string; quantity: number; variants: Record<string, string>; unitPrice?: number; variantId?: string; }
+export interface SavedItem { productId: string; shopId: string; quantity: number; variants: Record<string, string>; unitPrice?: number; variantId?: string; waistCm?: number; }
 
 export type ShopPrepStatus = 'preparing' | 'ready' | 'collected';
 export type PickupStepStatus = 'preparing' | 'ready_for_pickup' | 'picked_up';
@@ -124,7 +129,7 @@ interface AppState {
   catalogLoading: boolean;
   favorites: string[]; toggleFavorite: (productId: string) => void; isFavorite: (productId: string) => boolean;
   cart: CartItem[]; addToCart: (item: CartItem) => void; removeFromCart: (index: number) => void;
-  updateQuantity: (index: number, quantity: number, min?: number) => void; clearCart: () => void;
+  updateQuantity: (index: number, quantity: number, min?: number) => void; updateWaist: (index: number, waistCm: number) => void; clearCart: () => void;
   saveForLater: (index: number) => void; moveToCart: (index: number) => void; removeFromSaved: (index: number) => void;
   savedItems: SavedItem[];
   cartCount: number; cartSubtotal: number;
@@ -247,7 +252,14 @@ function loadStoredCart(): CartItem[] {
     const raw = localStorage.getItem(CART_STORAGE_KEY);
     if (!raw) return [];
     const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
+    if (!Array.isArray(parsed)) return [];
+    // Mesure d'une ligne Baya : conservée si valide, sinon retirée (la ligne
+    // reste dans le panier, mais la mesure sera redemandée avant la commande).
+    return parsed.map((item: CartItem) => {
+      const { waistCm, ...rest } = item;
+      const valid = normalizeStoredWaist(waistCm);
+      return valid === undefined ? rest : { ...rest, waistCm: valid };
+    });
   } catch {
     return [];
   }
@@ -617,7 +629,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // checkout itself; a plain "Ajouter au panier" click does nothing more.
   const addToCart = useCallback((item: CartItem) => {
     setCart((prev) => {
-      const idx = prev.findIndex((i) => i.productId === item.productId && JSON.stringify(i.variants) === JSON.stringify(item.variants));
+      const idx = prev.findIndex((i) => sameCartLine(i, item));
       if (idx >= 0) { const next = [...prev]; next[idx] = { ...next[idx], quantity: next[idx].quantity + item.quantity }; return next; }
       return [...prev, item];
     });
@@ -631,13 +643,22 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const updateQuantity = useCallback((index: number, quantity: number, min = 1) =>
     setCart((prev) => prev.map((item, i) => i === index ? { ...item, quantity: Math.max(min, quantity) } : item)), []);
 
+  // Modification de la mesure d'une ligne Baya avant la commande. La ligne
+  // garde sa place : aucune fusion automatique, même si une autre ligne a la
+  // même mesure.
+  const updateWaist = useCallback((index: number, waistCm: number) => {
+    const valid = normalizeStoredWaist(waistCm);
+    if (valid === undefined) return;
+    setCart((prev) => prev.map((item, i) => (i === index ? { ...item, waistCm: valid } : item)));
+  }, []);
+
   const clearCart = useCallback(() => setCart([]), []);
 
   const saveForLater = useCallback((index: number) => {
     setCart((prev) => {
       const item = prev[index];
       if (!item) return prev;
-      setSavedItems((s) => [...s, { productId: item.productId, shopId: item.shopId, quantity: item.quantity, variants: item.variants, variantId: item.variantId }]);
+      setSavedItems((s) => [...s, { productId: item.productId, shopId: item.shopId, quantity: item.quantity, variants: item.variants, variantId: item.variantId, waistCm: item.waistCm }]);
       return prev.filter((_, i) => i !== index);
     });
   }, []);
@@ -647,9 +668,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const item = prev[index];
       if (!item) return prev;
       setCart((c) => {
-        const idx = c.findIndex((i) => i.productId === item.productId && JSON.stringify(i.variants) === JSON.stringify(item.variants));
+        const idx = c.findIndex((i) => sameCartLine(i, item));
         if (idx >= 0) { const next = [...c]; next[idx] = { ...next[idx], quantity: next[idx].quantity + item.quantity }; return next; }
-        return [...c, { productId: item.productId, shopId: item.shopId, quantity: item.quantity, variants: item.variants, variantId: item.variantId }];
+        return [...c, { productId: item.productId, shopId: item.shopId, quantity: item.quantity, variants: item.variants, variantId: item.variantId, waistCm: item.waistCm }];
       });
       return prev.filter((_, i) => i !== index);
     });
@@ -696,7 +717,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const value: AppState = {
     route, navigate, goBack, canGoBack, catalogProducts, catalogShops, catalogLoading, favorites, toggleFavorite, isFavorite,
-    cart, addToCart, removeFromCart, updateQuantity, clearCart,
+    cart, addToCart, removeFromCart, updateQuantity, updateWaist, clearCart,
     saveForLater, moveToCart, removeFromSaved, savedItems,
     cartCount, cartSubtotal, cartOpen, setCartOpen, categoryDrawerOpen, setCategoryDrawerOpen,
     orders, addOrder,

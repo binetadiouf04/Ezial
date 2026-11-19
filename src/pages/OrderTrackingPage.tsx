@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { optionsLine } from '@/lib/waistMeasure';
 import { useApp } from '@/store/AppContext';
 import { formatFCFA } from '@/data/products';
 import { getShop } from '@/data/shops';
@@ -104,7 +105,7 @@ export default function OrderTrackingPage({ orderId }: { orderId: string }) {
                 const isPickup = sf.type === 'pickup';
                 return (
                   <div key={sf.shopId} className="flex items-start gap-3">
-                    <SmartImage src={shop?.logo ?? ''} alt="" className="h-10 w-10 rounded-full object-cover flex-shrink-0" />
+                    <SmartImage src={shop?.logo ?? ''} alt="" className="h-10 w-10 rounded-full bg-white object-contain flex-shrink-0" />
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center justify-between">
                         <p className="text-sm font-medium text-ink">{shop?.name}</p>
@@ -142,9 +143,7 @@ export default function OrderTrackingPage({ orderId }: { orderId: string }) {
                     <SmartImage src={p?.thumbnailUrl || p?.images[0] || `${import.meta.env.BASE_URL}ezial-fallback.webp`} alt="" className="h-12 w-10 rounded object-cover flex-shrink-0" />
                     <div className="flex-1 min-w-0">
                       <p className="text-xs font-medium text-ink line-clamp-1">{p?.name ?? item.productName ?? 'Produit'}</p>
-                      {Object.entries(item.variants).length > 0 && (
-                        <p className="text-[11px] text-ink/45">{Object.entries(item.variants).map(([k, v]) => `${k} : ${v}`).join(' · ')}</p>
-                      )}
+                      {optionsLine(item.variants, item.waistCm) && (<p className="text-[11px] text-ink/45">{optionsLine(item.variants, item.waistCm)}</p>)}
                       <p className="text-[11px] text-ink/35">Vendu par {shop?.name}</p>
                     </div>
                     <span className="text-xs font-medium text-ink flex-shrink-0">{formatFCFA(price * item.quantity)}</span>

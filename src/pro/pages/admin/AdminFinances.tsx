@@ -98,7 +98,7 @@ export default function AdminFinances() {
                     className="card w-full p-4 text-left hover:card-shadow transition-all"
                   >
                     <div className="flex items-center gap-3 mb-3">
-                      {shop.logoUrl && <SmartImage src={shop.logoUrl} alt="" className="h-9 w-9 rounded-lg object-cover flex-shrink-0" />}
+                      {shop.logoUrl && <SmartImage src={shop.logoUrl} alt="" className="h-9 w-9 rounded-lg bg-white object-contain flex-shrink-0" />}
                       <p className="text-sm font-semibold text-ink flex-1 truncate">{shop.shopName}</p>
                       <span className={`flex-shrink-0 rounded-full border px-2.5 py-1 text-[11px] font-medium ${statusStyles[shop.status]}`}>{statusLabels[shop.status]}</span>
                     </div>

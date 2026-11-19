@@ -406,6 +406,20 @@ export interface SupabaseProductDetailResult {
  * above — a draft/flagged/disabled product must never be reachable by
  * guessing or sharing its URL, on top of whatever RLS already enforces.
  */
+/**
+ * Nom du fournisseur d'un produit, affiché sur la fiche (Ezial Boutique
+ * uniquement). Lu par une fonction serveur qui ne renvoie QUE le nom, pour un
+ * produit actif de la boutique officielle : jamais la table interne
+ * product_suppliers, jamais d'autres informations. Tant que la fonction n'est
+ * pas installée (docs/sql/fournisseur-public.sql), aucun fournisseur n'est affiché.
+ */
+export async function fetchPublicProductSupplier(productId: string): Promise<string | null> {
+  const { data, error } = await supabase.rpc('public_product_suppliers', { p_product_ids: [productId] });
+  if (error || !Array.isArray(data) || data.length === 0) return null;
+  const name = (data[0] as { supplier?: string | null }).supplier;
+  return typeof name === 'string' && name.trim() ? name.trim() : null;
+}
+
 export async function fetchProductDetailFromSupabase(productKey: string): Promise<SupabaseProductDetailResult> {
   const { data: productRow, error: productError } = await supabase
     .from('products')

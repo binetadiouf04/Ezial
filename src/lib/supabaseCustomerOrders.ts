@@ -1,4 +1,5 @@
 import { supabase } from './supabaseClient';
+import { normalizeStoredWaist } from '@/lib/waistMeasure';
 import type { Order, ShopFulfillment, DeliveryStepStatus, ShopPrepStatus, PickupStepStatus } from '@/store/AppContext';
 
 // Real order history for "Mes commandes" — orders.customer_id = auth.uid()
@@ -46,6 +47,8 @@ interface OrderItemRow {
   selected_options: Record<string, string> | null;
   quantity: number;
   unit_price: number;
+  // Tour de taille (Baya), enregistré avec la commande ; null pour tout autre article.
+  waist_cm?: number | string | null;
 }
 
 // Real order_shops.status spans the full delivery/pickup flow — collapsed
@@ -122,6 +125,7 @@ export async function fetchCustomerOrders(customerId: string): Promise<Order[]> 
         // case).
         productName: it.product_name,
         orderItemId: it.id,
+        waistCm: normalizeStoredWaist(it.waist_cm),
       })),
       subtotal: o.products_subtotal,
       discount: o.discount_amount ?? 0,

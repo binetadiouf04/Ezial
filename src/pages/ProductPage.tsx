@@ -1,10 +1,10 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { shopPath } from '@/lib/shopUrl';
 import { recordProductView } from '@/lib/browsingHistory';
 import { useApp } from '@/store/AppContext';
 import { getProduct, getVariantPrice, getProductsFromSameShop, getSimilarProducts, isRealCatalogId } from '@/data/products';
 import { getShop, registerSupabaseShops } from '@/data/shops';
-import { fetchProductDetailFromSupabase } from '@/lib/supabaseCatalog';
+import { fetchProductDetailFromSupabase, fetchPublicProductSupplier } from '@/lib/supabaseCatalog';
 import { useNoIndex } from '@/lib/seoHead';
 import { isProductUuid, productPath } from '@/lib/productUrl';
 import { fetchProductReviews, checkCanReview, submitReview, deleteReview, createReviewReport, type Review, type ReviewReportReason } from '@/lib/supabaseReviews';
@@ -21,6 +21,8 @@ import Rating from '@/components/Rating';
 import FavoriteButton from '@/components/FavoriteButton';
 import ProductCarousel from '@/components/ProductCarousel';
 import SmartImage from '@/components/SmartImage';
+import MobileBuyBar from '@/components/MobileBuyBar';
+import { isBayaProduct, parseWaistCm, waistError, WAIST_LABEL, WAIST_HINT } from '@/lib/waistMeasure';
 import { CopyReference, ShareProduct } from '@/components/ProductShareActions';
 import { DELIVERY } from '@/shared/siteInfo';
 import { ChevronRight, Store, Plus, Minus, Check, Star, Camera, X, ShieldCheck, Loader2, Truck, ShoppingBag } from 'lucide-react';
@@ -62,6 +64,17 @@ export default function ProductPage({ productId }: { productId: string }) {
 
   const product = supabaseProduct;
 
+  // Nom du fournisseur (Ezial Boutique uniquement) : lu par une fonction serveur
+  // qui ne renvoie que le nom — voir fetchPublicProductSupplier.
+  const [supplierName, setSupplierName] = useState<string | null>(null);
+  useEffect(() => {
+    setSupplierName(null);
+    if (!product?.id || !isRealCatalogId(product.id)) return;
+    let cancelled = false;
+    fetchPublicProductSupplier(product.id).then((name) => { if (!cancelled) setSupplierName(name); });
+    return () => { cancelled = true; };
+  }, [product?.id]);
+
   // An old id-based link (/produit/<uuid>) shows the product's descriptive
   // URL in the address bar once it is known — same page, no new history
   // entry. Search engines get the real 301 from Cloudflare's _redirects.
@@ -80,6 +93,12 @@ export default function ProductPage({ productId }: { productId: string }) {
   const [tab, setTab] = useState<Tab>('Description');
   const [added, setAdded] = useState(false);
   const [error, setError] = useState('');
+  // Baya : tour de taille du client (texte saisi + message). Une personnalisation
+  // de la ligne, jamais une variante : le prix ne dépend pas de la mesure.
+  const [waistText, setWaistText] = useState('');
+  const [waistMsg, setWaistMsg] = useState('');
+  const waistRef = useRef<HTMLInputElement>(null);
+  useEffect(() => { setWaistText(''); setWaistMsg(''); }, [productId]);
 
   // Real reviews (Supabase) — only ever fetched for a real catalog product
   // (mock demo products keep their static mock reviews, rendered further
@@ -255,15 +274,28 @@ export default function ProductPage({ productId }: { productId: string }) {
   // (empty, or failed validateFabricQuantity).
   const fabricQtyInvalid = Boolean(product.saleMode) && (qtyText.trim() === '' || qtyError !== '');
 
+  const isBaya = isBayaProduct(product);
+
   const handleAdd = (buyNow = false) => {
+    let waistCm: number | undefined;
+    if (isBaya) {
+      const parsed = parseWaistCm(waistText);
+      if (parsed === null) {
+        setWaistMsg(waistError(waistText) ?? '');
+        waistRef.current?.focus();
+        waistRef.current?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+        return;
+      }
+      waistCm = parsed;
+    }
     if (!allSelected) { setError('Veuillez sélectionner: ' + requiredVariants.filter((v) => !variants[v]).join(', ')); return; }
     if (fabricQtyInvalid) return;
-    addToCart({ productId: product.id, shopId: product.shopId, quantity: qty, variants, unitPrice: dynamicPrice.price, variantId: dynamicPrice.variantId });
+    addToCart({ productId: product.id, shopId: product.shopId, quantity: qty, variants, unitPrice: dynamicPrice.price, variantId: dynamicPrice.variantId, ...(waistCm !== undefined ? { waistCm } : {}) });
     if (buyNow) navigate('/checkout'); else { setAdded(true); setTimeout(() => setAdded(false), 2000); }
   };
 
   return (
-    <div className="container-pro pb-28 pt-4 lg:py-8">
+    <div className="container-pro pb-8 pt-4 lg:py-8">
       <nav aria-label="Fil d'Ariane" className="mb-4 flex flex-wrap items-center gap-1.5 text-[11px] text-ink/45 lg:mb-6">
         <button onClick={() => navigate('/')} className="hover:text-burgundy">Accueil</button><ChevronRight size={11} aria-hidden="true" />
         {cat && <><button onClick={() => navigate(`/categorie/${cat.id}`)} className="hover:text-burgundy">{cat.label}</button><ChevronRight size={11} aria-hidden="true" /></>}
@@ -286,6 +318,10 @@ export default function ProductPage({ productId }: { productId: string }) {
                 <button type="button" onClick={() => navigate(shopPath(shop))} className="font-medium text-ink/75 underline-offset-2 transition-colors hover:text-burgundy hover:underline">{shop.name}</button>
               </p>
             )}
+            {/* Fournisseur public : nom seul, distinct de la boutique qui vend. */}
+            {supplierName && (
+              <p className="mt-1 text-sm text-ink/55">Fournisseur : <span className="font-medium text-ink/75">{supplierName}</span></p>
+            )}
             <div className="mt-1.5"><CopyReference reference={product.reference} /></div>
             {isRealCatalogId(product.id) ? (
               reviewStats.count > 0 && <div className="mt-2.5"><Rating rating={reviewStats.average} count={reviewStats.count} size="md" /></div>
@@ -303,6 +339,29 @@ export default function ProductPage({ productId }: { productId: string }) {
           {outOfStock ? <p className="text-sm font-medium text-ink/50">Rupture de stock</p> : (lowStock && !product.saleMode) ? <p className="text-sm font-medium text-burgundy">Plus que {product.stock} disponibles</p> : null}
           {product.variants.length > 0 && <div className="border-t border-ink/10 pt-5"><VariantSelector variants={product.variants} selected={variants} onChange={handleVariant} /></div>}
           <div className="space-y-4">
+            {isBaya && (
+              <div>
+                <label htmlFor="waist-cm" className="mb-1.5 block text-xs font-semibold text-ink/70">{WAIST_LABEL} <span className="text-burgundy" aria-hidden="true">*</span></label>
+                <input
+                  id="waist-cm"
+                  ref={waistRef}
+                  type="text"
+                  inputMode="decimal"
+                  autoComplete="off"
+                  required
+                  aria-required="true"
+                  aria-invalid={waistMsg ? 'true' : 'false'}
+                  aria-describedby="waist-cm-hint"
+                  placeholder="Ex. 82"
+                  value={waistText}
+                  onChange={(e) => { setWaistText(e.target.value); setWaistMsg(''); }}
+                  onBlur={() => { if (waistText.trim()) setWaistMsg(waistError(waistText) ?? ''); }}
+                  className={`w-40 rounded-lg border bg-white px-3 py-2.5 text-base text-ink focus:outline-none focus:ring-2 focus:ring-burgundy/20 ${waistMsg ? 'border-burgundy' : 'border-ink/20 focus:border-burgundy'}`}
+                />
+                <p id="waist-cm-hint" className="mt-1.5 text-xs leading-relaxed text-ink/55">{WAIST_HINT}</p>
+                {waistMsg && <p role="alert" className="mt-1 text-sm text-burgundy">{waistMsg}</p>}
+              </div>
+            )}
             <div>
               <span className="mb-1.5 block text-xs font-semibold text-ink/70">Quantité</span>
               {product.saleMode ? (
@@ -350,14 +409,12 @@ export default function ProductPage({ productId }: { productId: string }) {
             {product.saleMode && qtyError && <p className="text-sm text-burgundy">{qtyError}</p>}
             {error && <p className="text-sm text-burgundy">{error}</p>}
           </div>
-          {/* Barre d'achat : fixée en bas de l'écran sur mobile (zone de
-              sécurité respectée), intégrée à la page sur ordinateur. */}
-          <div className="fixed inset-x-0 bottom-0 z-30 border-t border-ink/10 bg-white/95 px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 backdrop-blur lg:static lg:z-auto lg:border-0 lg:bg-transparent lg:p-0 lg:backdrop-blur-none">
-            <div className="mx-auto flex max-w-[480px] gap-2.5 lg:max-w-none">
-              <button onClick={() => handleAdd(false)} disabled={outOfStock || fabricQtyInvalid} className="btn-shop min-w-0 flex-1 whitespace-nowrap !px-3 !text-sm sm:!text-[15px]">{added ? <><Check size={17} /> Ajouté</> : <><ShoppingBag size={17} aria-hidden="true" /> Ajouter au panier</>}</button>
-              <button onClick={() => handleAdd(true)} disabled={outOfStock || fabricQtyInvalid} className="btn-shop-line flex-none whitespace-nowrap !px-4 !text-sm sm:!text-[15px]">Acheter maintenant</button>
-            </div>
-          </div>
+          {/* Barre d'achat : fixée en bas de l'écran sur mobile (stable,
+              masquée pendant la saisie), intégrée à la page sur ordinateur. */}
+          <MobileBuyBar>
+            <button onClick={() => handleAdd(false)} disabled={outOfStock || fabricQtyInvalid} className="btn-shop min-w-0 flex-1 whitespace-nowrap !px-3 !text-sm sm:!text-[15px]">{added ? <><Check size={17} /> Ajouté</> : <><ShoppingBag size={17} aria-hidden="true" /> Ajouter au panier</>}</button>
+            <button onClick={() => handleAdd(true)} disabled={outOfStock || fabricQtyInvalid} className="btn-shop-line flex-none whitespace-nowrap !px-4 !text-sm sm:!text-[15px]">Acheter maintenant</button>
+          </MobileBuyBar>
           {/* Delivery promise (src/shared/siteInfo.js) — information only,
               the order flow and delivery fee are unchanged. */}
           <div className="flex items-center gap-3 rounded-lg border border-ink/10 bg-cream/50 px-3.5 py-3">

@@ -28,9 +28,10 @@ const isPlusShop = (shopId: string): boolean => {
   return shop?.isPremium === true || shop?.isOfficial === true;
 };
 
-// Each automatic section shows at most this many products on the Home —
-// "Voir tout" links to the full, uncapped list on its own page.
-const HOME_SECTION_LIMIT = 18;
+// Chaque section de produits de l'accueil en montre 10 au maximum — « Voir
+// tout » mène à la liste complète, sans limite, sur sa propre page. Ce plafond
+// ne concerne que l'aperçu de l'accueil, jamais le catalogue.
+const HOME_SECTION_LIMIT = 10;
 const HOME_SHOPS_LIMIT = 6;
 
 // "À découvrir" tiles (static or admin-managed) only point at real content:
@@ -95,8 +96,11 @@ function HomeProductPreview({
       {preview.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-20 text-center"><p className="text-sm text-ink/50">Aucun produit trouvé.</p></div>
       ) : (
-        <div className="grid grid-cols-3 gap-3 sm:gap-5 lg:grid-cols-6">
-          {preview.map((p, i) => <ProductCard key={p.id} product={p} priority={priority && i < 3} />)}
+        // 2 par ligne sur mobile (photos plus grandes), 3 sur tablette, 5 sur
+        // ordinateur : 10 produits = lignes complètes (5×2 mobile, 2×5 ordinateur).
+        // Sur tablette (3 colonnes), le 10e est masqué pour garder 3 lignes complètes.
+        <div className="grid grid-cols-2 gap-x-3 gap-y-6 sm:max-lg:[&>*:nth-child(10)]:hidden sm:grid-cols-3 sm:gap-x-5 sm:gap-y-8 lg:grid-cols-5">
+          {preview.map((p, i) => <ProductCard key={p.id} product={p} priority={priority && i < 4} />)}
         </div>
       )}
     </>

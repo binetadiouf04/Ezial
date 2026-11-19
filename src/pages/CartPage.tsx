@@ -1,4 +1,6 @@
 import { useApp } from '@/store/AppContext';
+import WaistEditor from '@/components/WaistEditor';
+import { isBayaProduct, lineNeedsWaist, optionsLine } from '@/lib/waistMeasure';
 import { shopPath } from '@/lib/shopUrl';
 import { productPath } from '@/lib/productUrl';
 import { formatFCFA, isRealCatalogId, getVariantPrice } from '@/data/products';
@@ -9,8 +11,10 @@ import PriceDisplay from '@/components/PriceDisplay';
 import SmartImage from '@/components/SmartImage';
 
 export default function CartPage() {
-  const { cart, removeFromCart, updateQuantity, cartSubtotal, navigate, saveForLater, savedItems, moveToCart, removeFromSaved, catalogProducts } = useApp();
+  const { cart, removeFromCart, updateQuantity, updateWaist, cartSubtotal, navigate, saveForLater, savedItems, moveToCart, removeFromSaved, catalogProducts } = useApp();
   const hasMockItem = cart.some((item) => !isRealCatalogId(item.productId));
+  // Baya sans mesure valide : on ne peut pas commander (le serveur revérifie aussi).
+  const missingWaist = cart.some((item) => lineNeedsWaist(item, catalogProducts.find((p) => p.id === item.productId)));
 
   if (cart.length === 0 && savedItems.length === 0) {
     return (
@@ -68,6 +72,7 @@ export default function CartPage() {
                               </p>
                             )}
                             {Object.entries(item.variants).map(([k, v]) => <p key={k} className="text-xs text-ink/45 mt-0.5">{k}: {v}</p>)}
+                            {isBayaProduct(product) && <WaistEditor value={item.waistCm} onSave={(cm) => updateWaist(index, cm)} />}
                             <div className="mt-3 flex items-center justify-between">
                               <div className="flex items-center border border-line rounded-full">
                                 <button
@@ -118,7 +123,13 @@ export default function CartPage() {
                   Un ou plusieurs produits de démonstration sont dans votre panier et doivent être retirés avant de commander.
                 </p>
               )}
-              <button onClick={() => navigate('/checkout')} disabled={hasMockItem} className="btn-primary w-full disabled:opacity-50 disabled:cursor-not-allowed">Passer la commande <ChevronRight size={16} /></button>
+              {missingWaist && (
+                <p role="alert" className="flex items-start gap-1.5 rounded-lg bg-burgundy/5 p-2.5 text-xs text-burgundy">
+                  <AlertTriangle size={14} className="mt-0.5 flex-shrink-0" />
+                  Indiquez le tour de taille de votre baya pour passer la commande.
+                </p>
+              )}
+              <button onClick={() => navigate('/checkout')} disabled={hasMockItem || missingWaist} className="btn-primary w-full disabled:opacity-50 disabled:cursor-not-allowed">Passer la commande <ChevronRight size={16} /></button>
               <button onClick={() => navigate('/')} className="btn-ghost w-full">Continuer mes achats</button>
             </div>
           </div>
@@ -141,6 +152,7 @@ export default function CartPage() {
                     <button onClick={() => navigate(productPath(product))} className="text-sm font-medium text-ink line-clamp-1 hover:text-burgundy">{product.name}</button>
                     {shop && <p className="text-xs text-ink/50">{shop.name}</p>}
                     {Object.entries(saved.variants).map(([k, v]) => <p key={k} className="text-xs text-ink/40">{k}: {v}</p>)}
+                    {saved.waistCm !== undefined && <p className="text-xs text-ink/40">{optionsLine({}, saved.waistCm)}</p>}
                     <div className="mt-1">
                       <PriceDisplay
                         price={(saved.unitPrice ?? product.price) * saved.quantity}

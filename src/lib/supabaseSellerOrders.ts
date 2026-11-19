@@ -1,4 +1,5 @@
 import { supabase } from './supabaseClient';
+import { normalizeStoredWaist } from '@/lib/waistMeasure';
 import { resolveImageUrl } from './supabaseCatalog';
 
 // Real Supabase-backed seller order list/detail — orders/order_shops/
@@ -52,6 +53,7 @@ interface OrderItemRow {
   quantity: number;
   unit_price: number;
   line_total: number;
+  waist_cm?: number | string | null;
 }
 
 function firstString(...values: unknown[]): string | null {
@@ -142,6 +144,8 @@ export interface SellerOrderItem {
   // Tissus category only — read from the live products row (order_items
   // itself never snapshots this), null for every other line.
   saleMode: string | null;
+  /** Tour de taille demandé par le client (Baya), en cm — à respecter à la préparation. */
+  waistCm: number | null;
 }
 
 export interface SellerOrderDetail {
@@ -247,6 +251,7 @@ export async function fetchSellerOrderDetail(shopId: string, orderShopId: string
       unitPrice: it.unit_price ?? 0,
       lineTotal: it.line_total ?? 0,
       saleMode: saleModeByProduct.get(it.product_id) ?? null,
+      waistCm: normalizeStoredWaist(it.waist_cm) ?? null,
     })),
   };
 }

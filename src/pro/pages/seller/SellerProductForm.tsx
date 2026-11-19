@@ -1,6 +1,8 @@
 import { useState, useMemo, useEffect } from 'react';
 import { isRealGoldJewelry, GOLD_JEWELRY_MESSAGE, GOLD_JEWELRY_HINT } from '@/lib/goldJewelry';
 import { allowsCustomColorCombos, addCustomColor, CUSTOM_COLOR_MAX_LENGTH } from '@/lib/variantValues';
+import { supplierNameError, SUPPLIER_NAME_MAX_LENGTH } from '@/lib/supplierName';
+import { isWaistMeasureSupported } from '@/lib/waistSupport';
 import { usePro } from '../../ProContext';
 import {
   categories, categoryMap, type CategoryId,
@@ -198,6 +200,7 @@ const VALIDATION_FIELD_LABELS: Record<string, string> = {
   fabricType: 'Type de tissu',
   saleMode: 'Mode de vente',
   availabilityStatus: 'Disponibilité',
+  supplier: 'Fournisseur',
 };
 
 // Maquillage: the color/teinte palette depends on the type of product chosen —
@@ -451,6 +454,14 @@ export default function SellerProductForm({ productId }: { productId?: string })
   // in its own RLS-protected table (product_suppliers), never shown to
   // customers or other shops. See fetchProductSupplier/saveProductSupplier.
   const [supplier, setSupplier] = useState('');
+
+  // Baya : proposée seulement quand la base enregistre le tour de taille (voir waistSupport.ts).
+  const [waistSupported, setWaistSupported] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    void isWaistMeasureSupported().then((ok) => { if (!cancelled) setWaistSupported(ok); });
+    return () => { cancelled = true; };
+  }, []);
 
   // "Fait à la main" — a product-wide characteristic, independent of
   // category/subcategory (never replaces either). Stored the same way as
@@ -1065,6 +1076,10 @@ export default function SellerProductForm({ productId }: { productId?: string })
       if (!saleMode) e.saleMode = 'Le mode de vente est obligatoire';
       if (!availabilityStatus) e.availabilityStatus = 'La disponibilité est obligatoire';
     }
+    if (sellerShopIsOfficial) {
+      const supplierMsg = supplierNameError(supplier);
+      if (supplierMsg) e.supplier = supplierMsg;
+    }
     setErrors(e);
     return e;
   };
@@ -1308,7 +1323,10 @@ export default function SellerProductForm({ productId }: { productId?: string })
   const renderColorSwatches = (group: FilterGroup) => {
     const selected = selections[group.id] ?? [];
     const showAll = showAllColors[group.id] ?? false;
-    const availableColors = group.options
+    // Une couleur déjà enregistrée sous un ancien nom (ex. « Kaki », devenu
+    // « Vert kaki ») reste affichée et sélectionnée : son stock est conservé.
+    const legacySelected = selected.filter((name) => !group.options.includes(name) && getColor(name));
+    const availableColors = [...legacySelected, ...group.options]
       .map((name) => getColor(name))
       .filter((c): c is NonNullable<typeof c> => c !== undefined);
     const visible = showAll ? availableColors : availableColors.slice(0, COLOR_PREVIEW_COUNT);
@@ -1528,7 +1546,7 @@ export default function SellerProductForm({ productId }: { productId?: string })
           <div>
             <label className="block text-xs font-medium text-ink/60 mb-1.5">Sous-catégorie</label>
             <div className="flex flex-wrap gap-2">
-              {selectedCategory.subcategories.map((s) => (
+              {selectedCategory.subcategories.filter((s) => s.id !== 'baya' || waistSupported || subId === 'baya').map((s) => (
                 <SelectableChip key={s.id} label={s.label} selected={subId === s.id} onClick={() => handleSubCategoryChange(s.id)} />
               ))}
             </div>
@@ -1630,14 +1648,17 @@ export default function SellerProductForm({ productId }: { productId?: string })
         </div>
         {sellerShopIsOfficial && (
           <div>
-            <label className="block text-xs font-medium text-ink/60 mb-1.5">Fournisseur</label>
+            <label htmlFor="product-supplier" className="block text-xs font-medium text-ink/60 mb-1.5">Fournisseur</label>
             <input
+              id="product-supplier"
               className="input-field"
-              placeholder={'Ex. "Fournisseur Dakar", "Boutique Aminata" — ou "Ezial" si le stock vient directement d\'EZIAL'}
+              placeholder="Ex. Diwaanu Wakana"
+              maxLength={SUPPLIER_NAME_MAX_LENGTH}
               value={supplier}
               onChange={(e) => setSupplier(e.target.value)}
             />
-            <p className="mt-1 text-xs text-ink/45">Visible uniquement en interne (EZIAL) — jamais affiché aux clients ni aux autres boutiques.</p>
+            {errors.supplier && <p className="mt-1 text-xs text-burgundy">{errors.supplier}</p>}
+            <p className="mt-1 text-xs text-ink/45">Champ réservé à Ezial Boutique. Le nom est affiché aux clients sur la fiche produit, à côté de la boutique qui vend : indiquez seulement le nom, sans téléphone, e-mail ni lien.</p>
           </div>
         )}
       </div>

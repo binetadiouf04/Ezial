@@ -1,4 +1,5 @@
 import { fabricTypes, fabricSaleModeLabels, type CategoryId } from './categories';
+import { COMMON_COLOR_NAMES, JEWELRY_COLOR_NAMES } from './colors';
 
 export interface FilterGroup { id: string; label: string; options: string[]; collapsible?: boolean }
 
@@ -8,15 +9,8 @@ export const globalPriceFilter: FilterGroup = {
   options: ['Moins de 10 000 FCFA', '10 000 – 25 000 FCFA', '25 000 – 75 000 FCFA', 'Plus de 75 000 FCFA'],
 };
 
-export const commonColors: string[] = [
-  'Noir', 'Blanc', 'Ivoire', 'Crème', 'Écru', 'Beige', 'Taupe', 'Camel', 'Marron', 'Chocolat', 'Terracotta', 'Champagne',
-  'Gris', 'Anthracite', 'Or', 'Argent', 'Bronze',
-  'Rouge', 'Bordeaux', 'Rose', 'Rose poudré', 'Rose bonbon', 'Rose fuchsia', 'Corail', 'Saumon',
-  'Orange', 'Jaune', 'Moutarde',
-  'Vert', 'Vert menthe', 'Vert olive', 'Vert kaki', 'Kaki',
-  'Turquoise', 'Bleu ciel', 'Bleu', 'Bleu roi', 'Bleu marine',
-  'Mauve', 'Lilas', 'Violet', 'Aubergine',
-];
+// Palette commune (Ezial Pro + marketplace) : définie dans src/data/colors.ts.
+export const commonColors: string[] = COMMON_COLOR_NAMES;
 
 // Motifs/imprimés — a distinct dimension from COULEUR: never rendered as a
 // solid-color swatch (Léopard, Floral, etc. have no single hex value).
@@ -38,11 +32,7 @@ const encensMaisonTypes = ['Encens', 'Diffuseur', 'Bougie', 'Huile à brûler', 
 // inoxydable » restent proposés. Ces options alimentent à la fois le filtre
 // client et le formulaire vendeur.
 const jewelryMaterials = ['Argent', 'Plaqué or', 'Acier inoxydable', 'Perles', 'Fantaisie'];
-const jewelryColors = [
-  'Doré', 'Argenté', 'Or rose', 'Noir', 'Blanc', 'Ivoire', 'Crème', 'Beige', 'Marron',
-  'Rouge', 'Bordeaux', 'Rose', 'Mauve', 'Violet', 'Bleu', 'Bleu marine', 'Vert', 'Turquoise',
-  'Jaune', 'Orange', 'Multicolore',
-];
+const jewelryColors: string[] = JEWELRY_COLOR_NAMES;
 
 const shoeTypesFemme = ['Baskets', 'Sandales', 'Talons', 'Mules', 'Claquettes', 'Ballerines', 'Mocassins', 'Chaussures plateformes', 'Bottes & bottines'];
 const shoeTypesHomme = ['Baskets', 'Sandales', 'Claquettes', 'Mocassins', 'Chaussures habillées', 'Bottes & bottines'];

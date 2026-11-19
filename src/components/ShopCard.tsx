@@ -15,7 +15,7 @@ export default function ShopCard({ shop }: { shop: Shop }) {
     <a href={shopPublicPath(shop)} onClick={(e) => { e.preventDefault(); navigate(shopPath(shop)); }} className="group flex flex-col overflow-hidden rounded-xl border border-line bg-white text-left transition-all hover:card-shadow">
       <div className="relative h-28 w-full overflow-hidden bg-cream"><ShopCover src={shop.banner} alt={shop.name} className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-105" /></div>
       <div className="flex items-center gap-3 p-4">
-        <ShopAvatar src={shop.logo} alt={shop.name} name={shop.name} className="h-12 w-12 flex-shrink-0 rounded-full border-2 border-white object-cover -mt-8 text-base shadow-sm" />
+        <ShopAvatar src={shop.logo} alt={shop.name} name={shop.name} className="h-12 w-12 flex-shrink-0 rounded-full border-2 border-white bg-white object-contain -mt-8 text-base shadow-sm" />
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1.5">
             <h3 className="truncate text-sm font-semibold text-ink group-hover:text-burgundy transition-colors">{shop.name}</h3>

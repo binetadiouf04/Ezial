@@ -76,7 +76,7 @@ export default function AdminShopFinanceDetail({ shopId }: { shopId: string }) {
       </button>
 
       <div className="card p-5 flex items-center gap-4">
-        {detail.logoUrl && <SmartImage src={detail.logoUrl} alt="" className="h-14 w-14 rounded-xl object-cover flex-shrink-0" />}
+        {detail.logoUrl && <SmartImage src={detail.logoUrl} alt="" className="h-14 w-14 rounded-xl bg-white object-contain flex-shrink-0" />}
         <h1 className="font-display text-lg font-semibold text-ink truncate flex-1">{detail.shopName}</h1>
       </div>
 

@@ -71,7 +71,7 @@ export default function Header() {
                   <>
                     {shopMatches.length > 0 && <div className="px-4 py-1.5"><p className="text-[10px] font-semibold uppercase tracking-wider text-ink/40">Boutiques</p></div>}
                     {shopMatches.slice(0, 2).map((s) => (
-                      <button key={s.id} onMouseDown={() => navigate(shopPath(s))} className="flex w-full items-center gap-3 px-4 py-2 text-left hover:bg-cream"><SmartImage src={s.logo} alt="" className="h-8 w-8 rounded-full object-cover" /><span className="text-sm font-medium text-ink">{s.name}</span>{s.isPremium && <PremiumBadge />}</button>
+                      <button key={s.id} onMouseDown={() => navigate(shopPath(s))} className="flex w-full items-center gap-3 px-4 py-2 text-left hover:bg-cream"><SmartImage src={s.logo} alt="" className="h-8 w-8 rounded-full bg-white object-contain" /><span className="text-sm font-medium text-ink">{s.name}</span>{s.isPremium && <PremiumBadge />}</button>
                     ))}
                     {matches.length > 0 && <div className="px-4 py-1.5 mt-1"><p className="text-[10px] font-semibold uppercase tracking-wider text-ink/40">{isSuggestion ? 'Suggestions' : 'Produits'}</p></div>}
                     {matches.slice(0, 5).map((p) => (

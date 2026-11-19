@@ -128,7 +128,7 @@ const SUBCATEGORY_LABELS = {
   'sacs-a-main': 'Sacs à main', 'sacs-bandouliere': 'Sacs bandoulière', pochette: 'Pochette', portefeuilles: 'Portefeuilles', 'sacs-a-dos': 'Sacs à dos',
   maquillage: 'Maquillage', skincare: 'Skincare', 'soins-capillaires': 'Soins capillaires', hygiene: 'Hygiène & soins corporels', 'mains-et-pieds': 'Manucure & Pédicure',
   'parfums-femme': 'Parfums Femme', 'parfums-homme': 'Parfums Homme', 'huiles-brumes': 'Huiles & Brumes', 'encens-parfums-maison': 'Encens & Parfums de maison',
-  colliers: 'Colliers', bracelets: 'Bracelets', bagues: 'Bagues', 'boucles-oreilles': "Boucles d'oreilles", montres: 'Montres', lunettes: 'Lunettes', 'bijoux-de-taille': 'Bijou de taille', 'ensemble-parure': 'Ensemble / Parure',
+  colliers: 'Colliers', bracelets: 'Bracelets', bagues: 'Bagues', 'boucles-oreilles': "Boucles d'oreilles", montres: 'Montres', lunettes: 'Lunettes', 'bijoux-de-taille': 'Bijou de taille', baya: 'Baya', 'ensemble-parure': 'Ensemble / Parure',
   pyjamas: 'Pyjamas', lingerie: 'Lingerie', 'sous-vetements': 'Sous-vêtements', 'vetements-de-nuit': 'Vêtements de nuit',
 };
 
@@ -151,6 +151,17 @@ const [shopsRes, productsRes] = await Promise.all([
 ]);
 if (shopsRes.error) { console.error('prerender-seo: shops query failed —', shopsRes.error.message); process.exit(1); }
 if (productsRes.error) { console.error('prerender-seo: products query failed —', productsRes.error.message); process.exit(1); }
+
+// Nom du fournisseur affiché sur la fiche (Ezial Boutique uniquement) : lu par
+// la fonction serveur public_product_suppliers, qui ne renvoie que le nom
+// (docs/sql/fournisseur-public.sql). Non bloquant : sans la fonction, aucun
+// fournisseur n'apparaît sur les pages statiques.
+const supplierByProduct = new Map();
+{
+  const { data, error } = await supabase.rpc('public_product_suppliers', { p_product_ids: null });
+  if (error) console.warn('prerender-seo: fournisseurs publics indisponibles —', error.message);
+  else for (const row of data ?? []) if (row?.product_id && typeof row.supplier === 'string' && row.supplier.trim()) supplierByProduct.set(row.product_id, row.supplier.trim());
+}
 
 // Identifiants et slugs servent de segments de chemin (dist/boutique/<slug>/,
 // dist/produit/<slug>/) et de lignes de _redirects : toute valeur qui n'a pas
@@ -361,6 +372,7 @@ for (const p of products) {
     <main>
       <h1>${esc(p.name)}</h1>
       ${shop ? `<p><a href="${esc(`${SITE_URL}${shopPath(shop)}`)}">${esc(shop.name)}</a></p>` : ''}
+      ${supplierByProduct.has(p.id) ? `<p>Fournisseur : ${esc(supplierByProduct.get(p.id))}</p>` : ''}
       ${images.map((url, i) => `<img src="${esc(url)}" alt="${esc(p.name)}"${i === 0 ? ' fetchpriority="high"' : ' loading="lazy"'} />`).join('')}
       <p>${price.toLocaleString('fr-FR')} FCFA</p>
       <p>${inStock ? 'En stock' : 'Rupture de stock'}</p>

@@ -1,4 +1,6 @@
 import { X, ShoppingBag, Plus, Minus, Trash2 } from 'lucide-react';
+import WaistEditor from './WaistEditor';
+import { isBayaProduct, lineNeedsWaist } from '@/lib/waistMeasure';
 import { shopPath } from '@/lib/shopUrl';
 import { useApp, type CartItem } from '@/store/AppContext';
 import { formatFCFA, getVariantPrice } from '@/data/products';
@@ -10,7 +12,7 @@ import SmartImage from './SmartImage';
 interface CartRow extends CartItem { index: number; }
 
 export default function CartDrawer() {
-  const { cartOpen, setCartOpen, cart, removeFromCart, updateQuantity, cartSubtotal, navigate, catalogProducts } = useApp();
+  const { cartOpen, setCartOpen, cart, removeFromCart, updateQuantity, updateWaist, cartSubtotal, navigate, catalogProducts } = useApp();
   if (!cartOpen) return null;
 
   const groups: Record<string, CartRow[]> = {};
@@ -49,6 +51,7 @@ export default function CartDrawer() {
                           <div className="flex-1 min-w-0">
                             <p className="text-sm font-medium text-ink leading-snug line-clamp-2">{product.name}</p>
                             {Object.entries(item.variants).map(([k, v]) => <p key={k} className="text-xs text-ink/45 mt-0.5">{k}: {v}</p>)}
+                            {isBayaProduct(product) && <WaistEditor size="sm" value={item.waistCm} onSave={(cm) => updateWaist(item.index, cm)} />}
                             <div className="mt-2 flex items-center justify-between">
                               <div className="flex items-center border border-line rounded-full">
                                 <button
@@ -82,7 +85,10 @@ export default function CartDrawer() {
               <div className="flex items-center justify-between"><span className="text-sm text-ink/60">Sous-total</span><span className="text-base font-semibold text-ink">{formatFCFA(cartSubtotal)}</span></div>
               <p className="text-xs text-ink/45">Livraison calculée au checkout.</p>
               <button onClick={() => { setCartOpen(false); navigate('/panier'); }} className="btn-outline w-full">Voir le panier</button>
-              <button onClick={() => { setCartOpen(false); navigate('/checkout'); }} className="btn-primary w-full">Passer au paiement</button>
+              {cart.some((item) => lineNeedsWaist(item, catalogProducts.find((p) => p.id === item.productId))) && (
+                <p role="alert" className="text-xs text-burgundy">Indiquez le tour de taille de votre baya pour passer au paiement.</p>
+              )}
+              <button onClick={() => { setCartOpen(false); navigate('/checkout'); }} disabled={cart.some((item) => lineNeedsWaist(item, catalogProducts.find((p) => p.id === item.productId)))} className="btn-primary w-full disabled:opacity-50 disabled:cursor-not-allowed">Passer au paiement</button>
             </div>
           </>
         )}

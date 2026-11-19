@@ -1,5 +1,6 @@
 import { supabase } from './supabaseClient';
 import { GOLD_JEWELRY_MESSAGE } from '@/lib/goldJewelry';
+import { supplierNameError, normalizeSupplierName } from '@/lib/supplierName';
 import { PRODUCT_IMAGES_BUCKET, resolveImageUrl } from './supabaseCatalog';
 import { assignShopPrefixes, formatReference } from '@/utils/reference';
 import { generateThumbnail } from '@/utils/imageOptimize';
@@ -913,7 +914,9 @@ export async function fetchProductSupplier(productId: string): Promise<string | 
 // recorded". Untouched (unchanged) input re-upserts the same value, which is
 // how an edit that never touches this field still preserves it.
 export async function saveProductSupplier(productId: string, supplier: string): Promise<{ error?: string }> {
-  const trimmed = supplier.trim();
+  const trimmed = normalizeSupplierName(supplier);
+  const nameError = supplierNameError(trimmed);
+  if (nameError) return { error: nameError };
   if (!trimmed) {
     const { error } = await supabase.from('product_suppliers').delete().eq('product_id', productId);
     if (error) return { error: `Impossible de supprimer le fournisseur : ${error.message}` };
@@ -922,7 +925,13 @@ export async function saveProductSupplier(productId: string, supplier: string): 
   const { error } = await supabase
     .from('product_suppliers')
     .upsert({ product_id: productId, supplier: trimmed, updated_at: new Date().toISOString() });
-  if (error) return { error: `Impossible d'enregistrer le fournisseur : ${error.message}` };
+  if (error) {
+    // La base est la vraie barrière : seule la boutique officielle peut écrire
+    // (règles d'accès) et seul un nom est accepté (contrainte).
+    if (error.message.includes('product_suppliers_supplier_name_check')) return { error: 'Le nom du fournisseur ne doit contenir ni e-mail, ni lien, ni numéro de téléphone (2 à 80 caractères).' };
+    if (error.code === '42501' || /row-level security/i.test(error.message)) return { error: 'Le champ Fournisseur est réservé à Ezial Boutique.' };
+    return { error: `Impossible d'enregistrer le fournisseur : ${error.message}` };
+  }
   return {};
 }
 

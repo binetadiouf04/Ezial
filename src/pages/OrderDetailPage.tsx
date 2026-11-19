@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { optionsLine } from '@/lib/waistMeasure';
 import { useApp, type DeliveryStepStatus, type PickupStepStatus, type Order } from '@/store/AppContext';
 import { formatFCFA } from '@/data/products';
 import { fabricSaleModeUnit, formatFabricQuantity } from '@/data/categories';
@@ -108,9 +109,7 @@ export default function OrderDetailPage({ orderId }: { orderId: string }) {
                     <SmartImage src={p?.thumbnailUrl || p?.images[0] || `${import.meta.env.BASE_URL}ezial-fallback.webp`} alt="" className="h-16 w-14 rounded-lg object-cover flex-shrink-0" />
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium text-ink line-clamp-1">{p?.name ?? item.productName ?? 'Produit'}</p>
-                      {Object.entries(item.variants).length > 0 && (
-                        <p className="text-xs text-ink/50 mt-0.5">{Object.entries(item.variants).map(([k, v]) => `${k} : ${v}`).join(' · ')}</p>
-                      )}
+                      {optionsLine(item.variants, item.waistCm) && (<p className="text-xs text-ink/50 mt-0.5">{optionsLine(item.variants, item.waistCm)}</p>)}
                       <p className="text-xs text-ink/50">Quantité : {p?.saleMode ? `${formatFabricQuantity(item.quantity)} ${fabricSaleModeUnit[p.saleMode]}` : item.quantity}</p>
                       <div className="flex items-center gap-2 mt-0.5">
                         {shop && <p className="text-[11px] text-ink/35">Vendu par {shop.name}</p>}
