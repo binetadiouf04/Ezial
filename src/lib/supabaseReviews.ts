@@ -1,4 +1,5 @@
 import { supabase } from './supabaseClient';
+import { fetchAllRows, chunk, ID_BATCH } from './supabasePaging';
 import { isRpcMissing } from './supabaseFeatureDetect';
 import { PRODUCT_IMAGES_BUCKET, resolveImageUrl } from './supabaseCatalog';
 import { optimizeImageFile } from '@/utils/imageOptimize';
@@ -51,19 +52,38 @@ interface ReviewImageRow {
   storage_path: string;
 }
 
-// Bulk stats for many products at once (ProductCard listings) — computed
-// client-side from raw ratings rather than a dedicated view/RPC, which is
-// plenty at pilot scale (few products, few reviews per product).
+// Notes de tous les produits d'un coup (cartes de l'accueil, listes).
+// 1) Une fonction serveur renvoie directement une ligne par produit noté
+//    (moyenne + nombre d'avis publics) : quelques octets, quel que soit le
+//    nombre d'avis, et aucune liste d'identifiants dans l'adresse.
+//    Voir docs/sql/avis-statistiques-publiques.sql.
+// 2) Tant qu'elle n'est pas installée : lecture des notes par lots
+//    d'identifiants (jamais une adresse démesurée), calculée sur l'appareil.
 export async function fetchReviewStatsForProducts(productIds: string[]): Promise<Map<string, ReviewStats>> {
   const stats = new Map<string, ReviewStats>();
   if (productIds.length === 0) return stats;
-  const { data, error } = await supabase.from('reviews').select('product_id, rating').in('product_id', productIds);
-  if (error || !data) return stats;
+
+  const wanted = new Set(productIds);
+  const rpc = await fetchAllRows<{ product_id: string; average: number | string; review_count: number | string }>((from, to) =>
+    supabase.rpc('public_review_stats').order('product_id').range(from, to));
+  if (!rpc.error) {
+    for (const row of rpc.data) {
+      const count = Number(row.review_count);
+      const average = Number(row.average);
+      if (wanted.has(row.product_id) && count > 0 && Number.isFinite(average)) stats.set(row.product_id, { average, count });
+    }
+    return stats;
+  }
+
   const byProduct = new Map<string, number[]>();
-  for (const row of data as { product_id: string; rating: number }[]) {
-    const list = byProduct.get(row.product_id) ?? [];
-    list.push(row.rating);
-    byProduct.set(row.product_id, list);
+  const batches = await Promise.all(chunk(productIds, ID_BATCH).map((ids) => supabase.from('reviews').select('product_id, rating').in('product_id', ids)));
+  for (const { data, error } of batches) {
+    if (error || !data) continue;
+    for (const row of data as { product_id: string; rating: number }[]) {
+      const list = byProduct.get(row.product_id) ?? [];
+      list.push(row.rating);
+      byProduct.set(row.product_id, list);
+    }
   }
   for (const [productId, ratings] of byProduct) {
     stats.set(productId, { average: ratings.reduce((s, r) => s + r, 0) / ratings.length, count: ratings.length });
