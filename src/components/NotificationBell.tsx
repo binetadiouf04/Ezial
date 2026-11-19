@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Bell, Check } from 'lucide-react';
 import { restoreDeviceForCurrentSession } from '@/lib/supabasePush';
+import BellPushStatus from './BellPushStatus';
 import {
   fetchNotifications, fetchUnreadNotificationCount, markNotificationRead, markAllNotificationsRead,
   type AppNotification,
@@ -108,6 +109,7 @@ export default function NotificationBell({ onNavigate }: { onNavigate: (url: str
               </button>
             )}
           </div>
+          <BellPushStatus />
           {notifications.length === 0 ? (
             <p className="p-6 text-center text-sm text-ink/45">Aucune notification.</p>
           ) : (
