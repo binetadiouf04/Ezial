@@ -35,6 +35,11 @@ export function isStandaloneApp(): boolean {
     || (navigator as Navigator & { standalone?: boolean }).standalone === true;
 }
 
+/** Vrai quand la clé publique de notification est présente dans la version publiée du site. */
+export function isPushKeyConfigured(): boolean {
+  return Boolean(VAPID_PUBLIC_KEY);
+}
+
 export function getPushSupportStatus(): PushSupportStatus {
   if (!VAPID_PUBLIC_KEY) return 'unsupported';
   if (!('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)) {
