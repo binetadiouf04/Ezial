@@ -71,9 +71,9 @@ de WhatsApp.
 | Type | Destinataire | Déclenchement | Clé anti-doublon | Validité |
 |---|---|---|---|---|
 | `buyer_order_confirmed` | Acheteur | Commande acceptée : à sa création par `create_order` (fin de transaction), ou lors d'un changement de `status` / `payment_status`. Jamais si la commande est annulée. Si `confirmation_requires_paid` = true : seulement quand `payment_status = 'paid'`. | `buyer_order_confirmed:<id commande>` | 24 h |
-| `seller_new_order` | Chaque boutique de la commande | Même événement ; une notification par sous-commande (`order_shops`) non annulée, pour la boutique concernée uniquement. | `seller_new_order:<id sous-commande>` | 24 h |
+| `seller_new_order` | **Désactivé** (décision du 19 nov. 2026 : le vendeur a déjà la notification du téléphone et la cloche ; migration `docs/sql/whatsapp-vendeur-24h.sql`). Le type reste autorisé en base mais n'est plus créé. Ancien comportement : chaque boutique de la commande | Même événement ; une notification par sous-commande (`order_shops`) non annulée, pour la boutique concernée uniquement. | `seller_new_order:<id sous-commande>` | 24 h |
 | `buyer_out_for_delivery` | Acheteur | Une mission de livraison passe réellement au statut `out_for_delivery` (une seule fois par commande). Jamais si la commande est annulée. | `buyer_out_for_delivery:<id commande>` | 3 h |
-| `seller_order_reminder` | Boutique | Tâche `whatsapp-maintenance` : 24 h après la notification « nouvelle commande » (et moins de 72 h après), si la sous-commande est toujours au statut `confirmed` (non prise en charge) et la commande non annulée. | `seller_order_reminder:<id sous-commande>` | 12 h |
+| `seller_order_reminder` | Boutique | **Seul WhatsApp envoyé au vendeur**, et seulement s'il a donné son consentement. Tâche `whatsapp-maintenance` : 24 h après l'acceptation de la commande (point de départ : le message de confirmation acheteur, créé au même moment, même sans consentement de l'acheteur ; et moins de 72 h après), si la sous-commande est toujours au statut `confirmed` (non prise en charge) et la commande non annulée. | `seller_order_reminder:<id sous-commande>` | 12 h |
 
 La clé anti-doublon est unique en base : un même événement ne peut jamais
 produire deux messages, même si le déclencheur s'exécute plusieurs fois.
@@ -353,3 +353,20 @@ plus de confirmation.
 5. Seulement ensuite : renseigner le vrai fournisseur, ses secrets et ses
    modèles approuvés, puis faire un premier envoi réel vers un numéro de test
    appartenant à la personne.
+
+---
+
+## 10. Où l'activer sur le site (19 nov. 2026)
+
+Même logique que les notifications du téléphone : directement dans la **cloche**
+(`BellPreferences`) et, pour l'acheteur, une petite carte d'invitation en deux
+étapes (`CustomerNotificationPrompt`) : notifications du téléphone, puis WhatsApp
+(« Activer » / « Plus tard », masquée 14 jours).
+
+- Acheteur : interrupteur « Messages WhatsApp » (confirmation + livraison en cours) et « Promotions » ;
+- Vendeur : interrupteur « Rappel WhatsApp » (un seul message, 24 h après une commande non prise en charge) ;
+- Livreur : aucun WhatsApp.
+
+Le consentement reste explicite et désactivé par défaut. **Tant qu'aucun
+fournisseur n'est branché (section 7), aucun message ne part**, même avec le
+consentement donné.

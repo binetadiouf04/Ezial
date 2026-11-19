@@ -57,7 +57,7 @@ export default function DriverLayout() {
           <p className="truncate text-sm font-semibold text-ink">{name}</p>
         </div>
         <div className="flex flex-shrink-0 items-center gap-1.5">
-          <NotificationBell onNavigate={(url) => navigate(url.replace(/^\/pro/, ''))} />
+          <NotificationBell audience="driver" onNavigate={(url) => navigate(url.replace(/^\/pro/, ''))} />
           {/* Sur livreur.ezial.net, l'espace est dédié : pas de retour vers la marketplace. */}
           {!getStaffSpace() && (
             <button

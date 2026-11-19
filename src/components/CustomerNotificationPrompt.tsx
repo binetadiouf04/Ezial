@@ -1,15 +1,21 @@
 import { useEffect, useState } from 'react';
-import { Bell, Check, Loader2, X } from 'lucide-react';
+import { Bell, Check, Loader2, MessageCircle, X } from 'lucide-react';
 import { useApp } from '@/store/AppContext';
 import { getPushSupportStatus, isDeviceRegisteredForUser, subscribeToPush } from '@/lib/supabasePush';
+import { getMyWhatsAppConsent, setMyWhatsAppConsent } from '@/lib/supabaseWhatsApp';
 
 // Invitation à activer les notifications, pour l'acheteur connecté : une petite
 // carte en bas de l'écran (jamais un écran bloquant), avec un bouton « Activer »
-// qui ouvre la demande d'autorisation du téléphone, et « Plus tard ».
+// et « Plus tard ». Deux étapes, l'une après l'autre : les notifications du
+// téléphone (demande d'autorisation du téléphone), puis les messages WhatsApp
+// (consentement explicite, désactivé par défaut). Chaque étape ne s'affiche que
+// si elle est utile : WhatsApp est proposé même quand le téléphone ne sait pas
+// recevoir de notifications.
 //
 // Règles :
-// - seulement quand l'appareil sait recevoir des notifications et que la
-//   question n'a pas encore été tranchée (ni acceptée, ni refusée) ;
+// - notifications du téléphone : seulement quand l'appareil sait en recevoir et
+//   que la question n'a pas encore été tranchée (ni acceptée, ni refusée) ;
+// - WhatsApp : seulement si le module est installé et le consentement pas donné ;
 // - jamais pendant le paiement, ni sur une fiche produit (la barre d'achat
 //   occupe le bas de l'écran) ;
 // - « Plus tard » la masque 14 jours ;
@@ -32,11 +38,14 @@ function rememberDismissal(): void {
   try { localStorage.setItem(DISMISSED_KEY, String(Date.now())); } catch { /* sans stockage : réaffichée à la prochaine visite */ }
 }
 
+type Step = 'push' | 'whatsapp';
+
 export default function CustomerNotificationPrompt() {
   const { customerUser, route } = useApp();
   const userId = customerUser?.id;
-  const [ready, setReady] = useState(false);
-  const [done, setDone] = useState(false);
+  const [steps, setSteps] = useState<Step[]>([]);
+  const [current, setCurrent] = useState<Step | null>(null);
+  const [done, setDone] = useState<Step | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [hidden, setHidden] = useState(false);
@@ -45,8 +54,9 @@ export default function CustomerNotificationPrompt() {
   const blockedRoute = path === '/checkout' || path.startsWith('/produit/') || path.startsWith('/paiement');
 
   useEffect(() => {
-    setReady(false);
-    setDone(false);
+    setSteps([]);
+    setCurrent(null);
+    setDone(null);
     setError('');
     if (!userId || recentlyDismissed()) return;
     let cancelled = false;
@@ -54,26 +64,41 @@ export default function CustomerNotificationPrompt() {
       void (async () => {
         const status = getPushSupportStatus();
         // « granted » : l'autorisation existe mais cet appareil n'est pas (ou plus) enregistré pour ce compte.
-        const needed = status === 'default' || (status === 'granted' && !(await isDeviceRegisteredForUser()));
-        if (!cancelled && needed) setReady(true);
+        const needsPush = status === 'default' || (status === 'granted' && !(await isDeviceRegisteredForUser()));
+        const whatsapp = await getMyWhatsAppConsent();
+        const needsWhatsApp = whatsapp.supported && !('error' in whatsapp) && !whatsapp.optedIn;
+        const needed: Step[] = [...(needsPush ? (['push'] as Step[]) : []), ...(needsWhatsApp ? (['whatsapp'] as Step[]) : [])];
+        if (!cancelled && needed.length > 0) { setSteps(needed); setCurrent(needed[0]); }
       })();
     }, SHOW_AFTER_MS);
     return () => { cancelled = true; window.clearTimeout(timer); };
   }, [userId]);
 
-  if (!userId || !ready || hidden || blockedRoute) return null;
+  if (!userId || !current || hidden || blockedRoute) return null;
+
+  const next = (finished: Step) => {
+    const following = steps[steps.indexOf(finished) + 1];
+    setDone(finished);
+    window.setTimeout(() => {
+      setDone(null);
+      if (following) setCurrent(following); else setHidden(true);
+    }, 1800);
+  };
 
   const enable = async () => {
     setError('');
     setLoading(true);
-    const result = await subscribeToPush(userId);
-    setLoading(false);
-    if (result.error) {
-      setError(result.error);
-      return;
+    if (current === 'push') {
+      const result = await subscribeToPush(userId);
+      setLoading(false);
+      if (result.error) { setError(result.error); return; }
+    } else {
+      const result = await setMyWhatsAppConsent(true, 'compte');
+      setLoading(false);
+      if (!result.supported) { setHidden(true); return; }
+      if ('error' in result) { setError(result.error); return; }
     }
-    setDone(true);
-    window.setTimeout(() => setHidden(true), 2500);
+    next(current);
   };
 
   const later = () => {
@@ -89,15 +114,21 @@ export default function CustomerNotificationPrompt() {
       style={{ bottom: 'calc(env(safe-area-inset-bottom, 0px) + 1rem)' }}
     >
       {done ? (
-        <p className="flex items-center gap-2 text-sm font-medium text-ink"><Check size={16} className="text-burgundy" /> Notifications activées. Merci !</p>
+        <p className="flex items-center gap-2 text-sm font-medium text-ink"><Check size={16} className="text-burgundy" /> {done === 'push' ? 'Notifications activées. Merci !' : 'Messages WhatsApp activés. Merci !'}</p>
       ) : (
         <>
           <button onClick={later} aria-label="Fermer" className="absolute right-2 top-2 rounded-full p-1.5 text-ink/40 hover:text-ink"><X size={16} /></button>
           <div className="flex items-start gap-3 pr-6">
-            <span className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-burgundy/10 text-burgundy"><Bell size={18} /></span>
+            <span className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-burgundy/10 text-burgundy">
+              {current === 'push' ? <Bell size={18} /> : <MessageCircle size={18} />}
+            </span>
             <div>
-              <p className="text-sm font-semibold text-ink">Suivez vos commandes en direct</p>
-              <p className="mt-0.5 text-xs leading-relaxed text-ink/60">Recevez une notification quand votre commande est confirmée, préparée et en cours de livraison.</p>
+              <p className="text-sm font-semibold text-ink">{current === 'push' ? 'Suivez vos commandes en direct' : 'Recevez-les aussi sur WhatsApp'}</p>
+              <p className="mt-0.5 text-xs leading-relaxed text-ink/60">
+                {current === 'push'
+                  ? 'Recevez une notification quand votre commande est confirmée, préparée et en cours de livraison.'
+                  : 'La confirmation de votre commande et l’avis de livraison en cours, par message WhatsApp. 2 messages au plus par commande, désactivable à tout moment.'}
+              </p>
             </div>
           </div>
           {error && <p className="mt-2 text-xs text-burgundy">{error}</p>}

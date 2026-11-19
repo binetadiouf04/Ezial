@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { Bell, Check } from 'lucide-react';
 import { restoreDeviceForCurrentSession } from '@/lib/supabasePush';
 import BellPushStatus from './BellPushStatus';
+import BellPreferences, { type BellAudience } from './BellPreferences';
 import {
   fetchNotifications, fetchUnreadNotificationCount, markNotificationRead, markAllNotificationsRead,
   type AppNotification,
@@ -22,7 +23,7 @@ function formatDateTime(iso: string): string {
 // caller's navigate() works slightly differently (AppContext's top-level
 // routes for the customer vs ProContext's /pro-relative routes for
 // seller/driver, which strip the /pro prefix first).
-export default function NotificationBell({ onNavigate }: { onNavigate: (url: string) => void }) {
+export default function NotificationBell({ onNavigate, audience = 'customer' }: { onNavigate: (url: string) => void; audience?: BellAudience }) {
   const [open, setOpen] = useState(false);
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
@@ -110,6 +111,7 @@ export default function NotificationBell({ onNavigate }: { onNavigate: (url: str
             )}
           </div>
           <BellPushStatus />
+          <BellPreferences audience={audience} />
           {notifications.length === 0 ? (
             <p className="p-6 text-center text-sm text-ink/45">Aucune notification.</p>
           ) : (

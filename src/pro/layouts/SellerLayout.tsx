@@ -174,7 +174,7 @@ export default function SellerLayout() {
               <p className="text-sm font-semibold text-ink truncate">{sellerShop?.name ?? name}</p>
               <p className="text-xs text-ink/40 font-mono">{identifier}</p>
             </div>
-            <NotificationBell onNavigate={(url) => navigate(url.replace(/^\/pro/, ''))} />
+            <NotificationBell audience="seller" onNavigate={(url) => navigate(url.replace(/^\/pro/, ''))} />
           </div>
         </div>
         <nav className="flex-1 space-y-4 overflow-y-auto p-3">
@@ -223,7 +223,7 @@ export default function SellerLayout() {
           <span className="truncate text-sm font-semibold text-ink">{sellerShop?.name ?? name}</span>
         </div>
         <div className="flex flex-shrink-0 items-center gap-1.5">
-          <NotificationBell onNavigate={(url) => navigate(url.replace(/^\/pro/, ''))} />
+          <NotificationBell audience="seller" onNavigate={(url) => navigate(url.replace(/^\/pro/, ''))} />
           <button
             onClick={() => (isOnProductForm ? navigate('/seller/produits') : goToMarketplace())}
             className="flex items-center gap-1.5 rounded-lg border border-line px-2.5 py-1.5 text-xs font-medium text-ink/60 hover:border-burgundy/30 hover:text-burgundy transition-colors"
