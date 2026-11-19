@@ -31,6 +31,11 @@ test('index.html (HTML initial lu par Google) porte exactement les mêmes textes
     `<meta name="twitter:description" content="${HOME_DESCRIPTION}" />`,
   ]) assert.ok(html.includes(tag), tag);
   assert.ok(html.includes('<link rel="canonical" href="https://ezial.net/" />'));
+  // Aperçu des liens : papillon sur fond rouge, jamais l'image de remplacement « Image indisponible ».
+  assert.ok(html.includes('<meta property="og:image" content="https://ezial.net/ezial-partage.png" />'));
+  assert.ok(html.includes('<meta name="twitter:image" content="https://ezial.net/ezial-partage.png" />'));
+  assert.ok(!/og:image[^>]*ezial-fallback/.test(html));
+  assert.ok(readFileSync(new URL('../../public/ezial-partage.png', import.meta.url)).length > 1000);
 });
 
 test('aucune description ni aucun titre ne parle de cheveux ni de « lifestyle »', () => {

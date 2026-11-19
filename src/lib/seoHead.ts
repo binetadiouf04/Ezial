@@ -12,7 +12,7 @@ export const SITE_URL = 'https://ezial.net';
 // route carries.
 export const DEFAULT_OG_TITLE = SEO.homeTitle;
 export const DEFAULT_OG_DESCRIPTION = SEO.homeDescription;
-export const DEFAULT_OG_IMAGE = `${SITE_URL}/ezial-fallback.webp`;
+export const DEFAULT_OG_IMAGE = `${SITE_URL}/ezial-partage.png`;
 
 export interface HeadTags {
   title: string;

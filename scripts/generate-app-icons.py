@@ -189,9 +189,37 @@ def save_favicons(master, out_dir):
     print(f'{ico.relative_to(ROOT)}  16+32+48  {ico.stat().st_size} octets')
 
 
+SHARE_SIZE = (1200, 630)    # format recommandé pour l'aperçu d'un lien (Open Graph)
+SHARE_SYMBOL_HEIGHT = 0.52  # part de la hauteur occupée par le symbole
+SHARE_RUBY = (140, 16, 36)  # rouge rubis #8C1024 (identité visuelle)
+
+
+def save_share_image(symbol, sym_bbox, out_path):
+    """Aperçu d'un lien : aplat rouge rubis, papillon officiel crème centré, sans texte."""
+    w, h = SHARE_SIZE
+    k = 2  # travail en double taille, puis réduction (bords nets)
+    canvas = Image.new('RGBA', (w * k, h * k), SHARE_RUBY + (255,))
+    # Même aplat que l'icône Admin : le symbole officiel, en crème uni.
+    alpha = np.clip((np.asarray(symbol)[..., 3].astype(np.float64) / 255 - 0.25) / 0.5, 0, 1) * 255
+    solid = np.zeros(alpha.shape + (4,), dtype=np.uint8)
+    solid[..., :3] = ADMIN_CREAM
+    solid[..., 3] = alpha.round().astype(np.uint8)
+    layer = Image.fromarray(solid, 'RGBA')
+    bx0, by0, bx1, by1 = sym_bbox
+    scale = SHARE_SYMBOL_HEIGHT * h * k / (by1 - by0)
+    resized = layer.resize((round(layer.width * scale), round(layer.height * scale)), Image.LANCZOS)
+    ox = round(w * k / 2 - (bx0 + bx1) / 2 * scale)
+    oy = round(h * k / 2 - (by0 + by1) / 2 * scale)
+    canvas.alpha_composite(resized, (ox, oy))
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    canvas.convert('RGB').resize((w, h), Image.LANCZOS).save(out_path, 'PNG', optimize=True)
+    print(f'{out_path.relative_to(ROOT)}  {w}x{h}  {out_path.stat().st_size} octets')
+
+
 def main():
     admin = '--admin' in sys.argv[1:]
     favicons = '--favicons' in sys.argv[1:]
+    share = '--partage' in sys.argv[1:]
     im = load_source()
     info = analyse(im)
     symbol, sym_bbox, ratio = extract_symbol(im, info)
@@ -201,6 +229,9 @@ def main():
     width_mask = width_any * min(1.0, SAFE_RADIUS / r_any)
     print(f'symbole : {width_any:.3f} de la largeur (icône standard), {width_mask:.3f} (adaptative) ; '
           f'rayon max {r_any:.3f} -> {symbol_max_radius_ratio(symbol, sym_bbox, width_mask):.3f}')
+    if share:
+        save_share_image(symbol, sym_bbox, OUT / 'ezial-partage.png')
+        return
     if favicons:
         cream, burgundy = np.array(ADMIN_CREAM, dtype=np.float64), np.array(ADMIN_BURGUNDY, dtype=np.float64)
         save_favicons(compose(symbol, sym_bbox, info, FAVICON_SYMBOL_RATIO, info['plane'], side=1024), OUT)
