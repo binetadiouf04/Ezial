@@ -10,10 +10,11 @@
     "preview": "vite preview",
     "typecheck": "tsc --noEmit -p tsconfig.app.json",
     "check:supabase": "node scripts/check-supabase.mjs",
-    "test:security": "node --experimental-strip-types --test supabase/functions/_shared/guards.test.mjs src/data/payments.test.mjs src/lib/adminStatsCore.test.mjs src/lib/adminDeliveriesCore.test.mjs src/lib/shopUrl.test.mjs src/lib/goldJewelry.test.mjs src/lib/appUpdateCore.test.mjs src/lib/variantValues.test.mjs src/lib/logoFit.test.mjs src/data/colors.test.mjs src/lib/mobileKeyboard.test.mjs src/lib/stockBadge.test.mjs src/lib/supplierName.test.mjs src/lib/waistMeasure.test.mjs src/lib/supabasePaging.test.mjs src/lib/vapidKey.test.mjs"
+    "test:security": "node --experimental-strip-types --test supabase/functions/_shared/guards.test.mjs src/data/payments.test.mjs src/lib/adminStatsCore.test.mjs src/lib/adminDeliveriesCore.test.mjs src/lib/shopUrl.test.mjs src/lib/goldJewelry.test.mjs src/lib/appUpdateCore.test.mjs src/lib/variantValues.test.mjs src/lib/logoFit.test.mjs src/data/colors.test.mjs src/lib/mobileKeyboard.test.mjs src/lib/stockBadge.test.mjs src/lib/supplierName.test.mjs src/lib/waistMeasure.test.mjs src/lib/supabasePaging.test.mjs src/lib/vapidKey.test.mjs src/lib/invoice.test.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.57.4",
+    "jspdf": "4.2.1",
     "lucide-react": "^0.446.0",
     "qrcode": "^1.5.4",
     "react": "^18.3.1",

@@ -8,6 +8,7 @@ import { ensureOrderDeliveryCode } from '@/lib/supabaseOrders';
 import { paymentLabels } from '@/data/payments';
 import { CheckCircle2, Truck, Store, MapPin, Smartphone, Clock, KeySquare } from 'lucide-react';
 import SmartImage from '@/components/SmartImage';
+import InvoiceButton from '@/components/InvoiceButton';
 
 const paymentIcons: Record<string, typeof Smartphone> = { wave: Smartphone, orange_money: Smartphone };
 
@@ -143,6 +144,8 @@ export default function OrderConfirmationPage({ orderId }: { orderId: string }) 
           <span className="font-medium text-ink">{formatFCFA(order.total)}</span>
         </div>
       </div>
+
+      <div className="mb-3"><InvoiceButton order={order} /></div>
 
       <div className="flex flex-col gap-3 sm:flex-row">
         <button onClick={() => navigate(`/suivi/${order.id}`)} className="btn-primary flex-1">Suivre ma commande</button>
