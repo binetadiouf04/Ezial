@@ -4,24 +4,22 @@ import { formatInvoiceMoney, invoiceFileName, type Invoice } from './invoice';
 // uniquement au clic : il n'alourdit aucune page). Rien n'est envoyé à un
 // serveur : la facture est construite à partir de la commande déjà chargée.
 //
-// Style : fond blanc, mot-symbole EZIAL en bordeaux (empattements, lettres
-// espacées), filets fins, petites capitales grises pour les libellés,
-// miniatures des produits, bandeau bordeaux pour le total.
+// Style minimaliste : fond blanc, mot-symbole EZIAL en bordeaux, libellés gris
+// discrets, deux filets fins, miniatures des produits, total en gras à la fin.
+// Aucun aplat de couleur.
 
 type Rgb = [number, number, number];
 const BURGUNDY: Rgb = [90, 13, 30];
 const INK: Rgb = [28, 25, 26];
 const GREY: Rgb = [120, 113, 115];
 const HAIR: Rgb = [226, 218, 214];
-const CREAM: Rgb = [248, 243, 238];
-const WHITE: Rgb = [255, 255, 255];
 
 const PAGE_W = 210;
 const MARGIN = 18;
 const RIGHT = PAGE_W - MARGIN;
 const BOTTOM = 266;
-const IMAGE_W = 13;
-const IMAGE_H = 16.25; // miniature 4:5
+const IMAGE_W = 11;
+const IMAGE_H = 13.75; // miniature 4:5
 const MAX_IMAGES = 30;
 
 /** Miniature -> JPEG (jsPDF ne lit pas le WebP). Toute erreur : pas d'image, jamais de facture bloquée. */
@@ -85,8 +83,6 @@ export async function createInvoicePdf(invoice: Invoice): Promise<{ blob: Blob; 
     }
     doc.setCharSpace(0);
   };
-  const label = (value: string, x: number, yy: number, align: 'left' | 'right' | 'center' = 'left') =>
-    text(value, x, yy, { size: 7, bold: true, color: GREY, space: 1.1, align });
   const hair = (yy: number, from = MARGIN, to = RIGHT, color: Rgb = HAIR) => { doc.setDrawColor(...color); doc.setLineWidth(0.2); doc.line(from, yy, to, yy); };
   const wrap = (value: string, width: number, size: number, bold = false): string[] => {
     doc.setFont('helvetica', bold ? 'bold' : 'normal');
@@ -94,100 +90,95 @@ export async function createInvoicePdf(invoice: Invoice): Promise<{ blob: Blob; 
     return doc.splitTextToSize(value, width) as string[];
   };
 
-  // ── En-tête ────────────────────────────────────────────────────────────
-  text('EZIAL', MARGIN, 24, { size: 28, bold: true, serif: true, color: BURGUNDY, space: 4 });
-  text('LA MARKETPLACE SÉNÉGALAISE', MARGIN, 30, { size: 6.5, color: GREY, space: 1.4 });
-  text('FACTURE', RIGHT, 17, { size: 9, bold: true, space: 3, align: 'right' });
-  text(`n° ${invoice.number}`, RIGHT, 23, { size: 9.5, align: 'right' });
-  text(new Date(invoice.date).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' }), RIGHT, 28.5, { size: 9, color: GREY, align: 'right' });
-  doc.setDrawColor(...BURGUNDY); doc.setLineWidth(0.6); doc.line(MARGIN, 37, RIGHT, 37);
+  // ── En-tête : le mot-symbole, puis le numéro et la date ─────────────────
+  text('EZIAL', MARGIN, 26, { size: 20, bold: true, serif: true, color: BURGUNDY, space: 2.4 });
+  text('Facture', RIGHT, 19, { size: 9, color: GREY, align: 'right' });
+  text(invoice.number, RIGHT, 24.5, { size: 10, bold: true, align: 'right' });
+  text(new Date(invoice.date).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' }), RIGHT, 29.5, { size: 9, color: GREY, align: 'right' });
 
-  // ── Qui est facturé, comment ──────────────────────────────────────────
-  y = 47;
+  // ── Facturé à / Paiement ──────────────────────────────────────────────
+  y = 48;
   const COL2 = 120;
-  label('FACTURÉ À', MARGIN, y);
-  label('PAIEMENT', COL2, y);
-  y += 5.5;
+  text('Facturé à', MARGIN, y, { size: 8, color: GREY });
+  text('Paiement', COL2, y, { size: 8, color: GREY });
+  y += 5;
   let yb = y;
-  text(invoice.buyer.name, MARGIN, yb, { size: 10, bold: true }); yb += 4.8;
-  for (const line of invoice.buyer.details) { text(line, MARGIN, yb, { size: 8.5, color: GREY }); yb += 4.2; }
-  text(invoice.paymentLabel, COL2, y, { size: 10, bold: true });
-  y = yb + 7;
+  text(invoice.buyer.name, MARGIN, yb, { size: 10 }); yb += 4.6;
+  for (const line of invoice.buyer.details) { text(line, MARGIN, yb, { size: 8.5, color: GREY }); yb += 4.1; }
+  text(invoice.paymentLabel, COL2, y, { size: 10 });
+  y = yb + 9;
 
-  // ── Tableau des articles ──────────────────────────────────────────────
+  // ── Articles ──────────────────────────────────────────────────────────
   const COL_QTY = 134;
   const COL_UNIT = 162;
   const tableHeader = () => {
-    label('ARTICLE', MARGIN, y);
-    label('QTÉ', COL_QTY, y, 'right');
-    label('PRIX', COL_UNIT, y, 'right');
-    label('TOTAL', RIGHT, y, 'right');
+    text('Article', MARGIN, y, { size: 8, color: GREY });
+    text('Qté', COL_QTY, y, { size: 8, color: GREY, align: 'right' });
+    text('Prix', COL_UNIT, y, { size: 8, color: GREY, align: 'right' });
+    text('Total', RIGHT, y, { size: 8, color: GREY, align: 'right' });
     y += 2.5;
-    doc.setDrawColor(...INK); doc.setLineWidth(0.3); doc.line(MARGIN, y, RIGHT, y);
-    y += 3;
+    hair(y);
+    y += 5;
   };
   const newPage = () => { doc.addPage(); y = 22; tableHeader(); };
   tableHeader();
 
   const groupHeader = (group: Invoice['groups'][number], continued: boolean) => {
-    doc.setFillColor(...CREAM);
-    doc.rect(MARGIN, y, RIGHT - MARGIN, 6.5, 'F');
-    label(`VENDU PAR ${group.shopName.toUpperCase()}${group.pickup ? '  ·  RETRAIT EN BOUTIQUE' : ''}${continued ? '  ·  SUITE' : ''}`, MARGIN + 2.5, y + 4.3);
-    y += 9;
+    text(`Vendu par ${group.shopName}${group.pickup ? ' · retrait en boutique' : ''}${continued ? ' (suite)' : ''}`, MARGIN, y, { size: 8, color: GREY });
+    y += 5;
   };
-  for (const group of invoice.groups) {
+  invoice.groups.forEach((group, index) => {
     if (y + 20 > BOTTOM) newPage();
+    if (index > 0) y += 3;
     groupHeader(group, false);
     for (const line of group.lines) {
       const hasImage = Boolean(line.imageUrl && images.has(line.imageUrl));
       const textX = hasImage ? MARGIN + IMAGE_W + 4 : MARGIN;
-      const nameLines = wrap(line.label, COL_QTY - textX - 16, 9.5, true);
+      const nameLines = wrap(line.label, COL_QTY - textX - 16, 9.5);
       const optionLines = line.options ? wrap(line.options, COL_QTY - textX - 16, 8) : [];
-      const textH = nameLines.length * 4.6 + optionLines.length * 3.9;
+      const textH = nameLines.length * 4.5 + optionLines.length * 3.9;
       const rowH = Math.max(hasImage ? IMAGE_H : 0, textH) + 5;
       if (y + rowH > BOTTOM) { newPage(); groupHeader(group, true); }
       if (hasImage) doc.addImage(images.get(line.imageUrl as string) as string, 'JPEG', MARGIN, y, IMAGE_W, IMAGE_H);
       let ty = y + 3.6;
-      for (const part of nameLines) { text(part, textX, ty, { size: 9.5, bold: true }); ty += 4.6; }
+      for (const part of nameLines) { text(part, textX, ty, { size: 9.5 }); ty += 4.5; }
       for (const part of optionLines) { text(part, textX, ty - 0.3, { size: 8, color: GREY }); ty += 3.9; }
-      text(line.quantity, COL_QTY, y + 3.6, { size: 9.5, align: 'right' });
+      text(line.quantity, COL_QTY, y + 3.6, { size: 9.5, color: GREY, align: 'right' });
       text(formatInvoiceMoney(line.unitPrice), COL_UNIT, y + 3.6, { size: 9.5, color: GREY, align: 'right' });
-      text(formatInvoiceMoney(line.total), RIGHT, y + 3.6, { size: 9.5, bold: true, align: 'right' });
+      text(formatInvoiceMoney(line.total), RIGHT, y + 3.6, { size: 9.5, align: 'right' });
       y += rowH;
-      hair(y - 2.5);
     }
-    y += 2;
-  }
+  });
 
-  // ── Totaux : le total en dernier, bien visible ────────────────────────
-  if (y + 46 > BOTTOM) newPage();
-  y += 4;
+  // ── Totaux : le total en dernier ──────────────────────────────────────
+  if (y + 40 > BOTTOM) newPage();
+  hair(y - 1);
+  y += 6;
   const LBL = 128;
   const row = (name: string, value: string) => {
-    text(name, LBL, y, { size: 9.5, color: GREY });
-    text(value, RIGHT, y, { size: 9.5, align: 'right' });
-    y += 5.8;
+    text(name, LBL, y, { size: 9, color: GREY });
+    text(value, RIGHT, y, { size: 9, color: GREY, align: 'right' });
+    y += 5.5;
   };
   row('Produits', formatInvoiceMoney(invoice.subtotal));
   if (invoice.discount > 0) row('Remise', `- ${formatInvoiceMoney(invoice.discount)}`);
   row('Livraison', invoice.delivery > 0 ? formatInvoiceMoney(invoice.delivery) : 'Gratuite');
-  y += 2;
-  doc.setFillColor(...BURGUNDY);
-  doc.roundedRect(LBL - 6, y, RIGHT - LBL + 6, 12, 1.5, 1.5, 'F');
-  text('TOTAL', LBL, y + 7.6, { size: 8.5, bold: true, color: WHITE, space: 2 });
-  text(formatInvoiceMoney(invoice.total), RIGHT - 4, y + 8, { size: 13, bold: true, color: WHITE, align: 'right' });
-  y += 12 + 6;
-  if (invoice.vatNote) text(invoice.vatNote, RIGHT, y, { size: 8, color: GREY, align: 'right' });
+  y += 1;
+  hair(y - 2, LBL, RIGHT, INK);
+  y += 5;
+  text('Total', LBL, y, { size: 11, bold: true });
+  text(formatInvoiceMoney(invoice.total), RIGHT, y, { size: 12, bold: true, color: BURGUNDY, align: 'right' });
+  y += 6;
+  if (invoice.vatNote) text(invoice.vatNote, RIGHT, y, { size: 7.5, color: GREY, align: 'right' });
 
   // ── Pied de page : identité légale, sur chaque page ───────────────────
   const pages = doc.getNumberOfPages();
   for (let i = 1; i <= pages; i += 1) {
     doc.setPage(i);
-    hair(278, MARGIN, RIGHT);
     let fy = 283;
-    for (const line of invoice.issuerFooter) { text(line, PAGE_W / 2, fy, { size: 7.5, color: GREY, align: 'center' }); fy += 3.8; }
-    text('Merci pour votre commande — ezial.net', PAGE_W / 2, fy + 1, { size: 7.5, bold: true, color: BURGUNDY, align: 'center' });
-    if (pages > 1) text(`${i} / ${pages}`, RIGHT, 283, { size: 7.5, color: GREY, align: 'right' });
+    for (const line of invoice.issuerFooter) { text(line, PAGE_W / 2, fy, { size: 7, color: GREY, align: 'center' }); fy += 3.6; }
+    text('ezial.net', PAGE_W / 2, fy + 0.5, { size: 7, color: BURGUNDY, align: 'center' });
+    if (pages > 1) text(`${i} / ${pages}`, RIGHT, 283, { size: 7, color: GREY, align: 'right' });
   }
 
   return { blob: doc.output('blob'), fileName: invoiceFileName(invoice.number) };
