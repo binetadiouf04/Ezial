@@ -8,6 +8,7 @@ export const COMPANY: {
   ninea: string;
   address: string;
   publicationManager: string;
+  vatNote: string;
 };
 export const CONTACT: { email: string; phone: string; phoneHref: string; city: string };
 export const SOCIAL_LINKS: { id: 'instagram' | 'tiktok' | 'facebook'; label: string; url: string }[];

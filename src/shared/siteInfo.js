@@ -15,6 +15,8 @@ export const COMPANY = {
   ninea: '013246576',
   address: 'Grand Yoff, quartier Sicap Foire, villa n° 48, Dakar, Sénégal',
   publicationManager: 'Bineta DIOUF',
+  /** Mention imprimée sur les factures : la société n'est pas soumise à la TVA (précisé par la dirigeante le 19 nov. 2026). */
+  vatNote: 'TVA non applicable',
 };
 
 export const CONTACT = {

@@ -29,8 +29,9 @@ export default function InvoiceButton({ order, className = 'btn-outline w-full' 
           return p?.saleMode ? `${formatFabricQuantity(item.quantity)} ${fabricSaleModeUnit[p.saleMode]}` : String(item.quantity);
         },
         optionsText: (item) => optionsLine(item.variants, item.waistCm) ?? '',
+        imageUrl: (item) => productOf(item)?.thumbnailUrl || productOf(item)?.images[0],
         paymentLabel: (payment) => paymentLabels[payment] ?? payment,
-      }, { name: COMPANY.name, legalForm: COMPANY.legalForm, rccm: COMPANY.rccm, ninea: COMPANY.ninea, address: COMPANY.address, email: CONTACT.email, phone: CONTACT.phone });
+      }, { name: COMPANY.name, vatNote: COMPANY.vatNote, legalForm: COMPANY.legalForm, rccm: COMPANY.rccm, ninea: COMPANY.ninea, address: COMPANY.address, email: CONTACT.email, phone: CONTACT.phone });
       const { deliverInvoice } = await import('@/lib/invoicePdf');
       await deliverInvoice(invoice);
     } catch {

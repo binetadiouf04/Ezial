@@ -8,6 +8,8 @@ import type { Order } from '@/store/AppContext';
 // numéro de commande (une facture par commande).
 
 export interface InvoiceLine {
+  /** Miniature du produit, si elle existe encore au catalogue. */
+  imageUrl?: string;
   label: string;
   options: string;
   quantity: string;
@@ -30,7 +32,13 @@ export interface Invoice {
   number: string;
   date: string;
   issuer: InvoiceParty;
+  /** Pied de page : identité légale de l'émetteur, en deux lignes. */
+  issuerFooter: string[];
   buyer: InvoiceParty;
+  /** « Boutique A + Boutique B » : toutes les boutiques qui ont vendu un article de la commande. */
+  soldBy: string;
+  /** Mention de TVA fournie par la société (vide : rien n'est imprimé). */
+  vatNote: string;
   groups: InvoiceGroup[];
   subtotal: number;
   discount: number;
@@ -41,6 +49,7 @@ export interface Invoice {
 
 export interface InvoiceCompany {
   name: string;
+  vatNote?: string;
   legalForm?: string;
   rccm?: string;
   ninea?: string;
@@ -55,6 +64,7 @@ export interface InvoiceHelpers {
   productName: (item: Order['items'][number]) => string;
   quantityText: (item: Order['items'][number]) => string;
   optionsText: (item: Order['items'][number]) => string;
+  imageUrl?: (item: Order['items'][number]) => string | undefined;
   paymentLabel: (payment: string) => string;
 }
 
@@ -79,6 +89,7 @@ export function buildInvoice(order: Order, helpers: InvoiceHelpers, company: Inv
     };
     const unitPrice = item.unitPrice ?? 0;
     group.lines.push({
+      imageUrl: helpers.imageUrl?.(item),
       label: helpers.productName(item),
       options: helpers.optionsText(item),
       quantity: helpers.quantityText(item),
@@ -88,13 +99,9 @@ export function buildInvoice(order: Order, helpers: InvoiceHelpers, company: Inv
     byShop.set(item.shopId, group);
   }
 
-  const issuerDetails: string[] = [];
-  if (company.legalForm) issuerDetails.push(company.legalForm);
-  if (company.address) issuerDetails.push(company.address);
-  if (company.rccm) issuerDetails.push(`RCCM : ${company.rccm}`);
-  if (company.ninea) issuerDetails.push(`NINEA : ${company.ninea}`);
-  const contact = [company.email, company.phone].filter(Boolean).join(' · ');
-  if (contact) issuerDetails.push(contact);
+  const legal = [company.legalForm, company.rccm ? `RCCM ${company.rccm}` : '', company.ninea ? `NINEA ${company.ninea}` : ''].filter(Boolean);
+  const reach = [company.address, company.email, company.phone].filter(Boolean);
+  const issuerFooter = [legal.join(' · '), reach.join(' · ')].filter(Boolean);
 
   const buyerName = `${order.customer.firstName} ${order.customer.lastName}`.trim();
   const buyerDetails: string[] = [];
@@ -104,7 +111,10 @@ export function buildInvoice(order: Order, helpers: InvoiceHelpers, company: Inv
   return {
     number: order.id,
     date: order.date,
-    issuer: { name: company.name, details: issuerDetails },
+    issuer: { name: company.name, details: [] },
+    issuerFooter,
+    soldBy: [...new Set([...byShop.values()].map((g) => g.shopName))].join(' + '),
+    vatNote: company.vatNote ?? '',
     buyer: { name: buyerName || 'Client Ezial', details: buyerDetails },
     groups: [...byShop.values()],
     subtotal: order.subtotal,

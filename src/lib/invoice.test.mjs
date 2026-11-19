@@ -32,13 +32,28 @@ test('les articles sont regroupés par boutique, avec les totaux de la commande'
   assert.equal(inv.subtotal - inv.discount + inv.delivery, inv.total);
 });
 
-test('émetteur et client : seules les informations connues sont imprimées', () => {
+test('plusieurs boutiques : « Vendu par A + B », une seule fois chacune', () => {
   const inv = buildInvoice(order, helpers, company);
-  assert.ok(inv.issuer.details.includes('NINEA : 013246576'));
-  assert.ok(inv.issuer.details.some((d) => d.includes('contact@ezial.net')));
+  assert.equal(inv.soldBy, 'Ezial Boutique + Maison Dakar');
+  const single = buildInvoice({ ...order, items: [order.items[0], order.items[2]], shopFulfillments: [order.shopFulfillments[0]] }, helpers, company);
+  assert.equal(single.soldBy, 'Ezial Boutique');
+});
+
+test('émetteur, TVA et client : seules les informations connues sont imprimées', () => {
+  const inv = buildInvoice(order, helpers, { ...company, vatNote: 'TVA non applicable' });
+  assert.equal(inv.vatNote, 'TVA non applicable');
+  assert.deepEqual(inv.issuerFooter, [
+    'Entreprise individuelle · RCCM SN.DKR.2026.A.40238 · NINEA 013246576',
+    'Dakar, Sénégal · contact@ezial.net · +221 71 105 52 52',
+  ]);
   assert.deepEqual(inv.buyer.details, ['Tél. : +221771234567', 'Quartier : Plateau']);
   const bare = buildInvoice({ ...order, customer: { firstName: '', lastName: '', phone: '', quartier: '' } }, helpers, { name: 'Ezial' });
-  assert.equal(bare.buyer.name, 'Client Ezial'); assert.deepEqual(bare.buyer.details, []); assert.deepEqual(bare.issuer.details, []);
+  assert.equal(bare.buyer.name, 'Client Ezial'); assert.deepEqual(bare.buyer.details, []); assert.deepEqual(bare.issuerFooter, []); assert.equal(bare.vatNote, '');
+});
+
+test('la miniature du produit est transmise à la ligne', () => {
+  const inv = buildInvoice(order, { ...helpers, imageUrl: (i) => `https://img/${i.productId}.jpg` }, company);
+  assert.equal(inv.groups[0].lines[0].imageUrl, 'https://img/p1.jpg');
 });
 
 test('montants : espace ordinaire comme séparateur, jamais d\'espace insécable', () => {
