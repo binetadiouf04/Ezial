@@ -4,18 +4,20 @@ import { useBuildInvoice } from '@/lib/useBuildInvoice';
 import InvoiceButton from '@/components/InvoiceButton';
 
 // Facture de la commande, affichée dans l'appli (page de confirmation, détail
-// d'une commande) : carte crème, écriture noire, accents rouge rubis. Mêmes lignes, mêmes montants et
+// d'une commande), en tête de page : elle sert de récapitulatif (articles et total, sans doublon
+// ailleurs). Carte blanche, écriture noire, accents rouge rubis. Mêmes lignes, mêmes montants et
 // même numéro que le PDF (voir src/lib/invoice.ts) : rien n'est recalculé ni
 // inventé ici. Le PDF se télécharge depuis le bouton en bas de la carte.
-export default function InvoiceCard({ order, className = '' }: { order: Order; className?: string }) {
+// draft : commande pas encore payée → « Votre commande », sans facture à télécharger.
+export default function InvoiceCard({ order, className = '', draft = false }: { order: Order; className?: string; draft?: boolean }) {
   const invoice = useBuildInvoice()(order);
   const date = new Date(invoice.date).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
   const hasSeveralShops = invoice.groups.length > 1;
 
   return (
-    <section aria-label={`Facture ${invoice.number}`} className={`rounded-2xl border border-beige bg-cream p-5 text-ink shadow-sm sm:p-6 ${className}`}>
+    <section aria-label={draft ? `Commande ${invoice.number}` : `Facture ${invoice.number}`} className={`rounded-2xl border border-line bg-white p-5 text-ink shadow-sm sm:p-6 ${className}`}>
       <div className="flex items-baseline justify-between gap-3">
-        <h2 className="text-[11px] font-semibold uppercase tracking-[0.22em] text-burgundy-ruby">Votre facture</h2>
+        <h2 className="text-[11px] font-semibold uppercase tracking-[0.22em] text-burgundy-ruby">{draft ? 'Votre commande' : 'Votre facture'}</h2>
         <p className="text-right text-xs text-ink/60">{invoice.number} · {date}</p>
       </div>
 
@@ -31,9 +33,9 @@ export default function InvoiceCard({ order, className = '' }: { order: Order; c
               {group.lines.map((line, lineIndex) => (
                 <li key={`${line.label}-${lineIndex}`} className="flex gap-3.5">
                   {line.imageUrl ? (
-                    <img src={line.imageUrl} alt="" loading="lazy" decoding="async" className="h-[70px] w-14 flex-shrink-0 rounded-md bg-beige/50 object-cover" />
+                    <img src={line.imageUrl} alt="" loading="lazy" decoding="async" className="h-[70px] w-14 flex-shrink-0 rounded-md bg-cream object-cover" />
                   ) : (
-                    <div aria-hidden="true" className="h-[70px] w-14 flex-shrink-0 rounded-md bg-beige/50" />
+                    <div aria-hidden="true" className="h-[70px] w-14 flex-shrink-0 rounded-md bg-cream" />
                   )}
                   <div className="min-w-0 flex-1">
                     <div className="flex items-start justify-between gap-3">
@@ -52,28 +54,32 @@ export default function InvoiceCard({ order, className = '' }: { order: Order; c
         ))}
       </div>
 
-      <dl className="mt-5 space-y-2 border-t border-beige pt-4 text-sm">
+      <dl className="mt-5 space-y-2 border-t border-line pt-4 text-sm">
         <div className="flex justify-between"><dt className="text-ink/70">Sous-total</dt><dd>{formatInvoiceMoney(invoice.subtotal)}</dd></div>
         {invoice.discount > 0 && <div className="flex justify-between"><dt className="text-ink/70">Remise</dt><dd>- {formatInvoiceMoney(invoice.discount)}</dd></div>}
         <div className="flex justify-between"><dt className="text-ink/70">Livraison</dt><dd>{invoice.delivery > 0 ? formatInvoiceMoney(invoice.delivery) : 'Gratuite'}</dd></div>
-        <div className="flex items-baseline justify-between border-t border-beige pt-3">
+        <div className="flex items-baseline justify-between border-t border-line pt-3">
           <dt className="text-base font-semibold">Total</dt>
           <dd className="font-display text-2xl font-semibold text-burgundy-ruby">{formatInvoiceMoney(invoice.total)}</dd>
         </div>
       </dl>
 
-      <div className="mt-4 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 text-xs text-ink/60">
-        <p>Facturé à {invoice.buyer.name} · {invoice.paymentLabel}</p>
-        {invoice.vatNote && <p>{invoice.vatNote}</p>}
-      </div>
+      {!draft && (
+        <>
+          <div className="mt-4 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 text-xs text-ink/60">
+            <p>Facturé à {invoice.buyer.name} · {invoice.paymentLabel}</p>
+            {invoice.vatNote && <p>{invoice.vatNote}</p>}
+          </div>
 
-      <div className="mt-5">
-        <InvoiceButton
-          order={order}
-          className="w-full rounded-xl border border-burgundy-ruby/40 px-4 py-3 text-sm font-medium text-burgundy-ruby transition-colors hover:bg-burgundy-ruby/5 disabled:opacity-60"
-          errorClassName="text-burgundy-ruby"
-        />
-      </div>
+          <div className="mt-5">
+            <InvoiceButton
+              order={order}
+              className="w-full rounded-xl border border-burgundy-ruby/40 px-4 py-3 text-sm font-medium text-burgundy-ruby transition-colors hover:bg-burgundy-ruby/5 disabled:opacity-60"
+              errorClassName="text-burgundy-ruby"
+            />
+          </div>
+        </>
+      )}
     </section>
   );
 }
