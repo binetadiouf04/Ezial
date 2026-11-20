@@ -5,6 +5,8 @@ import { fetchOrderDeliveryMissionStatuses } from '@/lib/supabaseOrders';
 import { formatFCFA } from '@/data/products';
 import ProductGrid from '@/components/ProductGrid';
 import SmartImage from '@/components/SmartImage';
+import PaymentStatusBadge from '@/components/PaymentStatusBadge';
+import { canResumePayment } from '@/lib/orderPayment';
 import CustomerAuthPanel from '@/components/CustomerAuthPanel';
 import PasswordField from '@/components/PasswordField';
 import PhoneField from '@/components/PhoneField';
@@ -380,7 +382,9 @@ export default function ProfilePage() {
                       <span className="font-mono text-sm font-semibold text-ink">{order.id}</span>
                       <p className="text-xs text-ink/45 mt-0.5">{new Date(order.date).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</p>
                     </div>
-                    <span className={`rounded-full px-3 py-1 text-xs font-medium ${getOrderStatusColor(order, effectiveStatus)}`}>{getOrderStatusLabel(order, effectiveStatus)}</span>
+                    {order.paymentRequired && order.paymentStatus !== 'paid'
+                      ? <PaymentStatusBadge order={order} className="px-3 py-1" />
+                      : <span className={`rounded-full px-3 py-1 text-xs font-medium ${getOrderStatusColor(order, effectiveStatus)}`}>{getOrderStatusLabel(order, effectiveStatus)}</span>}
                   </div>
                   <div className="flex gap-2 mb-3">
                     {order.items.slice(0, 4).map((item, i) => {
@@ -399,7 +403,9 @@ export default function ProfilePage() {
                       <span className="text-ink/50">{order.items.length} article{order.items.length > 1 ? 's' : ''} · </span>
                       <span className="font-semibold text-ink">{formatFCFA(order.total)}</span>
                     </div>
-                    <button onClick={() => navigate(`/compte/commande/${order.id}`)} className="flex items-center gap-1 text-sm font-medium text-burgundy hover:underline">Voir la commande <ChevronRight size={14} /></button>
+                    {canResumePayment(order, Date.now())
+                      ? <button onClick={() => navigate(`/compte/commande/${order.id}?payer=1`)} className="btn-primary !px-4 !py-2 text-sm">Payer maintenant</button>
+                      : <button onClick={() => navigate(`/compte/commande/${order.id}`)} className="flex items-center gap-1 text-sm font-medium text-burgundy hover:underline">Voir la commande <ChevronRight size={14} /></button>}
                   </div>
                 </div>
               );

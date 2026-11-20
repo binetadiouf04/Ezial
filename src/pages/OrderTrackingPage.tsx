@@ -9,6 +9,7 @@ import { pickupStepLabels, computeDeliveryStepStatus } from '@/data/orderStatusL
 import { paymentLabels } from '@/data/payments';
 import { Phone, MapPin, Package, Store, Check, Clock, KeySquare, Truck, Smartphone } from 'lucide-react';
 import SmartImage from '@/components/SmartImage';
+import PaymentStatusBadge from '@/components/PaymentStatusBadge';
 
 const shopPrepLabels: Record<string, string> = { preparing: 'En préparation', ready: 'Prête', collected: 'Prête' };
 const shopPrepColors: Record<string, string> = { preparing: 'bg-amber-50 text-amber-700', ready: 'bg-green-50 text-green-700', collected: 'bg-green-50 text-green-700' };
@@ -177,9 +178,7 @@ export default function OrderTrackingPage({ orderId }: { orderId: string }) {
               <span>{paymentLabels[order.payment] ?? order.payment}</span>
             </div>
             <div className="flex items-center gap-2">
-              <span className="rounded-full bg-green-50 px-2.5 py-0.5 text-xs font-medium text-green-700 flex items-center gap-1">
-                <Check size={11} /> Payé
-              </span>
+              <PaymentStatusBadge order={order} />
               <span className="text-sm font-semibold text-ink">{formatFCFA(order.total)}</span>
             </div>
           </div>

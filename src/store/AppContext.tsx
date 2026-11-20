@@ -107,6 +107,15 @@ export interface Order {
   preference?: DeliveryPreference;
   payment: string;
   status: DeliveryStepStatus;
+  // Paiement réel (orders.payment_status). Absent pour une commande pas encore relue.
+  paymentStatus?: 'pending' | 'paid' | 'failed' | 'refunded';
+  // Commande Orange Money à payer en ligne avant toute préparation
+  // (orders.payment_required) et sa fenêtre de paiement.
+  paymentRequired?: boolean;
+  paymentDeadline?: string | null;
+  paymentGraceUntil?: string | null;
+  // orders.status brut (« cancelled » n'existe pas dans DeliveryStepStatus).
+  orderStatus?: string;
 }
 
 interface AppState {
@@ -137,6 +146,8 @@ interface AppState {
   cartOpen: boolean; setCartOpen: (open: boolean) => void;
   categoryDrawerOpen: boolean; setCategoryDrawerOpen: (open: boolean) => void;
   orders: Order[]; addOrder: (order: Order) => void;
+  /** Met à jour une commande déjà chargée (par exemple son statut de paiement). */
+  patchOrder: (orderNumber: string, patch: Partial<Order>) => void;
   addresses: Address[];
   addAddress: (input: CustomerAddressInput, makeDefault?: boolean) => Promise<{ error?: string }>;
   updateAddress: (id: string, input: CustomerAddressInput) => Promise<{ error?: string }>;
@@ -714,6 +725,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const cartCount = cart.reduce((sum, i) => sum + i.quantity, 0);
   const cartSubtotal = cart.reduce((sum, i) => { const p = catalogProducts.find((p) => p.id === i.productId); return sum + (p ? (i.unitPrice ?? p.price) * i.quantity : 0); }, 0);
   const addOrder = useCallback((order: Order) => setOrders((prev) => [order, ...prev]), []);
+  const patchOrder = useCallback((orderNumber: string, patch: Partial<Order>) =>
+    setOrders((prev) => prev.map((o) => (o.id === orderNumber ? { ...o, ...patch } : o))), []);
 
   const addAddress = useCallback(async (input: CustomerAddressInput, makeDefault?: boolean): Promise<{ error?: string }> => {
     if (!customerUser) return { error: 'Non connecté.' };
@@ -753,7 +766,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     cart, addToCart, removeFromCart, updateQuantity, updateWaist, clearCart,
     saveForLater, moveToCart, removeFromSaved, savedItems,
     cartCount, cartSubtotal, cartOpen, setCartOpen, categoryDrawerOpen, setCategoryDrawerOpen,
-    orders, addOrder,
+    orders, addOrder, patchOrder,
     addresses, addAddress, updateAddress, deleteAddress, setDefaultAddress,
     customerInfo, updateCustomerInfo,
     customerUser, authLoading,
