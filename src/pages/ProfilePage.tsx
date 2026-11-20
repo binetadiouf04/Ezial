@@ -404,7 +404,7 @@ export default function ProfilePage() {
                       <span className="font-semibold text-ink">{formatFCFA(order.total)}</span>
                     </div>
                     {canResumePayment(order, Date.now())
-                      ? <button onClick={() => navigate(`/compte/commande/${order.id}`)} className="btn-primary !px-4 !py-2 text-sm">Payer maintenant</button>
+                      ? <button onClick={() => navigate(`/compte/commande/${order.id}?payer=1`)} className="btn-primary !px-4 !py-2 text-sm">Payer maintenant</button>
                       : <button onClick={() => navigate(`/compte/commande/${order.id}`)} className="flex items-center gap-1 text-sm font-medium text-burgundy hover:underline">Voir la commande <ChevronRight size={14} /></button>}
                   </div>
                 </div>

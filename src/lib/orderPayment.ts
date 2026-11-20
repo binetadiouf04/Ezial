@@ -40,7 +40,7 @@ export type BadgeTone = 'success' | 'warning' | 'info' | 'danger' | 'neutral';
 
 export function paymentBadge(o: PaymentFields, now: number): { label: string; tone: BadgeTone } {
   switch (paymentPhase(o, now)) {
-    case 'paid': return { label: 'Payé', tone: 'success' };
+    case 'paid': return { label: 'Paiement confirmé', tone: 'success' };
     case 'awaiting': return { label: 'En attente de paiement', tone: 'warning' };
     case 'verifying': return { label: 'Vérification du paiement', tone: 'info' };
     case 'cancelled': return { label: 'Annulée, paiement non reçu', tone: 'danger' };

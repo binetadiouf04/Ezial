@@ -61,7 +61,7 @@ export default function OrderConfirmationPage({ orderId }: { orderId: string }) 
         <p className="mt-1 text-xs text-ink/45">N° de commande : <span className="font-mono font-semibold text-ink">{order.id}</span></p>
       </div>
 
-      {order.paymentRequired && <OrangeMoneyPayment order={order} autoStart />}
+      {order.paymentRequired && <OrangeMoneyPayment order={order} autoStart autoOpen />}
 
       {/* Product-first items list */}
       <div className="card p-5 mb-5">

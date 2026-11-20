@@ -11,7 +11,9 @@ import { fetchOpenOrangeQr, fetchOrderPaymentState, startOrangeMoneyPayment, typ
 //   * Ordinateur : QR code à scanner avec le téléphone.
 //   * La page relit l'état réel de la commande toutes les 5 s et dès le retour dans
 //     l'application ; elle n'affiche « payé » que lorsque la base l'a confirmé.
-export default function OrangeMoneyPayment({ order, autoStart = false }: { order: Order; autoStart?: boolean }) {
+// autoOpen : la personne vient de toucher « Payer » ; sur téléphone, Max It s'ouvre directement
+// (une seule fois par tentative), le bouton restant affiché si l'ouverture n'a pas lieu.
+export default function OrangeMoneyPayment({ order, autoStart = false, autoOpen = false }: { order: Order; autoStart?: boolean; autoOpen?: boolean }) {
   const { patchOrder, navigate } = useApp();
   const [now, setNow] = useState(() => Date.now());
   const [qr, setQr] = useState<OrangeQr | null>(null);
@@ -20,6 +22,7 @@ export default function OrangeMoneyPayment({ order, autoStart = false }: { order
   const [error, setError] = useState('');
   const [showQr, setShowQr] = useState(false);
   const started = useRef(false);
+  const opened = useRef(false);
   const orderId = order.supabaseOrderId;
   const phase = paymentPhase(order, now);
   const handheld = useMemo(() => typeof navigator !== 'undefined'
@@ -86,6 +89,20 @@ export default function OrangeMoneyPayment({ order, autoStart = false }: { order
     })();
   }, [orderId, awaiting, autoStart, start]);
 
+  // Ouverture directe de Max It après le clic sur « Payer » (téléphone uniquement).
+  useEffect(() => {
+    const link = qr?.maxitLink ?? qr?.omLink;
+    if (!autoOpen || !handheld || !qr || !link || Date.parse(qr.validUntil) <= Date.now()) return;
+    const key = `ezial-om-ouvert-${qr.transactionId}`;
+    try {
+      if (window.sessionStorage.getItem(key)) return;
+      window.sessionStorage.setItem(key, '1');
+    } catch { /* stockage indisponible : on ouvre quand même une fois (verrou du composant) */ }
+    if (opened.current) return;
+    opened.current = true;
+    window.location.assign(link);
+  }, [autoOpen, handheld, qr]);
+
   const checkNow = async () => {
     setChecking(true);
     await refresh();
@@ -99,7 +116,7 @@ export default function OrangeMoneyPayment({ order, autoStart = false }: { order
       <div className="card mb-5 flex items-start gap-3 p-5" role="status">
         <CheckCircle2 size={20} className="mt-0.5 flex-shrink-0 text-green-700" />
         <div>
-          <p className="text-sm font-semibold text-ink">Paiement Orange Money reçu</p>
+          <p className="text-sm font-semibold text-ink">Paiement confirmé</p>
           <p className="mt-0.5 text-sm text-ink/60">Votre commande est confirmée : les boutiques la préparent.</p>
         </div>
       </div>

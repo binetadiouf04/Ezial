@@ -15,15 +15,15 @@ test('phases : payé, en attente, vérification, annulée, hors paiement en lign
   assert.equal(paymentPhase({}, NOW), 'offline');
 });
 
-test('badges : jamais « Payé » sans paiement confirmé', () => {
-  assert.deepEqual(paymentBadge(om({ paymentStatus: 'paid' }), NOW), { label: 'Payé', tone: 'success' });
+test('badges : jamais « Paiement confirmé » sans paiement confirmé', () => {
+  assert.deepEqual(paymentBadge(om({ paymentStatus: 'paid' }), NOW), { label: 'Paiement confirmé', tone: 'success' });
   assert.equal(paymentBadge(om(), NOW).label, 'En attente de paiement');
   assert.equal(paymentBadge(om({ paymentDeadline: '2026-11-20T09:00:00Z' }), NOW).label, 'Vérification du paiement');
   assert.equal(paymentBadge(om({ orderStatus: 'cancelled' }), NOW).label, 'Annulée, paiement non reçu');
-  assert.equal(paymentBadge({ paymentStatus: 'pending' }, NOW).label, 'Paiement non confirmé', 'ancienne commande non payée : pas « Payé »');
-  assert.equal(paymentBadge({ paymentStatus: 'paid' }, NOW).label, 'Payé');
+  assert.equal(paymentBadge({ paymentStatus: 'pending' }, NOW).label, 'Paiement non confirmé', 'ancienne commande non payée : pas « Paiement confirmé »');
+  assert.equal(paymentBadge({ paymentStatus: 'paid' }, NOW).label, 'Paiement confirmé');
   assert.equal(paymentBadge({ paymentStatus: 'refunded' }, NOW).label, 'Remboursé');
-  for (const o of [om(), om({ orderStatus: 'cancelled' }), {}, { paymentStatus: 'pending' }]) assert.notEqual(paymentBadge(o, NOW).label, 'Payé');
+  for (const o of [om(), om({ orderStatus: 'cancelled' }), {}, { paymentStatus: 'pending' }]) assert.notEqual(paymentBadge(o, NOW).label, 'Paiement confirmé');
 });
 
 test('reprise du paiement : seulement s\'il reste au moins une minute', () => {

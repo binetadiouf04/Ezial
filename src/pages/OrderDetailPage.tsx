@@ -90,7 +90,7 @@ export default function OrderDetailPage({ orderId }: { orderId: string }) {
           : <span className={`rounded-full px-3.5 py-1.5 text-xs font-medium ${getOrderStatusColor(order, effectiveStatus)}`}>{getOrderStatusLabel(order, effectiveStatus)}</span>}
       </div>
 
-      {order.paymentRequired && <OrangeMoneyPayment order={order} autoStart />}
+      {order.paymentRequired && <OrangeMoneyPayment order={order} autoStart autoOpen={typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('payer') === '1'} />}
 
       <div className="grid gap-6 lg:grid-cols-[1fr_300px]">
         <div className="space-y-5">
