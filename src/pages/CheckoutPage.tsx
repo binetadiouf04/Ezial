@@ -696,15 +696,6 @@ export default function CheckoutPage() {
                 );
               })}
 
-              {/* ONE consolidated Ezial delivery card */}
-              {hasDeliveryShops && (
-                <div className="flex items-center gap-3 rounded-lg border border-burgundy/25 bg-burgundy/[0.04] px-4 py-3">
-                  <Truck size={18} className="flex-shrink-0 text-burgundy" aria-hidden="true" />
-                  <p className="text-sm font-semibold text-ink">Livraison Ezial <span className="font-normal text-ink/60">· {deliveryFeeText}</span></p>
-                  <button type="button" onClick={() => setInfoSheet('livraison')} className="ml-auto flex-shrink-0 text-xs text-ink/50 underline underline-offset-2">Délais et frais</button>
-                </div>
-              )}
-
               {/* Position de livraison — requise dès qu'une boutique livre */}
               {hasDeliveryShops && (
                 <div className="space-y-3 rounded-lg border border-ink/15 p-4">
@@ -862,6 +853,15 @@ export default function CheckoutPage() {
                     </div>
                   )}
                 </div>
+              )}
+
+              {/* Frais de livraison : une ligne discrète, juste avant de continuer. */}
+              {hasDeliveryShops && (
+                <p className="flex flex-wrap items-center gap-x-1.5 text-xs text-ink/55">
+                  <Truck size={13} className="text-ink/40" aria-hidden="true" />
+                  Livraison Ezial {deliveryFeeText} ·
+                  <button type="button" onClick={() => setInfoSheet('livraison')} className="underline underline-offset-2">Délais et frais</button>
+                </p>
               )}
 
               <div className="grid grid-cols-[auto_1fr] gap-3 pt-1">
