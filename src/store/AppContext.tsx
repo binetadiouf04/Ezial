@@ -1,6 +1,7 @@
 import { normalizeStoredWaist, sameCartLine } from '@/lib/waistMeasure';
 import { createContext, useContext, useEffect, useState, useCallback, type ReactNode } from 'react';
 import { getStaffSpace } from '@/lib/staffSpace';
+import { scrollToTopNow } from '@/lib/scrollTop';
 import { type Product } from '@/data/products';
 import { registerSupabaseShops, type Shop } from '@/data/shops';
 import { fetchActiveCatalogFromSupabase } from '@/lib/supabaseCatalog';
@@ -572,7 +573,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     window.history.pushState({ ezialIdx: currentHistoryIndex() + 1 }, '', r);
     setRoute(r);
     setCategoryDrawerOpen(false);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    scrollToTopNow();
   }, []);
 
   // Relu à chaque rendu : le fournisseur se rend de nouveau à chaque changement de page.

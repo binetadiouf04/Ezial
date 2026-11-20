@@ -45,3 +45,15 @@ Tests : `core.test.ts` (31) et `orange-money.test.ts` (18), lancés par `npm run
 ## Questions encore ouvertes chez Orange
 Algorithme de `X-Sonatel-Signature` ; en-tête `Authorization` sur un callback par requête ; simulation d'un paiement de QR
 en sandbox ; liste blanche d'adresses IP ; procédure de remboursement.
+
+## Test réservé (20 nov. 2026)
+- Fonctions `payment-initiate` (JWT vérifié), `payment-webhook` et `payments-reconcile` (sans JWT, protégées par
+  la clé de callback / le secret partagé) **déployées** ; sans secrets elles répondent 503 / 401 (vérifié).
+- Migration 5 (`orange-money-5-testeurs.sql`) : seul le compte inscrit dans `payment_testers` voit le paiement
+  Orange Money ; interrupteur général toujours éteint.
+- Secrets générés dans le Vault par la personne (`payments_reconcile_secret`, `orange_money_callback_api_key`),
+  recopiés par elle dans les secrets des fonctions (jamais dans la conversation ni dans le dépôt).
+- Code marchand de test : `payments-reconcile?action=sandbox-test-numbers` (mode test uniquement).
+- Limite connue : en mode test, l'application Max It réelle ne peut pas payer un QR de test ; la simulation d'un
+  paiement dépend de ce qu'Orange fournit (question posée). Le vrai paiement de bout en bout se fera en production,
+  sur le seul compte testeur, avec un petit montant, après accord.

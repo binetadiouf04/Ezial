@@ -2,7 +2,8 @@
 insert into auth.users (id) values
   ('00000000-0000-4000-8000-0000000000c1'), ('00000000-0000-4000-8000-0000000000c2'),
   ('00000000-0000-4000-8000-0000000000d1'), ('00000000-0000-4000-8000-0000000000d2'),
-  ('00000000-0000-4000-8000-0000000000a1');
+  ('00000000-0000-4000-8000-0000000000a1'),
+  ('fb97d8f8-7551-462e-8f40-23ea3bd407be');   -- identifiant du compte testeur inscrit par la migration 5
 insert into public.profiles (id, role) values
   ('00000000-0000-4000-8000-0000000000c1', 'customer'), ('00000000-0000-4000-8000-0000000000c2', 'customer'),
   ('00000000-0000-4000-8000-0000000000d1', 'seller'), ('00000000-0000-4000-8000-0000000000d2', 'seller'),
@@ -32,6 +33,7 @@ begin
   truncate public.notifications, public.admin_notifications, public.ezial_events, public.whatsapp_queue, public.finance_audit_log,
            public.security_events, public.payment_events, public.seller_transactions, public.delivery_missions, public.delivery_stops;
   if to_regclass('public.payment_anomalies') is not null then execute 'truncate public.payment_anomalies'; end if;
+  if to_regclass('public.payment_testers') is not null then execute 'delete from public.payment_testers'; end if;
   update public.product_variants set stock = 10;
   update public.payment_settings set collections_enabled = false, payouts_enabled = false;
   if exists (select 1 from information_schema.columns where table_name = 'payment_settings' and column_name = 'orange_money_enabled') then

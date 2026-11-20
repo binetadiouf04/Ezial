@@ -22,11 +22,12 @@
 // (le fournisseur n'a pas de session Supabase ; la sécurité repose sur la
 // signature vérifiée par l'adaptateur.)
 // Secrets : SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY (automatiques),
-//   PAYMENTS_ENVIRONMENT, et les secrets de signature de chaque fournisseur
-//   (lus par les futurs adaptateurs).
+//   PAYMENTS_ENVIRONMENT, ORANGE_MONEY_* ; la clé de callback Orange est lue dans le
+//   coffre Supabase (payments_internal_secret, migration 6).
 import { createClient } from 'npm:@supabase/supabase-js@2';
 import { createAdapters, handleCollectionWebhook, isProvider, isUuid } from '../_shared/payments/core.ts';
 import type { PaymentStatus, Provider, RecordEventInput, WebhookDb } from '../_shared/payments/core.ts';
+import { paymentsEnv } from '../_shared/payments/vault.ts';
 
 const MAX_BODY_BYTES = 64 * 1024;
 
@@ -119,7 +120,7 @@ Deno.serve(async (req) => {
   // de payouts-dispatch suffit et aucun point d'entrée n'est ouvert.
   if (capability !== 'collection') return json({ error: 'Notifications de versement non prises en charge.' }, 503);
 
-  const adapter = createAdapters(Deno.env.toObject()).collection[provider];
+  const adapter = createAdapters(await paymentsEnv(supabase, Deno.env.toObject())).collection[provider];
   if (!adapter.status().ready) return json({ error: 'Paiement en ligne non configuré.' }, 503);
 
   const declared = Number(req.headers.get('content-length') ?? '0');

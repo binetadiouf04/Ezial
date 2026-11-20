@@ -7,22 +7,25 @@
 // Aucune conclusion locale : une commande n'est annulée que par
 // orders_finalize_unpaid, quand toutes ses tentatives sont closes chez Orange.
 //
+// Action « ?action=sandbox-test-numbers » (mode test uniquement) : numéros de test
+// Orange (MERCHANT, CUSTOMER…), pour connaître le code marchand de test.
+//
 // Action ponctuelle « ?action=register-callback » : enregistre chez Orange
 // l'adresse de payment-webhook et la clé ORANGE_MONEY_CALLBACK_API_KEY
 // (Orange la renverra en « Authorization: Basic … » à chaque callback).
 //
 // Déploiement : supabase functions deploy payments-reconcile --no-verify-jwt
 // Secrets :
-//   PAYMENTS_RECONCILE_SECRET — secret partagé (en-tête x-webhook-secret), même
-//                               valeur que le secret Vault « payments_reconcile_secret »
+//   Secret partagé (en-tête x-webhook-secret) : lu dans le coffre Supabase
+//   (« payments_reconcile_secret », migration 6) ; PAYMENTS_RECONCILE_SECRET en secours.
 //   PAYMENTS_ENVIRONMENT, ORANGE_MONEY_* — voir docs/orange-money/
 //   SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY — fournis automatiquement.
 import { createClient } from 'npm:@supabase/supabase-js@2';
 import { createAdapters, reconcileCollections } from '../_shared/payments/core.ts';
 import type { PaymentStatus, ReconcileCandidate, ReconcileDb } from '../_shared/payments/core.ts';
-import { OrangeMoneyCollection, safeEqual } from '../_shared/payments/orange-money.ts';
+import { OrangeMoneyCollection, fetchSandboxTestNumbers, safeEqual } from '../_shared/payments/orange-money.ts';
+import { paymentsEnv, reconcileSecret } from '../_shared/payments/vault.ts';
 
-const RECONCILE_SECRET = Deno.env.get('PAYMENTS_RECONCILE_SECRET') ?? '';
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? '';
 
 const supabase = createClient(SUPABASE_URL, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '', {
@@ -53,13 +56,20 @@ const db: ReconcileDb = {
 
 Deno.serve(async (req) => {
   if (req.method !== 'POST') return json({ error: 'Méthode non autorisée.' }, 405);
-  if (RECONCILE_SECRET.length < 24 || !safeEqual(req.headers.get('x-webhook-secret') ?? '', RECONCILE_SECRET)) {
+  const expected = await reconcileSecret(supabase, Deno.env.get('PAYMENTS_RECONCILE_SECRET'));
+  if (expected.length < 24 || !safeEqual(req.headers.get('x-webhook-secret') ?? '', expected)) {
     return json({ error: 'Non autorisé.' }, 401);
   }
-  const adapter = createAdapters(Deno.env.toObject()).collection.orange_money;
-  if (!adapter.status().ready) return json({ ok: false, result: 'not_configured' }, 503);
-
   const action = new URL(req.url).searchParams.get('action');
+  // Mode test uniquement : numéros de test Orange (dont le code marchand), avant la configuration complète.
+  if (action === 'sandbox-test-numbers') {
+    const res = await fetchSandboxTestNumbers(Deno.env.toObject());
+    return json(res, res.ok ? 200 : 502);
+  }
+
+  const adapter = createAdapters(await paymentsEnv(supabase, Deno.env.toObject())).collection.orange_money;
+  if (!adapter.status().ready) return json({ ok: false, result: 'not_configured', reason: adapter.status().reason }, 503);
+
   try {
     if (action === 'register-callback') {
       const callbackUrl = `${SUPABASE_URL}/functions/v1/payment-webhook?provider=orange_money`;

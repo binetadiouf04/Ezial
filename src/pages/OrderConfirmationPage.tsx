@@ -1,13 +1,9 @@
 import { useState, useEffect } from 'react';
-import { optionsLine } from '@/lib/waistMeasure';
 import { useApp } from '@/store/AppContext';
-import { formatFCFA } from '@/data/products';
-import { fabricSaleModeUnit, formatFabricQuantity } from '@/data/categories';
 import { getShop } from '@/data/shops';
 import { ensureOrderDeliveryCode } from '@/lib/supabaseOrders';
 import { paymentLabels } from '@/data/payments';
 import { CheckCircle2, Truck, Store, MapPin, Smartphone, Clock, KeySquare, AlertTriangle } from 'lucide-react';
-import SmartImage from '@/components/SmartImage';
 import InvoiceCard from '@/components/InvoiceCard';
 import OrangeMoneyPayment from '@/components/OrangeMoneyPayment';
 import PaymentStatusBadge from '@/components/PaymentStatusBadge';
@@ -16,7 +12,7 @@ import { paymentPhase } from '@/lib/orderPayment';
 const paymentIcons: Record<string, typeof Smartphone> = { wave: Smartphone, orange_money: Smartphone };
 
 export default function OrderConfirmationPage({ orderId }: { orderId: string }) {
-  const { orders, navigate, catalogProducts } = useApp();
+  const { orders, navigate } = useApp();
   const order = orders.find((o) => o.id === orderId);
   const [deliveryCode, setDeliveryCode] = useState<string | null>(null);
 
@@ -63,44 +59,8 @@ export default function OrderConfirmationPage({ orderId }: { orderId: string }) 
 
       {order.paymentRequired && <OrangeMoneyPayment order={order} autoStart autoOpen />}
 
-      {/* Product-first items list */}
-      <div className="card p-5 mb-5">
-        <h2 className="text-sm font-semibold text-ink mb-4">Articles</h2>
-        <div className="space-y-4">
-          {order.items.map((item, i) => {
-            // A product archived/removed after this order was placed must
-            // never make its own line disappear from the order the
-            // customer already paid for — falls back to the name
-            // snapshotted at purchase time (item.productName) and a
-            // placeholder image instead of dropping the row.
-            const p = catalogProducts.find((cp) => cp.id === item.productId);
-            const price = item.unitPrice ?? p?.price ?? 0;
-            const shop = getShop(item.shopId);
-            const sf = order.shopFulfillments.find((f) => f.shopId === item.shopId);
-            const isPickup = sf?.type === 'pickup';
-            return (
-              <div key={i} className="flex gap-3">
-                <SmartImage src={p?.thumbnailUrl || p?.images[0] || `${import.meta.env.BASE_URL}ezial-fallback.webp`} alt="" className="h-16 w-14 rounded-lg object-cover flex-shrink-0" />
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-ink line-clamp-1">{p?.name ?? item.productName ?? 'Produit'}</p>
-                  {optionsLine(item.variants, item.waistCm) && (<p className="text-xs text-ink/50 mt-0.5">{optionsLine(item.variants, item.waistCm)}</p>)}
-                  <p className="text-xs text-ink/50">Quantité : {p?.saleMode ? `${formatFabricQuantity(item.quantity)} ${fabricSaleModeUnit[p.saleMode]}` : item.quantity}</p>
-                  <div className="flex items-center gap-2 mt-0.5">
-                    {shop && <p className="text-[11px] text-ink/35">Vendu par {shop.name}</p>}
-                    {isPickup && <span className="text-[11px] text-ink/40 flex items-center gap-0.5"><Store size={10} /> Retrait</span>}
-                  </div>
-                </div>
-                <span className="text-sm font-semibold text-ink flex-shrink-0">{formatFCFA(price * item.quantity)}</span>
-              </div>
-            );
-          })}
-        </div>
-        <div className="border-t border-line mt-4 pt-3 space-y-1.5 text-sm">
-          <div className="flex justify-between"><span className="text-ink/60">Produits</span><span className="font-medium">{formatFCFA(order.subtotal)}</span></div>
-          <div className="flex justify-between"><span className="text-ink/60">Livraison Ezial</span><span className="font-medium">{order.delivery > 0 ? formatFCFA(order.delivery) : 'Gratuit'}</span></div>
-          <div className="border-t border-line pt-1.5 flex justify-between"><span className="font-medium text-ink">Total</span><span className="font-semibold text-ink">{formatFCFA(order.total)}</span></div>
-        </div>
-      </div>
+      {/* Facture en tête : articles et total (pas encore payée : simple récapitulatif, sans facture) */}
+      <InvoiceCard order={order} draft={awaitingOnlinePayment} className="mb-5" />
 
       {/* Delivery info */}
       {hasDelivery && (
@@ -152,13 +112,9 @@ export default function OrderConfirmationPage({ orderId }: { orderId: string }) 
         <div className="flex items-center gap-2 text-sm text-ink/70">
           <PaymentIcon size={16} className="text-ink/40" />
           <span>{paymentLabels[order.payment] ?? order.payment}</span>
-          <span className="text-ink/30">·</span>
-          <span className="font-medium text-ink">{formatFCFA(order.total)}</span>
           <PaymentStatusBadge order={order} className="ml-auto" />
         </div>
       </div>
-
-      {!awaitingOnlinePayment && <InvoiceCard order={order} className="mb-5" />}
 
       <div className="flex flex-col gap-3 sm:flex-row">
         <button onClick={() => navigate(`/suivi/${order.id}`)} className="btn-primary flex-1">Suivre ma commande</button>

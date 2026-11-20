@@ -1,15 +1,11 @@
 import { useEffect, useState } from 'react';
-import { optionsLine } from '@/lib/waistMeasure';
 import { useApp, type DeliveryStepStatus, type PickupStepStatus, type Order } from '@/store/AppContext';
-import { formatFCFA } from '@/data/products';
-import { fabricSaleModeUnit, formatFabricQuantity } from '@/data/categories';
 import { getShop } from '@/data/shops';
 import { ensureOrderDeliveryCode, fetchOrderDeliveryMissionStatus } from '@/lib/supabaseOrders';
 import { DeliveryTimeline, PickupTimeline } from '@/components/OrderTimeline';
 import { deliveryStatusLabels, pickupStepLabels, computeDeliveryStepStatus } from '@/data/orderStatusLabels';
 import { paymentLabels } from '@/data/payments';
 import { Package, Truck, Store, MapPin, Smartphone, Clock, KeySquare, CheckCircle2, AlertTriangle, RotateCcw } from 'lucide-react';
-import SmartImage from '@/components/SmartImage';
 import ClaimModal from '@/components/ClaimModal';
 import InvoiceCard from '@/components/InvoiceCard';
 import OrangeMoneyPayment from '@/components/OrangeMoneyPayment';
@@ -46,7 +42,7 @@ function getOrderStatusColor(order: Order, effectiveStatus: DeliveryStepStatus):
 }
 
 export default function OrderDetailPage({ orderId }: { orderId: string }) {
-  const { orders, navigate, catalogProducts, customerUser } = useApp();
+  const { orders, navigate, customerUser } = useApp();
   const order = orders.find((o) => o.id === orderId);
   const [deliveryCode, setDeliveryCode] = useState<string | null>(null);
   const [missionStatus, setMissionStatus] = useState<string | null>(null);
@@ -94,44 +90,8 @@ export default function OrderDetailPage({ orderId }: { orderId: string }) {
 
       <div className="grid gap-6 lg:grid-cols-[1fr_300px]">
         <div className="space-y-5">
-          {/* Products — product-first */}
-          <div className="card p-5">
-            <h2 className="text-sm font-semibold text-ink mb-4">Articles</h2>
-            <div className="space-y-4">
-              {order.items.map((item, i) => {
-                // Falls back to the name snapshotted at purchase time
-                // (item.productName) instead of dropping the row — a
-                // product archived after this order was placed must never
-                // make its line vanish from the customer's own order history.
-                const p = catalogProducts.find((cp) => cp.id === item.productId);
-                const price = item.unitPrice ?? p?.price ?? 0;
-                const shop = getShop(item.shopId);
-                const sf = order.shopFulfillments.find((f) => f.shopId === item.shopId);
-                const isPickup = sf?.type === 'pickup';
-                return (
-                  <div key={i} className="flex gap-3">
-                    <SmartImage src={p?.thumbnailUrl || p?.images[0] || `${import.meta.env.BASE_URL}ezial-fallback.webp`} alt="" className="h-16 w-14 rounded-lg object-cover flex-shrink-0" />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-ink line-clamp-1">{p?.name ?? item.productName ?? 'Produit'}</p>
-                      {optionsLine(item.variants, item.waistCm) && (<p className="text-xs text-ink/50 mt-0.5">{optionsLine(item.variants, item.waistCm)}</p>)}
-                      <p className="text-xs text-ink/50">Quantité : {p?.saleMode ? `${formatFabricQuantity(item.quantity)} ${fabricSaleModeUnit[p.saleMode]}` : item.quantity}</p>
-                      <div className="flex items-center gap-2 mt-0.5">
-                        {shop && <p className="text-[11px] text-ink/35">Vendu par {shop.name}</p>}
-                        {isPickup && <span className="text-[11px] text-ink/40 flex items-center gap-0.5"><Store size={10} /> Retrait</span>}
-                      </div>
-                    </div>
-                    <span className="text-sm font-semibold text-ink flex-shrink-0">{formatFCFA(price * item.quantity)}</span>
-                  </div>
-                );
-              })}
-            </div>
-            <div className="border-t border-line mt-4 pt-3 space-y-1.5 text-sm">
-              <div className="flex justify-between"><span className="text-ink/60">Produits</span><span className="font-medium">{formatFCFA(order.subtotal)}</span></div>
-              {order.discount > 0 && <div className="flex justify-between text-green-700"><span>Réduction</span><span className="font-medium">-{formatFCFA(order.discount)}</span></div>}
-              <div className="flex justify-between"><span className="text-ink/60">Livraison Ezial</span><span className="font-medium">{order.delivery > 0 ? formatFCFA(order.delivery) : 'Gratuit'}</span></div>
-              <div className="border-t border-line pt-1.5 flex justify-between"><span className="font-medium text-ink">Total</span><span className="font-semibold text-ink">{formatFCFA(order.total)}</span></div>
-            </div>
-          </div>
+          {/* Facture en tête : articles et total (pas encore payée : simple récapitulatif, sans facture) */}
+          <InvoiceCard order={order} draft={awaitingOnlinePayment} />
 
           {/* Delivery code — shown immediately at confirmation, like Uber's
               ride PIN, never gated on how far the delivery has progressed. */}
@@ -235,13 +195,8 @@ export default function OrderDetailPage({ orderId }: { orderId: string }) {
               <Smartphone size={16} className="text-ink/40" />
               <span>{paymentLabels[order.payment] ?? order.payment}</span>
             </div>
-            <div className="flex items-center gap-2">
-              <PaymentStatusBadge order={order} />
-              <span className="text-sm font-semibold text-ink">{formatFCFA(order.total)}</span>
-            </div>
+            <PaymentStatusBadge order={order} />
           </div>
-
-          {!awaitingOnlinePayment && <InvoiceCard order={order} />}
 
           {/* Retours / signalement — jamais bloqués par un délai côté
               interface : le délai légal de 48h n'est qu'une recommandation
