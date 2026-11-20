@@ -83,7 +83,7 @@ export default function OrderConfirmationPage({ orderId }: { orderId: string }) 
               <p>{order.customer.phone}</p>
               {order.customer.instructions && <p className="text-ink/45 italic">« {order.customer.instructions} »</p>}
               {order.preference?.type === 'preferred' && (
-                <p className="flex items-center gap-1.5 text-ink/55"><Clock size={13} /> Préférence : {order.preference.date} · {order.preference.window}</p>
+                <p className="flex items-center gap-1.5 text-ink/55"><Clock size={13} /> Livraison souhaitée : {order.preference.date} · {order.preference.window}</p>
               )}
             </div>
           </div>

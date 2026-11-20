@@ -166,10 +166,8 @@ export default function OrderDetailPage({ orderId }: { orderId: string }) {
               </div>
               {order.preference?.type === 'preferred' && (
                 <div className="border-t border-line pt-3 space-y-1.5">
-                  <p className="text-xs font-semibold text-ink/60">Préférence de livraison</p>
-                  <p className="flex items-center gap-1.5 text-sm text-ink/60"><Clock size={13} className="text-ink/40" /> Date : {order.preference.date}</p>
-                  <p className="flex items-center gap-1.5 text-sm text-ink/60"><Clock size={13} className="text-ink/40" /> Créneau : {order.preference.window}</p>
-                  <p className="text-xs text-ink/40 italic">Nous ferons notre possible pour respecter votre préférence. Le créneau n'est pas garanti.</p>
+                  <p className="text-xs font-semibold text-ink/60">Livraison souhaitée</p>
+                  <p className="flex items-center gap-1.5 text-sm text-ink/60"><Clock size={13} className="text-ink/40" /> {order.preference.date} · {order.preference.window}</p>
                 </div>
               )}
             </div>

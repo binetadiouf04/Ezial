@@ -165,8 +165,7 @@ export default function OrderTrackingPage({ orderId }: { orderId: string }) {
               <div className="flex items-start gap-2 text-sm text-ink/60"><MapPin size={15} className="mt-0.5 text-ink/40" /><span>{order.customer.firstName} {order.customer.lastName}<br />{order.customer.quartier}<br /><Phone size={11} className="inline mr-1" />{order.customer.phone}</span></div>
               {order.preference?.type === 'preferred' && (
                 <div className="border-t border-line pt-2 space-y-1">
-                  <div className="flex items-start gap-2 text-sm text-ink/60"><Clock size={15} className="mt-0.5 text-ink/40" /><span>Préférence : {order.preference.date} · {order.preference.window}</span></div>
-                  <p className="text-xs text-ink/40 italic">Nous ferons notre possible pour respecter votre préférence. Le créneau n'est pas garanti.</p>
+                  <div className="flex items-start gap-2 text-sm text-ink/60"><Clock size={15} className="mt-0.5 text-ink/40" /><span>Livraison souhaitée : {order.preference.date} · {order.preference.window}</span></div>
                 </div>
               )}
             </div>

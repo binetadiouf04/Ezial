@@ -236,7 +236,7 @@ Ezial livre à Dakar. Lorsque votre commande réunit plusieurs boutiques, Ezial 
 - **Délai** : ${DELIVERY.delay}. ${DELIVERY.legalNote}
 - **Adresse** : utilisez votre position actuelle ou recherchez une adresse, puis ajustez le repère sur la carte. Vous pouvez ajouter un point de repère et des instructions pour le livreur.
 - **Frais** : ils sont calculés selon la distance entre la ou les boutiques et votre adresse, et affichés avant la validation de la commande.
-- **Préférence** : vous pouvez indiquer une date et un créneau souhaités. Ezial fait son possible pour les respecter, sans garantie.
+- **Quand être livré** : « Dès que possible », ou un jour et un créneau souhaités. Ezial fait son possible pour les respecter, sans garantie.
 
 ## Retrait en boutique
 

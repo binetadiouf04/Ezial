@@ -829,16 +829,16 @@ export default function CheckoutPage() {
               {/* Delivery preference (only if at least one delivery) */}
               {hasDeliveryShops && (
                 <div className="space-y-3 border-t border-ink/10 pt-5">
-                  <h3 className="flex items-center gap-2 text-[15px] font-semibold text-ink"><Clock size={17} className="text-burgundy" aria-hidden="true" /> Préférence de livraison</h3>
+                  <h3 className="flex items-center gap-2 text-[15px] font-semibold text-ink"><Clock size={17} className="text-burgundy" aria-hidden="true" /> Quand souhaitez-vous être livré ?</h3>
                   <div className="grid gap-2 sm:grid-cols-2">
                     <button onClick={() => setPreference({ type: 'none' })} className={`opt-row items-center ${preference.type === 'none' ? 'opt-row-active' : ''}`}>
                       <Clock size={16} className={preference.type === 'none' ? 'text-burgundy' : 'text-ink/40'} />
-                      <span className="text-sm font-medium text-ink">Sans préférence</span>
+                      <span className="text-sm font-medium text-ink">Dès que possible</span>
                       <Radio active={preference.type === 'none'} />
                     </button>
                     <button onClick={() => setPreference({ type: 'preferred', date: tomorrowISO(), window: deliveryWindows[0] })} className={`opt-row items-center ${preference.type === 'preferred' ? 'opt-row-active' : ''}`}>
                       <Clock size={16} className={preference.type === 'preferred' ? 'text-burgundy' : 'text-ink/40'} />
-                      <span className="text-sm font-medium text-ink">Avec préférence</span>
+                      <span className="text-sm font-medium text-ink">Choisir un jour et un créneau</span>
                       <Radio active={preference.type === 'preferred'} />
                     </button>
                   </div>
@@ -846,11 +846,11 @@ export default function CheckoutPage() {
                     <div className="fade-in space-y-3">
                       <div className="grid gap-3 sm:grid-cols-2">
                         <div>
-                          <label className="co-label">Date souhaitée</label>
+                          <label className="co-label">Jour</label>
                           <input type="date" className="co-input" min={tomorrowISO()} value={preference.date} onChange={(e) => setPreference({ ...preference, date: e.target.value })} />
                         </div>
                         <div>
-                          <label className="co-label">Créneau préféré</label>
+                          <label className="co-label">Créneau</label>
                           <div className="relative">
                             <select className="co-input appearance-none pr-10" value={preference.window} onChange={(e) => setPreference({ ...preference, window: e.target.value })}>
                               {deliveryWindows.map((w) => <option key={w} value={w}>{w}</option>)}
