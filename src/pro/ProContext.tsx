@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, useCallback, useEffect, useMemo, type ReactNode } from 'react';
+import { scrollToTopNow } from '@/lib/scrollTop';
 import type { Role, DeliveryStep, ShopStatus, ProductStatus, ModerationEntry, ModerationTargetType, ModerationAction } from './data';
 import { missions as initialMissions, type Mission, type Product, type Shop, type Driver, type DriverTransaction, type Order, type Transaction } from './data';
 import { shops as initialShops, products as initialProducts, transactions as initialTransactions, driverTransactions as initialDriverTransactions, orders as initialOrders, drivers as initialDrivers, moderationHistory as initialModerationHistory } from './data';
@@ -425,7 +426,7 @@ export function ProProvider({ children }: { children: ReactNode }) {
   const navigate = useCallback((r: Route) => {
     setRoute(r);
     writeProRoute(r);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    scrollToTopNow();
   }, []);
 
   const login = useCallback((r: Role, id: string, n: string, shopInfo?: SellerShopInfo) => {
