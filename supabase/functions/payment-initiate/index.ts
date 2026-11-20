@@ -23,10 +23,12 @@
 //   PAYMENTS_ENVIRONMENT  — « sandbox » (défaut) ou « production »
 //   PAYMENTS_RETURN_URL   — adresse de retour après paiement ; « {orderNumber} » est remplacé
 //   PAYMENTS_CANCEL_URL   — adresse de retour après abandon ; idem
-//   (secrets propres à chaque fournisseur : lus par les futurs adaptateurs)
+//   ORANGE_MONEY_* — voir docs/orange-money/ ; la clé de callback est lue dans le coffre
+//   Supabase (payments_internal_secret, migration 6), la variable ne sert que de secours.
 import { createClient } from 'npm:@supabase/supabase-js@2';
 import { UserFacingError, createAdapters, initiatePayment, isProvider, isUuid } from '../_shared/payments/core.ts';
 import type { CheckoutData, InitiateDb, InitiateErrorCode, PaymentSettings, Provider, TransactionRow } from '../_shared/payments/core.ts';
+import { paymentsEnv } from '../_shared/payments/vault.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? '';
 const ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY') ?? '';
@@ -136,7 +138,7 @@ Deno.serve(async (req) => {
       if (!testerError && tester) effectiveSettings = { ...effectiveSettings, orange_money_enabled: true };
     }
 
-    const adapters = createAdapters(Deno.env.toObject());
+    const adapters = createAdapters(await paymentsEnv(admin, Deno.env.toObject()));
     const result = await initiatePayment(
       db,
       adapters.collection[provider],

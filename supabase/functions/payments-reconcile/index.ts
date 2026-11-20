@@ -16,16 +16,16 @@
 //
 // Déploiement : supabase functions deploy payments-reconcile --no-verify-jwt
 // Secrets :
-//   PAYMENTS_RECONCILE_SECRET — secret partagé (en-tête x-webhook-secret), même
-//                               valeur que le secret Vault « payments_reconcile_secret »
+//   Secret partagé (en-tête x-webhook-secret) : lu dans le coffre Supabase
+//   (« payments_reconcile_secret », migration 6) ; PAYMENTS_RECONCILE_SECRET en secours.
 //   PAYMENTS_ENVIRONMENT, ORANGE_MONEY_* — voir docs/orange-money/
 //   SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY — fournis automatiquement.
 import { createClient } from 'npm:@supabase/supabase-js@2';
 import { createAdapters, reconcileCollections } from '../_shared/payments/core.ts';
 import type { PaymentStatus, ReconcileCandidate, ReconcileDb } from '../_shared/payments/core.ts';
 import { OrangeMoneyCollection, fetchSandboxTestNumbers, safeEqual } from '../_shared/payments/orange-money.ts';
+import { paymentsEnv, reconcileSecret } from '../_shared/payments/vault.ts';
 
-const RECONCILE_SECRET = Deno.env.get('PAYMENTS_RECONCILE_SECRET') ?? '';
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? '';
 
 const supabase = createClient(SUPABASE_URL, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '', {
@@ -56,7 +56,8 @@ const db: ReconcileDb = {
 
 Deno.serve(async (req) => {
   if (req.method !== 'POST') return json({ error: 'Méthode non autorisée.' }, 405);
-  if (RECONCILE_SECRET.length < 24 || !safeEqual(req.headers.get('x-webhook-secret') ?? '', RECONCILE_SECRET)) {
+  const expected = await reconcileSecret(supabase, Deno.env.get('PAYMENTS_RECONCILE_SECRET'));
+  if (expected.length < 24 || !safeEqual(req.headers.get('x-webhook-secret') ?? '', expected)) {
     return json({ error: 'Non autorisé.' }, 401);
   }
   const action = new URL(req.url).searchParams.get('action');
@@ -66,7 +67,7 @@ Deno.serve(async (req) => {
     return json(res, res.ok ? 200 : 502);
   }
 
-  const adapter = createAdapters(Deno.env.toObject()).collection.orange_money;
+  const adapter = createAdapters(await paymentsEnv(supabase, Deno.env.toObject())).collection.orange_money;
   if (!adapter.status().ready) return json({ ok: false, result: 'not_configured', reason: adapter.status().reason }, 503);
 
   try {
