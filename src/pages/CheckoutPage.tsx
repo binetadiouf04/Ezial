@@ -515,8 +515,8 @@ export default function CheckoutPage() {
   const pickupShops = shopsInCart.filter((s) => getShopFulfillment(s.id) === 'pickup');
 
   // --- Présentation seulement : le récapitulatif est construit une fois et
-  // réutilisé (colonne latérale sur ordinateur, bloc repliable sur mobile aux
-  // étapes 1 et 2, bloc complet à l'étape 3 sur mobile). Mêmes données, mêmes
+  // réutilisé (colonne latérale sur ordinateur, bloc complet à l'étape Paiement
+  // sur mobile ; rien en haut des étapes Coordonnées et Livraison). Mêmes données, mêmes
   // montants, mêmes libellés que précédemment.
   const summaryLines = cart.map((item, i) => {
     const p = catalogProducts.find((cp) => cp.id === item.productId);
@@ -539,8 +539,6 @@ export default function CheckoutPage() {
       </div>
     );
   });
-
-  const firstSummaryProduct = catalogProducts.find((cp) => cp.id === cart[0]?.productId);
 
   const summaryTotals = (
     <div className="space-y-2 text-sm">
@@ -573,23 +571,6 @@ export default function CheckoutPage() {
       </button>
       <h1 className="mb-6 font-display text-[30px] font-medium leading-tight text-ink lg:text-4xl">Finaliser ma commande</h1>
       <div className="mx-auto mb-6 max-w-sm sm:mb-8 lg:mx-0 lg:max-w-md"><CheckoutSteps steps={steps} current={step} /></div>
-
-      {/* Mobile, étapes 1 et 2 : le récapitulatif reste à portée, replié. */}
-      {step !== 2 && (
-        <details className="group mb-6 rounded-lg border border-ink/15 lg:hidden">
-          <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-3.5 py-3 text-ink [&::-webkit-details-marker]:hidden">
-            <span className="flex min-w-0 items-center gap-3">
-              {firstSummaryProduct && <SmartImage src={firstSummaryProduct.thumbnailUrl || firstSummaryProduct.images[0]} alt="" className="h-12 w-10 flex-shrink-0 rounded-md object-cover" />}
-              <span className="min-w-0 normal-case tracking-normal"><span className="block text-sm font-semibold text-ink">Votre commande</span><span className="block text-xs font-normal text-ink/55">{cart.length} article{cart.length > 1 ? 's' : ''}</span></span>
-            </span>
-            <span className="flex flex-shrink-0 items-center gap-2"><span className="text-sm font-bold text-burgundy">{formatFCFA(estimatedTotal)}</span><ChevronDown size={15} className="transition-transform group-open:rotate-180" aria-hidden="true" /></span>
-          </summary>
-          <div className="space-y-4 border-t border-ink/10 px-4 py-4">
-            <div className="space-y-4">{summaryLines}</div>
-            {summaryTotals}
-          </div>
-        </details>
-      )}
 
       <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_340px] lg:gap-14">
         <div className="mx-auto w-full max-w-xl lg:mx-0 lg:max-w-none">
