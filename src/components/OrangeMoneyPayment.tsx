@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { AlertTriangle, CheckCircle2, Clock, Loader2, RefreshCw } from 'lucide-react';
+import { AlertTriangle, Clock, Loader2, RefreshCw } from 'lucide-react';
 import { useApp, type Order } from '@/store/AppContext';
 import { formatFCFA } from '@/data/products';
 import { canResumePayment, formatRemaining, isHandheld, paymentPhase } from '@/lib/orderPayment';
@@ -111,17 +111,8 @@ export default function OrangeMoneyPayment({ order, autoStart = false, autoOpen 
 
   if (!orderId || phase === 'offline') return null;
 
-  if (phase === 'paid') {
-    return (
-      <div className="card mb-5 flex items-start gap-3 p-5" role="status">
-        <CheckCircle2 size={20} className="mt-0.5 flex-shrink-0 text-green-700" />
-        <div>
-          <p className="text-sm font-semibold text-ink">Paiement confirmé</p>
-          <p className="mt-0.5 text-sm text-ink/60">Votre commande est confirmée : les boutiques la préparent.</p>
-        </div>
-      </div>
-    );
-  }
+  // Payé : la page l'annonce elle-même (titre « c'est confirmé », statut), pas de doublon ici.
+  if (phase === 'paid') return null;
 
   if (phase === 'cancelled') {
     return (

@@ -1,54 +1,61 @@
-import { Check, Circle } from 'lucide-react';
+import { Check } from 'lucide-react';
 import type { DeliveryStepStatus, PickupStepStatus } from '@/store/AppContext';
-import { deliveryStatusLabels, pickupStepLabels } from '@/data/orderStatusLabels';
 
-const deliverySteps: { id: DeliveryStepStatus; label: string }[] = [
-  { id: 'confirmed', label: deliveryStatusLabels.confirmed },
-  { id: 'preparing', label: deliveryStatusLabels.preparing },
-  { id: 'ready', label: deliveryStatusLabels.ready },
-  { id: 'delivering', label: deliveryStatusLabels.delivering },
-  { id: 'delivered', label: deliveryStatusLabels.delivered },
+// Frise « Où en est ma commande ? » : étapes réelles de la commande (préparation par la
+// boutique, livreur Ezial, remise contre le code), une phrase simple sous l'étape en cours.
+// Aucun délai ni promesse non vérifiée.
+
+interface Step { id: string; label: string; hint: string }
+
+const deliverySteps: Step[] = [
+  { id: 'confirmed', label: 'Commande reçue', hint: 'La boutique a bien reçu votre commande.' },
+  { id: 'preparing', label: 'En préparation', hint: 'La boutique prépare vos articles.' },
+  { id: 'ready', label: 'Prête', hint: 'Un livreur Ezial vient la récupérer.' },
+  { id: 'delivering', label: 'En route', hint: 'Le livreur vous l’apporte.' },
+  { id: 'delivered', label: 'Livrée', hint: 'Votre colis vous a été remis.' },
 ];
 
-const pickupSteps: { id: PickupStepStatus; label: string }[] = [
-  { id: 'preparing', label: pickupStepLabels.preparing },
-  { id: 'ready_for_pickup', label: pickupStepLabels.ready_for_pickup },
-  { id: 'picked_up', label: pickupStepLabels.picked_up },
+const pickupSteps: Step[] = [
+  { id: 'preparing', label: 'En préparation', hint: 'La boutique prépare vos articles.' },
+  { id: 'ready_for_pickup', label: 'Prête à retirer', hint: 'Présentez votre code de retrait à la boutique.' },
+  { id: 'picked_up', label: 'Récupérée', hint: 'Vous avez récupéré votre commande.' },
 ];
-
-interface Step { id: string; label: string; }
 
 function Timeline({ steps, currentIdx }: { steps: Step[]; currentIdx: number }) {
   return (
-    <div className="space-y-1">
+    <ol className="space-y-0">
       {steps.map((step, i) => {
-        const done = i < currentIdx;
+        const done = i < currentIdx || (i === currentIdx && i === steps.length - 1);
         const active = i === currentIdx;
+        const last = i === steps.length - 1;
         return (
-          <div key={step.id} className="flex items-start gap-3.5">
+          <li key={step.id} className="flex gap-3" aria-current={active ? 'step' : undefined}>
             <div className="flex flex-col items-center">
-              <div className={`flex h-9 w-9 items-center justify-center rounded-full border-2 transition-colors ${done ? 'border-burgundy bg-burgundy/10 text-burgundy' : active ? 'border-burgundy bg-burgundy text-white' : 'border-line text-ink/30'}`}>
-                {done ? <Check size={16} strokeWidth={3} /> : active ? <span className="h-2.5 w-2.5 rounded-full bg-white" /> : <Circle size={14} />}
-              </div>
-              {i < steps.length - 1 && <div className={`h-8 w-0.5 ${done ? 'bg-burgundy' : 'bg-line'}`} />}
+              <span className={`flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full border-2 ${done ? 'border-burgundy bg-burgundy text-white' : active ? 'border-burgundy bg-white' : 'border-line bg-white'}`}>
+                {done ? <Check size={13} strokeWidth={3} /> : active ? <span className="h-2 w-2 rounded-full bg-burgundy" /> : null}
+              </span>
+              {!last && <span className={`w-0.5 flex-1 ${i < currentIdx ? 'bg-burgundy' : 'bg-line'}`} style={{ minHeight: 18 }} />}
             </div>
-            <div className="pt-1.5 pb-8"><p className={`text-sm font-medium ${active ? 'text-burgundy' : done ? 'text-ink' : 'text-ink/40'}`}>{step.label}</p></div>
-          </div>
+            <div className={last ? 'pb-0' : 'pb-4'}>
+              <p className={`text-sm leading-6 ${active ? 'font-semibold text-ink' : done ? 'text-ink/70' : 'text-ink/40'}`}>{step.label}</p>
+              {active && <p className="text-sm text-ink/60">{step.hint}</p>}
+            </div>
+          </li>
         );
       })}
-    </div>
+    </ol>
   );
 }
 
 export function DeliveryTimeline({ status }: { status: DeliveryStepStatus }) {
-  // Map picked_up to delivering since the customer-facing flow no longer has a separate pickup step
+  // Le client ne voit pas d'étape « récupérée par le livreur » distincte : c'est « En route ».
   const mappedStatus = status === 'picked_up' ? 'delivering' : status;
-  const currentIdx = deliverySteps.findIndex((s) => s.id === mappedStatus);
+  const currentIdx = Math.max(0, deliverySteps.findIndex((s) => s.id === mappedStatus));
   return <Timeline steps={deliverySteps} currentIdx={currentIdx} />;
 }
 
 export function PickupTimeline({ status }: { status: PickupStepStatus }) {
-  const currentIdx = pickupSteps.findIndex((s) => s.id === status);
+  const currentIdx = Math.max(0, pickupSteps.findIndex((s) => s.id === status));
   return <Timeline steps={pickupSteps} currentIdx={currentIdx} />;
 }
 

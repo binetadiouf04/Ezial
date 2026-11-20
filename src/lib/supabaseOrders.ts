@@ -162,8 +162,10 @@ export async function recordOrderCgvConsent(orderId: string): Promise<{ error?: 
 // null for a pickup-only order (no delivery leg to protect with a code).
 export async function ensureOrderDeliveryCode(orderId: string): Promise<string | null> {
   const { data, error } = await supabase.rpc('ensure_order_delivery_code', { p_order_id: orderId });
-  if (error || !data) return null;
-  return data as string;
+  if (error || data === null || data === undefined) return null;
+  // Texte attendu ; tout autre format (réponse inattendue) n'est jamais affiché comme un code.
+  if (typeof data === 'number') return String(data);
+  return typeof data === 'string' && data.trim() ? data.trim() : null;
 }
 
 // orders.status is never updated after create_order() writes it once — the

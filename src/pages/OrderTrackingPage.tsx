@@ -9,6 +9,7 @@ import { pickupStepLabels, computeDeliveryStepStatus } from '@/data/orderStatusL
 import { paymentLabels } from '@/data/payments';
 import { Phone, MapPin, Package, Store, Check, Clock, KeySquare, Truck, Smartphone } from 'lucide-react';
 import SmartImage from '@/components/SmartImage';
+import { DeliveryCodeCard } from '@/components/OrderParts';
 import PaymentStatusBadge from '@/components/PaymentStatusBadge';
 
 const shopPrepLabels: Record<string, string> = { preparing: 'En préparation', ready: 'Prête', collected: 'Prête' };
@@ -24,11 +25,13 @@ export default function OrderTrackingPage({ orderId }: { orderId: string }) {
   // immediately, never gated on delivery progress. orders.status is never
   // updated past its initial value, so the real progress comes from the
   // delivery mission instead (see computeDeliveryStepStatus).
+  // Pas de code de livraison tant que le paiement en ligne n'est pas confirmé, ni pour une commande annulée.
+  const noCode = (!!order?.paymentRequired && order.paymentStatus !== 'paid') || order?.orderStatus === 'cancelled';
   useEffect(() => {
     if (!order?.supabaseOrderId) return;
-    void ensureOrderDeliveryCode(order.supabaseOrderId).then(setDeliveryCode);
+    if (!noCode) void ensureOrderDeliveryCode(order.supabaseOrderId).then(setDeliveryCode);
     void fetchOrderDeliveryMissionStatus(order.supabaseOrderId).then(setMissionStatus);
-  }, [order?.supabaseOrderId]);
+  }, [order?.supabaseOrderId, noCode]);
 
   if (!order) {
     return <div className="container-pro py-20 text-center"><Package size={42} className="mx-auto text-ink/20" /><p className="mt-4 text-sm text-ink/60">Commande introuvable.</p><button onClick={() => navigate('/profil')} className="btn-outline mt-6">Mes commandes</button></div>;
@@ -48,16 +51,7 @@ export default function OrderTrackingPage({ orderId }: { orderId: string }) {
       <div className="grid gap-6 lg:grid-cols-[1fr_300px]">
         <div className="space-y-5">
           {/* Overall delivery timeline (if any delivery) */}
-          {hasDelivery && deliveryCode && (
-            <div className="rounded-2xl p-6 text-center" style={{ background: 'linear-gradient(135deg, rgba(128,23,37,0.06), rgba(128,23,37,0.12))' }}>
-              <div className="flex items-center justify-center gap-2 mb-2">
-                <KeySquare size={18} className="text-burgundy" />
-                <p className="text-sm font-semibold uppercase tracking-wider text-burgundy">Votre code de livraison</p>
-              </div>
-              <p className="font-mono text-5xl font-bold tracking-[0.3em] text-burgundy">{deliveryCode}</p>
-              <p className="mt-3 text-sm font-medium text-ink/70">Communiquez ce code au livreur uniquement au moment où il vous remet votre colis.</p>
-            </div>
-          )}
+          {hasDelivery && deliveryCode && <DeliveryCodeCard code={deliveryCode} />}
 
           {hasDelivery && (
             <div className="card p-6">
