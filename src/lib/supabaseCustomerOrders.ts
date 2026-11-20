@@ -1,5 +1,6 @@
 import { supabase } from './supabaseClient';
 import { normalizeStoredWaist } from '@/lib/waistMeasure';
+import { splitDeliveryNotes } from '@/lib/recentDeliveryPlaces';
 import type { Order, ShopFulfillment, DeliveryStepStatus, ShopPrepStatus, PickupStepStatus } from '@/store/AppContext';
 
 // Real order history for "Mes commandes" — orders.customer_id = auth.uid()
@@ -24,6 +25,7 @@ interface OrderRow {
   phone?: string;
   neighborhood?: string;
   delivery_notes?: string;
+  delivery_address?: string | null;
   preferred_delivery_date?: string | null;
   preferred_delivery_slot?: string | null;
   payment_status?: string;
@@ -105,6 +107,7 @@ export async function fetchCustomerOrders(customerId: string): Promise<Order[]> 
     const orderItems = items.filter((it) => orderShopIdsForOrder.has(it.order_shop_id));
     const shopIdByOrderShopId = new Map(shopsForOrder.map((s) => [s.id, s.shop_id]));
 
+    const notes = splitDeliveryNotes(o.delivery_notes);
     return {
       id: o.order_number,
       supabaseOrderId: o.id,
@@ -114,7 +117,10 @@ export async function fetchCustomerOrders(customerId: string): Promise<Order[]> 
         lastName: o.last_name ?? '',
         phone: o.phone ?? '',
         quartier: o.neighborhood ?? '',
-        instructions: o.delivery_notes ?? undefined,
+        // « Point de repère : X. instructions » (format écrit à la commande) → deux champs.
+        landmark: notes.landmark || undefined,
+        instructions: notes.instructions || undefined,
+        address: typeof o.delivery_address === 'string' && o.delivery_address.trim() ? o.delivery_address.trim() : undefined,
       },
       items: orderItems.map((it) => ({
         productId: it.product_id,

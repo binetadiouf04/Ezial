@@ -94,7 +94,7 @@ export interface Order {
   // (e.g. re-fetching the order) without another shape change.
   supabaseOrderId?: string;
   date: string;
-  customer: { firstName: string; lastName: string; phone: string; quartier: string; landmark?: string; instructions?: string };
+  customer: { firstName: string; lastName: string; phone: string; quartier: string; landmark?: string; instructions?: string; address?: string };
   items: CartItem[];
   subtotal: number;
   // Amount already deducted from `subtotal` (per-item promo + promo code

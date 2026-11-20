@@ -9,8 +9,14 @@ import InvoiceButton from '@/components/InvoiceButton';
 // même numéro que le PDF (voir src/lib/invoice.ts) : rien n'est recalculé ni
 // inventé ici. Le PDF se télécharge depuis le bouton en bas de la carte.
 // draft : commande pas encore payée → « Votre commande », sans facture à télécharger.
-export default function InvoiceCard({ order, className = '', draft = false }: { order: Order; className?: string; draft?: boolean }) {
+// showDelivery : adresse de livraison sous le total (la page n'a alors pas de bloc « Livraison à » séparé).
+export default function InvoiceCard({ order, className = '', draft = false, showDelivery = false }: { order: Order; className?: string; draft?: boolean; showDelivery?: boolean }) {
   const invoice = useBuildInvoice()(order);
+  const c = order.customer;
+  const deliveryPlace = [c.address || c.quartier, c.landmark ? `repère : ${c.landmark}` : ''].filter(Boolean).join(' · ');
+  const deliveryWhen = order.preference?.type === 'preferred' && order.preference.date
+    ? `${order.preference.date}${order.preference.window ? ` · ${order.preference.window}` : ''}`
+    : 'dès que possible';
   const date = new Date(invoice.date).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
   const hasSeveralShops = invoice.groups.length > 1;
 
@@ -64,10 +70,22 @@ export default function InvoiceCard({ order, className = '', draft = false }: { 
         </div>
       </dl>
 
+      {showDelivery && (deliveryPlace || c.instructions) && (
+        <div className="mt-4 rounded-xl bg-cream/60 px-4 py-3 text-sm">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-ink/55">Livraison</p>
+          {deliveryPlace && <p className="mt-1 text-ink">{deliveryPlace}</p>}
+          {c.instructions && <p className="text-ink/60">« {c.instructions} »</p>}
+          <p className="text-ink/60">Souhaitée : {deliveryWhen}</p>
+        </div>
+      )}
+
       {!draft && (
         <>
           <div className="mt-4 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 text-xs text-ink/60">
-            <p>Facturé à {invoice.buyer.name} · {invoice.paymentLabel}</p>
+            <p>
+              Facturé à {invoice.buyer.name} · {invoice.paymentLabel}
+              {order.paymentStatus === 'paid' && <span className="font-medium text-green-700"> · Paiement confirmé</span>}
+            </p>
             {invoice.vatNote && <p>{invoice.vatNote}</p>}
           </div>
 
