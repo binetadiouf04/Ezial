@@ -18,6 +18,7 @@ import PhoneField from '@/components/PhoneField';
 import CustomerAuthPanel from '@/components/CustomerAuthPanel';
 import { Check, Truck, Store, Smartphone, Clock, Loader2, AlertCircle, AlertTriangle, MapPin, Navigation, Search, ArrowLeft, Gift, UserCheck, ChevronDown, Wallet, FileText, Lock } from 'lucide-react';
 import SmartImage from '@/components/SmartImage';
+import { scrollToTopNow } from '@/lib/scrollTop';
 
 const InfoSheet = lazy(() => import('@/components/info/InfoSheet'));
 
@@ -109,6 +110,9 @@ type LocationMode = 'gps' | 'manual';
 export default function CheckoutPage() {
   const { cart, cartSubtotal, clearCart, navigate, addOrder, catalogProducts, customerUser, authLoading } = useApp();
   const [step, setStep] = useState(0);
+  // Chaque étape (Coordonnées → Livraison → Paiement) s'ouvre en haut de page : sans cela, on restait
+  // en bas (là où se trouve le bouton « Continuer »), sur le pied de page, surtout sur iPhone.
+  useEffect(() => { scrollToTopNow(); }, [step]);
   const [form, setForm] = useState<CheckoutForm>(() => ({ firstName: '', lastName: '', phone: '', email: '', quartier: 'Plateau', landmark: '', instructions: '', ...loadDraftForm() }));
   const [preference, setPreference] = useState<DeliveryPreference>({ type: 'none' });
   const [payment, setPayment] = useState('wave');
@@ -120,8 +124,8 @@ export default function CheckoutPage() {
   // ever means "j'ai lu et j'accepte les CGV", unchecked by default, and
   // the version + timestamp are recorded server-side via record_order_cgv_consent()
   // right after the order itself is created.
-  // Les conditions générales s'ouvrent dans une fenêtre, sans quitter le paiement.
-  const [cgvOpen, setCgvOpen] = useState(false);
+  // Conditions générales et page d'aide « Livraison » : ouvertes dans une fenêtre, sans quitter la commande.
+  const [infoSheet, setInfoSheet] = useState<string | null>(null);
   const [location, setLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [locationStatus, setLocationStatus] = useState<LocationStatus>('idle');
   const [locationMode, setLocationMode] = useState<LocationMode>('gps');
@@ -276,8 +280,8 @@ export default function CheckoutPage() {
   const deliveryFeeText = !hasDeliveryShops
     ? 'Gratuit'
     : deliveryFeeKnown
-      ? `Livraison estimée : ${formatFCFA(effectiveDeliveryFeeEstimate)}`
-      : `Livraison à partir de ${formatFCFA(DELIVERY_FEE_FLOOR)}`;
+      ? `environ ${formatFCFA(effectiveDeliveryFeeEstimate)}`
+      : `à partir de ${formatFCFA(DELIVERY_FEE_FLOOR)}`;
   const estimatedDeliveryFee = hasDeliveryShops ? (deliveryFeeKnown ? effectiveDeliveryFeeEstimate : DELIVERY_FEE_FLOOR) : 0;
   const estimatedGiftWrapFee = giftWrap ? GIFT_WRAP_FEE : 0;
   const promoDiscount = appliedPromo?.discountAmount ?? 0;
@@ -548,7 +552,6 @@ export default function CheckoutPage() {
         <span className="text-sm font-semibold text-ink">{hasDeliveryShops && !deliveryFeeKnown ? 'Total à partir de' : 'Total estimé'}</span>
         <span className="text-lg font-bold leading-none text-burgundy">{formatFCFA(estimatedTotal)}</span>
       </div>
-      {hasDeliveryShops && <p className="text-[11px] leading-relaxed text-ink/45">Le montant exact de la livraison est calculé à la validation et confirmé sur votre reçu.</p>}
       {isGift && (
         <div className="flex items-start gap-1.5 border-t border-ink/10 pt-3 text-xs text-ink/60">
           <Gift size={13} className="mt-0.5 flex-shrink-0 text-burgundy" aria-hidden="true" />
@@ -642,7 +645,6 @@ export default function CheckoutPage() {
 
                 {isGift && (
                   <div className="fade-in space-y-4 rounded-lg border border-ink/15 bg-cream/50 p-4">
-                    <p className="text-xs leading-relaxed text-ink/55">Ces informations concernent le destinataire — elles remplacent les vôtres pour la livraison de cette commande.</p>
                     <div>
                       <label className="co-label">Nom du destinataire</label>
                       <input className="co-input" value={giftRecipientName} onChange={(e) => { setGiftRecipientName(e.target.value); setErrors((prev) => { const next = { ...prev }; delete next.giftRecipientName; return next; }); }} />
@@ -695,7 +697,7 @@ export default function CheckoutPage() {
                     <div className="space-y-2">
                       <button onClick={() => setShopFulfillments({ ...shopFulfillments, [shop.id]: 'delivery' })} className={`opt-row ${current === 'delivery' ? 'opt-row-active' : ''}`}>
                         <Truck size={17} className={`mt-px flex-shrink-0 ${current === 'delivery' ? 'text-burgundy' : 'text-ink/40'}`} />
-                        <div><p className="text-sm font-medium text-ink">Livraison</p><p className="text-xs text-ink/55">Dakar sous 4–48 h</p></div>
+                        <p className="text-sm font-medium text-ink">Livraison</p>
                         <Radio active={current === 'delivery'} />
                       </button>
                       {shop.pickupEnabled && (
@@ -709,26 +711,16 @@ export default function CheckoutPage() {
                         </button>
                       )}
                     </div>
-                    {current === 'pickup' && (
-                      <div className="fade-in rounded-lg bg-cream/60 p-3">
-                        <p className="text-xs leading-relaxed text-ink/60">Vous pourrez récupérer votre commande dès qu'elle sera marquée prête.</p>
-                      </div>
-                    )}
                   </div>
                 );
               })}
 
               {/* ONE consolidated Ezial delivery card */}
               {hasDeliveryShops && (
-                <div className="rounded-lg border border-burgundy/25 bg-burgundy/[0.04] p-4">
-                  <div className="flex items-center gap-3">
-                    <Truck size={19} className="flex-shrink-0 text-burgundy" aria-hidden="true" />
-                    <div>
-                      <p className="text-sm font-semibold text-ink">Livraison Ezial</p>
-                      <p className="text-xs text-ink/60">Dakar sous 4–48 h · {deliveryFeeText}</p>
-                    </div>
-                  </div>
-                  <p className="mt-2.5 text-xs leading-relaxed text-ink/50">Ezial regroupe vos articles des différentes boutiques en une seule livraison vers votre adresse. Le frais exact est calculé à la validation, selon la distance réelle.</p>
+                <div className="flex items-center gap-3 rounded-lg border border-burgundy/25 bg-burgundy/[0.04] px-4 py-3">
+                  <Truck size={18} className="flex-shrink-0 text-burgundy" aria-hidden="true" />
+                  <p className="text-sm font-semibold text-ink">Livraison Ezial <span className="font-normal text-ink/60">· {deliveryFeeText}</span></p>
+                  <button type="button" onClick={() => setInfoSheet('livraison')} className="ml-auto flex-shrink-0 text-xs text-ink/50 underline underline-offset-2">Délais et frais</button>
                 </div>
               )}
 
@@ -736,14 +728,8 @@ export default function CheckoutPage() {
               {hasDeliveryShops && (
                 <div className="space-y-3 rounded-lg border border-ink/15 p-4">
                   <h3 className="flex items-center gap-1.5 text-sm font-semibold text-ink"><MapPin size={16} className="text-burgundy" /> Position de livraison</h3>
-                  <p className="text-xs leading-relaxed text-ink/65">
-                    Cette position est utilisée pour calculer vos frais de livraison.
-                  </p>
-
-                  {location ? (
-                    <p className="flex items-center gap-1.5 text-sm font-medium text-green-700"><Check size={15} /> Position de livraison définie</p>
-                  ) : (
-                    <p className="flex items-center gap-1.5 text-sm font-medium text-amber-700"><AlertTriangle size={15} /> Position de livraison non définie</p>
+                  {!location && (
+                    <p className="flex items-center gap-1.5 text-sm font-medium text-amber-700"><AlertTriangle size={15} /> Position non définie</p>
                   )}
 
                   {/* Mode toggle */}
@@ -773,10 +759,10 @@ export default function CheckoutPage() {
                         </button>
                       )}
                       {locationStatus === 'denied' && (
-                        <p className="flex items-start gap-1.5 text-xs text-burgundy"><AlertCircle size={13} className="mt-0.5 flex-shrink-0" /> Accès à la position refusé. Autorisez la géolocalisation dans les réglages de votre navigateur, ou choisissez le retrait en boutique si disponible.</p>
+                        <p className="flex items-start gap-1.5 text-xs text-burgundy"><AlertCircle size={13} className="mt-0.5 flex-shrink-0" /> Position refusée : recherchez plutôt votre adresse.</p>
                       )}
                       {locationStatus === 'unsupported' && (
-                        <p className="flex items-start gap-1.5 text-xs text-burgundy"><AlertCircle size={13} className="mt-0.5 flex-shrink-0" /> Votre navigateur ne prend pas en charge la géolocalisation. Choisissez le retrait en boutique si disponible.</p>
+                        <p className="flex items-start gap-1.5 text-xs text-burgundy"><AlertCircle size={13} className="mt-0.5 flex-shrink-0" /> Position indisponible : recherchez plutôt votre adresse.</p>
                       )}
                     </div>
                   )}
@@ -784,7 +770,7 @@ export default function CheckoutPage() {
                   {locationMode === 'manual' && (
                     <div className="space-y-3 rounded-lg border border-ink/15 p-3.5">
                       <div>
-                        <label className="co-label">Rechercher une adresse ou un lieu</label>
+                        <label className="co-label">Adresse ou lieu</label>
                         <div className="relative">
                           <input
                             type="text"
@@ -824,14 +810,13 @@ export default function CheckoutPage() {
                             ) : selectedLabel ? (
                               <p className="mt-0.5 flex items-start gap-1.5 text-sm text-ink/75"><MapPin size={14} className="mt-0.5 flex-shrink-0 text-burgundy" /> {selectedLabel}</p>
                             ) : manualAdjusted ? (
-                              <p className="mt-0.5 text-xs text-ink/60">Adresse précise non trouvée pour ce point — la position exacte reste enregistrée. Ajoutez un point de repère si besoin, juste en dessous.</p>
+                              <p className="mt-0.5 text-xs text-ink/60">Position enregistrée sur la carte.</p>
                             ) : null}
                           </div>
                         </div>
                       )}
 
                       <GoogleLocationPickerMap position={location} onChange={handleMapPick} />
-                      <p className="text-xs leading-relaxed text-ink/45">Cliquez sur la carte ou faites glisser le repère pour préciser l'emplacement exact de livraison. Vous pouvez rechercher une autre adresse à tout moment.</p>
                     </div>
                   )}
                 </div>
@@ -844,7 +829,7 @@ export default function CheckoutPage() {
                     <input className="co-input" placeholder="Ex: près de la pharmacie, en face de..." value={form.landmark} onChange={(e) => setForm({ ...form, landmark: e.target.value })} />
                   </div>
                   <div>
-                    <label className="co-label">Instructions pour la livraison <span className="normal-case tracking-normal text-ink/40">(facultatif)</span></label>
+                    <label className="co-label">Instructions <span className="normal-case tracking-normal text-ink/40">(optionnel)</span></label>
                     <textarea className="co-input" rows={2} placeholder="Ex. Appelez-moi en arrivant, portail noir..." value={form.instructions} onChange={(e) => setForm({ ...form, instructions: e.target.value })} />
                   </div>
                 </div>
@@ -863,7 +848,7 @@ export default function CheckoutPage() {
               {/* Delivery preference (only if at least one delivery) */}
               {hasDeliveryShops && (
                 <div className="space-y-3 border-t border-ink/10 pt-5">
-                  <h3 className="flex items-center gap-2 text-[15px] font-semibold text-ink"><Clock size={17} className="text-burgundy" aria-hidden="true" /> Avez-vous une préférence de livraison ?</h3>
+                  <h3 className="flex items-center gap-2 text-[15px] font-semibold text-ink"><Clock size={17} className="text-burgundy" aria-hidden="true" /> Préférence de livraison</h3>
                   <div className="grid gap-2 sm:grid-cols-2">
                     <button onClick={() => setPreference({ type: 'none' })} className={`opt-row items-center ${preference.type === 'none' ? 'opt-row-active' : ''}`}>
                       <Clock size={16} className={preference.type === 'none' ? 'text-burgundy' : 'text-ink/40'} />
@@ -893,10 +878,6 @@ export default function CheckoutPage() {
                           </div>
                         </div>
                       </div>
-                      <p className="flex items-start gap-1.5 text-xs leading-relaxed text-ink/45">
-                        <AlertCircle size={13} className="mt-0.5 flex-shrink-0" />
-                        Nous ferons notre possible pour respecter votre préférence. Le créneau n'est pas garanti.
-                      </p>
                     </div>
                   )}
                 </div>
@@ -944,15 +925,14 @@ export default function CheckoutPage() {
               </div>
 
               <div className="space-y-3">
-                <h3 className="flex items-center gap-2 text-[15px] font-semibold text-ink"><Wallet size={17} className="text-burgundy" aria-hidden="true" /> Choisir un mode de paiement</h3>
-                <p className="text-xs leading-relaxed text-ink/55">Choisissez votre mode de paiement. Simulation uniquement, aucun paiement réel.</p>
+                <h3 className="flex items-center gap-2 text-[15px] font-semibold text-ink"><Wallet size={17} className="text-burgundy" aria-hidden="true" /> Mode de paiement</h3>
                 <div className="space-y-2">
                   {paymentMethods.map((p) => {
                     const Icon = p.icon;
                     return (
                       <button key={p.id} onClick={() => setPayment(p.id)} className={`opt-row items-center !p-4 ${payment === p.id ? 'opt-row-active' : ''}`}>
                         <Icon size={19} className={`flex-shrink-0 ${payment === p.id ? 'text-burgundy' : 'text-ink/40'}`} />
-                        <div><p className="text-sm font-medium text-ink">{p.label}</p><p className="text-xs text-ink/50">{p.description}</p></div>
+                        <p className="text-sm font-medium text-ink">{p.label}</p>
                         <Radio active={payment === p.id} />
                       </button>
                     );
@@ -971,7 +951,7 @@ export default function CheckoutPage() {
               <div className="sticky bottom-0 z-20 -mx-4 border-t border-ink/10 bg-white/95 px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 backdrop-blur sm:mx-0 sm:border-0 sm:bg-transparent sm:p-0 sm:backdrop-blur-none">
                 <p className="mb-2.5 text-center text-xs leading-relaxed text-ink/55">
                   En cliquant sur « Payer », vous acceptez les{' '}
-                  <button type="button" onClick={() => setCgvOpen(true)} className="font-medium text-burgundy underline underline-offset-2">conditions générales de vente</button>.
+                  <button type="button" onClick={() => setInfoSheet('conditions-generales')} className="font-medium text-burgundy underline underline-offset-2">conditions générales de vente</button>.
                 </p>
                 <div className="grid grid-cols-[auto_1fr] gap-3">
                   <button onClick={() => setStep(1)} className="btn-shop-line" disabled={processing}>Retour</button>
@@ -993,9 +973,9 @@ export default function CheckoutPage() {
           </div>
         </aside>
       </div>
-      {cgvOpen && (
+      {infoSheet && (
         <Suspense fallback={null}>
-          <InfoSheet slug="conditions-generales" onClose={() => setCgvOpen(false)} />
+          <InfoSheet slug={infoSheet} onClose={() => setInfoSheet(null)} />
         </Suspense>
       )}
     </div>

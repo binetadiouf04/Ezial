@@ -115,7 +115,6 @@ export default function CartPage() {
               <h2 className="font-display text-lg font-semibold">Récapitulatif</h2>
               <div className="flex justify-between text-sm"><span className="text-ink/60">Sous-total produits</span><span className="font-medium text-ink">{formatFCFA(cartSubtotal)}</span></div>
               <div className="flex justify-between text-sm"><span className="text-ink/60">Livraison</span><span className="text-ink/50">Calculée à l'étape suivante</span></div>
-              <p className="text-xs text-ink/40 leading-relaxed">Les frais de livraison seront calculés à l'étape suivante.</p>
               <div className="border-t border-line pt-3 flex justify-between"><span className="font-medium text-ink">Total estimé</span><span className="font-semibold text-ink">{formatFCFA(cartSubtotal)}</span></div>
               {hasMockItem && (
                 <p className="flex items-start gap-1.5 rounded-lg bg-burgundy/5 p-2.5 text-xs text-burgundy">
