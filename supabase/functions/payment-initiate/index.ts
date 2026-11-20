@@ -2,11 +2,12 @@
 // commande du client connecté et renvoie l'adresse de la page de paiement
 // du fournisseur.
 //
-// ÉTAT ACTUEL : AUCUN PAIEMENT POSSIBLE. Les adaptateurs d'encaissement sont
-// « non configurés » (voir ../_shared/payments/core.ts) : la fonction répond
-// 503 « not_available » sans rien écrire en base, tant que les API officielles
-// ne sont pas intégrées et testées et que payment_settings.collections_enabled
-// reste à false. Voir docs/paiements-decaissements.md.
+// Orange Money (« QR CODE – OM ») : renvoie un QR et des liens d'ouverture de
+// l'application (Max It / Orange Money), valables jusqu'à la fin du délai de
+// paiement de la commande. Actif seulement si les secrets ORANGE_MONEY_* sont
+// présents ET payment_settings.orange_money_enabled = true ; sinon 503
+// « not_available » sans rien écrire. Wave reste « non configuré ».
+// Voir docs/orange-money/.
 //
 // Appelée par le site (supabase.functions.invoke) avec la session du client.
 // Déploiement : supabase functions deploy payment-initiate
@@ -24,7 +25,7 @@
 //   (secrets propres à chaque fournisseur : lus par les futurs adaptateurs)
 import { createClient } from 'npm:@supabase/supabase-js@2';
 import { UserFacingError, createAdapters, initiatePayment, isProvider, isUuid } from '../_shared/payments/core.ts';
-import type { InitiateDb, InitiateErrorCode, PaymentSettings, Provider, TransactionRow } from '../_shared/payments/core.ts';
+import type { CheckoutData, InitiateDb, InitiateErrorCode, PaymentSettings, Provider, TransactionRow } from '../_shared/payments/core.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? '';
 const ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY') ?? '';
@@ -60,7 +61,16 @@ const db: InitiateDb = {
     if (error) throw new Error(error.message);
     return (data?.order_number as string | undefined) ?? null;
   },
-  async setPending(transactionId: string, providerReference: string, checkoutUrl: string, expiresAt: string | null) {
+  async getPaymentDeadline(orderId: string) {
+    const { data, error } = await admin.from('orders').select('payment_deadline').eq('id', orderId).maybeSingle();
+    if (error) throw new Error(error.message);
+    return (data?.payment_deadline as string | null | undefined) ?? null;
+  },
+  async saveCheckoutData(transactionId: string, checkoutData: CheckoutData) {
+    const { error } = await admin.from('payment_transactions').update({ checkout_data: checkoutData }).eq('id', transactionId);
+    if (error) throw new Error(error.message);
+  },
+  async setPending(transactionId: string, providerReference: string, checkoutUrl: string | null, expiresAt: string | null) {
     const { error } = await admin.rpc('payments_set_pending', {
       p_transaction_id: transactionId,
       p_provider_reference: providerReference,
@@ -113,7 +123,7 @@ Deno.serve(async (req) => {
   try {
     const { data: settings, error: settingsError } = await admin
       .from('payment_settings')
-      .select('collections_enabled, payouts_enabled')
+      .select('collections_enabled, payouts_enabled, orange_money_enabled')
       .maybeSingle();
     if (settingsError) throw new Error(settingsError.message);
 
@@ -131,7 +141,9 @@ Deno.serve(async (req) => {
       { settings: (settings as PaymentSettings | null) ?? { collections_enabled: false, payouts_enabled: false } },
     );
 
-    if (result.ok) return json({ checkoutUrl: result.checkoutUrl });
+    if (result.ok) {
+      return json({ transactionId: result.transactionId, checkoutUrl: result.checkoutUrl, checkoutData: result.checkoutData ?? null, expiresAt: result.expiresAt ?? null });
+    }
     return json({ error: result.message, code: result.code }, HTTP_STATUS[result.code]);
   } catch (err) {
     console.error('[paiements] payment-initiate :', err instanceof Error ? err.message : String(err));

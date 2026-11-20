@@ -4,10 +4,11 @@
 //   https://lkqezdrdbogtborgjvlw.supabase.co/functions/v1/payment-webhook?provider=wave
 //   https://lkqezdrdbogtborgjvlw.supabase.co/functions/v1/payment-webhook?provider=orange_money
 //
-// ÉTAT ACTUEL : 503 pour tout appel. Les adaptateurs d'encaissement sont
-// « non configurés » (voir ../_shared/payments/core.ts) : aucune notification
-// n'est lue, enregistrée ni traitée tant que les API officielles ne sont pas
-// intégrées et testées. Voir docs/paiements-decaissements.md.
+// Orange Money : callback « Merchant payment completed », authentifié par
+// « Authorization: Basic {apiKey} » (clé enregistrée avec le callback marchand).
+// Wave : 503 (non configuré). Le contenu n'est jamais cru : le statut et le
+// montant sont redemandés à Orange, puis payments_record_verification applique
+// les règles de la base. Voir docs/orange-money/.
 //
 // Règles (appliquées par handleCollectionWebhook) :
 //   - signature vérifiée par l'adaptateur sur le corps BRUT, avant toute
@@ -24,8 +25,8 @@
 //   PAYMENTS_ENVIRONMENT, et les secrets de signature de chaque fournisseur
 //   (lus par les futurs adaptateurs).
 import { createClient } from 'npm:@supabase/supabase-js@2';
-import { createAdapters, handleCollectionWebhook, isProvider } from '../_shared/payments/core.ts';
-import type { Provider, RecordEventInput, WebhookDb } from '../_shared/payments/core.ts';
+import { createAdapters, handleCollectionWebhook, isProvider, isUuid } from '../_shared/payments/core.ts';
+import type { PaymentStatus, Provider, RecordEventInput, WebhookDb } from '../_shared/payments/core.ts';
 
 const MAX_BODY_BYTES = 64 * 1024;
 
@@ -68,7 +69,23 @@ const db: WebhookDb = {
       .eq('provider_reference', providerReference)
       .maybeSingle();
     if (error) throw new Error(error.message);
-    return (data as { id: string; amount: number; status: string } | null) ?? null;
+    if (data) return data as { id: string; amount: number; status: string };
+    // Orange Money : la référence envoyée à Orange est l'identifiant de la tentative
+    // (utile si le QR a été créé mais que la référence n'a pas encore été enregistrée).
+    if (!isUuid(providerReference)) return null;
+    const byId = await supabase.from('payment_transactions').select('id, amount, status').eq('provider', provider).eq('id', providerReference).maybeSingle();
+    if (byId.error) throw new Error(byId.error.message);
+    return (byId.data as { id: string; amount: number; status: string } | null) ?? null;
+  },
+  async recordVerification(transactionId: string, status: PaymentStatus, amount: number | null, providerTransactionId: string | null) {
+    const { data, error } = await supabase.rpc('payments_record_verification', {
+      p_transaction_id: transactionId,
+      p_provider_status: status,
+      p_amount: amount,
+      p_provider_transaction_id: providerTransactionId,
+    });
+    if (error) throw new Error(error.message);
+    return data as string;
   },
   async confirm(transactionId: string, providerReference: string, confirmedAmount: number) {
     const { data, error } = await supabase.rpc('payments_confirm', {

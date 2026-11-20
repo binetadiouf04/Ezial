@@ -1,15 +1,20 @@
+import { OrangeMoneyCollection } from './orange-money.ts';
+import type { FetchLike } from './orange-money.ts';
+
 // Ezial — cœur des paiements Wave / Orange Money (encaissements et
 // décaissements vendeurs).
 //
-// TypeScript pur : aucune API propre à Deno ou à Node, aucun import. Le même
+// TypeScript pur : aucune API propre à Deno ou à Node ; seul import : l'adaptateur
+// Orange Money (./orange-money.ts, lui aussi en TypeScript pur). Le même
 // fichier tourne dans les Edge Functions (payment-initiate, payment-webhook,
 // payouts-dispatch) et dans les tests
 // (`node --test supabase/functions/_shared/payments/core.test.ts`).
 //
-// ÉTAT ACTUEL : RIEN N'EST OPÉRATIONNEL. Les quatre adaptateurs (Wave
-// encaissement, Wave décaissement, Orange Money encaissement, Orange Money
-// décaissement) sont des implémentations « non configurées » : leur status()
-// renvoie ready = false et aucune opération ne fait quoi que ce soit. Les
+// ÉTAT ACTUEL : seul l'encaissement Orange Money « QR CODE – OM » est écrit
+// (./orange-money.ts, d'après la documentation officielle). Il n'est prêt que si
+// tous ses secrets sont présents, ET il ne sert que si
+// payment_settings.orange_money_enabled = true. Wave (encaissement et
+// décaissement) et le décaissement Orange Money restent « non configurés ». Les
 // fonctions d'orchestration s'arrêtent AVANT toute écriture en base quand
 // l'adaptateur n'est pas prêt.
 //
@@ -47,7 +52,7 @@ export interface AdapterStatus {
 }
 
 /** Statut d'un paiement, traduit depuis le vocabulaire du fournisseur par l'adaptateur. */
-export type PaymentStatus = 'confirmed' | 'failed' | 'cancelled' | 'expired' | 'pending' | 'unknown';
+export type PaymentStatus = 'confirmed' | 'failed' | 'cancelled' | 'expired' | 'pending' | 'unknown' | 'not_found';
 
 // ---------------------------------------------------------------------------
 // Encaissement (le client paie sa commande)
@@ -62,10 +67,24 @@ export interface CheckoutRequest {
   orderNumber: string;
   returnUrl: string;
   cancelUrl: string;
+  /** Durée de validité souhaitée (secondes), alignée sur la fin du délai de paiement de la commande. */
+  validitySeconds?: number;
+}
+
+/** Données d'affichage d'un paiement par QR (Orange Money) : aucune donnée secrète. */
+export interface CheckoutData {
+  kind: 'orange_money_qr';
+  /** Image PNG du QR, en base64 (sans préfixe data:). */
+  qrCode: string | null;
+  deepLink: string | null;
+  deepLinks: { maxit: string | null; om: string | null };
+  shortLink: string | null;
+  qrId: string | null;
+  validUntil: string;
 }
 
 export type CheckoutResult =
-  | { ok: true; providerReference: string; checkoutUrl: string; expiresAt: string | null }
+  | { ok: true; providerReference: string; checkoutUrl: string | null; checkoutData?: CheckoutData; expiresAt: string | null }
   | { ok: false; retryable: boolean; error: string };
 
 export interface WebhookEvent {
@@ -82,7 +101,7 @@ export interface WebhookVerification {
 }
 
 export type PaymentStatusResult =
-  | { status: PaymentStatus; amount: number | null }
+  | { status: PaymentStatus; amount: number | null; providerTransactionId?: string | null; successCount?: number }
   | { error: string; retryable: boolean };
 
 export interface CollectionAdapter {
@@ -93,6 +112,8 @@ export interface CollectionAdapter {
   verifyWebhook(rawBody: string, headers: Record<string, string>): Promise<WebhookVerification>;
   /** Statut réel interrogé auprès de l'API du fournisseur (seule source de vérité). */
   getPaymentStatus(providerReference: string): Promise<PaymentStatusResult>;
+  /** Vérification groupée (optionnelle) : une seule recherche pour plusieurs références. */
+  getPaymentStatuses?(references: string[], sinceIso: string): Promise<Map<string, PaymentStatusResult> | { error: string; retryable: boolean }>;
 }
 
 // ---------------------------------------------------------------------------
@@ -225,16 +246,8 @@ export class WaveDisbursement extends NotConfiguredDisbursement {
   }
 }
 
-/**
- * Orange Money — encaissement.
- * // À IMPLÉMENTER à réception de la documentation officielle :
- * //   status(), createCheckout(), verifyWebhook(), getPaymentStatus().
- */
-export class OrangeMoneyCollection extends NotConfiguredCollection {
-  constructor(environment: PaymentsEnvironment) {
-    super('orange_money', environment);
-  }
-}
+// Orange Money — encaissement « QR CODE – OM » : voir ./orange-money.ts.
+export { OrangeMoneyCollection };
 
 /**
  * Orange Money — décaissement.
@@ -254,17 +267,17 @@ export interface Adapters {
 }
 
 /**
- * Construit les quatre adaptateurs. Aujourd'hui ils sont TOUJOURS « non
- * configurés », quelle que soit la configuration. Seul PAYMENTS_ENVIRONMENT
- * ('sandbox' par défaut, ou 'production') est lu, pour usage futur.
+ * Construit les quatre adaptateurs. PAYMENTS_ENVIRONMENT : 'sandbox' (défaut) ou
+ * 'production'. Seul l'encaissement Orange Money lit ses secrets (ORANGE_MONEY_*) ;
+ * les trois autres adaptateurs restent « non configurés ».
  */
-export function createAdapters(env: Record<string, string | undefined>): Adapters {
+export function createAdapters(env: Record<string, string | undefined>, fetchImpl?: FetchLike): Adapters {
   const environment: PaymentsEnvironment = env.PAYMENTS_ENVIRONMENT === 'production' ? 'production' : 'sandbox';
   return {
     environment,
     collection: {
       wave: new WaveCollection(environment),
-      orange_money: new OrangeMoneyCollection(environment),
+      orange_money: new OrangeMoneyCollection(environment, env, fetchImpl),
     },
     disbursement: {
       wave: new WaveDisbursement(environment),
@@ -323,12 +336,13 @@ export interface TransactionRow {
   id: string;
   order_id: string;
   provider: Provider;
-  status: 'initiated' | 'pending' | 'confirmed' | 'failed' | 'cancelled' | 'expired';
+  status: 'initiated' | 'pending' | 'confirmed' | 'failed' | 'cancelled' | 'expired' | 'superseded' | 'duplicate';
   amount: number;
   currency: string;
   idempotency_key: string;
   provider_reference: string | null;
   checkout_url: string | null;
+  checkout_data?: CheckoutData | null;
   expires_at: string | null;
 }
 
@@ -349,9 +363,13 @@ export interface InitiateDb {
   /** Numéro lisible de la commande (orders.order_number). */
   getOrderNumber(orderId: string): Promise<string | null>;
   /** payments_set_pending */
-  setPending(transactionId: string, providerReference: string, checkoutUrl: string, expiresAt: string | null): Promise<void>;
+  setPending(transactionId: string, providerReference: string, checkoutUrl: string | null, expiresAt: string | null): Promise<void>;
   /** payments_fail */
   fail(transactionId: string, status: 'failed' | 'cancelled' | 'expired', reason: string): Promise<string>;
+  /** Fin du délai de paiement de la commande (orders.payment_deadline), si elle existe. */
+  getPaymentDeadline?(orderId: string): Promise<string | null>;
+  /** Enregistre les données d'affichage du QR (payment_transactions.checkout_data). */
+  saveCheckoutData?(transactionId: string, data: CheckoutData): Promise<void>;
 }
 
 export interface WebhookDb {
@@ -365,6 +383,28 @@ export interface WebhookDb {
   confirm(transactionId: string, providerReference: string, confirmedAmount: number): Promise<string>;
   /** payments_fail */
   fail(transactionId: string, status: 'failed' | 'cancelled' | 'expired', reason: string): Promise<string>;
+  /**
+   * payments_record_verification : enregistre le statut constaté chez le fournisseur et applique
+   * les règles de la base (confirmation, clôture, « introuvable » seulement après la fin de validité).
+   * Quand il est fourni, il remplace confirm/fail.
+   */
+  recordVerification?(transactionId: string, status: PaymentStatus, amount: number | null, providerTransactionId: string | null): Promise<string>;
+}
+
+/** Ligne renvoyée par payments_reconcile_candidates. */
+export interface ReconcileCandidate {
+  transaction_id: string;
+  order_id: string;
+  reference: string;
+  status: string;
+  expires_at: string | null;
+  created_at: string;
+  check_count: number;
+}
+
+export interface ReconcileDb {
+  candidates(limit: number): Promise<ReconcileCandidate[]>;
+  recordVerification(transactionId: string, status: PaymentStatus, amount: number | null, providerTransactionId: string | null): Promise<string>;
 }
 
 /** Ligne de public.seller_payouts. */
@@ -399,6 +439,8 @@ export type PaymentsDb = InitiateDb & WebhookDb & PayoutDb;
 
 export interface PaymentSettings {
   collections_enabled: boolean;
+  /** Interrupteur propre à Orange Money (Wave reste piloté par collections_enabled). */
+  orange_money_enabled?: boolean;
   payouts_enabled: boolean;
   payout_frequency?: 'daily' | 'weekly';
   payout_weekday?: number;
@@ -413,7 +455,7 @@ export const NOT_AVAILABLE_MESSAGE = 'Le paiement en ligne Wave / Orange Money e
 export type InitiateErrorCode = 'not_available' | 'invalid_request' | 'refused' | 'provider_error' | 'internal_error';
 
 export type InitiateResult =
-  | { ok: true; checkoutUrl: string; transactionId: string }
+  | { ok: true; checkoutUrl: string | null; transactionId: string; checkoutData?: CheckoutData; expiresAt?: string }
   | { ok: false; code: InitiateErrorCode; message: string };
 
 export interface InitiateInput {
@@ -434,11 +476,19 @@ function isHttpsUrl(value: string): boolean {
   return /^https:\/\/[^\s]+$/.test(value);
 }
 
+/** Réponse de succès : les champs QR / expiration ne sont présents que s'ils existent. */
+function withCheckout(transactionId: string, checkoutUrl: string | null, checkoutData: CheckoutData | undefined, expiresAt: string | null): InitiateResult {
+  const res: InitiateResult = { ok: true, checkoutUrl, transactionId };
+  if (checkoutData) res.checkoutData = checkoutData;
+  if (checkoutData && expiresAt) res.expiresAt = expiresAt;
+  return res;
+}
+
 export async function initiatePayment(
   db: InitiateDb,
   adapter: CollectionAdapter,
   input: InitiateInput,
-  opts: { settings?: Pick<PaymentSettings, 'collections_enabled'>; log?: Log } = {},
+  opts: { settings?: Pick<PaymentSettings, 'collections_enabled' | 'orange_money_enabled'>; log?: Log; now?: () => number } = {},
 ): Promise<InitiateResult> {
   const log = opts.log ?? defaultLog;
 
@@ -448,9 +498,12 @@ export async function initiatePayment(
     log(`[paiements] encaissement ${adapter.provider} non prêt : ${readiness.reason ?? 'non configuré'}`);
     return { ok: false, code: 'not_available', message: NOT_AVAILABLE_MESSAGE };
   }
-  if (opts.settings && !opts.settings.collections_enabled) {
-    return { ok: false, code: 'not_available', message: NOT_AVAILABLE_MESSAGE };
+  // Interrupteur propre à chaque moyen : Orange Money = orange_money_enabled, Wave = collections_enabled.
+  if (opts.settings) {
+    const enabled = input.provider === 'orange_money' ? opts.settings.orange_money_enabled === true : opts.settings.collections_enabled;
+    if (!enabled) return { ok: false, code: 'not_available', message: NOT_AVAILABLE_MESSAGE };
   }
+  const now = opts.now ?? Date.now;
   if (!isHttpsUrl(input.returnUrl) || !isHttpsUrl(input.cancelUrl)) {
     log('[paiements] adresses de retour / annulation non configurées');
     return { ok: false, code: 'not_available', message: NOT_AVAILABLE_MESSAGE };
@@ -469,13 +522,23 @@ export async function initiatePayment(
     return { ok: false, code: 'internal_error', message: 'Le paiement n’a pas pu être lancé. Réessayez dans un instant.' };
   }
 
-  // Tentative déjà ouverte avec une page de paiement valide : on la réutilise.
-  if (tx.status === 'pending' && tx.checkout_url && (!tx.expires_at || Date.parse(tx.expires_at) > Date.now())) {
-    return { ok: true, checkoutUrl: tx.checkout_url, transactionId: tx.id };
+  // Tentative déjà ouverte avec une page ou un QR encore valable : on la réutilise.
+  if (tx.status === 'pending' && (tx.checkout_url || tx.checkout_data) && (!tx.expires_at || Date.parse(tx.expires_at) > now())) {
+    return withCheckout(tx.id, tx.checkout_url, tx.checkout_data ?? undefined, tx.expires_at);
   }
 
   try {
     const orderNumber = (await db.getOrderNumber(tx.order_id)) ?? tx.order_id;
+    // QR valable jusqu'à la fin du délai de paiement de la commande, jamais au-delà.
+    let validitySeconds: number | undefined;
+    if (db.getPaymentDeadline) {
+      const deadline = await db.getPaymentDeadline(tx.order_id);
+      if (deadline) {
+        validitySeconds = Math.floor((Date.parse(deadline) - now()) / 1000);
+        if (!(validitySeconds >= 60)) return { ok: false, code: 'refused', message: 'Le délai de paiement est dépassé.' };
+        validitySeconds = Math.min(validitySeconds, 1800);
+      }
+    }
     const checkout = await adapter.createCheckout({
       transactionId: tx.id,
       idempotencyKey: tx.idempotency_key,
@@ -484,6 +547,7 @@ export async function initiatePayment(
       orderNumber,
       returnUrl: fillUrl(input.returnUrl, orderNumber),
       cancelUrl: fillUrl(input.cancelUrl, orderNumber),
+      validitySeconds,
     });
 
     if (!checkout.ok) {
@@ -499,14 +563,17 @@ export async function initiatePayment(
         message: `${PROVIDER_LABELS[adapter.provider]} n’a pas pu ouvrir la page de paiement. Réessayez dans un instant ou choisissez un autre moyen de paiement.`,
       };
     }
-    if (!isHttpsUrl(checkout.checkoutUrl) || !checkout.providerReference) {
+    const hasPage = checkout.checkoutUrl !== null && isHttpsUrl(checkout.checkoutUrl);
+    const hasQr = !!checkout.checkoutData && (!!checkout.checkoutData.qrCode || !!checkout.checkoutData.deepLink);
+    if ((!hasPage && !hasQr) || !checkout.providerReference) {
       log(`[paiements] ${tx.id} : réponse incomplète de ${adapter.provider}`);
       return { ok: false, code: 'provider_error', message: `${PROVIDER_LABELS[adapter.provider]} n’a pas pu ouvrir la page de paiement. Réessayez dans un instant.` };
     }
 
-    await db.setPending(tx.id, checkout.providerReference, checkout.checkoutUrl, checkout.expiresAt);
-    log(`[paiements] ${tx.id} : page de paiement ${adapter.provider} créée (${tx.amount} FCFA)`);
-    return { ok: true, checkoutUrl: checkout.checkoutUrl, transactionId: tx.id };
+    if (checkout.checkoutData && db.saveCheckoutData) await db.saveCheckoutData(tx.id, checkout.checkoutData);
+    await db.setPending(tx.id, checkout.providerReference, hasPage ? checkout.checkoutUrl : null, checkout.expiresAt);
+    log(`[paiements] ${tx.id} : ${hasPage ? 'page de paiement' : 'QR'} ${adapter.provider} créé (${tx.amount} FCFA)`);
+    return withCheckout(tx.id, hasPage ? checkout.checkoutUrl : null, checkout.checkoutData, checkout.expiresAt);
   } catch (err) {
     log(`[paiements] ${tx.id} : erreur pendant le lancement : ${errorText(err)}`);
     return { ok: false, code: 'internal_error', message: 'Le paiement n’a pas pu être lancé. Réessayez dans un instant.' };
@@ -599,6 +666,13 @@ export async function handleCollectionWebhook(
     if ('error' in real) {
       return await finish(`verification_impossible: ${redactPhones(real.error).slice(0, 150)}`, real.retryable ? 503 : 200);
     }
+    if ((real.successCount ?? 0) > 1) log(`[paiements] ${tx.id} : ${real.successCount} paiements réussis pour une même référence — à vérifier`);
+
+    // Base récente : les règles (confirmation, clôture, « introuvable ») sont appliquées par la base.
+    if (db.recordVerification) {
+      const res = await db.recordVerification(tx.id, real.status, real.amount, real.providerTransactionId ?? null);
+      return await finish(`verify:${res}`);
+    }
 
     switch (real.status) {
       case 'confirmed': {
@@ -619,6 +693,63 @@ export async function handleCollectionWebhook(
   } catch (err) {
     return await finish(`error: ${errorText(err).slice(0, 150)}`, 500);
   }
+}
+
+// ---------------------------------------------------------------------------
+// b bis. Vérification périodique des paiements en attente (appelé par payments-reconcile)
+// ---------------------------------------------------------------------------
+
+export interface ReconcileSummary {
+  checked: number;
+  results: Record<string, number>;
+  error?: string;
+}
+
+/**
+ * Interroge le fournisseur pour les tentatives non closes (QR en cours, anciens QR remplacés,
+ * créations incertaines) et enregistre le statut constaté. Aucune conclusion locale : c'est la base
+ * (payments_record_verification) qui décide, et une commande n'est annulée que par
+ * orders_finalize_unpaid quand toutes ses tentatives sont closes chez le fournisseur.
+ */
+export async function reconcileCollections(
+  db: ReconcileDb,
+  adapter: CollectionAdapter,
+  opts: { limit?: number; log?: Log } = {},
+): Promise<ReconcileSummary> {
+  const log = opts.log ?? defaultLog;
+  const summary: ReconcileSummary = { checked: 0, results: {} };
+  if (!adapter.status().ready) return { ...summary, error: 'not_configured' };
+  const candidates = await db.candidates(opts.limit ?? 50);
+  if (candidates.length === 0) return summary;
+
+  let statuses: Map<string, PaymentStatusResult>;
+  if (adapter.getPaymentStatuses) {
+    const oldest = Math.min(...candidates.map((c) => Date.parse(c.created_at)).filter((n) => Number.isFinite(n)));
+    const since = new Date((Number.isFinite(oldest) ? oldest : Date.now()) - 2 * 60 * 1000).toISOString();
+    const res = await adapter.getPaymentStatuses(candidates.map((c) => c.reference), since);
+    if (!(res instanceof Map)) {
+      log(`[paiements] vérification ${adapter.provider} impossible : ${redactPhones(res.error).slice(0, 150)}`);
+      return { ...summary, error: res.retryable ? 'provider_unavailable' : 'provider_refused' };
+    }
+    statuses = res;
+  } else {
+    statuses = new Map();
+    for (const c of candidates.slice(0, 20)) statuses.set(c.reference, await adapter.getPaymentStatus(c.reference));
+  }
+
+  for (const c of candidates) {
+    const real = statuses.get(c.reference);
+    if (!real || 'error' in real) continue;
+    if ((real.successCount ?? 0) > 1) log(`[paiements] ${c.transaction_id} : ${real.successCount} paiements réussis pour une même référence — à vérifier`);
+    try {
+      const res = await db.recordVerification(c.transaction_id, real.status, real.amount, real.providerTransactionId ?? null);
+      summary.checked += 1;
+      summary.results[res] = (summary.results[res] ?? 0) + 1;
+    } catch (err) {
+      log(`[paiements] ${c.transaction_id} : enregistrement de la vérification impossible (${errorText(err)})`);
+    }
+  }
+  return summary;
 }
 
 // ---------------------------------------------------------------------------

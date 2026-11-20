@@ -247,7 +247,7 @@ function webhookEvent(status: PaymentStatus, eventId = 'evt_provider_1') {
 // Adaptateurs non configurés (état réel aujourd'hui)
 // ---------------------------------------------------------------------------
 
-test('createAdapters : les quatre adaptateurs sont non configurés, quel que soit env', async () => {
+test('createAdapters : sans secrets, aucun adaptateur n\'est prêt (Orange Money : configuration incomplète)', async () => {
   const a: Adapters = createAdapters({ PAYMENTS_ENVIRONMENT: 'production', WAVE_PROVIDER: 'test', PAYMENTS_PROVIDER: 'test' });
   assert.equal(a.environment, 'production');
   assert.equal(createAdapters({}).environment, 'sandbox');
@@ -256,7 +256,11 @@ test('createAdapters : les quatre adaptateurs sont non configurés, quel que soi
   assert.equal(a.collection.orange_money instanceof OrangeMoneyCollection, true);
   assert.equal(a.disbursement.wave instanceof WaveDisbursement, true);
   assert.equal(a.disbursement.orange_money instanceof OrangeMoneyDisbursement, true);
-  for (const ad of [a.collection.wave, a.collection.orange_money, a.disbursement.wave, a.disbursement.orange_money]) {
+  const om = a.collection.orange_money.status();
+  assert.equal(om.ready, false);
+  assert.equal(om.configured, false);
+  assert.match(om.reason ?? '', /^Orange Money : configuration incomplète \(ORANGE_MONEY_CLIENT_ID, ORANGE_MONEY_CLIENT_SECRET, ORANGE_MONEY_MERCHANT_CODE/);
+  for (const ad of [a.collection.wave, a.disbursement.wave, a.disbursement.orange_money]) {
     const s = ad.status();
     assert.equal(s.configured, false);
     assert.equal(s.ready, false);
