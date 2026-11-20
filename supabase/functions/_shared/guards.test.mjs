@@ -98,3 +98,20 @@ test('double authentification : un administrateur inscrit doit avoir validé son
   assert.equal(adminMfaSatisfied(null, 2), false);
   assert.equal(adminMfaSatisfied('AAL2', 1), false);
 });
+
+test('clé VAPID : erreurs de collage courantes nettoyées, longueur vérifiée, jamais de clé dans le diagnostic', async () => {
+  const { normalizeVapidKey } = await import('./guards.ts');
+  const priv = 'Ab-_0123456789abcdefghijklmnopqrstuvwxyzABC'; // 43 caractères
+  assert.equal(priv.length, 43);
+  assert.deepEqual(normalizeVapidKey(priv, 'private'), { ok: true, key: priv });
+  assert.deepEqual(normalizeVapidKey(`"${priv}="\n`, 'private'), { ok: true, key: priv });
+  assert.deepEqual(normalizeVapidKey(` Private Key:\n ${priv} `, 'private'), { ok: true, key: priv });
+  assert.deepEqual(normalizeVapidKey('Ab+/0123456789abcdefghijklmnopqrstuvwxyzABC=', 'private'), { ok: true, key: priv });
+  assert.deepEqual(normalizeVapidKey(` ${priv}​`, 'private'), { ok: true, key: priv });
+  const short = normalizeVapidKey(priv.slice(0, 40), 'private');
+  assert.equal(short.ok, false); assert.equal(short.length, 40); assert.ok(!JSON.stringify(short).includes(priv.slice(0, 40)));
+  const pub = 'B' + 'A'.repeat(86); // « B... » = octet 0x04
+  assert.deepEqual(normalizeVapidKey(pub, 'public'), { ok: true, key: pub });
+  assert.equal(normalizeVapidKey(pub, 'private').ok, false); // clé publique collée à la place de la privée
+  assert.equal(normalizeVapidKey('', 'private').ok, false);
+});

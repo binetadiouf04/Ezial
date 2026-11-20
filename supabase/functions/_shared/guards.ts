@@ -113,3 +113,37 @@ export function jwtAssuranceLevel(authHeader: string | null | undefined): string
 export function adminMfaSatisfied(aal: string | null, verifiedFactorCount: number): boolean {
   return verifiedFactorCount <= 0 || aal === 'aal2';
 }
+
+// ── Clés de notification (VAPID) ─────────────────────────────────────────────
+
+export type VapidKeyResult = { ok: true; key: string } | { ok: false; reason: string; length: number };
+
+/**
+ * Nettoie une clé VAPID collée dans les secrets Supabase (souvent depuis un iPad) :
+ * libellé « Private Key: » / « Public Key: », guillemets, espaces, retours à la ligne,
+ * caractères invisibles et « = » final retirés ; base64 classique (« + », « / »)
+ * converti en base64 « URL-safe ». Puis vérifie la longueur attendue : 32 octets
+ * (43 caractères) pour la clé privée, 65 octets (87 caractères, octet 0x04) pour la
+ * publique. Le diagnostic ne contient jamais la clé elle-même.
+ */
+export function normalizeVapidKey(raw: string | null | undefined, kind: 'private' | 'public'): VapidKeyResult {
+  const cleaned = (raw ?? '')
+    .replace(/^[\s\S]*?(private|public)\s*key\s*:?/i, '')
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/[^A-Za-z0-9_-]/g, '');
+  const expected = kind === 'private' ? 43 : 87;
+  if (!cleaned) return { ok: false, reason: 'absente', length: 0 };
+  if (cleaned.length !== expected) {
+    return { ok: false, reason: cleaned.length < expected ? `incomplète (${expected} caractères attendus)` : `trop longue (${expected} caractères attendus)`, length: cleaned.length };
+  }
+  if (kind === 'public') {
+    try {
+      const first = atob(cleaned.slice(0, 4).replace(/-/g, '+').replace(/_/g, '/')).charCodeAt(0);
+      if (first !== 4) return { ok: false, reason: 'ce n’est pas une clé publique VAPID', length: cleaned.length };
+    } catch {
+      return { ok: false, reason: 'invalide', length: cleaned.length };
+    }
+  }
+  return { ok: true, key: cleaned };
+}
