@@ -19,6 +19,8 @@ import CustomerAuthPanel from '@/components/CustomerAuthPanel';
 import { Check, Truck, Store, Smartphone, Clock, Loader2, AlertCircle, AlertTriangle, MapPin, Navigation, Search, ArrowLeft, Gift, UserCheck, ChevronDown, Wallet, FileText, Lock } from 'lucide-react';
 import SmartImage from '@/components/SmartImage';
 import { scrollToTopNow } from '@/lib/scrollTop';
+import { placeTitle, type RecentDeliveryPlace } from '@/lib/recentDeliveryPlaces';
+import { fetchRecentDeliveryPlaces } from '@/lib/supabaseRecentDeliveryPlaces';
 
 const InfoSheet = lazy(() => import('@/components/info/InfoSheet'));
 
@@ -105,7 +107,7 @@ function CheckoutAccountStep({ onBackToCart }: { onBackToCart: () => void }) {
 }
 
 type LocationStatus = 'idle' | 'requesting' | 'granted' | 'denied' | 'unsupported';
-type LocationMode = 'gps' | 'manual';
+type LocationMode = 'gps' | 'manual' | 'saved';
 
 export default function CheckoutPage() {
   const { cart, cartSubtotal, clearCart, navigate, addOrder, catalogProducts, customerUser, authLoading } = useApp();
@@ -169,6 +171,46 @@ export default function CheckoutPage() {
   const [resolvingAddress, setResolvingAddress] = useState(false);
 
   useEffect(() => { persistDraftForm(form); }, [form]);
+
+  // Adresses déjà utilisées (comme sur Uber) : reprises des commandes passées du client.
+  // La plus récente est proposée d'office ; le client peut toujours en changer.
+  const [recentPlaces, setRecentPlaces] = useState<RecentDeliveryPlace[]>([]);
+  const [selectedPlace, setSelectedPlace] = useState(-1);
+  const applySavedPlace = (index: number, places: RecentDeliveryPlace[] = recentPlaces) => {
+    const place = places[index];
+    if (!place) return;
+    setSelectedPlace(index);
+    setLocationMode('saved');
+    setLocation({ lat: place.lat, lng: place.lng });
+    setSelectedLabel(place.label);
+    setManualAdjusted(false);
+    setForm((prev) => ({
+      ...prev,
+      landmark: place.landmark || prev.landmark,
+      instructions: place.instructions || prev.instructions,
+    }));
+  };
+  useEffect(() => {
+    if (!customerUser?.id) return;
+    let cancelled = false;
+    void fetchRecentDeliveryPlaces(customerUser.id).then((places) => {
+      if (cancelled || places.length === 0) return;
+      setRecentPlaces(places);
+      // Proposée d'office seulement si aucune position n'a encore été choisie (et pas pour un cadeau).
+      if (!location && !isGift) applySavedPlace(0, places);
+    });
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [customerUser?.id]);
+  // Cadeau : l'adresse est celle du destinataire, jamais une adresse enregistrée de l'acheteur.
+  useEffect(() => {
+    if (isGift && locationMode === 'saved') {
+      setSelectedPlace(-1);
+      setLocation(null);
+      setSelectedLabel(null);
+      setLocationMode('gps');
+    }
+  }, [isGift, locationMode]);
 
   // Prefill from the connected profile — these fields were already given at
   // signup, so the account's own values take priority over a stale draft
@@ -338,6 +380,7 @@ export default function CheckoutPage() {
   };
 
   const openManualLocationMode = () => {
+    setSelectedPlace(-1);
     setManualAdjusted(false);
     setSelectedLabel(null);
     addressSearch.reset();
@@ -704,13 +747,29 @@ export default function CheckoutPage() {
                     <p className="flex items-center gap-1.5 text-sm font-medium text-amber-700"><AlertTriangle size={15} /> Position non définie</p>
                   )}
 
+                  {/* Adresses déjà utilisées : un toucher suffit ; les boutons dessous permettent d'en changer. */}
+                  {!isGift && recentPlaces.length > 0 && (
+                    <div className="space-y-2">
+                      {recentPlaces.map((place, index) => (
+                        <button key={`${place.lat},${place.lng}`} type="button" onClick={() => applySavedPlace(index)} className={`opt-row items-center ${locationMode === 'saved' && selectedPlace === index ? 'opt-row-active' : ''}`}>
+                          <MapPin size={16} className={`flex-shrink-0 ${locationMode === 'saved' && selectedPlace === index ? 'text-burgundy' : 'text-ink/40'}`} />
+                          <span className="min-w-0 text-left">
+                            <span className="block truncate text-sm font-medium text-ink">{placeTitle(place)}</span>
+                            {place.label && place.landmark && <span className="block truncate text-xs text-ink/50">{place.landmark}</span>}
+                          </span>
+                          <Radio active={locationMode === 'saved' && selectedPlace === index} />
+                        </button>
+                      ))}
+                    </div>
+                  )}
+
                   {/* Mode toggle */}
                   <div className="grid gap-2 sm:grid-cols-2">
                     {/* One tap both selects GPS mode and asks for the position —
                         no second "Utiliser ma position actuelle" button below. */}
                     <button
                       type="button"
-                      onClick={() => { setLocationMode('gps'); requestLocation(); }}
+                      onClick={() => { setSelectedPlace(-1); setSelectedLabel(null); setLocationMode('gps'); requestLocation(); }}
                       disabled={locationStatus === 'requesting'}
                       className={`${locationMode === 'gps' ? 'btn-shop' : 'btn-shop-line'} !px-3 !py-3 !text-[11px]`}
                     >
