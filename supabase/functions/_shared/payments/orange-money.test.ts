@@ -3,7 +3,7 @@
 // Lancer : node --experimental-strip-types --test supabase/functions/_shared/payments/orange-money.test.ts
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { OrangeMoneyCollection, mapOrangeStatus, sanitizeMerchantName, summarizeTransactions, ORANGE_BASE_URLS } from './orange-money.ts';
+import { OrangeMoneyCollection, fetchSandboxTestNumbers, mapOrangeStatus, sanitizeMerchantName, summarizeTransactions, ORANGE_BASE_URLS } from './orange-money.ts';
 import type { FetchLike } from './orange-money.ts';
 import { createAdapters, handleCollectionWebhook, initiatePayment, reconcileCollections } from './core.ts';
 import type { CheckoutData, InitiateDb, PaymentStatus, ReconcileCandidate, ReconcileDb, RecordEventInput, TransactionRow, WebhookDb } from './core.ts';
@@ -393,4 +393,18 @@ test('enregistrement du callback marchand : code, nom, adresse https et clé', a
   assert.equal(body.apiKey, CALLBACK_KEY);
   assert.match(body.callbackUrl, /^https:\/\//);
   assert.equal((await adapter(fake).registerCallback('http://pas-https')).ok, false);
+});
+
+test('mode test : numéros de test Orange (sandbox uniquement, identifiants seuls)', async () => {
+  const o = new FakeOrange();
+  o.routes['GET /api/assignments/v1/partner/sim-cards'] = [{ status: 200, body: [{ type: 'MERCHANT', msisdn: '770000000', code: '654321' }] }];
+  const ok = await fetchSandboxTestNumbers({ ORANGE_MONEY_CLIENT_ID: 'c', ORANGE_MONEY_CLIENT_SECRET: 's' }, o.fetch);
+  assert.deepEqual(ok, { ok: true, body: [{ type: 'MERCHANT', msisdn: '770000000', code: '654321' }] });
+  assert.ok(o.requests.every((r) => r.url.startsWith(ORANGE_BASE_URLS.sandbox)), 'uniquement la sandbox');
+  assert.equal(o.requests[1].headers.Authorization, 'Bearer jeton-1');
+  const prod = await fetchSandboxTestNumbers({ PAYMENTS_ENVIRONMENT: 'production', ORANGE_MONEY_CLIENT_ID: 'c', ORANGE_MONEY_CLIENT_SECRET: 's' }, o.fetch);
+  assert.equal(prod.ok, false, 'refusé en production');
+  const none = await fetchSandboxTestNumbers({}, o.fetch);
+  assert.equal(none.ok, false, 'identifiants requis');
+  assert.equal(o.requests.length, 2, 'aucun appel sans identifiants ni en production');
 });

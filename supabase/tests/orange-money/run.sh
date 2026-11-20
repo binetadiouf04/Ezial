@@ -14,14 +14,16 @@ P -c "create table tests.baseline_defs as select p.oid::regprocedure::text sig, 
   -c "create table tests.baseline_triggers as select tgname::text, tgrelid::regclass::text from pg_trigger where not tgisinternal" >/dev/null
 echo "== État de production (avant migrations)"
 for t in tests/10-*.sql; do echo "-- $t"; P -f "$t" 2>&1 | grep -E "OK|ÉCHEC|ERROR" || true; done
-echo "== Application des migrations 1 à 4"
-for m in orange-money-1-structure orange-money-2-commandes orange-money-3-stock orange-money-4-verification; do P -f $SQL/$m.sql >/dev/null; done
+echo "== Application des migrations 1 à 5"
+for m in orange-money-1-structure orange-money-2-commandes orange-money-3-stock orange-money-4-verification orange-money-5-testeurs; do P -f $SQL/$m.sql >/dev/null; done
 echo "== Une seconde application (idempotence)"
-for m in orange-money-1-structure orange-money-2-commandes orange-money-3-stock orange-money-4-verification; do P -f $SQL/$m.sql >/dev/null; done
+for m in orange-money-1-structure orange-money-2-commandes orange-money-3-stock orange-money-4-verification orange-money-5-testeurs; do P -f $SQL/$m.sql >/dev/null; done
 echo "OK    : migrations relançables sans erreur"
 for t in tests/3*.sql; do echo "-- $t"; P -f "$t" 2>&1 | grep -E "OK|ÉCHEC|ERROR" || true; done
 echo "-- tests/80-concurrence.sh"; ./tests/80-concurrence.sh
-echo "== Retour arrière"
+echo "== Retour arrière (migration 5, puis migrations 1 à 4)"
+P -f $SQL/orange-money-5-retour-arriere.sql >/dev/null
+P -c "select tests.check(to_regclass('public.payment_testers') is null, 'Retour arrière 5 : liste des testeurs supprimée')" 2>&1 | grep -E 'OK|ÉCHEC|ERROR' || true
 ./build-rollback.sh >/dev/null
 P -f $SQL/orange-money-retour-arriere.sql >/dev/null
 for t in tests/90-*.sql; do echo "-- $t"; P -f "$t" 2>&1 | grep -E "OK|ÉCHEC|ERROR" || true; done

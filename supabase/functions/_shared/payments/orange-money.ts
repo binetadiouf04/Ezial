@@ -392,3 +392,33 @@ export class OrangeMoneyCollection implements CollectionAdapter {
     return { ok: true };
   }
 }
+
+/**
+ * MODE TEST UNIQUEMENT : numéros de test fournis par Orange (MERCHANT, CUSTOMER, RETAILER)
+ * via GET /api/assignments/v1/partner/sim-cards. N'utilise que les identifiants de
+ * l'application (le code marchand n'est pas encore connu à ce stade). Refusé en production.
+ */
+export async function fetchSandboxTestNumbers(
+  env: Record<string, string | undefined>,
+  fetchImpl: FetchLike = fetch as unknown as FetchLike,
+): Promise<{ ok: true; body: unknown } | { ok: false; error: string }> {
+  if (env.PAYMENTS_ENVIRONMENT === 'production') return { ok: false, error: 'Réservé au mode test (sandbox).' };
+  const clientId = (env[ORANGE_ENV.clientId] ?? '').trim();
+  const clientSecret = (env[ORANGE_ENV.clientSecret] ?? '').trim();
+  if (!clientId || !clientSecret) return { ok: false, error: `${ORANGE_ENV.clientId} et ${ORANGE_ENV.clientSecret} requis.` };
+  const base = ORANGE_BASE_URLS.sandbox;
+  try {
+    const form = new URLSearchParams({ client_id: clientId, client_secret: clientSecret, grant_type: 'client_credentials' }).toString();
+    const t = await fetchImpl(base + '/oauth/v1/token', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded', Accept: 'application/json' }, body: form });
+    const tText = await t.text();
+    let token = '';
+    try { token = String((JSON.parse(tText) as Record<string, unknown>).access_token ?? ''); } catch { token = ''; }
+    if (t.status !== 200 || !token) return { ok: false, error: `jeton refusé (HTTP ${t.status})` };
+    const r = await fetchImpl(base + '/api/assignments/v1/partner/sim-cards', { method: 'GET', headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' } });
+    const text = await r.text();
+    if (r.status !== 200) return { ok: false, error: `numéros de test refusés (HTTP ${r.status})` };
+    try { return { ok: true, body: JSON.parse(text) }; } catch { return { ok: false, error: 'réponse illisible' }; }
+  } catch (err) {
+    return { ok: false, error: maskDigits(err instanceof Error ? err.message : String(err)).slice(0, 200) };
+  }
+}
