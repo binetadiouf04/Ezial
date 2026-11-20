@@ -7,6 +7,7 @@ import FavoriteButton from './FavoriteButton';
 import { getShop } from '@/data/shops';
 import SmartImage from './SmartImage';
 import { productPath, productPublicPath } from '@/lib/productUrl';
+import { discountPercent } from '@/data/products';
 import { stockBadge } from '@/lib/stockBadge';
 
 export default function ProductCard({ product, priority = false }: { product: Product; priority?: boolean }) {
@@ -16,6 +17,8 @@ export default function ProductCard({ product, priority = false }: { product: Pr
   // (1 à 3 unités, toutes variantes confondues) — voir src/lib/stockBadge.ts.
   const badge = stockBadge(product);
   const outOfStock = badge?.kind === 'out';
+  // Promo réelle (ancien prix supérieur au prix) : pourcentage bien visible sur la photo.
+  const disc = discountPercent(product.price, product.oldPrice);
 
   return (
     // A real href (not just an onClick) so Google's own rendering pass can
@@ -42,7 +45,10 @@ export default function ProductCard({ product, priority = false }: { product: Pr
           className={`h-full w-full object-contain transition-transform duration-700 group-hover:scale-105 ${outOfStock ? 'opacity-60 grayscale' : ''}`}
         />
         <div className="absolute right-2.5 top-2.5"><FavoriteButton productId={product.id} /></div>
-        {product.isNew && !product.isPromo && <span className="absolute left-2.5 top-2.5 rounded-full bg-white/95 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-ink">Nouveau</span>}
+        {disc && !outOfStock && (
+          <span className="pointer-events-none absolute left-2.5 top-2.5 rounded-full bg-burgundy-ruby px-2.5 py-1 text-xs font-bold leading-none text-white shadow-sm">-{disc} %</span>
+        )}
+        {product.isNew && !product.isPromo && !disc && <span className="absolute left-2.5 top-2.5 rounded-full bg-white/95 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-ink">Nouveau</span>}
         {/* Discret, en bas à gauche : ne masque pas le produit. */}
         {badge && (
           <span className={`pointer-events-none absolute bottom-2 left-2 rounded-full px-2.5 py-1 text-[10px] font-semibold leading-none shadow-sm ${badge.kind === 'out' ? 'bg-white/95 text-ink/70' : 'bg-burgundy text-white'}`}>

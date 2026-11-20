@@ -9,13 +9,12 @@ export default function PriceDisplay({ price, oldPrice, size = 'md' }: { price: 
   // sa ligne, bien lisible, avec la réduction à côté ; l'ancien prix barré
   // passe en petit juste dessous — jamais de retour à la ligne désordonné.
   if (size === 'card') {
+    // Promo : prix en rouge rubis, ancien prix barré juste à côté. Le pourcentage est
+    // affiché en pastille sur la photo (ProductCard), pas répété ici.
     return (
-      <div className="leading-tight">
-        <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
-          <span className="whitespace-nowrap text-[15px] font-bold text-ink">{formatFCFA(price)}</span>
-          {oldPrice && disc && <span className="rounded-full bg-burgundy/10 px-1.5 py-0.5 text-[10px] font-semibold leading-none text-burgundy">-{disc}%</span>}
-        </div>
-        {oldPrice && disc && <span className="mt-0.5 block text-[11px] text-ink/40 line-through">{formatFCFA(oldPrice)}</span>}
+      <div className="flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5 leading-tight">
+        <span className={`whitespace-nowrap text-[15px] font-bold ${disc ? 'text-burgundy-ruby' : 'text-ink'}`}>{formatFCFA(price)}</span>
+        {oldPrice && disc && <span className="whitespace-nowrap text-[11px] text-ink/45 line-through">{formatFCFA(oldPrice)}</span>}
       </div>
     );
   }
