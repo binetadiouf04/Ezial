@@ -515,8 +515,8 @@ export default function CheckoutPage() {
   const pickupShops = shopsInCart.filter((s) => getShopFulfillment(s.id) === 'pickup');
 
   // --- Présentation seulement : le récapitulatif est construit une fois et
-  // réutilisé (colonne latérale sur ordinateur, bloc repliable sur mobile aux
-  // étapes 1 et 2, bloc complet à l'étape 3 sur mobile). Mêmes données, mêmes
+  // réutilisé (colonne latérale sur ordinateur, bloc complet à l'étape Paiement
+  // sur mobile ; rien en haut des étapes Coordonnées et Livraison). Mêmes données, mêmes
   // montants, mêmes libellés que précédemment.
   const summaryLines = cart.map((item, i) => {
     const p = catalogProducts.find((cp) => cp.id === item.productId);
@@ -539,8 +539,6 @@ export default function CheckoutPage() {
       </div>
     );
   });
-
-  const firstSummaryProduct = catalogProducts.find((cp) => cp.id === cart[0]?.productId);
 
   const summaryTotals = (
     <div className="space-y-2 text-sm">
@@ -573,23 +571,6 @@ export default function CheckoutPage() {
       </button>
       <h1 className="mb-6 font-display text-[30px] font-medium leading-tight text-ink lg:text-4xl">Finaliser ma commande</h1>
       <div className="mx-auto mb-6 max-w-sm sm:mb-8 lg:mx-0 lg:max-w-md"><CheckoutSteps steps={steps} current={step} /></div>
-
-      {/* Mobile, étapes 1 et 2 : le récapitulatif reste à portée, replié. */}
-      {step !== 2 && (
-        <details className="group mb-6 rounded-lg border border-ink/15 lg:hidden">
-          <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-3.5 py-3 text-ink [&::-webkit-details-marker]:hidden">
-            <span className="flex min-w-0 items-center gap-3">
-              {firstSummaryProduct && <SmartImage src={firstSummaryProduct.thumbnailUrl || firstSummaryProduct.images[0]} alt="" className="h-12 w-10 flex-shrink-0 rounded-md object-cover" />}
-              <span className="min-w-0 normal-case tracking-normal"><span className="block text-sm font-semibold text-ink">Votre commande</span><span className="block text-xs font-normal text-ink/55">{cart.length} article{cart.length > 1 ? 's' : ''}</span></span>
-            </span>
-            <span className="flex flex-shrink-0 items-center gap-2"><span className="text-sm font-bold text-burgundy">{formatFCFA(estimatedTotal)}</span><ChevronDown size={15} className="transition-transform group-open:rotate-180" aria-hidden="true" /></span>
-          </summary>
-          <div className="space-y-4 border-t border-ink/10 px-4 py-4">
-            <div className="space-y-4">{summaryLines}</div>
-            {summaryTotals}
-          </div>
-        </details>
-      )}
 
       <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_340px] lg:gap-14">
         <div className="mx-auto w-full max-w-xl lg:mx-0 lg:max-w-none">
@@ -848,16 +829,16 @@ export default function CheckoutPage() {
               {/* Delivery preference (only if at least one delivery) */}
               {hasDeliveryShops && (
                 <div className="space-y-3 border-t border-ink/10 pt-5">
-                  <h3 className="flex items-center gap-2 text-[15px] font-semibold text-ink"><Clock size={17} className="text-burgundy" aria-hidden="true" /> Préférence de livraison</h3>
+                  <h3 className="flex items-center gap-2 text-[15px] font-semibold text-ink"><Clock size={17} className="text-burgundy" aria-hidden="true" /> Quand souhaitez-vous être livré ?</h3>
                   <div className="grid gap-2 sm:grid-cols-2">
                     <button onClick={() => setPreference({ type: 'none' })} className={`opt-row items-center ${preference.type === 'none' ? 'opt-row-active' : ''}`}>
                       <Clock size={16} className={preference.type === 'none' ? 'text-burgundy' : 'text-ink/40'} />
-                      <span className="text-sm font-medium text-ink">Sans préférence</span>
+                      <span className="text-sm font-medium text-ink">Dès que possible</span>
                       <Radio active={preference.type === 'none'} />
                     </button>
                     <button onClick={() => setPreference({ type: 'preferred', date: tomorrowISO(), window: deliveryWindows[0] })} className={`opt-row items-center ${preference.type === 'preferred' ? 'opt-row-active' : ''}`}>
                       <Clock size={16} className={preference.type === 'preferred' ? 'text-burgundy' : 'text-ink/40'} />
-                      <span className="text-sm font-medium text-ink">Avec préférence</span>
+                      <span className="text-sm font-medium text-ink">Choisir un jour et un créneau</span>
                       <Radio active={preference.type === 'preferred'} />
                     </button>
                   </div>
@@ -865,11 +846,11 @@ export default function CheckoutPage() {
                     <div className="fade-in space-y-3">
                       <div className="grid gap-3 sm:grid-cols-2">
                         <div>
-                          <label className="co-label">Date souhaitée</label>
+                          <label className="co-label">Jour</label>
                           <input type="date" className="co-input" min={tomorrowISO()} value={preference.date} onChange={(e) => setPreference({ ...preference, date: e.target.value })} />
                         </div>
                         <div>
-                          <label className="co-label">Créneau préféré</label>
+                          <label className="co-label">Créneau</label>
                           <div className="relative">
                             <select className="co-input appearance-none pr-10" value={preference.window} onChange={(e) => setPreference({ ...preference, window: e.target.value })}>
                               {deliveryWindows.map((w) => <option key={w} value={w}>{w}</option>)}
