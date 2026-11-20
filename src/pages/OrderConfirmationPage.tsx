@@ -6,9 +6,12 @@ import { fabricSaleModeUnit, formatFabricQuantity } from '@/data/categories';
 import { getShop } from '@/data/shops';
 import { ensureOrderDeliveryCode } from '@/lib/supabaseOrders';
 import { paymentLabels } from '@/data/payments';
-import { CheckCircle2, Truck, Store, MapPin, Smartphone, Clock, KeySquare } from 'lucide-react';
+import { CheckCircle2, Truck, Store, MapPin, Smartphone, Clock, KeySquare, AlertTriangle } from 'lucide-react';
 import SmartImage from '@/components/SmartImage';
 import InvoiceCard from '@/components/InvoiceCard';
+import OrangeMoneyPayment from '@/components/OrangeMoneyPayment';
+import PaymentStatusBadge from '@/components/PaymentStatusBadge';
+import { paymentPhase } from '@/lib/orderPayment';
 
 const paymentIcons: Record<string, typeof Smartphone> = { wave: Smartphone, orange_money: Smartphone };
 
@@ -20,10 +23,12 @@ export default function OrderConfirmationPage({ orderId }: { orderId: string }) 
   // Same code OrderTrackingPage shows later — generated right at order
   // creation, so it's already there to display the first time the
   // customer sees this page, not only once they go look for it.
+  // Commande Orange Money pas encore payée : pas de code de livraison (rien ne sera livré avant paiement).
+  const awaitingOnlinePayment = !!order?.paymentRequired && order.paymentStatus !== 'paid';
   useEffect(() => {
-    if (!order?.supabaseOrderId) return;
+    if (!order?.supabaseOrderId || awaitingOnlinePayment) return;
     void ensureOrderDeliveryCode(order.supabaseOrderId).then(setDeliveryCode);
-  }, [order?.supabaseOrderId]);
+  }, [order?.supabaseOrderId, awaitingOnlinePayment]);
 
   if (!order) {
     return (
@@ -37,6 +42,7 @@ export default function OrderConfirmationPage({ orderId }: { orderId: string }) 
   }
 
   const PaymentIcon = paymentIcons[order.payment] ?? Smartphone;
+  const phase = paymentPhase(order, Date.now());
   const hasDelivery = order.shopFulfillments.some((f) => f.type === 'delivery');
   const pickupShops = order.shopFulfillments.filter((f) => f.type === 'pickup');
 
@@ -44,12 +50,18 @@ export default function OrderConfirmationPage({ orderId }: { orderId: string }) 
     <div className="container-pro py-10 max-w-2xl">
       <div className="text-center mb-8 fade-in">
         <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-burgundy/10">
-          <CheckCircle2 size={36} className="text-burgundy" />
+          {phase === 'cancelled' ? <AlertTriangle size={34} className="text-burgundy" /> : awaitingOnlinePayment ? <Clock size={34} className="text-burgundy" /> : <CheckCircle2 size={36} className="text-burgundy" />}
         </div>
-        <h1 className="mt-4 font-display text-2xl font-semibold text-ink">Commande confirmée</h1>
-        <p className="mt-1.5 text-sm text-ink/55">Merci pour votre commande.</p>
+        <h1 className="mt-4 font-display text-2xl font-semibold text-ink">
+          {phase === 'cancelled' ? 'Commande annulée' : awaitingOnlinePayment ? 'Commande enregistrée' : 'Commande confirmée'}
+        </h1>
+        <p className="mt-1.5 text-sm text-ink/55">
+          {phase === 'cancelled' ? 'Le paiement n’a pas été reçu dans le délai.' : awaitingOnlinePayment ? 'Payez avec Orange Money pour confirmer votre commande.' : 'Merci pour votre commande.'}
+        </p>
         <p className="mt-1 text-xs text-ink/45">N° de commande : <span className="font-mono font-semibold text-ink">{order.id}</span></p>
       </div>
+
+      {order.paymentRequired && <OrangeMoneyPayment order={order} autoStart />}
 
       {/* Product-first items list */}
       <div className="card p-5 mb-5">
@@ -93,7 +105,7 @@ export default function OrderConfirmationPage({ orderId }: { orderId: string }) 
       {/* Delivery info */}
       {hasDelivery && (
         <>
-          {deliveryCode && (
+          {deliveryCode && !awaitingOnlinePayment && (
             <div className="card mb-5 rounded-2xl p-6 text-center" style={{ background: 'linear-gradient(135deg, rgba(128,23,37,0.06), rgba(128,23,37,0.12))' }}>
               <div className="flex items-center justify-center gap-2 mb-2">
                 <KeySquare size={18} className="text-burgundy" />
@@ -142,10 +154,11 @@ export default function OrderConfirmationPage({ orderId }: { orderId: string }) 
           <span>{paymentLabels[order.payment] ?? order.payment}</span>
           <span className="text-ink/30">·</span>
           <span className="font-medium text-ink">{formatFCFA(order.total)}</span>
+          <PaymentStatusBadge order={order} className="ml-auto" />
         </div>
       </div>
 
-      <InvoiceCard order={order} className="mb-5" />
+      {!awaitingOnlinePayment && <InvoiceCard order={order} className="mb-5" />}
 
       <div className="flex flex-col gap-3 sm:flex-row">
         <button onClick={() => navigate(`/suivi/${order.id}`)} className="btn-primary flex-1">Suivre ma commande</button>

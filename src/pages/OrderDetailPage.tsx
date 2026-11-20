@@ -8,10 +8,12 @@ import { ensureOrderDeliveryCode, fetchOrderDeliveryMissionStatus } from '@/lib/
 import { DeliveryTimeline, PickupTimeline } from '@/components/OrderTimeline';
 import { deliveryStatusLabels, pickupStepLabels, computeDeliveryStepStatus } from '@/data/orderStatusLabels';
 import { paymentLabels } from '@/data/payments';
-import { Package, Truck, Store, MapPin, Smartphone, Clock, Check, KeySquare, CheckCircle2, AlertTriangle, RotateCcw } from 'lucide-react';
+import { Package, Truck, Store, MapPin, Smartphone, Clock, KeySquare, CheckCircle2, AlertTriangle, RotateCcw } from 'lucide-react';
 import SmartImage from '@/components/SmartImage';
 import ClaimModal from '@/components/ClaimModal';
 import InvoiceCard from '@/components/InvoiceCard';
+import OrangeMoneyPayment from '@/components/OrangeMoneyPayment';
+import PaymentStatusBadge from '@/components/PaymentStatusBadge';
 
 const deliveryStatusColors: Record<DeliveryStepStatus, string> = {
   confirmed: 'bg-blue-50 text-blue-700', preparing: 'bg-amber-50 text-amber-700', ready: 'bg-green-50 text-green-700',
@@ -52,11 +54,13 @@ export default function OrderDetailPage({ orderId }: { orderId: string }) {
 
   // Generated right at order confirmation (like Uber's ride PIN) — shown
   // immediately, never gated on delivery progress.
+  // Commande Orange Money pas encore payée : ni code de livraison ni facture (rien ne part avant paiement).
+  const awaitingOnlinePayment = !!order?.paymentRequired && order.paymentStatus !== 'paid';
   useEffect(() => {
     if (!order?.supabaseOrderId) return;
-    void ensureOrderDeliveryCode(order.supabaseOrderId).then(setDeliveryCode);
+    if (!awaitingOnlinePayment) void ensureOrderDeliveryCode(order.supabaseOrderId).then(setDeliveryCode);
     void fetchOrderDeliveryMissionStatus(order.supabaseOrderId).then(setMissionStatus);
-  }, [order?.supabaseOrderId]);
+  }, [order?.supabaseOrderId, awaitingOnlinePayment]);
 
   if (!order) {
     return (
@@ -81,8 +85,12 @@ export default function OrderDetailPage({ orderId }: { orderId: string }) {
           <h1 className="font-display text-2xl font-semibold text-ink">Commande {order.id}</h1>
           <p className="mt-1 text-sm text-ink/55">{new Date(order.date).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</p>
         </div>
-        <span className={`rounded-full px-3.5 py-1.5 text-xs font-medium ${getOrderStatusColor(order, effectiveStatus)}`}>{getOrderStatusLabel(order, effectiveStatus)}</span>
+        {awaitingOnlinePayment
+          ? <PaymentStatusBadge order={order} className="px-3.5 py-1.5" />
+          : <span className={`rounded-full px-3.5 py-1.5 text-xs font-medium ${getOrderStatusColor(order, effectiveStatus)}`}>{getOrderStatusLabel(order, effectiveStatus)}</span>}
       </div>
+
+      {order.paymentRequired && <OrangeMoneyPayment order={order} autoStart />}
 
       <div className="grid gap-6 lg:grid-cols-[1fr_300px]">
         <div className="space-y-5">
@@ -127,7 +135,7 @@ export default function OrderDetailPage({ orderId }: { orderId: string }) {
 
           {/* Delivery code — shown immediately at confirmation, like Uber's
               ride PIN, never gated on how far the delivery has progressed. */}
-          {hasDelivery && deliveryCode && (
+          {hasDelivery && deliveryCode && !awaitingOnlinePayment && (
             <div className="rounded-2xl p-6 text-center" style={{ background: 'linear-gradient(135deg, rgba(128,23,37,0.06), rgba(128,23,37,0.12))' }}>
               <div className="flex items-center justify-center gap-2 mb-2">
                 <KeySquare size={18} className="text-burgundy" />
@@ -228,14 +236,12 @@ export default function OrderDetailPage({ orderId }: { orderId: string }) {
               <span>{paymentLabels[order.payment] ?? order.payment}</span>
             </div>
             <div className="flex items-center gap-2">
-              <span className="rounded-full bg-green-50 px-2.5 py-0.5 text-xs font-medium text-green-700 flex items-center gap-1">
-                <Check size={11} /> Payé
-              </span>
+              <PaymentStatusBadge order={order} />
               <span className="text-sm font-semibold text-ink">{formatFCFA(order.total)}</span>
             </div>
           </div>
 
-          <InvoiceCard order={order} />
+          {!awaitingOnlinePayment && <InvoiceCard order={order} />}
 
           {/* Retours / signalement — jamais bloqués par un délai côté
               interface : le délai légal de 48h n'est qu'une recommandation

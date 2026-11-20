@@ -398,6 +398,11 @@ export default function CheckoutPage() {
       preference: hasDeliveryShops ? preference : undefined,
       payment,
       status: (result.order.status as DeliveryStepStatus) ?? 'confirmed',
+      paymentStatus: result.order.payment_status as Order['paymentStatus'],
+      paymentRequired: result.order.payment_required === true,
+      paymentDeadline: (result.order.payment_deadline as string | null | undefined) ?? null,
+      paymentGraceUntil: (result.order.payment_grace_until as string | null | undefined) ?? null,
+      orderStatus: result.order.status,
     };
   };
 

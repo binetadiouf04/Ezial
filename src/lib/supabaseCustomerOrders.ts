@@ -26,6 +26,10 @@ interface OrderRow {
   delivery_notes?: string;
   preferred_delivery_date?: string | null;
   preferred_delivery_slot?: string | null;
+  payment_status?: string;
+  payment_required?: boolean;
+  payment_deadline?: string | null;
+  payment_grace_until?: string | null;
   [key: string]: unknown;
 }
 
@@ -137,6 +141,11 @@ export async function fetchCustomerOrders(customerId: string): Promise<Order[]> 
         : { type: 'none' },
       payment: o.payment_method,
       status: (o.status as DeliveryStepStatus) ?? 'confirmed',
+      paymentStatus: o.payment_status as Order['paymentStatus'],
+      paymentRequired: o.payment_required === true,
+      paymentDeadline: o.payment_deadline ?? null,
+      paymentGraceUntil: o.payment_grace_until ?? null,
+      orderStatus: o.status,
     };
   });
 }
