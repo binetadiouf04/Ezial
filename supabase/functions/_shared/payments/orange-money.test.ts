@@ -402,6 +402,7 @@ test('mode test : numéros de test Orange (sandbox uniquement, identifiants seul
   assert.deepEqual(ok, { ok: true, body: [{ type: 'MERCHANT', msisdn: '770000000', code: '654321' }] });
   assert.ok(o.requests.every((r) => r.url.startsWith(ORANGE_BASE_URLS.sandbox)), 'uniquement la sandbox');
   assert.equal(o.requests[1].headers.Authorization, 'Bearer jeton-1');
+  assert.match(o.requests[1].url, /nbMerchants=1/, 'demande explicitement un numéro marchand');
   const prod = await fetchSandboxTestNumbers({ PAYMENTS_ENVIRONMENT: 'production', ORANGE_MONEY_CLIENT_ID: 'c', ORANGE_MONEY_CLIENT_SECRET: 's' }, o.fetch);
   assert.equal(prod.ok, false, 'refusé en production');
   const none = await fetchSandboxTestNumbers({}, o.fetch);

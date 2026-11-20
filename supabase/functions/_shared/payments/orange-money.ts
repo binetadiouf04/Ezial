@@ -414,7 +414,8 @@ export async function fetchSandboxTestNumbers(
     let token = '';
     try { token = String((JSON.parse(tText) as Record<string, unknown>).access_token ?? ''); } catch { token = ''; }
     if (t.status !== 200 || !token) return { ok: false, error: `jeton refusé (HTTP ${t.status})` };
-    const r = await fetchImpl(base + '/api/assignments/v1/partner/sim-cards', { method: 'GET', headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' } });
+    // Par défaut Orange ne fournit qu'un numéro CLIENT : on demande aussi un numéro MARCHAND (code marchand de test).
+    const r = await fetchImpl(base + '/api/assignments/v1/partner/sim-cards?nbCustomers=1&nbMerchants=1', { method: 'GET', headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' } });
     const text = await r.text();
     if (r.status !== 200) return { ok: false, error: `numéros de test refusés (HTTP ${r.status})` };
     try { return { ok: true, body: JSON.parse(text) }; } catch { return { ok: false, error: 'réponse illisible' }; }
