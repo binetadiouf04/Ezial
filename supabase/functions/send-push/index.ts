@@ -15,14 +15,26 @@
 //                                             Edge Function automatically)
 import { createClient } from 'npm:@supabase/supabase-js@2';
 import webpush from 'npm:web-push@3.6.7';
-import { checkSharedSecret, parsePushPayload } from '../_shared/guards.ts';
+import { checkSharedSecret, parsePushPayload, normalizeVapidKey } from '../_shared/guards.ts';
 
-const VAPID_PUBLIC_KEY = Deno.env.get('VAPID_PUBLIC_KEY') ?? '';
-const VAPID_PRIVATE_KEY = Deno.env.get('VAPID_PRIVATE_KEY') ?? '';
 const VAPID_SUBJECT = Deno.env.get('VAPID_SUBJECT') ?? 'mailto:contact@ezial.net';
 const PUSH_WEBHOOK_SECRET = Deno.env.get('PUSH_WEBHOOK_SECRET') ?? '';
 
-webpush.setVapidDetails(VAPID_SUBJECT, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
+// Clés nettoyées (collage depuis un iPad) et vérifiées ; une clé inutilisable ne fait plus
+// planter la fonction au démarrage : elle répond 503, avec le diagnostic (jamais la clé) au journal.
+const vapidPrivate = normalizeVapidKey(Deno.env.get('VAPID_PRIVATE_KEY'), 'private');
+const vapidPublic = normalizeVapidKey(Deno.env.get('VAPID_PUBLIC_KEY'), 'public');
+let vapidReady = false;
+if (!vapidPrivate.ok) console.error(`VAPID_PRIVATE_KEY ${vapidPrivate.reason} : ${vapidPrivate.length} caractère(s) utiles.`);
+if (!vapidPublic.ok) console.error(`VAPID_PUBLIC_KEY ${vapidPublic.reason} : ${vapidPublic.length} caractère(s) utiles.`);
+if (vapidPrivate.ok && vapidPublic.ok) {
+  try {
+    webpush.setVapidDetails(VAPID_SUBJECT, vapidPublic.key, vapidPrivate.key);
+    vapidReady = true;
+  } catch (err) {
+    console.error(`Clés VAPID refusées : ${(err as Error).message}`);
+  }
+}
 
 const supabase = createClient(
   Deno.env.get('SUPABASE_URL') ?? '',
@@ -37,6 +49,7 @@ Deno.serve(async (req) => {
   if (secretCheck === 'unconfigured') return new Response('Service unavailable', { status: 503 });
   if (secretCheck !== 'ok') return new Response('Unauthorized', { status: 401 });
   if (req.method !== 'POST') return new Response('Method not allowed', { status: 405 });
+  if (!vapidReady) return new Response('Service unavailable', { status: 503 });
 
   let raw: unknown;
   try { raw = await req.json(); } catch { return new Response('Bad request', { status: 400 }); }
@@ -61,7 +74,8 @@ Deno.serve(async (req) => {
     } catch (err) {
       // A 404/410 means the subscription is gone (uninstalled, permission
       // revoked...) — clean it up so future sends don't keep retrying it.
-      if (err?.statusCode === 404 || err?.statusCode === 410) {
+      const statusCode = (err as { statusCode?: number } | null)?.statusCode;
+      if (statusCode === 404 || statusCode === 410) {
         await supabase.from('push_subscriptions').delete().eq('endpoint', sub.endpoint);
       }
     }

@@ -15,17 +15,29 @@
 // every Edge Function already has, to resolve the admin's own JWT.
 import { createClient } from 'npm:@supabase/supabase-js@2';
 import webpush from 'npm:web-push@3.6.7';
-import { adminMfaSatisfied, checkSharedSecret, isUuid, jwtAssuranceLevel, safeInternalPath } from '../_shared/guards.ts';
+import { adminMfaSatisfied, checkSharedSecret, isUuid, jwtAssuranceLevel, safeInternalPath, normalizeVapidKey } from '../_shared/guards.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? '';
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
 const ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY') ?? '';
-const VAPID_PUBLIC_KEY = Deno.env.get('VAPID_PUBLIC_KEY') ?? '';
-const VAPID_PRIVATE_KEY = Deno.env.get('VAPID_PRIVATE_KEY') ?? '';
 const VAPID_SUBJECT = Deno.env.get('VAPID_SUBJECT') ?? 'mailto:contact@ezial.net';
 const PUSH_WEBHOOK_SECRET = Deno.env.get('PUSH_WEBHOOK_SECRET') ?? '';
 
-webpush.setVapidDetails(VAPID_SUBJECT, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
+// Clés nettoyées (collage depuis un iPad) et vérifiées ; une clé inutilisable ne fait plus
+// planter la fonction au démarrage : elle répond 503, avec le diagnostic (jamais la clé) au journal.
+const vapidPrivate = normalizeVapidKey(Deno.env.get('VAPID_PRIVATE_KEY'), 'private');
+const vapidPublic = normalizeVapidKey(Deno.env.get('VAPID_PUBLIC_KEY'), 'public');
+let vapidReady = false;
+if (!vapidPrivate.ok) console.error(`VAPID_PRIVATE_KEY ${vapidPrivate.reason} : ${vapidPrivate.length} caractère(s) utiles.`);
+if (!vapidPublic.ok) console.error(`VAPID_PUBLIC_KEY ${vapidPublic.reason} : ${vapidPublic.length} caractère(s) utiles.`);
+if (vapidPrivate.ok && vapidPublic.ok) {
+  try {
+    webpush.setVapidDetails(VAPID_SUBJECT, vapidPublic.key, vapidPrivate.key);
+    vapidReady = true;
+  } catch (err) {
+    console.error(`Clés VAPID refusées : ${(err as Error).message}`);
+  }
+}
 
 const admin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
 
@@ -139,6 +151,8 @@ async function claimCampaign(campaignId: string, scheduledOnly: boolean): Promis
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
+  // Clés de notification inutilisables : rien n'est tenté, la campagne reste programmée.
+  if (!vapidReady) return json({ error: 'Notifications indisponibles : clés VAPID à vérifier.' }, 503);
 
   let body: { campaignId?: string } = {};
   try { body = await req.json(); } catch { /* dispatch mode sends no body */ }
