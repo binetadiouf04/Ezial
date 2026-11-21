@@ -1,13 +1,12 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
-import { Check, Loader2, Search, X, Info, Settings2, Zap } from 'lucide-react';
+import { Check, Loader2, Search, X, Info, Zap, Plus } from 'lucide-react';
 import { categories } from '@/data/categories';
 import {
   saveAdminPromotion, setAdminPromotionStatus, searchActiveProducts, fetchProductsByIds,
   dakarInputsToIso, isoToDakarInputs, KIND_LABELS,
-  type AdminPromotion, type AdminShopOption, type DeliveryNeighborhood, type ProductOption,
-  type PromotionAudience, type PromotionKind, type PromotionTarget,
+  type AdminPromotion, type AdminShopOption, type ProductOption,
+  type PromotionAudience, type PromotionKind, type PromotionTarget, type SellerShareType,
 } from '@/lib/supabaseAdminPromotions';
-import NeighborhoodManager from './NeighborhoodManager';
 
 // Formulaire de création / modification d'une campagne. Validation côté
 // interface pour guider l'administratrice ; le serveur (admin_promotion_save)
@@ -33,10 +32,19 @@ interface FormState {
   categoryIds: string[];
   subcategoryRefs: string[];
   products: ProductOption[];
-  neighborhoodIds: string[];
+  shares: ShareState[];
 }
 
-type Errors = Partial<Record<'name' | 'code' | 'value' | 'maxDiscount' | 'deliveryCap' | 'minAmount' | 'start' | 'end' | 'maxUsesTotal' | 'maxUsesPerCustomer' | 'budgetMax', string>>;
+interface ShareState {
+  shopId: string;
+  shareType: SellerShareType;
+  shareValue: string;
+  agreedNote: string;
+  agreed: boolean;
+}
+
+// Clés fixes, plus « share:<shopId> » pour chaque part vendeur.
+type Errors = Partial<Record<string, string>>;
 
 const CODE_RE = /^[A-Z0-9_-]{3,30}$/;
 
@@ -74,7 +82,8 @@ function initialState(p: AdminPromotion | null): FormState {
     categoryIds: t.filter((x) => x.type === 'category').map((x) => x.ref),
     subcategoryRefs: t.filter((x) => x.type === 'subcategory').map((x) => x.ref),
     products: t.filter((x) => x.type === 'product').map((x) => ({ id: x.ref, name: '…', shopId: '' })),
-    neighborhoodIds: p?.neighborhoodIds ?? [],
+    // Une part déjà enregistrée a été acceptée par le vendeur.
+    shares: (p?.sellerShares ?? []).map((x) => ({ shopId: x.shopId, shareType: x.shareType, shareValue: str(x.shareValue), agreedNote: x.agreedNote ?? '', agreed: true })),
   };
 }
 
@@ -100,6 +109,15 @@ function validate(f: FormState): Errors {
   if (f.maxUsesTotal && Number(f.maxUsesTotal) < 1) e.maxUsesTotal = 'Au moins 1 utilisation.';
   if (!f.maxUsesPerCustomer || Number(f.maxUsesPerCustomer) < 1) e.maxUsesPerCustomer = 'Au moins 1 utilisation par client.';
   if (f.budgetMax && Number(f.budgetMax) <= 0) e.budgetMax = 'Le budget doit être positif.';
+  if (f.kind !== 'free_delivery') {
+    for (const x of f.shares) {
+      const v = Number(x.shareValue);
+      if (!x.shareValue || v <= 0) e[`share:${x.shopId}`] = 'Indiquez la part du vendeur.';
+      else if (x.shareType === 'percent' && v > 100) e[`share:${x.shopId}`] = 'Un pourcentage ne peut pas dépasser 100.';
+      else if (x.shareType === 'fixed' && f.kind === 'fixed' && Number(f.value) > 0 && v > Number(f.value)) e[`share:${x.shopId}`] = 'La part ne peut pas dépasser la réduction.';
+      else if (!x.agreed) e[`share:${x.shopId}`] = 'Cochez « Le vendeur a donné son accord » pour enregistrer.';
+    }
+  }
   return e;
 }
 
@@ -139,13 +157,10 @@ function Toggle({ active, onClick, children, disabled }: { active: boolean; onCl
 }
 
 export default function PromotionForm({
-  promotion, shops, neighborhoods, neighborhoodsMissing, onNeighborhoodsChanged, onSaved, onCancel,
+  promotion, shops, onSaved, onCancel,
 }: {
   promotion: AdminPromotion | null;
   shops: AdminShopOption[];
-  neighborhoods: DeliveryNeighborhood[];
-  neighborhoodsMissing: boolean;
-  onNeighborhoodsChanged: () => void;
   onSaved: (notice: string) => void;
   onCancel: () => void;
 }) {
@@ -158,11 +173,11 @@ export default function PromotionForm({
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<ProductOption[]>([]);
   const [searching, setSearching] = useState(false);
-  const [manageNeighborhoods, setManageNeighborhoods] = useState(false);
+  const [shareShopToAdd, setShareShopToAdd] = useState('');
   const [shopFilter, setShopFilter] = useState('');
 
   const set = <K extends keyof FormState>(key: K, value: FormState[K]) => setF((prev) => ({ ...prev, [key]: value }));
-  const toggleIn = (key: 'shopIds' | 'categoryIds' | 'subcategoryRefs' | 'neighborhoodIds', id: string) =>
+  const toggleIn = (key: 'shopIds' | 'categoryIds' | 'subcategoryRefs', id: string) =>
     setF((prev) => ({ ...prev, [key]: prev[key].includes(id) ? prev[key].filter((x) => x !== id) : [...prev[key], id] }));
 
   // Après une première tentative, les messages suivent la saisie.
@@ -207,7 +222,13 @@ export default function PromotionForm({
     const q = shopFilter.trim().toLowerCase();
     return q ? shops.filter((s) => s.name.toLowerCase().includes(q) || f.shopIds.includes(s.id)) : shops;
   }, [shops, shopFilter, f.shopIds]);
-  const shownNeighborhoods = neighborhoods.filter((n) => n.isActive || f.neighborhoodIds.includes(n.id));
+  const updateShare = (shopId: string, patch: Partial<ShareState>) =>
+    setF((prev) => ({ ...prev, shares: prev.shares.map((x) => (x.shopId === shopId ? { ...x, ...patch } : x)) }));
+  const addShare = (shopId: string) => {
+    if (!shopId || f.shares.some((x) => x.shopId === shopId)) return;
+    setF((prev) => ({ ...prev, shares: [...prev.shares, { shopId, shareType: 'fixed', shareValue: '', agreedNote: '', agreed: false }] }));
+    setShareShopToAdd('');
+  };
   const targetCount = f.shopIds.length + f.categoryIds.length + f.subcategoryRefs.length + f.products.length;
 
   const applyDuration = (hours: number) => {
@@ -266,7 +287,9 @@ export default function PromotionForm({
       maxUsesPerCustomer: Number(f.maxUsesPerCustomer),
       budgetMax: intOrNull(f.budgetMax),
       targets,
-      neighborhoodIds: f.neighborhoodIds,
+      sellerShares: f.kind === 'free_delivery' ? [] : f.shares.map((x) => ({
+        shopId: x.shopId, shareType: x.shareType, shareValue: Number(x.shareValue), agreedNote: x.agreedNote.trim() || null,
+      })),
     });
     if (result.error || !result.id) {
       setSaving(null);
@@ -346,28 +369,29 @@ export default function PromotionForm({
         </div>
       </Section>
 
-      <Section title="Période (heure de Dakar)">
-        <div className="flex flex-wrap gap-2">
-          {([['2 h', 2], ['24 h', 24], ['48 h', 48], ['14 jours', 24 * 14]] as const).map(([label, h]) => (
-            <button key={label} type="button" onClick={() => applyDuration(h)} className="chip"><Zap size={12} />{label}</button>
-          ))}
-          <button type="button" onClick={applyWeekend} className="chip"><Zap size={12} />Ce week-end</button>
+      <Section title="Dates de l’offre (heure de Dakar)">
+        <p className="text-[11px] text-ink/50">Choisissez le début, puis une durée : la fin se remplit toute seule. Heures de Dakar.</p>
+        <Field label="L’offre commence le" error={errors.start}>
+          <div className="grid grid-cols-[1.4fr_1fr] gap-2 sm:max-w-md">
+            <input type="date" aria-label="Date de début" className="input-field px-3" value={f.startDate} onChange={(e) => set('startDate', e.target.value)} />
+            <input type="time" aria-label="Heure de début" className="input-field px-3" value={f.startTime} onChange={(e) => set('startTime', e.target.value)} />
+          </div>
+        </Field>
+        <div>
+          <p className="mb-1.5 text-xs font-medium text-ink/60">Durée de l’offre</p>
+          <div className="flex flex-wrap gap-2" role="group" aria-label="Durée de l’offre">
+            {([['2 h', 2], ['24 h', 24], ['48 h', 48], ['14 jours', 24 * 14]] as const).map(([label, h]) => (
+              <button key={label} type="button" onClick={() => applyDuration(h)} className="chip"><Zap size={12} />{label}</button>
+            ))}
+            <button type="button" onClick={applyWeekend} className="chip"><Zap size={12} />Ce week-end</button>
+          </div>
         </div>
-        <div className="grid gap-3 sm:grid-cols-2">
-          <Field label="Début" error={errors.start}>
-            <div className="grid grid-cols-[1.4fr_1fr] gap-2">
-              <input type="date" aria-label="Date de début" className="input-field px-3" value={f.startDate} onChange={(e) => set('startDate', e.target.value)} />
-              <input type="time" aria-label="Heure de début" className="input-field px-3" value={f.startTime} onChange={(e) => set('startTime', e.target.value)} />
-            </div>
-          </Field>
-          <Field label="Fin" error={errors.end}>
-            <div className="grid grid-cols-[1.4fr_1fr] gap-2">
-              <input type="date" aria-label="Date de fin" className="input-field px-3" value={f.endDate} onChange={(e) => set('endDate', e.target.value)} />
-              <input type="time" aria-label="Heure de fin" className="input-field px-3" value={f.endTime} onChange={(e) => set('endTime', e.target.value)} />
-            </div>
-          </Field>
-        </div>
-        <p className="text-[11px] text-ink/45">Les raccourcis partent du début saisi (sinon de maintenant).</p>
+        <Field label="L’offre se termine le" error={errors.end}>
+          <div className="grid grid-cols-[1.4fr_1fr] gap-2 sm:max-w-md">
+            <input type="date" aria-label="Date de fin" className="input-field px-3" value={f.endDate} onChange={(e) => set('endDate', e.target.value)} />
+            <input type="time" aria-label="Heure de fin" className="input-field px-3" value={f.endTime} onChange={(e) => set('endTime', e.target.value)} />
+          </div>
+        </Field>
       </Section>
 
       <Section title="Conditions">
@@ -468,29 +492,45 @@ export default function PromotionForm({
         </div>
       </Section>
 
-      <Section
-        title="Quartiers éligibles"
-        aside={!neighborhoodsMissing && (
-          <button type="button" onClick={() => setManageNeighborhoods((v) => !v)} className="btn-ghost px-2.5 py-1 text-xs"><Settings2 size={13} /> {manageNeighborhoods ? 'Fermer' : 'Gérer les quartiers'}</button>
-        )}
-      >
-        {neighborhoodsMissing ? (
-          <p className="text-xs text-ink/50">La liste des quartiers sera disponible après la mise à jour de la base.</p>
-        ) : (
-          <>
-            <p className="text-[11px] text-ink/50">{f.neighborhoodIds.length === 0 ? 'Aucun quartier choisi : tous les quartiers.' : `${f.neighborhoodIds.length} quartier${f.neighborhoodIds.length > 1 ? 's' : ''} choisi${f.neighborhoodIds.length > 1 ? 's' : ''}.`}</p>
-            <div className="flex max-h-48 flex-wrap gap-2 overflow-y-auto">
-              {shownNeighborhoods.length === 0 && <p className="text-xs text-ink/45">Aucun quartier actif.</p>}
-              {shownNeighborhoods.map((n) => (
-                <Toggle key={n.id} active={f.neighborhoodIds.includes(n.id)} onClick={() => toggleIn('neighborhoodIds', n.id)}>
-                  {n.name}{!n.isActive && <span className="text-ink/40"> (désactivé)</span>}
-                </Toggle>
-              ))}
+      {f.kind !== 'free_delivery' && (
+        <Section title="Participation des vendeurs (facultatif)">
+          <p className="text-[11px] text-ink/55">Le vendeur finance sa part (déduite de sa vente) ; Ezial reverse le reste. Commission inchangée.</p>
+          <p className="text-[11px] text-ink/45">Exemple : réduction 2 500 FCFA, part vendeur 1 000 FCFA → Ezial reverse 1 500 FCFA.</p>
+          {f.shares.map((x) => {
+            const err = errors[`share:${x.shopId}`];
+            return (
+              <div key={x.shopId} className="space-y-2.5 rounded-xl border border-line bg-cream/40 p-3">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="min-w-0 truncate text-sm font-semibold text-ink">{shopNames.get(x.shopId) ?? 'Boutique'}</p>
+                  <button type="button" onClick={() => set('shares', f.shares.filter((y) => y.shopId !== x.shopId))} className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full text-ink/40 hover:bg-cream" aria-label={`Retirer la part de ${shopNames.get(x.shopId) ?? 'cette boutique'}`}><X size={15} /></button>
+                </div>
+                <div className="flex flex-wrap gap-2" role="group" aria-label="Type de part">
+                  <Toggle active={x.shareType === 'fixed'} onClick={() => updateShare(x.shopId, { shareType: 'fixed' })}>Montant par commande (FCFA)</Toggle>
+                  <Toggle active={x.shareType === 'percent'} onClick={() => updateShare(x.shopId, { shareType: 'percent' })}>Pourcentage de la réduction (%)</Toggle>
+                </div>
+                <div className="grid gap-2 sm:grid-cols-[10rem_1fr]">
+                  <input inputMode="numeric" className="input-field py-2.5" aria-label={x.shareType === 'fixed' ? 'Part du vendeur en FCFA' : 'Part du vendeur en %'} value={x.shareValue} onChange={(e) => updateShare(x.shopId, { shareValue: digits(e.target.value).slice(0, x.shareType === 'percent' ? 3 : 9) })} placeholder={x.shareType === 'fixed' ? 'Ex : 1000' : 'Ex : 40'} />
+                  <input className="input-field py-2.5" aria-label="Note sur l’accord" maxLength={200} value={x.agreedNote} onChange={(e) => updateShare(x.shopId, { agreedNote: e.target.value })} placeholder="Note (ex. accord par WhatsApp le 21/11)" />
+                </div>
+                <label className="flex items-center gap-2 text-sm text-ink/75">
+                  <input type="checkbox" checked={x.agreed} onChange={(e) => updateShare(x.shopId, { agreed: e.target.checked })} className="h-4 w-4 rounded border-line text-burgundy focus:ring-burgundy" />
+                  Le vendeur a donné son accord
+                </label>
+                {err && <p className="text-xs text-burgundy">{err}</p>}
+              </div>
+            );
+          })}
+          {shops.some((s) => !f.shares.some((x) => x.shopId === s.id)) && (
+            <div className="flex gap-2">
+              <select className="input-field flex-1 py-2.5" value={shareShopToAdd} onChange={(e) => setShareShopToAdd(e.target.value)} aria-label="Boutique qui participe">
+                <option value="">Choisir une boutique…</option>
+                {shops.filter((s) => !f.shares.some((x) => x.shopId === s.id)).map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+              </select>
+              <button type="button" onClick={() => addShare(shareShopToAdd)} disabled={!shareShopToAdd} className="btn-outline flex-shrink-0 px-4 py-2.5"><Plus size={14} /> Ajouter</button>
             </div>
-            {manageNeighborhoods && <NeighborhoodManager neighborhoods={neighborhoods} onChanged={onNeighborhoodsChanged} />}
-          </>
-        )}
-      </Section>
+          )}
+        </Section>
+      )}
 
       <div className="card sticky bottom-3 z-10 space-y-2 p-3 card-shadow sm:p-4">
         {saveError && <p className="text-xs text-burgundy" role="alert">{saveError}</p>}

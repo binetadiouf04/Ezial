@@ -10,19 +10,21 @@ import { isModuleMissing, isRpcMissing } from './supabaseFeatureDetect';
 // Formes JSON supposées (le contrat ne fixe que les noms et les paramètres) :
 // - admin_promotions_list() : tableau (ou { promotions: [...] }) d'objets aux
 //   noms de colonnes de `promotions` (snake_case), plus `targets`
-//   [{ target_type, target_ref }], `neighborhoods` (tableau d'uuid ou
-//   d'objets { id | neighborhood_id, name }) et `stats` { orders,
-//   product_discount, delivery_discount, ezial_cost, budget_remaining, sales,
+//   [{ target_type, target_ref }], `seller_shares` [{ shop_id, share_type,
+//   share_value, agreed_note }] et `stats` { orders, product_discount,
+//   delivery_discount, ezial_cost, seller_funded, budget_remaining, sales,
 //   commissions, ezial_net }. La lecture accepte aussi le camelCase.
 // - admin_promotion_save(p) : p reprend les colonnes de `promotions`
 //   (snake_case, sans uses_count / budget_used / status), plus `targets`
-//   [{ target_type, target_ref }] et `neighborhood_ids` [uuid]. `id` absent =
-//   création (statut brouillon côté serveur). Pour « livraison offerte »,
-//   value = 0 (seul delivery_cap compte).
+//   [{ target_type, target_ref }] et `seller_shares` [{ shop_id, share_type
+//   'fixed'|'percent', share_value, agreed_note }] (vide pour « livraison
+//   offerte »). `id` absent = création (statut brouillon côté serveur). Pour
+//   « livraison offerte », value = 0 (seul delivery_cap compte).
+//   Les campagnes valent pour toute la région de Dakar (pas de quartiers).
 // - admin_promotion_compensations(p_status) : tableau (ou { compensations })
 //   d'objets { id, order_id, order_number, shop_id, shop_name, amount, status,
-//   paid_at, paid_method, paid_reference, note, created_at, promotion_name }.
-// - admin_neighborhood_save(p) : p = { id?, name, department, is_active, sort_order }.
+//   paid_at, paid_method, paid_reference, note, created_at, promotion_name,
+//   seller_share, gross_allocation, payout_orange_money, payout_wave }.
 
 export const PROMOTIONS_MISSING_MESSAGE = 'Les campagnes seront disponibles après la mise à jour de la base.';
 
@@ -49,11 +51,16 @@ export const COMPENSATION_METHOD_LABELS: Record<CompensationMethod, string> = {
 
 export interface PromotionTarget { type: PromotionTargetType; ref: string }
 
+export type SellerShareType = 'fixed' | 'percent';
+/** Part de la réduction financée par une boutique, avec son accord. */
+export interface SellerShare { shopId: string; shareType: SellerShareType; shareValue: number; agreedNote: string | null }
+
 export interface PromotionStats {
   orders: number;
   productDiscount: number;
   deliveryDiscount: number;
   ezialCost: number;
+  sellerFunded: number;
   budgetRemaining: number | null;
   sales: number;
   commissions: number;
@@ -79,7 +86,7 @@ export interface AdminPromotion {
   usesCount: number;
   budgetUsed: number;
   targets: PromotionTarget[];
-  neighborhoodIds: string[];
+  sellerShares: SellerShare[];
   stats: PromotionStats;
 }
 
@@ -99,15 +106,7 @@ export interface PromotionInput {
   maxUsesPerCustomer: number;
   budgetMax: number | null;
   targets: PromotionTarget[];
-  neighborhoodIds: string[];
-}
-
-export interface DeliveryNeighborhood {
-  id: string;
-  name: string;
-  department: string | null;
-  isActive: boolean;
-  sortOrder: number;
+  sellerShares: SellerShare[];
 }
 
 export interface AdminShopOption { id: string; name: string; isOfficial: boolean }
@@ -127,6 +126,12 @@ export interface PromotionCompensation {
   note: string | null;
   createdAt: string | null;
   promotionName: string | null;
+  /** Part financée par le vendeur (déduite de sa vente), si la campagne en prévoit une. */
+  sellerShare: number | null;
+  /** Réduction totale rattachée à cette boutique pour la commande. */
+  grossAllocation: number | null;
+  payoutOrangeMoney: string | null;
+  payoutWave: string | null;
 }
 
 type Raw = Record<string, unknown>;
@@ -176,6 +181,7 @@ function mapStats(raw: unknown): PromotionStats {
     productDiscount: num(pick(s, 'product_discount')),
     deliveryDiscount: num(pick(s, 'delivery_discount')),
     ezialCost: num(pick(s, 'ezial_cost')),
+    sellerFunded: num(pick(s, 'seller_funded')),
     budgetRemaining: numOrNull(pick(s, 'budget_remaining')),
     sales: num(pick(s, 'sales')),
     commissions: num(pick(s, 'commissions')),
@@ -188,10 +194,13 @@ function mapPromotion(row: Raw): AdminPromotion {
     type: (pick(t, 'target_type') ?? t.type) as PromotionTargetType,
     ref: String(pick(t, 'target_ref') ?? t.ref ?? ''),
   })).filter((t) => t.ref);
-  const rawNeighborhoods = (pick(row, 'neighborhood_ids') ?? row.neighborhoods) as unknown;
-  const neighborhoodIds = (Array.isArray(rawNeighborhoods) ? rawNeighborhoods : [])
-    .map((n) => (typeof n === 'string' ? n : String((n as Raw)?.id ?? (n as Raw)?.neighborhood_id ?? '')))
-    .filter(Boolean);
+  const rawShares = pick(row, 'seller_shares');
+  const sellerShares: SellerShare[] = (Array.isArray(rawShares) ? rawShares as Raw[] : []).map((x) => ({
+    shopId: String(pick(x, 'shop_id') ?? ''),
+    shareType: (pick(x, 'share_type') === 'percent' ? 'percent' : 'fixed') as SellerShareType,
+    shareValue: num(pick(x, 'share_value')),
+    agreedNote: strOrNull(pick(x, 'agreed_note')),
+  })).filter((x) => x.shopId);
   return {
     id: String(row.id),
     name: String(row.name ?? ''),
@@ -211,7 +220,7 @@ function mapPromotion(row: Raw): AdminPromotion {
     usesCount: num(pick(row, 'uses_count')),
     budgetUsed: num(pick(row, 'budget_used')),
     targets,
-    neighborhoodIds,
+    sellerShares,
     stats: mapStats(row.stats),
   };
 }
@@ -243,7 +252,12 @@ export async function saveAdminPromotion(input: PromotionInput): Promise<{ id?: 
     max_uses_per_customer: input.maxUsesPerCustomer,
     budget_max: input.budgetMax,
     targets: input.targets.map((t) => ({ target_type: t.type, target_ref: t.ref })),
-    neighborhood_ids: input.neighborhoodIds,
+    seller_shares: input.kind === 'free_delivery' ? [] : input.sellerShares.map((x) => ({
+      shop_id: x.shopId,
+      share_type: x.shareType,
+      share_value: x.shareValue,
+      agreed_note: x.agreedNote?.trim() || null,
+    })),
   };
   if (input.id) p.id = input.id;
   const { data, error } = await supabase.rpc('admin_promotion_save', { p });
@@ -271,6 +285,10 @@ function mapCompensation(row: Raw): PromotionCompensation {
     note: strOrNull(row.note),
     createdAt: strOrNull(pick(row, 'created_at')),
     promotionName: strOrNull(pick(row, 'promotion_name')),
+    sellerShare: numOrNull(pick(row, 'seller_share')),
+    grossAllocation: numOrNull(pick(row, 'gross_allocation')),
+    payoutOrangeMoney: strOrNull(pick(row, 'payout_orange_money')),
+    payoutWave: strOrNull(pick(row, 'payout_wave')),
   };
 }
 
@@ -291,36 +309,6 @@ export async function markCompensationsPaid(ids: string[], method: CompensationM
     p_note: note.trim() || null,
   });
   return error ? { error: friendlyError(error, 'Impossible d’enregistrer le paiement. Réessayez.') } : {};
-}
-
-export async function fetchDeliveryNeighborhoods(): Promise<ListResult<DeliveryNeighborhood>> {
-  const { data, error } = await supabase
-    .from('delivery_neighborhoods')
-    .select('id, name, department, is_active, sort_order')
-    .order('sort_order', { ascending: true })
-    .order('name', { ascending: true });
-  if (error) {
-    if (isModuleMissing(error)) return { missing: true };
-    return { missing: false, items: [], error: 'Impossible de charger les quartiers.' };
-  }
-  return {
-    missing: false,
-    items: (data ?? []).map((r) => ({
-      id: String(r.id),
-      name: String(r.name ?? ''),
-      department: strOrNull(r.department),
-      isActive: r.is_active !== false,
-      sortOrder: num(r.sort_order),
-    })),
-  };
-}
-
-export async function saveDeliveryNeighborhood(n: { id?: string; name: string; department: string | null; isActive: boolean; sortOrder: number }): Promise<{ id?: string; error?: string }> {
-  const p: Raw = { name: n.name.trim(), department: n.department?.trim() || null, is_active: n.isActive, sort_order: n.sortOrder };
-  if (n.id) p.id = n.id;
-  const { data, error } = await supabase.rpc('admin_neighborhood_save', { p });
-  if (error) return { error: error.code === '23505' ? 'Ce quartier existe déjà.' : friendlyError(error, 'Enregistrement du quartier impossible.') };
-  return { id: typeof data === 'string' ? data : n.id };
 }
 
 /** Boutiques actives (hors boutiques supprimées), pour les cibles d'une campagne. */

@@ -2,9 +2,9 @@ import { useCallback, useEffect, useState } from 'react';
 import { AlertCircle, Check, Loader2, Pause, Pencil, Play, Plus, Square } from 'lucide-react';
 import { formatFCFA } from '@/data/products';
 import {
-  fetchAdminPromotions, fetchActiveShopOptions, fetchDeliveryNeighborhoods, setAdminPromotionStatus,
+  fetchAdminPromotions, fetchActiveShopOptions, setAdminPromotionStatus,
   formatDakarDateTime, KIND_LABELS, PROMOTIONS_MISSING_MESSAGE,
-  type AdminPromotion, type AdminShopOption, type DeliveryNeighborhood, type PromotionStatus,
+  type AdminPromotion, type AdminShopOption, type PromotionStatus,
 } from '@/lib/supabaseAdminPromotions';
 import ConfirmDialog from '../../components/blog/ConfirmDialog';
 import PromotionForm from './promotions/PromotionForm';
@@ -88,8 +88,6 @@ export default function AdminPromotions() {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
   const [shops, setShops] = useState<AdminShopOption[]>([]);
-  const [neighborhoods, setNeighborhoods] = useState<DeliveryNeighborhood[]>([]);
-  const [neighborhoodsMissing, setNeighborhoodsMissing] = useState(false);
   const [editing, setEditing] = useState<AdminPromotion | 'new' | null>(null);
   const [pending, setPending] = useState<Pending>(null);
   const [busy, setBusy] = useState(false);
@@ -107,19 +105,11 @@ export default function AdminPromotions() {
     if (res.error) setLoadError(res.error);
   }, []);
 
-  const loadNeighborhoods = useCallback(async () => {
-    const res = await fetchDeliveryNeighborhoods();
-    if (res.missing) { setNeighborhoodsMissing(true); return; }
-    setNeighborhoodsMissing(false);
-    setNeighborhoods(res.items);
-  }, []);
-
   useEffect(() => { void load(); }, [load]);
   useEffect(() => {
     if (missing) return;
     void fetchActiveShopOptions().then(setShops);
-    void loadNeighborhoods();
-  }, [missing, loadNeighborhoods]);
+  }, [missing]);
 
   const confirmStatus = async () => {
     if (!pending) return;
@@ -147,9 +137,6 @@ export default function AdminPromotions() {
         key={editing === 'new' ? 'new' : editing.id}
         promotion={editing === 'new' ? null : editing}
         shops={shops}
-        neighborhoods={neighborhoods}
-        neighborhoodsMissing={neighborhoodsMissing}
-        onNeighborhoodsChanged={() => void loadNeighborhoods()}
         onCancel={() => setEditing(null)}
         onSaved={(msg) => { setEditing(null); setNotice(msg); void load(); }}
       />
@@ -207,7 +194,8 @@ export default function AdminPromotions() {
                       Du {formatDakarDateTime(p.startsAt)} au {formatDakarDateTime(p.endsAt)} <span className="text-ink/40">(heure de Dakar)</span>
                     </p>
                     <p className="mt-0.5 text-xs text-ink/45">
-                      {targetsLabel(p)} · {p.neighborhoodIds.length === 0 ? 'Tous les quartiers' : plural(p.neighborhoodIds.length, 'quartier')}
+                      {targetsLabel(p)}
+                      {p.sellerShares.length > 0 ? ` · ${plural(p.sellerShares.length, 'vendeur')} participe${p.sellerShares.length > 1 ? 'nt' : ''}` : ''}
                       {p.audience === 'new_customers' ? ' · Nouveaux clients' : ''}
                       {p.minAmount > 0 ? ` · Min. ${formatFCFA(p.minAmount)}` : ''}
                     </p>
@@ -220,6 +208,7 @@ export default function AdminPromotions() {
                       <Stat label="Réduction produits" value={formatFCFA(s.productDiscount)} />
                       <Stat label="Livraison offerte" value={formatFCFA(s.deliveryDiscount)} />
                       <Stat label="Coût Ezial" value={formatFCFA(s.ezialCost)} />
+                      <Stat label="Financé par les vendeurs" value={formatFCFA(s.sellerFunded)} />
                       <Stat label="CA produits" value={formatFCFA(s.sales)} />
                       <Stat label="Commissions" value={formatFCFA(s.commissions)} />
                       <Stat label="Revenu Ezial après promo" value={formatFCFA(s.ezialNet)} strong negative={s.ezialNet < 0} />

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { AlertCircle, Check, Loader2, X } from 'lucide-react';
+import { AlertCircle, Check, Copy, Loader2, Smartphone, X } from 'lucide-react';
+import { copyText } from '@/lib/clipboard';
 import { formatFCFA } from '@/data/products';
 import {
   fetchAdminCompensations, markCompensationsPaid, formatDakarDateTime, COMPENSATION_METHOD_LABELS, PROMOTIONS_MISSING_MESSAGE,
@@ -22,6 +23,17 @@ const statusStyles: Record<CompensationStatus, string> = {
 };
 const statusLabels: Record<CompensationStatus, string> = { due: 'À payer', paid: 'Payée', cancelled: 'Annulée' };
 
+interface ShopDue { key: string; name: string; total: number; ids: string[]; orangeMoney: string | null; wave: string | null }
+
+function CopyButton({ label, text, id, copied, onCopy }: { label: string; text: string; id: string; copied: string | null; onCopy: (id: string, text: string) => void }) {
+  const state = copied === id ? 'ok' : copied === `${id}:ko` ? 'ko' : null;
+  return (
+    <button type="button" onClick={() => onCopy(id, text)} className="btn-outline flex-shrink-0 px-3 py-1.5 text-xs">
+      {state === 'ok' ? <Check size={13} /> : <Copy size={13} />} {state === 'ok' ? 'Copié' : state === 'ko' ? 'Copie impossible' : label}
+    </button>
+  );
+}
+
 export default function CompensationsPanel() {
   const [filter, setFilter] = useState<CompensationStatus>('due');
   const [items, setItems] = useState<PromotionCompensation[]>([]);
@@ -36,6 +48,7 @@ export default function CompensationsPanel() {
   const [paying, setPaying] = useState(false);
   const [payError, setPayError] = useState('');
   const [notice, setNotice] = useState('');
+  const [copied, setCopied] = useState<string | null>(null);
 
   const load = useCallback(async (status: CompensationStatus) => {
     setLoading(true);
@@ -53,24 +66,38 @@ export default function CompensationsPanel() {
 
   // Total à payer par boutique (filtre « À payer »).
   const byShop = useMemo(() => {
-    const map = new Map<string, { key: string; name: string; total: number; ids: string[] }>();
+    const map = new Map<string, ShopDue>();
     for (const c of items) {
       if (c.status !== 'due') continue;
       const key = c.shopId ?? c.shopName;
-      const entry = map.get(key) ?? { key, name: c.shopName, total: 0, ids: [] };
+      const entry = map.get(key) ?? { key, name: c.shopName, total: 0, ids: [], orangeMoney: null, wave: null };
       entry.total += c.amount;
       entry.ids.push(c.id);
+      entry.orangeMoney = entry.orangeMoney ?? c.payoutOrangeMoney;
+      entry.wave = entry.wave ?? c.payoutWave;
       map.set(key, entry);
     }
     return [...map.values()].sort((a, b) => b.total - a.total);
   }, [items]);
 
   const selectedTotal = items.filter((c) => selected.includes(c.id)).reduce((s, c) => s + c.amount, 0);
+  // Une seule boutique sélectionnée : on affiche ses numéros de versement.
+  const selectedShopKeys = [...new Set(items.filter((c) => selected.includes(c.id)).map((c) => c.shopId ?? c.shopName))];
+  const payShop = selectedShopKeys.length === 1 ? byShop.find((b) => b.key === selectedShopKeys[0]) ?? null : null;
+
+  const openPay = (shop: ShopDue | null) => {
+    if (shop) setSelected(shop.ids);
+    setMethod(shop?.orangeMoney ? 'orange_money' : shop?.wave ? 'wave' : 'wave');
+    setPayError('');
+    setCopied(null);
+    setPayOpen(true);
+  };
+  const copy = async (id: string, text: string) => {
+    const ok = await copyText(text);
+    setCopied(ok ? id : `${id}:ko`);
+    window.setTimeout(() => setCopied((c) => (c === id || c === `${id}:ko` ? null : c)), 2000);
+  };
   const toggle = (id: string) => setSelected((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
-  const selectShop = (ids: string[]) => setSelected((prev) => {
-    const all = ids.every((id) => prev.includes(id));
-    return all ? prev.filter((id) => !ids.includes(id)) : [...new Set([...prev, ...ids])];
-  });
 
   const confirmPaid = async () => {
     setPaying(true);
@@ -115,12 +142,11 @@ export default function CompensationsPanel() {
               </div>
               <ul className="divide-y divide-line">
                 {byShop.map((b) => {
-                  const all = b.ids.every((id) => selected.includes(id));
                   return (
                     <li key={b.key} className="flex items-center gap-3 py-2">
                       <p className="min-w-0 flex-1 truncate text-sm text-ink">{b.name} <span className="text-xs text-ink/45">· {b.ids.length} commande{b.ids.length > 1 ? 's' : ''}</span></p>
                       <p className="flex-shrink-0 text-sm font-semibold text-ink">{formatFCFA(b.total)}</p>
-                      <button type="button" onClick={() => selectShop(b.ids)} className={`chip flex-shrink-0 ${all ? 'chip-active' : ''}`}>{all ? 'Sélectionnée' : 'Sélectionner'}</button>
+                      <button type="button" onClick={() => openPay(b)} className="btn-primary flex-shrink-0 px-4 py-1.5 text-xs">Payer</button>
                     </li>
                   );
                 })}
@@ -156,6 +182,13 @@ export default function CompensationsPanel() {
                           ? `Payée le ${formatDakarDateTime(c.paidAt)}${c.paidMethod ? ` · ${COMPENSATION_METHOD_LABELS[c.paidMethod] ?? c.paidMethod}` : ''}${c.paidReference ? ` · réf. ${c.paidReference}` : ''}`
                           : `Créée le ${formatDakarDateTime(c.createdAt)}`}
                       </p>
+                      {(c.grossAllocation !== null || c.sellerShare !== null) && (
+                        <p className="mt-0.5 text-[11px] text-ink/55">
+                          {c.grossAllocation !== null ? `Réduction totale ${formatFCFA(c.grossAllocation)}` : ''}
+                          {c.grossAllocation !== null && c.sellerShare !== null ? ' · ' : ''}
+                          {c.sellerShare !== null ? `part vendeur ${formatFCFA(c.sellerShare)}` : ''}
+                        </p>
+                      )}
                       {c.note && <p className="mt-0.5 break-words text-[11px] text-ink/45">Note : {c.note}</p>}
                     </div>
                   </label>
@@ -170,17 +203,39 @@ export default function CompensationsPanel() {
         <div className="card sticky bottom-3 z-10 flex flex-wrap items-center gap-3 p-3 card-shadow">
           <p className="min-w-0 flex-1 text-sm text-ink">{selected.length} sélectionnée{selected.length > 1 ? 's' : ''} · <strong>{formatFCFA(selectedTotal)}</strong></p>
           <button type="button" onClick={() => setSelected([])} className="btn-ghost px-3">Désélectionner</button>
-          <button type="button" onClick={() => { setPayError(''); setPayOpen(true); }} className="btn-primary px-5 py-2.5"><Check size={15} /> Marquer payé</button>
+          <button type="button" onClick={() => openPay(null)} className="btn-primary px-5 py-2.5"><Check size={15} /> Marquer payé</button>
         </div>
       )}
 
       {payOpen && (
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-ink/40 p-0 sm:items-center sm:p-4" onClick={paying ? undefined : () => setPayOpen(false)}>
-          <div role="dialog" aria-modal="true" aria-labelledby="pay-title" className="w-full max-w-md rounded-t-2xl bg-white p-5 sm:rounded-xl" onClick={(e) => e.stopPropagation()}>
+          <div role="dialog" aria-modal="true" aria-labelledby="pay-title" className="max-h-[92vh] w-full max-w-md overflow-y-auto rounded-t-2xl bg-white p-5 sm:rounded-xl" onClick={(e) => e.stopPropagation()}>
             <div className="mb-3 flex items-center justify-between gap-3">
-              <h3 id="pay-title" className="font-display text-lg font-semibold text-ink">Marquer payé</h3>
+              <h3 id="pay-title" className="font-display text-lg font-semibold text-ink">{payShop ? `Payer ${payShop.name}` : 'Marquer payé'}</h3>
               <button type="button" onClick={() => setPayOpen(false)} disabled={paying} aria-label="Fermer"><X size={18} className="text-ink/40" /></button>
             </div>
+            {payShop && (
+              <div className="mb-4 space-y-2 rounded-xl border border-line bg-cream/50 p-3">
+                {([['om', 'Orange Money', payShop.orangeMoney], ['wave', 'Wave', payShop.wave]] as const).map(([id, label, number]) => (
+                  <div key={id} className="flex items-center gap-2">
+                    <Smartphone size={15} className="flex-shrink-0 text-ink/40" />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-[11px] text-ink/50">{label}</p>
+                      <p className={`truncate text-sm ${number ? 'font-mono font-semibold text-ink' : 'text-ink/45'}`}>{number ?? 'Aucun numéro enregistré'}</p>
+                    </div>
+                    {number && <CopyButton label="Copier le numéro" text={number.replace(/\s/g, '')} id={id} copied={copied} onCopy={(i, t) => void copy(i, t)} />}
+                  </div>
+                ))}
+                <div className="flex items-center gap-2 border-t border-line pt-2">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[11px] text-ink/50">Montant total à payer</p>
+                    <p className="font-display text-xl font-semibold text-burgundy">{formatFCFA(selectedTotal)}</p>
+                  </div>
+                  <CopyButton label="Copier le montant" text={String(selectedTotal)} id="amount" copied={copied} onCopy={(i, t) => void copy(i, t)} />
+                </div>
+                <p className="text-[11px] text-ink/55">Envoyez le montant depuis votre application Orange Money ou Wave, puis marquez comme payé.</p>
+              </div>
+            )}
             <p className="mb-4 text-sm text-ink/60">{selected.length} compensation{selected.length > 1 ? 's' : ''} · <strong className="text-ink">{formatFCFA(selectedTotal)}</strong></p>
             <div className="space-y-3">
               <div>
@@ -203,7 +258,7 @@ export default function CompensationsPanel() {
               <div className="flex gap-2 pt-1">
                 <button type="button" onClick={() => setPayOpen(false)} disabled={paying} className="btn-outline flex-1 px-4">Annuler</button>
                 <button type="button" onClick={() => void confirmPaid()} disabled={paying} className="btn-primary flex-1 px-4">
-                  {paying ? <Loader2 size={15} className="animate-spin" /> : <Check size={15} />} Confirmer
+                  {paying ? <Loader2 size={15} className="animate-spin" /> : <Check size={15} />} Marquer payé
                 </button>
               </div>
             </div>
