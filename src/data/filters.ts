@@ -56,9 +56,10 @@ const clothingTypesHomme = [
 const nightwearTypes = ['Pyjama', 'Nuisette', 'Chemise de nuit', 'Peignoir'];
 const lingerieTypes = ['Soutien-gorge', 'Culotte', 'Ensemble', 'Body', 'Caleçon / boxer'];
 
-// Bagues : tailles françaises (tour de doigt en mm), plus « Taille standard »
-// pour les bagues ajustables ou à taille unique. Variante de stock (« Taille »).
-export const ringSizes: string[] = [...Array.from({ length: 17 }, (_, i) => String(48 + i)), 'Taille standard'];
+// Bagues : tailles américaines (8, 8.5, 10…), celles utilisées par Ezial et ses
+// vendeurs, de 5 à 13 par demi-taille, plus « Taille standard » pour les bagues
+// ajustables ou à taille unique. Variante de stock (« Taille »).
+export const ringSizes: string[] = [...Array.from({ length: 17 }, (_, i) => String(5 + i / 2)), 'Taille standard'];
 
 // Lunettes : caractéristiques propres (la « Matière » des bijoux ne s'applique
 // pas à une monture). Identifiants = libellé sans accents ni espaces, comme pour
