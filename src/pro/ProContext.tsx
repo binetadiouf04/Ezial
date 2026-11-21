@@ -10,6 +10,8 @@ import { signInAdmin, restoreAdminSession, completeAdminMfaChallenge } from '@/l
 import { checkDriverUsername, createDriverPin, signInDriverWithPin, restoreDriverSession, type DriverLoginStatus } from '@/lib/supabaseDriverAuth';
 import { fetchDriverMissions, acceptDeliveryMission, markStopCollected, startMissionDelivery, completeMissionDelivery } from '@/lib/supabaseDriverMissions';
 import { supabase } from '@/lib/supabaseClient';
+import { getStaffSpace } from '@/lib/staffSpace';
+import { readProMarker, writeProMarker, clearProMarker, hasStoredSupabaseSession } from './proAuthMarker';
 
 type Route = string;
 
@@ -110,6 +112,8 @@ export interface AdminMfaChallengeState {
 }
 
 interface ProState extends AuthState {
+  /** Session existante en cours de vérification : afficher un chargement, pas la connexion. */
+  authRestoring: boolean;
   route: Route;
   navigate: (r: Route) => void;
   login: (role: Role, identifier: string, name: string, shopInfo?: SellerShopInfo) => void;
@@ -297,6 +301,14 @@ export function ProProvider({ children }: { children: ReactNode }) {
   const [isDriverMissionsLoading, setIsDriverMissionsLoading] = useState(false);
   const [driverActionError, setDriverActionError] = useState<string | null>(null);
   const [adminMfaChallenge, setAdminMfaChallenge] = useState<AdminMfaChallengeState | null>(null);
+  // Vérification d'une session existante en cours (ouverture de l'application) : l'écran
+  // de connexion n'est pas montré pendant ce temps (il « clignotait » plusieurs secondes
+  // avant l'ouverture de la boutique). Vrai seulement s'il y a quelque chose à vérifier.
+  const [authRestoring, setAuthRestoring] = useState<boolean>(() => {
+    const marker = readProMarker();
+    if (marker) return true;
+    return getStaffSpace() === null && hasStoredSupabaseSession();
+  });
 
   // Admin state
   const [allShops, setAllShops] = useState<Shop[]>(initialShops);
@@ -326,14 +338,8 @@ export function ProProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
-    const saved = sessionStorage.getItem('ezial-pro-auth');
-    if (!saved) return;
-    let parsed: { role: Role; identifier: string; name: string };
-    try {
-      parsed = JSON.parse(saved);
-    } catch {
-      return;
-    }
+    const parsed = readProMarker();
+    if (!parsed) return;
 
     // '/' means the path was bare /pro (a fresh entry, no sub-page) — only
     // then does session restore pick the role's default landing route. A
@@ -349,12 +355,14 @@ export function ProProvider({ children }: { children: ReactNode }) {
       (async () => {
         const driver = await restoreDriverSession();
         if (!driver) {
-          sessionStorage.removeItem('ezial-pro-auth');
+          clearProMarker();
+          setAuthRestoring(false);
           return;
         }
         setRole('driver');
         setIdentifier(parsed.identifier);
         setName(driver.name);
+        setAuthRestoring(false);
         const real = await loadDriverMissions();
         if (requestedRoute !== '/') return;
         const pendingOrderId = pendingDriverOrderId();
@@ -372,8 +380,9 @@ export function ProProvider({ children }: { children: ReactNode }) {
       // public.admins before the admin area opens.
       (async () => {
         const admin = await restoreAdminSession();
+        setAuthRestoring(false);
         if (!admin) {
-          sessionStorage.removeItem('ezial-pro-auth');
+          clearProMarker();
           return;
         }
         if ('mfaRequired' in admin) {
@@ -396,7 +405,8 @@ export function ProProvider({ children }: { children: ReactNode }) {
     (async () => {
       const shop = await restoreSellerSession();
       if (!shop) {
-        sessionStorage.removeItem('ezial-pro-auth');
+        clearProMarker();
+        setAuthRestoring(false);
         return;
       }
       setRole('seller');
@@ -407,6 +417,7 @@ export function ProProvider({ children }: { children: ReactNode }) {
       if (requestedRoute === '/') { setRoute('/seller'); writeProRoute('/seller'); }
       const mockShop = initialShops.find((s) => s.sellerId === parsed.identifier);
       setSellerShop(mockShop ?? null);
+      setAuthRestoring(false);
     })();
     // Deliberately mount-only — re-running this on every `missions` update
     // (e.g. after collectParcel) would re-navigate the driver back to a
@@ -456,24 +467,31 @@ export function ProProvider({ children }: { children: ReactNode }) {
         }
       });
     }
-    sessionStorage.setItem('ezial-pro-auth', JSON.stringify({ role: r, identifier: id, name: n }));
+    writeProMarker({ role: r, identifier: id, name: n });
   }, [loadDriverMissions]);
 
-  // A seller signup-confirmation link (or a password-reset link) opens in a
-  // brand-new tab with no sessionStorage marker at all — the restore block
-  // above skips entirely in that case (it only ever looks at sessionStorage),
-  // even though a real Supabase session now exists. This picks up exactly
-  // that gap: a real session, no sessionStorage marker, landing on bare
-  // /pro (never a direct deep link to a specific sub-page, which keeps
-  // requiring an explicit login exactly as before).
+  // Pas de repère enregistré (lien de confirmation d'inscription ou de nouveau mot de
+  // passe ouvert dans un nouvel onglet, repère effacé…) alors qu'une vraie session
+  // Supabase existe : on vérifie si elle possède une boutique.
+  // Étendu le 21 nov. 2026 à toutes les pages vendeur (pas seulement /pro) : une
+  // session Supabase valide qui possède une boutique rouvre l'espace boutique là où
+  // l'on arrive (la boutique reste vérifiée par restoreSellerSession, comme toujours).
   useEffect(() => {
-    if (sessionStorage.getItem('ezial-pro-auth')) return;
-    if (proSubRouteFromPath() !== '/') return;
+    if (readProMarker()) return;
+    if (getStaffSpace() !== null) return;
+    if (!hasStoredSupabaseSession()) return;
+    const requested = proSubRouteFromPath();
+    if (requested !== '/' && !requested.startsWith('/seller')) { setAuthRestoring(false); return; }
     let cancelled = false;
     (async () => {
       const shop = await restoreSellerSession();
-      if (cancelled || !shop) return;
-      login('seller', shop.sellerCode || shop.shopId, shop.shopName, { supabaseShopId: shop.shopId, isOfficial: shop.isOfficial });
+      if (cancelled) return;
+      if (shop) {
+        login('seller', shop.sellerCode || shop.shopId, shop.shopName, { supabaseShopId: shop.shopId, isOfficial: shop.isOfficial });
+        // Page vendeur demandée (lien direct, notification) : on y reste.
+        if (requested !== '/') { setRoute(requested); writeProRoute(requested); }
+      }
+      setAuthRestoring(false);
     })();
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -491,7 +509,7 @@ export function ProProvider({ children }: { children: ReactNode }) {
     setDriverVisibleMissions([]);
     setDriverActionError(null);
     setAdminMfaChallenge(null);
-    sessionStorage.removeItem('ezial-pro-auth');
+    clearProMarker();
     // Fire-and-forget: the local session is already cleared above regardless
     // of whether the Supabase sign-out call itself succeeds.
     void signOutSeller();
@@ -620,7 +638,7 @@ export function ProProvider({ children }: { children: ReactNode }) {
       // Même marqueur qu'une session admin ordinaire, pour qu'un rechargement
       // pendant la vérification revienne sur l'écran du code (et non sur le
       // formulaire). Jamais cru seul : restoreAdminSession() revalide tout.
-      sessionStorage.setItem('ezial-pro-auth', JSON.stringify({ role: 'admin', identifier, name: '' }));
+      writeProMarker({ role: 'admin', identifier, name: '' });
       return { mfaRequired: true };
     }
     return { name: result.name };
@@ -635,7 +653,7 @@ export function ProProvider({ children }: { children: ReactNode }) {
     setRole('admin');
     setIdentifier(adminMfaChallenge.identifier);
     setName(result.name);
-    sessionStorage.setItem('ezial-pro-auth', JSON.stringify({ role: 'admin', identifier: adminMfaChallenge.identifier, name: result.name }));
+    writeProMarker({ role: 'admin', identifier: adminMfaChallenge.identifier, name: result.name });
     // Même règle que login() et que la restauration de session : après le
     // mot de passe, toujours le tableau de bord ; au rechargement d'une
     // sous-page de l'administration, cette sous-page est conservée.
@@ -888,6 +906,7 @@ export function ProProvider({ children }: { children: ReactNode }) {
 
   const value: ProState = {
     role,
+    authRestoring,
     identifier,
     name,
     route,
