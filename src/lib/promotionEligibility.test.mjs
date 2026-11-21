@@ -28,5 +28,5 @@ test('conditions affichées', () => {
   const fmt = (n) => `${n} FCFA`;
   assert.equal(freeDeliveryConditions(promo(), fmt), '');
   assert.equal(freeDeliveryConditions(promo({ minAmount: 15000, deliveryCap: 1500, neighborhoods: ['Plateau'] }), fmt),
-    "dès 15000 FCFA d'articles concernés, jusqu'à 1500 FCFA de livraison, dans certains quartiers de Dakar");
+    "dès 15000 FCFA d'articles concernés, jusqu'à 1500 FCFA de livraison");
 });

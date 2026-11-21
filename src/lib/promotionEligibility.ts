@@ -40,6 +40,5 @@ export function freeDeliveryConditions(p: PublicPromotion, formatMoney: (n: numb
   const parts: string[] = [];
   if (p.minAmount > 0) parts.push(`dès ${formatMoney(p.minAmount)} d'articles concernés`);
   if (p.deliveryCap) parts.push(`jusqu'à ${formatMoney(p.deliveryCap)} de livraison`);
-  if (p.neighborhoods.length > 0) parts.push('dans certains quartiers de Dakar');
   return parts.join(', ');
 }

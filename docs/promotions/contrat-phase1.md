@@ -1,5 +1,17 @@
 # Campagnes promotionnelles — phase 1 : contrat commun (base ↔ admin ↔ marketplace)
 
+**Mise à jour du 21 nov. 2026 (soir), prioritaire sur le reste de ce fichier :**
+- **Quartiers retirés** des campagnes (pas de delivery_neighborhoods / promotion_neighborhoods) : toute la région
+  de Dakar est livrée ; `public_active_promotions.neighborhoods` et `admin_promotions_list.neighborhoods` = tableaux vides.
+- **Part vendeur facultative** : `promotion_seller_shares(promotion_id, shop_id, share_type 'fixed'|'percent',
+  share_value, agreed, agreed_note)` ; part vendeur V = min(A, valeur) (fixe, par commande) ou round(A × % / 100) ;
+  le solde automatique du vendeur baisse de A (réduction de sa boutique), Ezial lui reverse A − V (compensation) ;
+  commission inchangée ; jamais sur la livraison offerte. `admin_promotion_save` reçoit `seller_shares`,
+  `admin_promotions_list` les renvoie, stats + `seller_funded`.
+- **Paiement des compensations** : `admin_promotion_compensations` renvoie aussi `payout_orange_money`,
+  `payout_wave` (numéros approuvés de la boutique), `seller_share`, `gross_allocation` ; l'admin copie numéro et
+  montant, paie depuis son application, puis marque « payé » (aucun lien profond inventé).
+
 Décisions de la propriétaire (21 nov. 2026) :
 - un seul système « Campagnes promotionnelles » ; phase 1 = réduction fixe, pourcentage, livraison offerte ;
 - **Ezial finance toujours** la promotion ; le vendeur garde sa vente au prix normal et sa commission
