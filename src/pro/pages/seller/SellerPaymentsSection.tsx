@@ -1,10 +1,11 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { formatFCFA, formatDate } from '../../data';
 import {
   submitPayoutMethod, maskWalletPhone, providerLabel, PAYOUT_STATUS_LABELS,
   type SellerPaymentSummary, type PayoutMethod, type SellerPayout, type PaymentProvider, type SellerPayoutStatus,
 } from '@/lib/supabasePayments';
 import { Loader2, Check, Clock, Smartphone } from 'lucide-react';
+import { fetchSellerPromotionCompensations, type SellerCompensationsResult } from '@/lib/supabaseSellerPromotions';
 
 // « Mes paiements » du vendeur, affiché seulement quand le module paiements
 // est installé. Tout est en lecture seule (montants calculés par le serveur) ;
@@ -216,5 +217,57 @@ function ProviderAccount({
         </form>
       )}
     </div>
+  );
+}
+
+// « Compensations promotion Ezial » : réductions des campagnes Ezial
+// rattachées aux ventes de la boutique, reversées à la main par Ezial.
+// Masqué tant que la migration n'est pas exécutée ou que la liste est vide.
+export function SellerPromotionCompensations({ shopId }: { shopId: string }) {
+  const [state, setState] = useState<SellerCompensationsResult | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    void fetchSellerPromotionCompensations(shopId).then((res) => { if (!cancelled) setState(res); });
+    return () => { cancelled = true; };
+  }, [shopId]);
+
+  if (!state || !state.supported) return null;
+  if (state.error) return <p className="text-sm text-burgundy">{state.error}</p>;
+  const items = state.items.filter((c) => c.status !== 'cancelled');
+  if (items.length === 0) return null;
+  const due = items.filter((c) => c.status === 'due').reduce((s, c) => s + c.amount, 0);
+
+  return (
+    <section className="space-y-3">
+      <div>
+        <h2 className="text-sm font-semibold text-ink">Compensations promotion Ezial</h2>
+        <p className="mt-0.5 text-xs text-ink/50">Réductions offertes par Ezial sur vos ventes : Ezial vous reverse ces montants.</p>
+      </div>
+      <div className="card p-4">
+        <p className="text-xs font-medium text-ink/50">Total à recevoir</p>
+        <p className="mt-1 font-display text-xl font-semibold text-burgundy">{formatFCFA(due)}</p>
+      </div>
+      <ul className="card divide-y divide-line">
+        {items.map((c) => (
+          <li key={c.id} className="flex items-center justify-between gap-3 p-4">
+            <div className="min-w-0">
+              <p className="truncate font-mono text-sm font-semibold text-ink">{c.orderNumber ?? '—'}</p>
+              <p className="mt-0.5 text-xs text-ink/45">
+                {c.status === 'paid'
+                  ? (c.paidAt ? `Payée le ${formatDate(c.paidAt)}` : 'Payée')
+                  : (c.createdAt ? `Commande du ${formatDate(c.createdAt)}` : 'En attente de versement')}
+              </p>
+            </div>
+            <div className="flex flex-shrink-0 items-center gap-2">
+              <span className="text-sm font-semibold text-ink">{formatFCFA(c.amount)}</span>
+              <span className={`whitespace-nowrap rounded-full px-2.5 py-1 text-[11px] font-semibold ${c.status === 'paid' ? 'bg-green-50 text-green-700' : 'bg-amber-50 text-amber-700'}`}>
+                {c.status === 'paid' ? 'Payée' : 'À recevoir'}
+              </span>
+            </div>
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }

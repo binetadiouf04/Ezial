@@ -11,7 +11,7 @@ import {
   fetchSellerFinanceSummary, fetchMyPayoutMethods, fetchMyPayouts,
   type SellerPaymentSummary, type PayoutMethod, type SellerPayout,
 } from '@/lib/supabasePayments';
-import { SellerPaymentCards, SellerPayoutMethodCard, SellerPayoutHistory } from './SellerPaymentsSection';
+import { SellerPaymentCards, SellerPayoutMethodCard, SellerPayoutHistory, SellerPromotionCompensations } from './SellerPaymentsSection';
 
 // Module paiements (migration Wave / Orange Money) : tant qu'il n'est pas
 // installé, la page garde exactement son affichage actuel.
@@ -154,6 +154,8 @@ export default function SellerFinances() {
         </div>
         {requestError && <p className="mt-2 text-sm text-burgundy">{requestError}</p>}
       </div>
+
+      <SellerPromotionCompensations shopId={sellerSupabaseShopId} />
 
       {payments.kind === 'ready' && (
         <>

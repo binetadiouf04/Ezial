@@ -1,0 +1,391 @@
+import { supabase } from './supabaseClient';
+import { isDeletedShop } from './deletedShop';
+import { isModuleMissing, isRpcMissing } from './supabaseFeatureDetect';
+
+// Campagnes promotionnelles — phase 1, côté administration (Ezial Admin).
+// Contrat : docs/promotions/contrat-phase1.md. Tout passe par les fonctions
+// serveur admin_* (table admins + double authentification) ; l'interface ne
+// calcule aucune réduction et ne fait que relire ce que le serveur renvoie.
+//
+// Formes JSON supposées (le contrat ne fixe que les noms et les paramètres) :
+// - admin_promotions_list() : tableau (ou { promotions: [...] }) d'objets aux
+//   noms de colonnes de `promotions` (snake_case), plus `targets`
+//   [{ target_type, target_ref }], `neighborhoods` (tableau d'uuid ou
+//   d'objets { id | neighborhood_id, name }) et `stats` { orders,
+//   product_discount, delivery_discount, ezial_cost, budget_remaining, sales,
+//   commissions, ezial_net }. La lecture accepte aussi le camelCase.
+// - admin_promotion_save(p) : p reprend les colonnes de `promotions`
+//   (snake_case, sans uses_count / budget_used / status), plus `targets`
+//   [{ target_type, target_ref }] et `neighborhood_ids` [uuid]. `id` absent =
+//   création (statut brouillon côté serveur). Pour « livraison offerte »,
+//   value = 0 (seul delivery_cap compte).
+// - admin_promotion_compensations(p_status) : tableau (ou { compensations })
+//   d'objets { id, order_id, order_number, shop_id, shop_name, amount, status,
+//   paid_at, paid_method, paid_reference, note, created_at, promotion_name }.
+// - admin_neighborhood_save(p) : p = { id?, name, department, is_active, sort_order }.
+
+export const PROMOTIONS_MISSING_MESSAGE = 'Les campagnes seront disponibles après la mise à jour de la base.';
+
+export type PromotionKind = 'fixed' | 'percent' | 'free_delivery';
+export type PromotionStatus = 'draft' | 'active' | 'paused' | 'ended';
+export type PromotionAudience = 'all' | 'new_customers';
+export type PromotionTargetType = 'product' | 'shop' | 'category' | 'subcategory';
+export type CompensationStatus = 'due' | 'paid' | 'cancelled';
+export type CompensationMethod = 'wave' | 'orange_money' | 'especes' | 'virement' | 'autre';
+
+export const KIND_LABELS: Record<PromotionKind, string> = {
+  fixed: 'Réduction fixe',
+  percent: 'Pourcentage',
+  free_delivery: 'Livraison offerte',
+};
+
+export const COMPENSATION_METHOD_LABELS: Record<CompensationMethod, string> = {
+  wave: 'Wave',
+  orange_money: 'Orange Money',
+  especes: 'Espèces',
+  virement: 'Virement',
+  autre: 'Autre',
+};
+
+export interface PromotionTarget { type: PromotionTargetType; ref: string }
+
+export interface PromotionStats {
+  orders: number;
+  productDiscount: number;
+  deliveryDiscount: number;
+  ezialCost: number;
+  budgetRemaining: number | null;
+  sales: number;
+  commissions: number;
+  ezialNet: number;
+}
+
+export interface AdminPromotion {
+  id: string;
+  name: string;
+  code: string | null;
+  kind: PromotionKind;
+  value: number;
+  maxDiscount: number | null;
+  minAmount: number;
+  deliveryCap: number | null;
+  startsAt: string;
+  endsAt: string;
+  status: PromotionStatus;
+  audience: PromotionAudience;
+  maxUsesTotal: number | null;
+  maxUsesPerCustomer: number;
+  budgetMax: number | null;
+  usesCount: number;
+  budgetUsed: number;
+  targets: PromotionTarget[];
+  neighborhoodIds: string[];
+  stats: PromotionStats;
+}
+
+export interface PromotionInput {
+  id?: string;
+  name: string;
+  code: string | null;
+  kind: PromotionKind;
+  value: number;
+  maxDiscount: number | null;
+  minAmount: number;
+  deliveryCap: number | null;
+  startsAt: string;
+  endsAt: string;
+  audience: PromotionAudience;
+  maxUsesTotal: number | null;
+  maxUsesPerCustomer: number;
+  budgetMax: number | null;
+  targets: PromotionTarget[];
+  neighborhoodIds: string[];
+}
+
+export interface DeliveryNeighborhood {
+  id: string;
+  name: string;
+  department: string | null;
+  isActive: boolean;
+  sortOrder: number;
+}
+
+export interface AdminShopOption { id: string; name: string; isOfficial: boolean }
+export interface ProductOption { id: string; name: string; shopId: string }
+
+export interface PromotionCompensation {
+  id: string;
+  orderId: string | null;
+  orderNumber: string | null;
+  shopId: string | null;
+  shopName: string;
+  amount: number;
+  status: CompensationStatus;
+  paidAt: string | null;
+  paidMethod: CompensationMethod | null;
+  paidReference: string | null;
+  note: string | null;
+  createdAt: string | null;
+  promotionName: string | null;
+}
+
+type Raw = Record<string, unknown>;
+type SupabaseLikeError = { code?: string; message?: string } | null;
+
+// Lit une valeur en snake_case puis en camelCase.
+function pick(row: Raw, snake: string): unknown {
+  if (row[snake] !== undefined) return row[snake];
+  const camel = snake.replace(/_([a-z])/g, (_, c: string) => c.toUpperCase());
+  return row[camel];
+}
+function num(v: unknown, fallback = 0): number {
+  const n = typeof v === 'string' ? Number(v) : (v as number);
+  return typeof n === 'number' && Number.isFinite(n) ? n : fallback;
+}
+function numOrNull(v: unknown): number | null {
+  if (v === null || v === undefined || v === '') return null;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
+}
+function strOrNull(v: unknown): string | null {
+  return typeof v === 'string' && v !== '' ? v : null;
+}
+function asArray(data: unknown, key: string): Raw[] {
+  if (Array.isArray(data)) return data as Raw[];
+  if (data && typeof data === 'object' && Array.isArray((data as Raw)[key])) return (data as Raw)[key] as Raw[];
+  return [];
+}
+
+/** Message affichable : « module absent », message métier du serveur, ou message générique. */
+function friendlyError(error: SupabaseLikeError, fallback: string): string {
+  if (!error) return fallback;
+  if (isRpcMissing(error) || isModuleMissing(error)) return PROMOTIONS_MISSING_MESSAGE;
+  if (error.code === '23505') return 'Ce code existe déjà.';
+  if (error.code === '42501' || error.code === 'PT403' || /mfa_required/i.test(error.message ?? '')) {
+    return 'Accès refusé : reconnectez-vous avec la double authentification.';
+  }
+  // Exceptions levées par les fonctions (RAISE … : P0001, 22023, 23514) : messages français du serveur.
+  if (error.message && (error.code === 'P0001' || error.code === '22023' || error.code === '23514')) return error.message;
+  return fallback;
+}
+
+function mapStats(raw: unknown): PromotionStats {
+  const s = (raw && typeof raw === 'object' ? raw : {}) as Raw;
+  return {
+    orders: num(pick(s, 'orders')),
+    productDiscount: num(pick(s, 'product_discount')),
+    deliveryDiscount: num(pick(s, 'delivery_discount')),
+    ezialCost: num(pick(s, 'ezial_cost')),
+    budgetRemaining: numOrNull(pick(s, 'budget_remaining')),
+    sales: num(pick(s, 'sales')),
+    commissions: num(pick(s, 'commissions')),
+    ezialNet: num(pick(s, 'ezial_net')),
+  };
+}
+
+function mapPromotion(row: Raw): AdminPromotion {
+  const targets = (Array.isArray(row.targets) ? row.targets as Raw[] : []).map((t) => ({
+    type: (pick(t, 'target_type') ?? t.type) as PromotionTargetType,
+    ref: String(pick(t, 'target_ref') ?? t.ref ?? ''),
+  })).filter((t) => t.ref);
+  const rawNeighborhoods = (pick(row, 'neighborhood_ids') ?? row.neighborhoods) as unknown;
+  const neighborhoodIds = (Array.isArray(rawNeighborhoods) ? rawNeighborhoods : [])
+    .map((n) => (typeof n === 'string' ? n : String((n as Raw)?.id ?? (n as Raw)?.neighborhood_id ?? '')))
+    .filter(Boolean);
+  return {
+    id: String(row.id),
+    name: String(row.name ?? ''),
+    code: strOrNull(row.code),
+    kind: (row.kind as PromotionKind) ?? 'fixed',
+    value: num(row.value),
+    maxDiscount: numOrNull(pick(row, 'max_discount')),
+    minAmount: num(pick(row, 'min_amount')),
+    deliveryCap: numOrNull(pick(row, 'delivery_cap')),
+    startsAt: String(pick(row, 'starts_at') ?? ''),
+    endsAt: String(pick(row, 'ends_at') ?? ''),
+    status: (row.status as PromotionStatus) ?? 'draft',
+    audience: (row.audience as PromotionAudience) ?? 'all',
+    maxUsesTotal: numOrNull(pick(row, 'max_uses_total')),
+    maxUsesPerCustomer: num(pick(row, 'max_uses_per_customer'), 1),
+    budgetMax: numOrNull(pick(row, 'budget_max')),
+    usesCount: num(pick(row, 'uses_count')),
+    budgetUsed: num(pick(row, 'budget_used')),
+    targets,
+    neighborhoodIds,
+    stats: mapStats(row.stats),
+  };
+}
+
+export type ListResult<T> = { missing: true } | { missing: false; items: T[]; error?: string };
+
+export async function fetchAdminPromotions(): Promise<ListResult<AdminPromotion>> {
+  const { data, error } = await supabase.rpc('admin_promotions_list');
+  if (error) {
+    if (isRpcMissing(error) || isModuleMissing(error)) return { missing: true };
+    return { missing: false, items: [], error: friendlyError(error, 'Impossible de charger les campagnes. Réessayez.') };
+  }
+  return { missing: false, items: asArray(data, 'promotions').map(mapPromotion) };
+}
+
+export async function saveAdminPromotion(input: PromotionInput): Promise<{ id?: string; error?: string }> {
+  const p: Raw = {
+    name: input.name.trim(),
+    code: input.code ? input.code.trim().toUpperCase() : null,
+    kind: input.kind,
+    value: input.kind === 'free_delivery' ? 0 : input.value,
+    max_discount: input.kind === 'percent' ? input.maxDiscount : null,
+    min_amount: input.minAmount,
+    delivery_cap: input.kind === 'free_delivery' ? input.deliveryCap : null,
+    starts_at: input.startsAt,
+    ends_at: input.endsAt,
+    audience: input.audience,
+    max_uses_total: input.maxUsesTotal,
+    max_uses_per_customer: input.maxUsesPerCustomer,
+    budget_max: input.budgetMax,
+    targets: input.targets.map((t) => ({ target_type: t.type, target_ref: t.ref })),
+    neighborhood_ids: input.neighborhoodIds,
+  };
+  if (input.id) p.id = input.id;
+  const { data, error } = await supabase.rpc('admin_promotion_save', { p });
+  if (error) return { error: friendlyError(error, 'Enregistrement impossible. Réessayez.') };
+  return { id: typeof data === 'string' ? data : input.id };
+}
+
+export async function setAdminPromotionStatus(id: string, status: Exclude<PromotionStatus, 'draft'>): Promise<{ error?: string }> {
+  const { error } = await supabase.rpc('admin_promotion_set_status', { p_id: id, p_status: status });
+  return error ? { error: friendlyError(error, 'Changement de statut impossible. Réessayez.') } : {};
+}
+
+function mapCompensation(row: Raw): PromotionCompensation {
+  return {
+    id: String(row.id),
+    orderId: strOrNull(pick(row, 'order_id')),
+    orderNumber: strOrNull(pick(row, 'order_number')),
+    shopId: strOrNull(pick(row, 'shop_id')),
+    shopName: strOrNull(pick(row, 'shop_name')) ?? 'Boutique',
+    amount: num(row.amount),
+    status: (row.status as CompensationStatus) ?? 'due',
+    paidAt: strOrNull(pick(row, 'paid_at')),
+    paidMethod: (strOrNull(pick(row, 'paid_method')) as CompensationMethod | null),
+    paidReference: strOrNull(pick(row, 'paid_reference')),
+    note: strOrNull(row.note),
+    createdAt: strOrNull(pick(row, 'created_at')),
+    promotionName: strOrNull(pick(row, 'promotion_name')),
+  };
+}
+
+export async function fetchAdminCompensations(status: CompensationStatus | null): Promise<ListResult<PromotionCompensation>> {
+  const { data, error } = await supabase.rpc('admin_promotion_compensations', { p_status: status });
+  if (error) {
+    if (isRpcMissing(error) || isModuleMissing(error)) return { missing: true };
+    return { missing: false, items: [], error: friendlyError(error, 'Impossible de charger les montants à reverser. Réessayez.') };
+  }
+  return { missing: false, items: asArray(data, 'compensations').map(mapCompensation) };
+}
+
+export async function markCompensationsPaid(ids: string[], method: CompensationMethod, reference: string, note: string): Promise<{ error?: string }> {
+  const { error } = await supabase.rpc('admin_mark_compensations_paid', {
+    p_ids: ids,
+    p_method: method,
+    p_reference: reference.trim() || null,
+    p_note: note.trim() || null,
+  });
+  return error ? { error: friendlyError(error, 'Impossible d’enregistrer le paiement. Réessayez.') } : {};
+}
+
+export async function fetchDeliveryNeighborhoods(): Promise<ListResult<DeliveryNeighborhood>> {
+  const { data, error } = await supabase
+    .from('delivery_neighborhoods')
+    .select('id, name, department, is_active, sort_order')
+    .order('sort_order', { ascending: true })
+    .order('name', { ascending: true });
+  if (error) {
+    if (isModuleMissing(error)) return { missing: true };
+    return { missing: false, items: [], error: 'Impossible de charger les quartiers.' };
+  }
+  return {
+    missing: false,
+    items: (data ?? []).map((r) => ({
+      id: String(r.id),
+      name: String(r.name ?? ''),
+      department: strOrNull(r.department),
+      isActive: r.is_active !== false,
+      sortOrder: num(r.sort_order),
+    })),
+  };
+}
+
+export async function saveDeliveryNeighborhood(n: { id?: string; name: string; department: string | null; isActive: boolean; sortOrder: number }): Promise<{ id?: string; error?: string }> {
+  const p: Raw = { name: n.name.trim(), department: n.department?.trim() || null, is_active: n.isActive, sort_order: n.sortOrder };
+  if (n.id) p.id = n.id;
+  const { data, error } = await supabase.rpc('admin_neighborhood_save', { p });
+  if (error) return { error: error.code === '23505' ? 'Ce quartier existe déjà.' : friendlyError(error, 'Enregistrement du quartier impossible.') };
+  return { id: typeof data === 'string' ? data : n.id };
+}
+
+/** Boutiques actives (hors boutiques supprimées), pour les cibles d'une campagne. */
+export async function fetchActiveShopOptions(): Promise<AdminShopOption[]> {
+  const { data, error } = await supabase.from('shops').select('id, name, status, is_official').eq('status', 'active').order('name', { ascending: true });
+  if (error || !data) return [];
+  return data.filter((s) => !isDeletedShop(s)).map((s) => ({ id: String(s.id), name: String(s.name ?? ''), isOfficial: s.is_official === true }));
+}
+
+function normalize(s: string): string {
+  return s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+}
+
+/** Recherche par nom parmi les produits actifs (non archivés). */
+export async function searchActiveProducts(query: string): Promise<ProductOption[]> {
+  const q = query.trim();
+  if (q.length < 2) return [];
+  const pattern = `%${q.replace(/[%_,()]/g, ' ')}%`;
+  const { data, error } = await supabase
+    .from('products')
+    .select('id, name, shop_id')
+    .eq('status', 'active')
+    .is('archived_at', null)
+    .ilike('name', pattern)
+    .order('name', { ascending: true })
+    .limit(20);
+  if (error || !data) return [];
+  const needle = normalize(q);
+  return data
+    .map((r) => ({ id: String(r.id), name: String(r.name ?? ''), shopId: String(r.shop_id ?? '') }))
+    .filter((p) => normalize(p.name).includes(needle));
+}
+
+/** Noms des produits déjà ciblés (modification d'une campagne). */
+export async function fetchProductsByIds(ids: string[]): Promise<ProductOption[]> {
+  if (ids.length === 0) return [];
+  const { data, error } = await supabase.from('products').select('id, name, shop_id').in('id', ids);
+  if (error || !data) return [];
+  return data.map((r) => ({ id: String(r.id), name: String(r.name ?? ''), shopId: String(r.shop_id ?? '') }));
+}
+
+// ---- Dates : heure de Dakar = UTC+0 toute l'année ----
+
+const DAKAR_TZ = 'Africa/Dakar';
+
+/** « 21 nov. 2026, 10:00 » en heure de Dakar. */
+export function formatDakarDateTime(iso: string | null | undefined): string {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '—';
+  return d.toLocaleString('fr-FR', { timeZone: DAKAR_TZ, day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+}
+
+/** Champs date (AAAA-MM-JJ) et heure (HH:MM) en heure de Dakar → ISO. */
+export function dakarInputsToIso(date: string, time: string): string | null {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !/^\d{2}:\d{2}$/.test(time)) return null;
+  const d = new Date(`${date}T${time}:00Z`);
+  return Number.isNaN(d.getTime()) ? null : d.toISOString();
+}
+
+/** ISO → champs date et heure en heure de Dakar. */
+export function isoToDakarInputs(iso: string | null | undefined): { date: string; time: string } {
+  if (!iso) return { date: '', time: '' };
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return { date: '', time: '' };
+  const s = d.toISOString();
+  return { date: s.slice(0, 10), time: s.slice(11, 16) };
+}
