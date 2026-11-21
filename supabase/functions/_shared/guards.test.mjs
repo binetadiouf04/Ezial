@@ -115,3 +115,20 @@ test('clé VAPID : erreurs de collage courantes nettoyées, longueur vérifiée,
   assert.equal(normalizeVapidKey(pub, 'private').ok, false); // clé publique collée à la place de la privée
   assert.equal(normalizeVapidKey('', 'private').ok, false);
 });
+
+test('campagne : image limitée au stockage Ezial (site-content/push), bouton borné', async () => {
+  const { safeCampaignImage, safeActionLabel } = await import('./guards.ts');
+  const base = 'https://abc.supabase.co';
+  const ok = `${base}/storage/v1/object/public/site-content/push/1700000000-noel.webp`;
+  assert.equal(safeCampaignImage(ok, base), ok);
+  assert.equal(safeCampaignImage(ok, `${base}/`), ok);
+  assert.equal(safeCampaignImage(`${base}/storage/v1/object/public/product-images/x.webp`, base), null);
+  assert.equal(safeCampaignImage('https://ailleurs.example/push/x.webp', base), null);
+  assert.equal(safeCampaignImage(ok.replace('https', 'http'), base.replace('https', 'http')), null);
+  assert.equal(safeCampaignImage(`${ok}" onerror="x`, base), null);
+  assert.equal(safeCampaignImage(null, base), null);
+  assert.equal(safeActionLabel('  Voir les offres  '), 'Voir les offres');
+  assert.equal(safeActionLabel('Un texte de bouton beaucoup trop long pour Android'), 'Un texte de bouton beauc');
+  assert.equal(safeActionLabel('\u0007'), null);
+  assert.equal(safeActionLabel(42), null);
+});

@@ -42,6 +42,7 @@ Usage (Pillow et numpy requis) :
   python3 scripts/generate-app-icons.py            # Ezial Marketplace (icônes existantes)
   python3 scripts/generate-app-icons.py --admin    # Ezial Admin
   python3 scripts/generate-app-icons.py --favicons # favicons Marketplace et Admin
+  python3 scripts/generate-app-icons.py --badge    # icône Android de la barre d'état (notifications)
 """
 import sys
 from pathlib import Path
@@ -216,6 +217,27 @@ def save_share_image(symbol, sym_bbox, out_path):
     print(f'{out_path.relative_to(ROOT)}  {w}x{h}  {out_path.stat().st_size} octets')
 
 
+def save_badge(symbol, sym_bbox, out_path, side=96, fill=0.82):
+    """Petite icône Android de la barre d'état (« badge ») : le papillon officiel en blanc
+    uni sur fond transparent — Android n'en garde que la silhouette (canal alpha)."""
+    k = 4
+    canvas = Image.new('RGBA', (side * k, side * k), (0, 0, 0, 0))
+    alpha = np.clip((np.asarray(symbol)[..., 3].astype(np.float64) / 255 - 0.25) / 0.5, 0, 1) * 255
+    solid = np.zeros(alpha.shape + (4,), dtype=np.uint8)
+    solid[..., :3] = 255
+    solid[..., 3] = alpha.round().astype(np.uint8)
+    layer = Image.fromarray(solid, 'RGBA')
+    bx0, by0, bx1, by1 = sym_bbox
+    scale = fill * side * k / max(bx1 - bx0, by1 - by0)
+    resized = layer.resize((round(layer.width * scale), round(layer.height * scale)), Image.LANCZOS)
+    ox = round(side * k / 2 - (bx0 + bx1) / 2 * scale)
+    oy = round(side * k / 2 - (by0 + by1) / 2 * scale)
+    canvas.alpha_composite(resized, (ox, oy))
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    canvas.resize((side, side), Image.LANCZOS).save(out_path, 'PNG', optimize=True)
+    print(f'{out_path.relative_to(ROOT)}  {side}x{side}  {out_path.stat().st_size} octets')
+
+
 def main():
     admin = '--admin' in sys.argv[1:]
     favicons = '--favicons' in sys.argv[1:]
@@ -231,6 +253,9 @@ def main():
           f'rayon max {r_any:.3f} -> {symbol_max_radius_ratio(symbol, sym_bbox, width_mask):.3f}')
     if share:
         save_share_image(symbol, sym_bbox, OUT / 'ezial-partage.png')
+        return
+    if '--badge' in sys.argv[1:]:
+        save_badge(symbol, sym_bbox, OUT / 'icons' / 'badge-96.png')
         return
     if favicons:
         cream, burgundy = np.array(ADMIN_CREAM, dtype=np.float64), np.array(ADMIN_BURGUNDY, dtype=np.float64)

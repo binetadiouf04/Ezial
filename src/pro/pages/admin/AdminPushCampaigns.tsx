@@ -3,8 +3,10 @@ import {
   fetchPushCampaigns, createPushCampaign, deletePushCampaign, sendPushCampaignNow,
   countMarketingPushRecipients, type PushCampaign, type CampaignStatus,
 } from '@/lib/supabaseAdminPushCampaigns';
-import { Loader2, AlertCircle, Megaphone, Plus, X, Send, Trash2, Clock } from 'lucide-react';
+import { Loader2, AlertCircle, Megaphone, Plus, X, Send, Trash2, Clock, ImagePlus } from 'lucide-react';
 import IosNotificationPreview from '@/pro/components/IosNotificationPreview';
+import AndroidNotificationPreview from '@/pro/components/AndroidNotificationPreview';
+import { uploadSiteContentImage } from '@/lib/supabaseHomeContent';
 
 const statusLabels: Record<CampaignStatus, string> = {
   draft: 'Brouillon',
@@ -107,6 +109,12 @@ export default function AdminPushCampaigns() {
                   <p className="text-sm font-semibold text-ink">{c.title}</p>
                   <p className="text-sm text-ink/65 mt-0.5">{c.body}</p>
                   {c.clickUrl && <p className="text-xs text-ink/40 mt-1 font-mono">→ {c.clickUrl}</p>}
+                  {(c.imageUrl || c.actionLabel) && (
+                    <div className="mt-2 flex items-center gap-2 text-xs text-ink/50">
+                      {c.imageUrl && <img src={c.imageUrl} alt="" className="h-10 w-20 rounded-md bg-cream object-cover" />}
+                      {c.actionLabel && <span>Bouton : « {c.actionLabel} »</span>}
+                    </div>
+                  )}
                 </div>
                 <span className={`flex-shrink-0 rounded-full px-2.5 py-1 text-[11px] font-semibold ${statusStyles[c.status]}`}>{statusLabels[c.status]}</span>
               </div>
@@ -148,6 +156,9 @@ function Composer({ onCancel, onCreated }: { onCancel: () => void; onCreated: ()
   const [title, setTitle] = useState('');
   const [body, setBody] = useState('');
   const [clickUrl, setClickUrl] = useState('');
+  const [imageUrl, setImageUrl] = useState<string | null>(null);
+  const [imageUploading, setImageUploading] = useState(false);
+  const [actionLabel, setActionLabel] = useState('');
   const [scheduledAt, setScheduledAt] = useState('');
   const [recipientCount, setRecipientCount] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
@@ -164,6 +175,8 @@ function Composer({ onCancel, onCreated }: { onCancel: () => void; onCreated: ()
       title: title.trim(),
       body: body.trim(),
       clickUrl: clickUrl.trim(),
+      imageUrl,
+      actionLabel,
       scheduledAt: scheduledAt ? new Date(scheduledAt).toISOString() : null,
     });
     if (result.error || !result.id) { setSaving(false); setError(result.error ?? "Impossible de créer la campagne."); return; }
@@ -172,6 +185,16 @@ function Composer({ onCancel, onCreated }: { onCancel: () => void; onCreated: ()
     }
     setSaving(false);
     onCreated();
+  };
+
+  const pickImage = async (file: File | undefined) => {
+    if (!file) return;
+    setError('');
+    setImageUploading(true);
+    const res = await uploadSiteContentImage(file, 'push');
+    setImageUploading(false);
+    if ('error' in res) { setError(res.error); return; }
+    setImageUrl(res.url);
   };
 
   return (
@@ -199,6 +222,30 @@ function Composer({ onCancel, onCreated }: { onCancel: () => void; onCreated: ()
         <p className="mt-1 text-xs text-ink/40">Une seule idée, une phrase qui donne envie de toucher la notification.</p>
       </div>
       <div>
+        <p className="mb-1.5 block text-xs font-medium text-ink/60">Image (Android, facultative)</p>
+        {imageUrl ? (
+          <div className="flex items-center gap-3">
+            <img src={imageUrl} alt="Image de la campagne" className="h-16 w-32 rounded-lg bg-cream object-cover" />
+            <button type="button" onClick={() => setImageUrl(null)} className="text-xs font-medium text-ink/50 hover:text-burgundy">Retirer l’image</button>
+          </div>
+        ) : (
+          <label className={`flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-dashed border-line px-4 py-4 text-sm text-ink/60 hover:border-burgundy/40 ${imageUploading ? 'pointer-events-none opacity-60' : ''}`}>
+            {imageUploading ? <Loader2 size={16} className="animate-spin" /> : <ImagePlus size={16} />}
+            {imageUploading ? 'Envoi de l’image…' : 'Choisir une image'}
+            <input type="file" accept="image/jpeg,image/png,image/webp" className="sr-only" onChange={(e) => { void pickImage(e.target.files?.[0]); e.target.value = ''; }} />
+          </label>
+        )}
+        <p className="mt-1 text-xs text-ink/40">Format paysage (2:1, par exemple 1024 × 512), sans texte important sur les bords : Android la recadre.</p>
+      </div>
+      <div>
+        <div className="mb-1.5 flex items-baseline justify-between">
+          <label htmlFor="campagne-bouton" className="block text-xs font-medium text-ink/60">Texte du bouton (Android, facultatif)</label>
+          <span className="text-[11px] text-ink/40">{actionLabel.trim().length} / 24</span>
+        </div>
+        <input id="campagne-bouton" className="input-field" placeholder="Voir les offres" value={actionLabel} onChange={(e) => setActionLabel(e.target.value)} maxLength={24} />
+        <p className="mt-1 text-xs text-ink/40">Le bouton ouvre la même page que la notification (destination ci-dessous).</p>
+      </div>
+      <div>
         <label className="block text-xs font-medium text-ink/60 mb-1.5">Destination au clic (facultatif)</label>
         <input className="input-field font-mono text-sm" placeholder="/promo" value={clickUrl} onChange={(e) => setClickUrl(e.target.value)} />
         <p className="mt-1 text-xs text-ink/40">Exemples : /promo, /categorie/mode, /produit/xxxx. Laissez vide pour ouvrir l'accueil.</p>
@@ -211,8 +258,9 @@ function Composer({ onCancel, onCreated }: { onCancel: () => void; onCreated: ()
 
       </div>
 
-      <div className="md:sticky md:top-4">
+      <div className="space-y-5 md:sticky md:top-4">
         <IosNotificationPreview title={title} body={body} />
+        <AndroidNotificationPreview title={title} body={body} imageUrl={imageUrl} actionLabel={actionLabel} />
       </div>
       </div>
 

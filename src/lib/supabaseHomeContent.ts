@@ -21,10 +21,11 @@ export function resolveSiteContentUrl(path: string): string {
 // A hero banner spans the full page width; a discover tile is a small
 // circle — both resized and re-encoded as WebP before upload (see
 // optimizeImageFile), same as every other image upload in the app.
-const SITE_CONTENT_MAX_DIMENSION: Record<'hero' | 'discover', number> = { hero: 1600, discover: 400 };
+// push : image d'une notification Android (affichée en 2:1, 1024 px suffisent).
+const SITE_CONTENT_MAX_DIMENSION: Record<'hero' | 'discover' | 'push', number> = { hero: 1600, discover: 400, push: 1024 };
 
 /** Uploads an admin-picked image to the site-content bucket and returns its public URL. */
-export async function uploadSiteContentImage(file: File, folder: 'hero' | 'discover'): Promise<{ url: string } | { error: string }> {
+export async function uploadSiteContentImage(file: File, folder: 'hero' | 'discover' | 'push'): Promise<{ url: string } | { error: string }> {
   const optimized = await optimizeImageFile(file, SITE_CONTENT_MAX_DIMENSION[folder]);
   const path = `${folder}/${Date.now()}-${optimized.name.replace(/[^a-zA-Z0-9_.-]/g, '_')}`;
   const { error } = await supabase.storage.from(SITE_CONTENT_BUCKET).upload(path, optimized, { cacheControl: '31536000' });
