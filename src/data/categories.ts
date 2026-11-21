@@ -22,7 +22,6 @@ import discover18 from '@/assets/discover/18.webp';
 import discover19 from '@/assets/discover/19.webp';
 import discover20 from '@/assets/discover/20.webp';
 import discover21 from '@/assets/discover/21.webp';
-import discover22 from '@/assets/discover/22.webp';
 import discover23 from '@/assets/discover/23.webp';
 import discover24 from '@/assets/discover/24.webp';
 
@@ -210,7 +209,7 @@ export const homeCircleTiles: HomeCircleTile[] = [
   // cropped/optimized the same way as discover01-24 when available.
   { id: 'tissus', label: 'Tissus', image: 'https://images.pexels.com/photos/3965543/pexels-photo-3965543.jpeg?auto=compress&cs=tinysrgb&h=650&w=940', route: '/categorie/tissus', alwaysShow: true },
   // Streetwear/Voile/Abaya n'ont pas encore de sous-catégorie dédiée dans la
-  // taxonomie (comme Robes ou Or plus haut) : ils routent vers une recherche
+  // taxonomie (comme Robes plus haut) : ils routent vers une recherche
   // sur leur propre libellé, qui remontera les produits dès qu'un vendeur
   // les tague avec ce type/style.
   { id: 'streetwear', label: 'Streetwear', image: discover14, route: '/recherche?q=streetwear' },
@@ -222,7 +221,9 @@ export const homeCircleTiles: HomeCircleTile[] = [
   { id: 'encens', label: 'Encens', image: discover20, route: '/categorie/parfums/encens-parfums-maison' },
   { id: 'huiles-brumes', label: 'Huiles & brumes', image: '', route: '/categorie/parfums/huiles-brumes' },
   { id: 'bijoux', label: 'Bijoux', image: discover21, route: '/categorie/bijoux' },
-  { id: 'or', label: 'Or', image: discover22, route: '/recherche?q=or' },
+  // Montres (21 nov. 2026, à la place de « Or », la vente d'or véritable étant retirée) :
+  // photo réelle du catalogue (montre Casio d'Ezial Boutique, miniature du stockage).
+  { id: 'montres', label: 'Montres', image: 'https://lkqezdrdbogtborgjvlw.supabase.co/storage/v1/object/public/product-images/616a8f9f-f96f-401b-8e46-001ccd500479/62106abe-4598-4619-8e98-a4b5a288e1f4/0-thumb-2e3rp9-photo-1795034118062-thumb.jpg', route: '/categorie/bijoux/montres' },
   { id: 'pyjamas', label: 'Pyjamas', image: discover23, route: '/categorie/lingerie/pyjamas' },
   { id: 'sous-vetements', label: 'Sous-vêtements', image: discover24, route: '/categorie/lingerie/sous-vetements' },
 ];
