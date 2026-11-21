@@ -29,10 +29,13 @@ const isPlusShop = (shopId: string): boolean => {
   return shop?.isPremium === true || shop?.isOfficial === true;
 };
 
-// Chaque section de produits de l'accueil en montre 14 au maximum — « Voir
-// tout » mène à la liste complète, sans limite, sur sa propre page. Ce plafond
-// ne concerne que l'aperçu de l'accueil, jamais le catalogue.
-const HOME_SECTION_LIMIT = 14;
+// Chaque section de produits de l'accueil en montre 15 au maximum sur iPad
+// (3 par ligne) et ordinateur (5 par ligne) : 15 remplit les lignes à tout
+// coup. Sur mobile (2 par ligne) le 15e est masqué : 14 remplit 7 lignes.
+// « Voir tout » mène à la liste complète, sans limite, sur sa propre page. Ce
+// plafond ne concerne que l'aperçu de l'accueil, jamais le catalogue.
+const HOME_SECTION_LIMIT = 15;
+const HOME_MOBILE_LIMIT = 14;
 const HOME_SHOPS_LIMIT = 6;
 
 // "À découvrir" tiles (static or admin-managed) only point at real content:
@@ -98,9 +101,12 @@ function HomeProductPreview({
         <div className="flex flex-col items-center justify-center py-20 text-center"><p className="text-sm text-ink/50">Aucun produit trouvé.</p></div>
       ) : (
         // 2 par ligne sur mobile (photos plus grandes : 14 produits = 7 lignes
-        // complètes), 3 sur tablette, 5 sur ordinateur.
+        // complètes), 3 sur tablette, 5 sur ordinateur (15 produits = 5 ou 3
+        // lignes complètes ; le 15e n'apparaît pas sur mobile).
         <div className="grid grid-cols-2 gap-x-3 gap-y-6 sm:grid-cols-3 sm:gap-x-5 sm:gap-y-8 lg:grid-cols-5">
-          {preview.map((p, i) => <ProductCard key={p.id} product={p} priority={priority && i < 4} />)}
+          {preview.map((p, i) => i < HOME_MOBILE_LIMIT
+            ? <ProductCard key={p.id} product={p} priority={priority && i < 4} />
+            : <div key={p.id} className="hidden sm:block"><ProductCard product={p} /></div>)}
         </div>
       )}
     </>

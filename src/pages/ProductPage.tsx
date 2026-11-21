@@ -156,8 +156,6 @@ export default function ProductPage({ productId }: { productId: string }) {
 
   useEffect(() => {
     loadReviews();
-    setCanReview(false);
-    setCanReviewChecked(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [product?.id, customerUser?.id]);
 

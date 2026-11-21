@@ -171,6 +171,7 @@ export function safeCampaignImage(value: unknown, supabaseUrl: string): string |
 export function safeActionLabel(value: unknown): string | null {
   if (typeof value !== 'string') return null;
   // deno-lint-ignore no-control-regex
+  // eslint-disable-next-line no-control-regex
   const text = value.replace(/[\u0000-\u001f\u007f]/g, '').trim().slice(0, 24).trim();
   return text || null;
 }
