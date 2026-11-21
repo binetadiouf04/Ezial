@@ -1,16 +1,16 @@
 -- APERÇU (promotions_preview), CAMPAGNES PUBLIQUES, ANCIEN CONTRÔLE validate_promo_code : formes JSON du contrat.
 select tests.reset_promo();
 do $$
-declare r jsonb; v uuid; v_liv uuid; n integer; items jsonb := jsonb_build_array(tests.it('1'));
+declare r jsonb; v uuid; v_liv uuid; v_p10 uuid; n integer; items jsonb := jsonb_build_array(tests.it('1'));
 begin
-  perform tests.new_promo('P10', 'percent', 10);
+  v_p10 := tests.new_promo('P10', 'percent', 10);
   v := tests.new_promo('NOUVEAUX', 'fixed', 500, '{"audience": "new_customers"}');
   v_liv := tests.new_promo(null, 'free_delivery', 0, '{"delivery_cap": 1000, "min_amount": 5000}');
   perform tests.target(v_liv, 'category', 'mode-femme'); perform tests.target(v_liv, 'subcategory', 'sacs/sacs-a-main');
   perform tests.as_user(tests.uid('c1'));
   -- Code valable
   r := public.promotions_preview(jsonb_build_object('items', items, 'shopFulfillments', '{}'::jsonb, 'neighborhood', 'Plateau', 'promoCode', 'p10', 'deliveryFeeEstimate', 2500));
-  perform tests.check(r = jsonb_build_object('valid', true, 'message', null, 'applied', jsonb_build_object('promotionId', (tests.promo('P10')->>'id'), 'code', 'P10',
+  perform tests.check(r = jsonb_build_object('valid', true, 'message', null, 'applied', jsonb_build_object('promotionId', v_p10, 'code', 'P10',
         'name', 'P10', 'kind', 'percent', 'productDiscount', 1000, 'deliveryDiscount', 0, 'deliveryFee', 2500, 'eligibleAmount', 10000, 'automatic', false)),
     'Aperçu : forme exacte du contrat avec un code (' || r::text || ')');
   -- Code refusé

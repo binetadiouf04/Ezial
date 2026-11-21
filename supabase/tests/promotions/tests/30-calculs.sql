@@ -29,8 +29,8 @@ begin
   perform tests.new_promo('P50', 'percent', 50);
   o := tests.buy_code(c1, jsonb_build_array(tests.it('5')), 'P50');
   perform tests.check((o->>'promo_discount')::int = 1667 and (o->>'total_amount')::int = 3333 - 1667 + 1500, 'Arrondi : 50 % de 3 333 = 1 666,5 -> 1 667');
-  perform tests.new_promo('P3', 'percent', 3);
-  o := tests.buy_code(c1, jsonb_build_array(tests.it('5')), 'P3');
+  perform tests.new_promo('P03', 'percent', 3);
+  o := tests.buy_code(c1, jsonb_build_array(tests.it('5')), 'P03');
   perform tests.check((o->>'promo_discount')::int = 100, 'Arrondi : 3 % de 3 333 = 99,99 -> 100');
 
   -- Plafond du pourcentage

@@ -135,6 +135,7 @@ set check_function_bodies = off;
 create function tests.reset_promo() returns void language plpgsql as $$
 begin
   perform tests.reset();
+  update public.product_variants set stock = 100;   -- scénarios longs : le stock n'est pas le sujet de ces tests
   delete from public.promotion_targets where promotion_id in (select id from public.promotions where code is distinct from 'EZI10');
   delete from public.promotion_seller_shares where promotion_id in (select id from public.promotions where code is distinct from 'EZI10');
   delete from public.promotions where code is distinct from 'EZI10';

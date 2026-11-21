@@ -48,10 +48,11 @@ for m in promotions-1-structure promotions-2-commande promotions-3-admin; do P -
 T tests/20-migrations.sql
 
 echo "== Tests fonctionnels"
-for t in tests/3*.sql tests/4*.sql tests/5*.sql tests/6*.sql; do T "$t"; done
+for t in tests/3*.sql tests/4*.sql tests/5*.sql tests/6*.sql tests/7*.sql; do T "$t"; done
 echo "-- tests/80-concurrence.sh"; ./tests/80-concurrence.sh || true
 
 echo "== Retours arrière : refus tant qu'une commande utilise une campagne"
+./build-rollback.sh >/dev/null
 P -c "select tests.reset_promo(); select tests.new_promo('REFUS', 'fixed', 500); select tests.buy(tests.uid('c1'), jsonb_build_array(tests.it('1')), '{\"promoCode\": \"REFUS\"}')" >/dev/null
 for r in promotions-3-retour-arriere promotions-2-retour-arriere promotions-1-retour-arriere; do
   out=$(P -f $SQL/$r.sql || true)
@@ -59,7 +60,6 @@ for r in promotions-3-retour-arriere promotions-2-retour-arriere promotions-1-re
 done
 P -c "update public.orders set status = 'cancelled' where promotion_id is not null" >/dev/null
 echo "== Retours arrière 3, 2, 1"
-./build-rollback.sh >/dev/null
 P -f $SQL/promotions-3-retour-arriere.sql >/dev/null
 out=$(P -f $SQL/promotions-1-retour-arriere.sql || true)
 if grep -q "promotions-2-retour-arriere" <<<"$out"; then echo "OK    : retour arrière 1 refusé tant que le 2 n'est pas exécuté"; else echo "ÉCHEC : retour arrière 1 accepté avant le 2"; fi
