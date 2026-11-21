@@ -136,17 +136,26 @@ export const categories: Category[] = [
   { id: 'bijoux', label: 'Bijoux & Accessoires', subcategories: [
     { id: 'colliers', label: 'Colliers' }, { id: 'bracelets', label: 'Bracelets' }, { id: 'bagues', label: 'Bagues' },
     { id: 'boucles-oreilles', label: 'Boucles d\'oreilles' }, { id: 'montres', label: 'Montres' },
-    { id: 'lunettes', label: 'Lunettes' }, { id: 'bijoux-de-taille', label: 'Bijou de taille' }, { id: 'baya', label: 'Baya' },
+    { id: 'lunettes', label: 'Lunettes' }, { id: 'baya', label: 'Baya' },
     { id: 'ensemble-parure', label: 'Ensemble / Parure' },
   ]},
   { id: 'lingerie', label: 'Pyjamas & Lingerie', subcategories: [
-    { id: 'pyjamas', label: 'Pyjamas' }, { id: 'lingerie', label: 'Lingerie' },
-    { id: 'sous-vetements', label: 'Sous-vêtements' }, { id: 'vetements-de-nuit', label: 'Vêtements de nuit' },
+    { id: 'pyjamas', label: 'Pyjamas & nuisettes' }, { id: 'lingerie', label: 'Lingerie & sous-vêtements' },
   ]},
   // No subcategories — a Tissus product is differentiated by fabric_type
   // (see fabricTypes above), a dedicated filter, not a subcategory.
   { id: 'tissus', label: 'Tissus', subcategories: [] },
 ];
+
+/**
+ * Sous-catégories regroupées le 21 nov. 2026 (« catégorie/ancienne » → nouvelle) :
+ * une ancienne adresse ou un produit pas encore reclassé mène au bon endroit.
+ */
+export const RENAMED_SUBCATEGORIES: Record<string, string> = {
+  'bijoux/bijoux-de-taille': 'baya',
+  'lingerie/sous-vetements': 'lingerie',
+  'lingerie/vetements-de-nuit': 'pyjamas',
+};
 
 export const categoryMap: Record<CategoryId, Category> = categories.reduce(
   (acc, c) => ({ ...acc, [c.id]: c }), {} as Record<CategoryId, Category>,
@@ -226,5 +235,5 @@ export const homeCircleTiles: HomeCircleTile[] = [
   // Boutique, miniature du stockage).
   { id: 'montres', label: 'Montres', image: 'https://lkqezdrdbogtborgjvlw.supabase.co/storage/v1/object/public/product-images/616a8f9f-f96f-401b-8e46-001ccd500479/843c3ab3-29e0-4b21-9325-e354e11f62b9/0-thumb-dx44tt-photo-1795035766861-thumb.jpg', route: '/categorie/bijoux/montres' },
   { id: 'pyjamas', label: 'Pyjamas', image: discover23, route: '/categorie/lingerie/pyjamas' },
-  { id: 'sous-vetements', label: 'Sous-vêtements', image: discover24, route: '/categorie/lingerie/sous-vetements' },
+  { id: 'sous-vetements', label: 'Lingerie', image: discover24, route: '/categorie/lingerie/lingerie' },
 ];

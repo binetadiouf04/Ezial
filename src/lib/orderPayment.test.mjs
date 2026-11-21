@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { paymentPhase, canResumePayment, paymentBadge, formatRemaining, isHandheld, isOrangeLink } from './orderPayment.ts';
+import { paymentPhase, canResumePayment, paymentBadge, formatRemaining, isHandheld, isOrangeLink, isWaveLink } from './orderPayment.ts';
 
 const NOW = Date.parse('2026-11-20T10:00:00Z');
 const om = (extra = {}) => ({ paymentRequired: true, paymentStatus: 'pending', orderStatus: 'confirmed', paymentDeadline: '2026-11-20T10:20:00Z', ...extra });
@@ -56,4 +56,16 @@ test('liens : seulement https et domaine orange-sonatel.com', () => {
   assert.equal(isOrangeLink('https://orange-sonatel.com.pirate.example/x'), false);
   assert.equal(isOrangeLink('javascript:alert(1)'), false);
   assert.equal(isOrangeLink(null), false);
+});
+
+test('isWaveLink : seulement du https chez wave.com', () => {
+  assert.equal(isWaveLink('https://pay.wave.com/c/cos-18qq25rgr100a'), true);
+  assert.equal(isWaveLink('https://wave.com/pay'), true);
+  assert.equal(isWaveLink('http://pay.wave.com/c/cos-1'), false);
+  assert.equal(isWaveLink('https://wave.com.evil.example/c/1'), false);
+  assert.equal(isWaveLink('https://evilwave.com/c/1'), false);
+  assert.equal(isWaveLink('https://user:pw@pay.wave.com/c/1'), false);
+  assert.equal(isWaveLink('javascript:alert(1)'), false);
+  assert.equal(isWaveLink(null), false);
+  assert.equal(isWaveLink(42), false);
 });

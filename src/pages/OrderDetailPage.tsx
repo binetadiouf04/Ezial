@@ -7,7 +7,7 @@ import { deliveryStatusLabels, pickupStepLabels, computeDeliveryStepStatus } fro
 import { Package, KeySquare, AlertTriangle, RotateCcw } from 'lucide-react';
 import ClaimModal from '@/components/ClaimModal';
 import InvoiceCard from '@/components/InvoiceCard';
-import OrangeMoneyPayment from '@/components/OrangeMoneyPayment';
+import OnlinePayment from '@/components/OnlinePayment';
 import PaymentStatusBadge from '@/components/PaymentStatusBadge';
 import { DeliveryCodeCard, PickupPlace } from '@/components/OrderParts';
 import RateOrderItems from '@/components/RateOrderItems';
@@ -84,7 +84,7 @@ export default function OrderDetailPage({ orderId }: { orderId: string }) {
         <p className="mt-1 text-sm text-ink/55">{date}</p>
       </header>
 
-      {order.paymentRequired && <OrangeMoneyPayment order={order} autoStart autoOpen={typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('payer') === '1'} />}
+      {order.paymentRequired && <OnlinePayment order={order} autoStart autoOpen={typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('payer') === '1'} />}
 
       {cancelled && !order.paymentRequired && (
         <p className="card mb-4 p-4 text-sm text-ink/70">Cette commande a été annulée. Elle ne sera pas livrée.</p>

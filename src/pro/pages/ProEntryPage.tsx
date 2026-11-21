@@ -9,7 +9,7 @@ import DriverLoginPanel from '../components/DriverLoginPanel';
 import { getStaffSpace } from '@/lib/staffSpace';
 import { useNoIndex } from '@/lib/seoHead';
 import { BECOME_SELLER_ROUTE } from '@/lib/sellerIntent';
-import { Loader2 } from 'lucide-react';
+import { Loader2, WifiOff } from 'lucide-react';
 
 // Each role's layout (and every page it pulls in) is its own chunk — a
 // seller logging in never has to download the admin dashboard's code, or
@@ -28,7 +28,7 @@ function ProRouteFallback({ label }: { label?: string }) {
 }
 
 export default function ProEntryPage() {
-  const { role, authRestoring, adminMfaChallenge, login, verifySellerLogin, signUpSellerAccount, requestSellerPasswordReset, resendSellerConfirmationEmail, resendSellerConfirmationForLogin, verifyAdminLogin, checkDriverUsername, createDriverPin, signInDriverWithPin } = usePro();
+  const { role, authRestoring, authRestoreFailed, retryAuthRestore, abandonAuthRestore, adminMfaChallenge, login, verifySellerLogin, signUpSellerAccount, requestSellerPasswordReset, resendSellerConfirmationEmail, resendSellerConfirmationForLogin, verifyAdminLogin, checkDriverUsername, createDriverPin, signInDriverWithPin } = usePro();
   const { navigate: navigateApp } = useApp();
   // admin.ezial.net → administrateur, livreur.ezial.net → livreur. Ces deux
   // espaces n'existent plus sur le site public : ni lien, ni écran, et une
@@ -55,6 +55,27 @@ export default function ProEntryPage() {
   // Session existante en cours de vérification : jamais l'écran de connexion entre-temps.
   if (authRestoring && !role) {
     return <ProRouteFallback label={staffSpace === 'driver' ? 'Ouverture de votre espace…' : staffSpace === 'admin' ? 'Ouverture de l’administration…' : 'Ouverture de votre boutique…'} />;
+  }
+
+  // Session enregistrée mais vérification impossible (réseau coupé ou lent, serveur
+  // indisponible) : jamais l'écran de connexion — le vendeur n'est pas déconnecté.
+  if (authRestoreFailed && !role && staffSpace === null) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-cream p-4">
+        <div className="card w-full max-w-sm p-6 text-center" role="alert" aria-live="polite">
+          <WifiOff size={28} strokeWidth={1.5} className="mx-auto text-burgundy/70" aria-hidden="true" />
+          <h1 className="mt-3 font-display text-2xl text-ink">Connexion impossible pour le moment</h1>
+          <p className="mt-2 text-sm text-ink/70">
+            Votre session est conservée sur cet appareil : inutile de vous reconnecter.
+            Votre boutique s’ouvrira automatiquement dès le retour du réseau.
+          </p>
+          <button type="button" onClick={retryAuthRestore} className="btn-primary mt-5 w-full">Réessayer</button>
+          <button type="button" onClick={abandonAuthRestore} className="mt-3 text-xs text-ink/60 underline underline-offset-2">
+            Se connecter avec un autre compte
+          </button>
+        </div>
+      </div>
+    );
   }
 
   // If seller is logged in, render the seller layout

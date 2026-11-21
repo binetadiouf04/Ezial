@@ -1,10 +1,10 @@
-import { createContext, useContext, useState, useCallback, useEffect, useMemo, type ReactNode } from 'react';
+import { createContext, useContext, useState, useCallback, useEffect, useMemo, useRef, type ReactNode } from 'react';
 import { scrollToTopNow } from '@/lib/scrollTop';
 import type { Role, DeliveryStep, ShopStatus, ProductStatus, ModerationEntry, ModerationTargetType, ModerationAction } from './data';
 import { missions as initialMissions, type Mission, type Product, type Shop, type Driver, type DriverTransaction, type Order, type Transaction } from './data';
 import { shops as initialShops, products as initialProducts, transactions as initialTransactions, driverTransactions as initialDriverTransactions, orders as initialOrders, drivers as initialDrivers, moderationHistory as initialModerationHistory } from './data';
 import { assignShopPrefixes, nextReferenceForShop } from '@/utils/reference';
-import { signInSeller, restoreSellerSession, signOutSeller, signUpSeller, requestSellerPasswordReset, resendSellerConfirmation, resendSellerConfirmationForIdentifier, createShopForLoggedInCustomer, type SignUpSellerInput, type SignUpSellerResult } from '@/lib/supabaseSellerAuth';
+import { signInSeller, signOutSeller, signUpSeller, requestSellerPasswordReset, resendSellerConfirmation, resendSellerConfirmationForIdentifier, createShopForLoggedInCustomer, type SignUpSellerInput, type SignUpSellerResult } from '@/lib/supabaseSellerAuth';
 import { deleteMyAccount } from '@/lib/supabaseAccountDeletion';
 import { signInAdmin, restoreAdminSession, completeAdminMfaChallenge } from '@/lib/supabaseAdminAuth';
 import { checkDriverUsername, createDriverPin, signInDriverWithPin, restoreDriverSession, type DriverLoginStatus } from '@/lib/supabaseDriverAuth';
@@ -12,6 +12,7 @@ import { fetchDriverMissions, acceptDeliveryMission, markStopCollected, startMis
 import { supabase } from '@/lib/supabaseClient';
 import { getStaffSpace } from '@/lib/staffSpace';
 import { readProMarker, writeProMarker, clearProMarker, hasStoredSupabaseSession } from './proAuthMarker';
+import { checkSellerSession } from './sellerSessionCheck';
 
 type Route = string;
 
@@ -114,6 +115,10 @@ export interface AdminMfaChallengeState {
 interface ProState extends AuthState {
   /** Session existante en cours de vérification : afficher un chargement, pas la connexion. */
   authRestoring: boolean;
+  /** Session enregistrée mais vérification impossible (réseau, serveur) : le vendeur reste connecté. */
+  authRestoreFailed: boolean;
+  retryAuthRestore: () => void;
+  abandonAuthRestore: () => void;
   route: Route;
   navigate: (r: Route) => void;
   login: (role: Role, identifier: string, name: string, shopInfo?: SellerShopInfo) => void;
@@ -309,6 +314,9 @@ export function ProProvider({ children }: { children: ReactNode }) {
     if (marker) return true;
     return getStaffSpace() === null && hasStoredSupabaseSession();
   });
+  // Session enregistrée mais vérification impossible pour l'instant (réseau, serveur) :
+  // ni écran de connexion, ni déconnexion — un écran d'attente avec « Réessayer ».
+  const [authRestoreFailed, setAuthRestoreFailed] = useState(false);
 
   // Admin state
   const [allShops, setAllShops] = useState<Shop[]>(initialShops);
@@ -399,26 +407,8 @@ export function ProProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    // Seller sessions are never trusted from sessionStorage alone — the
-    // real Supabase session must still exist AND still own a real shop
-    // (shops.owner_id = auth.uid()) before the seller area opens.
-    (async () => {
-      const shop = await restoreSellerSession();
-      if (!shop) {
-        clearProMarker();
-        setAuthRestoring(false);
-        return;
-      }
-      setRole('seller');
-      setIdentifier(parsed.identifier);
-      setName(shop.shopName);
-      setSellerSupabaseShopId(shop.shopId);
-      setSellerShopIsOfficial(shop.isOfficial);
-      if (requestedRoute === '/') { setRoute('/seller'); writeProRoute('/seller'); }
-      const mockShop = initialShops.find((s) => s.sellerId === parsed.identifier);
-      setSellerShop(mockShop ?? null);
-      setAuthRestoring(false);
-    })();
+    // Espace boutique : repris par restoreSeller() (effet plus bas), qui sait
+    // distinguer « pas connecté » d'une simple erreur de réseau.
     // Deliberately mount-only — re-running this on every `missions` update
     // (e.g. after collectParcel) would re-navigate the driver back to a
     // stale deep link on each unrelated state change.
@@ -470,31 +460,91 @@ export function ProProvider({ children }: { children: ReactNode }) {
     writeProMarker({ role: r, identifier: id, name: n });
   }, [loadDriverMissions]);
 
-  // Pas de repère enregistré (lien de confirmation d'inscription ou de nouveau mot de
-  // passe ouvert dans un nouvel onglet, repère effacé…) alors qu'une vraie session
-  // Supabase existe : on vérifie si elle possède une boutique.
-  // Étendu le 21 nov. 2026 à toutes les pages vendeur (pas seulement /pro) : une
-  // session Supabase valide qui possède une boutique rouvre l'espace boutique là où
-  // l'on arrive (la boutique reste vérifiée par restoreSellerSession, comme toujours).
-  useEffect(() => {
-    if (readProMarker()) return;
-    if (getStaffSpace() !== null) return;
-    if (!hasStoredSupabaseSession()) return;
+  // Reprise de l'espace boutique à l'ouverture de l'application. La session n'est
+  // jamais crue sur la seule copie locale : la vraie session Supabase et la boutique
+  // possédée (shops.owner_id = auth.uid()) sont revérifiées auprès du serveur.
+  // - Repère « boutique ouverte » présent : on rouvre la boutique.
+  // - Pas de repère (lien de confirmation ou de nouveau mot de passe ouvert dans un
+  //   nouvel onglet, repère effacé…) mais une session Supabase enregistrée, sur /pro ou
+  //   une page vendeur : on regarde si elle possède une boutique.
+  // Une erreur passagère (réseau coupé ou lent, appli reprise après une mise en veille,
+  // serveur momentanément indisponible) ne déconnecte plus : le repère et la session
+  // sont gardés, l'écran « Connexion impossible pour le moment » remplace l'écran de
+  // connexion et la vérification est refaite automatiquement (21 nov. 2026 : c'était
+  // la cause des « déconnexions » à répétition — le vendeur retapait son mot de passe).
+  const restoreInFlight = useRef(false);
+  const restoreAbandoned = useRef(false);
+  const restoreSeller = useCallback(async ({ silent = false }: { silent?: boolean } = {}) => {
+    if (restoreInFlight.current || restoreAbandoned.current) return;
+    const marker = readProMarker();
+    if (marker && marker.role !== 'seller') return;
     const requested = proSubRouteFromPath();
-    if (requested !== '/' && !requested.startsWith('/seller')) { setAuthRestoring(false); return; }
-    let cancelled = false;
-    (async () => {
-      const shop = await restoreSellerSession();
-      if (cancelled) return;
-      if (shop) {
+    if (!marker && (getStaffSpace() !== null || !hasStoredSupabaseSession() || (requested !== '/' && !requested.startsWith('/seller')))) {
+      setAuthRestoring(false);
+      return;
+    }
+    restoreInFlight.current = true;
+    if (!silent) setAuthRestoring(true);
+    try {
+      const check = await checkSellerSession();
+      if (restoreAbandoned.current) return;
+      if (check.kind === 'unavailable') { setAuthRestoreFailed(true); return; }
+      setAuthRestoreFailed(false);
+      if (check.kind !== 'seller') {
+        // Vraiment déconnecté, ou session d'acheteur sans boutique (laissée telle quelle).
+        if (marker) clearProMarker();
+        return;
+      }
+      const { shop } = check;
+      if (marker) {
+        setRole('seller');
+        setIdentifier(marker.identifier);
+        setName(shop.shopName);
+        setSellerSupabaseShopId(shop.shopId);
+        setSellerShopIsOfficial(shop.isOfficial);
+        if (requested === '/') { setRoute('/seller'); writeProRoute('/seller'); }
+        setSellerShop(initialShops.find((s) => s.sellerId === marker.identifier) ?? null);
+      } else {
         login('seller', shop.sellerCode || shop.shopId, shop.shopName, { supabaseShopId: shop.shopId, isOfficial: shop.isOfficial });
         // Page vendeur demandée (lien direct, notification) : on y reste.
         if (requested !== '/') { setRoute(requested); writeProRoute(requested); }
       }
+    } finally {
+      restoreInFlight.current = false;
       setAuthRestoring(false);
-    })();
-    return () => { cancelled = true; };
+    }
+  }, [login]);
+
+  useEffect(() => {
+    void restoreSeller();
+    // Une seule fois à l'ouverture ; les nouvelles tentatives passent par l'effet ci-dessous.
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Vérification impossible : nouvelle tentative au retour du réseau, au retour dans
+  // l'application et toutes les 15 s, sans rien demander au vendeur.
+  useEffect(() => {
+    if (!authRestoreFailed || role) return;
+    const retry = () => { void restoreSeller({ silent: true }); };
+    const onVisible = () => { if (document.visibilityState === 'visible') retry(); };
+    window.addEventListener('online', retry);
+    document.addEventListener('visibilitychange', onVisible);
+    const timer = window.setInterval(retry, 15_000);
+    return () => {
+      window.removeEventListener('online', retry);
+      document.removeEventListener('visibilitychange', onVisible);
+      window.clearInterval(timer);
+    };
+  }, [authRestoreFailed, role, restoreSeller]);
+
+  const retryAuthRestore = useCallback(() => { void restoreSeller(); }, [restoreSeller]);
+
+  // « Se connecter avec un autre compte » depuis l'écran « Connexion impossible » :
+  // plus de nouvelle tentative, le formulaire de connexion s'affiche.
+  const abandonAuthRestore = useCallback(() => {
+    restoreAbandoned.current = true;
+    setAuthRestoreFailed(false);
+    setAuthRestoring(false);
   }, []);
 
   const logout = useCallback(() => {
@@ -509,6 +559,7 @@ export function ProProvider({ children }: { children: ReactNode }) {
     setDriverVisibleMissions([]);
     setDriverActionError(null);
     setAdminMfaChallenge(null);
+    setAuthRestoreFailed(false);
     clearProMarker();
     // Fire-and-forget: the local session is already cleared above regardless
     // of whether the Supabase sign-out call itself succeeds.
@@ -907,6 +958,9 @@ export function ProProvider({ children }: { children: ReactNode }) {
   const value: ProState = {
     role,
     authRestoring,
+    authRestoreFailed,
+    retryAuthRestore,
+    abandonAuthRestore,
     identifier,
     name,
     route,

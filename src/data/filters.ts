@@ -51,7 +51,27 @@ const clothingTypesHomme = [
   'Grande taille',
 ];
 
-const lingerieTypes = ['Pyjama', 'Nuisette', 'Soutien-gorge', 'Culotte', 'Sous-vêtement', 'Caleçon'];
+// Pyjamas & Lingerie : deux sous-catégories seulement, sans doublon entre elles.
+// Un « Type » ne répète jamais la sous-catégorie : il précise la pièce.
+const nightwearTypes = ['Pyjama', 'Nuisette', 'Chemise de nuit', 'Peignoir'];
+const lingerieTypes = ['Soutien-gorge', 'Culotte', 'Ensemble', 'Body', 'Caleçon / boxer'];
+
+// Bagues : tailles françaises (tour de doigt en mm), plus « Taille standard »
+// pour les bagues ajustables ou à taille unique. Variante de stock (« Taille »).
+export const ringSizes: string[] = [...Array.from({ length: 17 }, (_, i) => String(48 + i)), 'Taille standard'];
+
+// Lunettes : caractéristiques propres (la « Matière » des bijoux ne s'applique
+// pas à une monture). Identifiants = libellé sans accents ni espaces, comme pour
+// les montres (lien filtre client ↔ caractéristique enregistrée).
+export const GLASSES_GROUP_IDS = ['typedelunettes', 'forme', 'monture'] as const;
+const lunettesFilters: FilterGroup[] = [
+  { id: 'typedelunettes', label: 'Type de lunettes', options: ['Lunettes de soleil', 'Lunettes de vue', 'Anti-lumière bleue'] },
+  { id: 'forme', label: 'Forme', options: ['Ronde', 'Carrée', 'Rectangulaire', 'Ovale', 'Aviateur', 'Papillon', 'Oversize'] },
+  { id: 'monture', label: 'Monture', options: ['Métal', 'Acétate / plastique', 'Sans monture'] },
+  { id: 'public', label: 'Public', options: ['Homme', 'Femme', 'Mixte'] },
+  { id: 'couleur', label: 'Couleur', options: JEWELRY_COLOR_NAMES, collapsible: true },
+  globalPriceFilter,
+];
 
 const makeupProductTypes = ['Fond de teint', 'Anticernes', 'Poudre', 'Blush', 'Bronzer', 'Highlighter', 'Mascara', 'Eyeliner', 'Palette', 'Fard à paupières', 'Rouge à lèvres', 'Gloss', 'Crayon à lèvres', 'Crayon à sourcils', 'Faux cils'];
 
@@ -175,6 +195,28 @@ export const subcategoryFilters: Record<string, FilterGroup[]> = {
   'parfums/huiles-brumes': huilesBrumesFilters,
   'parfums/encens-parfums-maison': encensMaisonFilters,
   'bijoux/montres': montresFilters,
+  'bijoux/lunettes': lunettesFilters,
+  'bijoux/bagues': [
+    { id: 'matiere', label: 'Matière', options: jewelryMaterials },
+    { id: 'taille', label: 'Taille', options: ringSizes },
+    { id: 'couleur', label: 'Couleur', options: jewelryColors, collapsible: true },
+    { id: 'motif', label: 'Motif / Imprimé', options: commonPrints, collapsible: true },
+    globalPriceFilter,
+  ],
+  'lingerie/pyjamas': [
+    { id: 'type', label: 'Type', options: nightwearTypes },
+    { id: 'taille', label: 'Taille', options: clothingSizes },
+    { id: 'couleur', label: 'Couleur', options: commonColors, collapsible: true },
+    { id: 'motif', label: 'Motif / Imprimé', options: commonPrints, collapsible: true },
+    globalPriceFilter,
+  ],
+  'lingerie/lingerie': [
+    { id: 'type', label: 'Type', options: lingerieTypes },
+    { id: 'taille', label: 'Taille', options: clothingSizes },
+    { id: 'couleur', label: 'Couleur', options: commonColors, collapsible: true },
+    { id: 'motif', label: 'Motif / Imprimé', options: commonPrints, collapsible: true },
+    globalPriceFilter,
+  ],
 };
 
 export const filterConfig: Record<CategoryId, FilterGroup[]> = {
@@ -202,10 +244,9 @@ export const filterConfig: Record<CategoryId, FilterGroup[]> = {
     { id: 'motif', label: 'Motif / Imprimé', options: commonPrints, collapsible: true },
     globalPriceFilter,
   ],
+  // Toute la beauté (maquillage, skincare, cheveux…) : aucun filtre qui
+  // mélangerait les types de produits ; chaque sous-catégorie a les siens.
   beaute: [
-    { id: 'peau', label: 'Type de peau', options: ['Sèche', 'Mixte', 'Grasse', 'Sensible', 'Normale'] },
-    { id: 'besoin', label: 'Besoin', options: ['Hydratation', 'Imperfections', 'Éclat', 'Anti-âge'] },
-    { id: 'typeproduit', label: 'Type de produit', options: ['Sérum', 'Crème', 'Palette', 'Rouge à lèvres', 'Nettoyant', 'Masque'] },
     globalPriceFilter,
   ],
   parfums: [
@@ -214,7 +255,7 @@ export const filterConfig: Record<CategoryId, FilterGroup[]> = {
   ],
   // No 'type' group here on purpose: the subcategory already selected
   // (Colliers, Bracelets, Bagues, Boucles d'oreilles, Montres, Lunettes,
-  // Bijou de taille, Ensemble/Parure — see categories.ts) is the exact same
+  // Baya, Ensemble/Parure — see categories.ts) is the exact same
   // classification a "Type" group would otherwise ask for again.
   bijoux: [
     { id: 'matiere', label: 'Matière', options: jewelryMaterials },
@@ -223,7 +264,7 @@ export const filterConfig: Record<CategoryId, FilterGroup[]> = {
     globalPriceFilter,
   ],
   lingerie: [
-    { id: 'type', label: 'Type', options: lingerieTypes },
+    { id: 'type', label: 'Type', options: [...nightwearTypes, ...lingerieTypes] },
     { id: 'taille', label: 'Taille', options: clothingSizes },
     { id: 'couleur', label: 'Couleur', options: commonColors, collapsible: true },
     { id: 'motif', label: 'Motif / Imprimé', options: commonPrints, collapsible: true },

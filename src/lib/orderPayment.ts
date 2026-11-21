@@ -79,3 +79,14 @@ export function isOrangeLink(url: unknown): url is string {
     return false;
   }
 }
+
+/** Seuls des liens https de Wave (wave.com et ses sous-domaines) sont ouverts : jamais une adresse arbitraire. */
+export function isWaveLink(url: unknown): url is string {
+  if (typeof url !== 'string') return false;
+  try {
+    const u = new URL(url);
+    return u.protocol === 'https:' && !u.username && !u.password && (u.hostname === 'wave.com' || u.hostname.endsWith('.wave.com'));
+  } catch {
+    return false;
+  }
+}

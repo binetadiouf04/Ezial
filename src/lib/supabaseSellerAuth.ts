@@ -103,7 +103,7 @@ export async function signInSeller(identifier: string, password: string): Promis
   if (!shop) {
     // Authenticated, but no real shop is linked to this account — never
     // leave a half-authenticated seller session standing.
-    await supabase.auth.signOut();
+    await supabase.auth.signOut({ scope: 'local' });
     return { error: NO_SHOP_ERROR };
   }
   return shop;
@@ -301,7 +301,7 @@ export async function signOutSeller(): Promise<void> {
   // Avant la déconnexion (la RLS exige encore la session) : cet appareil ne
   // recevra plus les notifications de ce compte.
   await forgetThisDeviceOnSignOut();
-  await supabase.auth.signOut();
+  await supabase.auth.signOut({ scope: 'local' });
 }
 
 export async function resendSellerConfirmation(email: string): Promise<{ error?: string }> {

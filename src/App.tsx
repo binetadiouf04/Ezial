@@ -6,7 +6,7 @@ import { AppProvider, useApp } from '@/store/AppContext';
 import { ProProvider } from '@/pro/ProContext';
 import type { Product } from '@/data/products';
 import type { Shop } from '@/data/shops';
-import { categoryMap, type CategoryId } from '@/data/categories';
+import { categoryMap, RENAMED_SUBCATEGORIES, type CategoryId } from '@/data/categories';
 import { findProductByKey, productPublicPath } from '@/lib/productUrl';
 import { findShopByKey, shopPublicPath } from '@/lib/shopUrl';
 import {
@@ -96,7 +96,8 @@ function RouteView() {
   if (clean.startsWith('/categorie/')) {
     const parts = clean.split('/');
     const categoryId = parts[2];
-    const subId = parts[3];
+    // Anciennes sous-catégories regroupées : l'ancienne adresse ouvre la nouvelle.
+    const subId = parts[3] ? (RENAMED_SUBCATEGORIES[`${categoryId}/${parts[3]}`] ?? parts[3]) : undefined;
     if (categoryId) return <CategoryPage categoryId={categoryId} subId={subId} />;
   }
 
