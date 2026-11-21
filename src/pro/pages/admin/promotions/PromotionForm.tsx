@@ -317,7 +317,7 @@ export default function PromotionForm({
 
       <p className="flex items-start gap-2 rounded-lg bg-cream/70 p-3 text-xs text-ink/60">
         <Info size={14} className="mt-0.5 flex-shrink-0 text-burgundy" />
-        Ezial finance la réduction ; la part des vendeurs est inscrite à reverser.
+        Ezial finance la réduction (moins la part vendeur éventuelle) ; le montant dû aux vendeurs est inscrit à reverser.
       </p>
 
       <Section title="Campagne">

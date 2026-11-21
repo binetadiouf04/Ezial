@@ -119,7 +119,7 @@ export default function CompensationsPanel() {
 
   return (
     <div className="space-y-4">
-      <p className="text-xs text-ink/55">Réductions de campagne financées par Ezial : la part de chaque boutique lui est reversée à la main.</p>
+      <p className="text-xs text-ink/55">Ce qu’Ezial reverse à chaque boutique pour les réductions de campagne (part vendeur déjà déduite), payé à la main.</p>
 
       <div className="flex flex-wrap gap-2" role="group" aria-label="Filtrer les compensations">
         {FILTERS.map((f) => (
