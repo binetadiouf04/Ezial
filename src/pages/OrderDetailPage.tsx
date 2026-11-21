@@ -10,6 +10,7 @@ import InvoiceCard from '@/components/InvoiceCard';
 import OrangeMoneyPayment from '@/components/OrangeMoneyPayment';
 import PaymentStatusBadge from '@/components/PaymentStatusBadge';
 import { DeliveryCodeCard, PickupPlace } from '@/components/OrderParts';
+import RateOrderItems from '@/components/RateOrderItems';
 
 const deliveryStatusColors: Record<DeliveryStepStatus, string> = {
   confirmed: 'bg-blue-50 text-blue-700', preparing: 'bg-amber-50 text-amber-700', ready: 'bg-green-50 text-green-700',
@@ -63,6 +64,9 @@ export default function OrderDetailPage({ orderId }: { orderId: string }) {
   const pickupFulfillments = order.shopFulfillments.filter((f) => f.type === 'pickup');
   const effectiveStatus = computeDeliveryStepStatus(order, missionStatus);
   const confirmed = !awaitingOnlinePayment && !cancelled;
+  // Reçue (livrée, ou retirée en boutique) : le client peut noter ses articles.
+  const received = confirmed && ((hasDelivery && effectiveStatus === 'delivered')
+    || pickupFulfillments.some((f) => f.pickupStatus === 'picked_up'));
   const status = getOrderStatus(order, effectiveStatus);
   const date = new Date(order.date).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 
@@ -87,6 +91,8 @@ export default function OrderDetailPage({ orderId }: { orderId: string }) {
       )}
 
       <div className="space-y-4">
+          {received && customerUser && <RateOrderItems order={order} customerId={customerUser.id} />}
+
           {confirmed && hasDelivery && deliveryCode && effectiveStatus !== 'delivered' && <DeliveryCodeCard code={deliveryCode} />}
 
           {confirmed && hasDelivery && (

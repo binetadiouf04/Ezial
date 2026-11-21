@@ -202,6 +202,33 @@ export async function submitReview(userId: string, input: SubmitReviewInput): Pr
   return {};
 }
 
+/** Notes déjà données par ce client à ces produits (pour la notation depuis une commande). */
+export async function fetchMyRatings(userId: string, productIds: string[]): Promise<Map<string, number>> {
+  const ratings = new Map<string, number>();
+  const ids = [...new Set(productIds)].filter(Boolean);
+  if (ids.length === 0) return ratings;
+  const { data, error } = await supabase.from('reviews').select('product_id, rating').eq('user_id', userId).in('product_id', ids);
+  if (error || !data) return ratings;
+  for (const row of data) ratings.set(row.product_id as string, Number(row.rating));
+  return ratings;
+}
+
+/**
+ * Note seule, en un geste (depuis la commande) : crée l'avis sans commentaire, ou change
+ * seulement la note d'un avis existant — son commentaire et ses photos sont conservés.
+ */
+export async function rateProduct(userId: string, productId: string, rating: number): Promise<{ error?: string }> {
+  if (!Number.isInteger(rating) || rating < 1 || rating > 5) return { error: 'Note invalide.' };
+  const { data: existing } = await supabase.from('reviews').select('id').eq('product_id', productId).eq('user_id', userId).maybeSingle();
+  if (existing) {
+    const { error } = await supabase.from('reviews').update({ rating, updated_at: new Date().toISOString() }).eq('id', existing.id);
+    return error ? { error: "Impossible d'enregistrer la note. Réessayez." } : {};
+  }
+  const { error } = await supabase.from('reviews').insert({ product_id: productId, user_id: userId, rating, comment: null });
+  if (error?.code === '42501') return { error: 'Vous pourrez noter cet article une fois reçu.' };
+  return error ? { error: "Impossible d'enregistrer la note. Réessayez." } : {};
+}
+
 export async function deleteReview(reviewId: string): Promise<{ error?: string }> {
   const { data: images } = await supabase.from('review_images').select('storage_path').eq('review_id', reviewId);
   const paths = (images ?? []).map((r) => r.storage_path as string).filter(Boolean);
