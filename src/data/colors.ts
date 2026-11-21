@@ -1,3 +1,5 @@
+import { MAKEUP_SHADE_DEFS } from './makeupShades.ts';
+
 export interface ColorDef {
   name: string;
   hex: string;
@@ -136,6 +138,9 @@ export const colorPalette: ColorDef[] = [
   // Specials
   { name: 'Multicolore', hex: '#e0507a', multi: true },
   { name: 'Transparent', hex: '#f0f0f0', light: true },
+
+  // Maquillage : teintes par type de produit (src/data/makeupShades.ts)
+  ...MAKEUP_SHADE_DEFS,
 ];
 
 export const colorMap: Record<string, ColorDef> = colorPalette.reduce((acc, c) => {

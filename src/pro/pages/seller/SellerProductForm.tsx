@@ -10,7 +10,8 @@ import {
   fabricAvailabilityStatuses, fabricAvailabilityLabels,
   type FabricSaleMode, type FabricAvailabilityStatus,
 } from '@/data/categories';
-import { getFilters, WATCH_GROUP_IDS, type FilterGroup } from '@/data/filters';
+import { getFilters, WATCH_GROUP_IDS, GLASSES_GROUP_IDS, type FilterGroup } from '@/data/filters';
+import { MAKEUP_SHADES_BY_TYPE } from '@/data/makeupShades';
 import { discountPercent, COLOR_PRINT_VARIANT_KEY } from '@/data/products';
 import { getColor } from '@/data/colors';
 import VendorNoticeBanner, { type VendorNotice } from '../../components/VendorNoticeBanner';
@@ -60,7 +61,7 @@ const blurOnWheel = (e: React.WheelEvent<HTMLInputElement>) => e.currentTarget.b
 // Which filter groups are single-choice (radio-like) vs descriptive multi-choice
 // (checkbox-like, but never split stock) vs true variant dimensions (checkbox-like
 // AND generate one stock/price line per selected value).
-const SINGLE_CHOICE_IDS = new Set(['type', 'style', 'texture', 'matiere', 'peau', 'typeproduit', 'longueurongles', ...WATCH_GROUP_IDS]);
+const SINGLE_CHOICE_IDS = new Set(['type', 'style', 'texture', 'matiere', 'peau', 'typeproduit', 'longueurongles', ...WATCH_GROUP_IDS, ...GLASSES_GROUP_IDS]);
 // The one exception to 'type' being single-choice: for Vêtements (Femme and
 // Homme), several clothing types can describe the same product (e.g. "Robes"
 // and "Grande taille", or "T-shirts" and "Tenues de sport") — a product must
@@ -203,31 +204,9 @@ const VALIDATION_FIELD_LABELS: Record<string, string> = {
   supplier: 'Fournisseur',
 };
 
-// Maquillage: the color/teinte palette depends on the type of product chosen —
-// a foundation needs skin tones, a lipstick needs lip shades, etc.
-const skinToneShades = ['Très clair', 'Clair', 'Medium', 'Caramel', 'Doré', 'Brun', 'Brun foncé', 'Deep'];
-const lipShades = ['Nude', 'Rose nude', 'Mauve', 'Bordeaux', 'Rouge', 'Brun', 'Chocolat', 'Prune', 'Corail'];
-const eyeShades = ['Noir', 'Brun', 'Bleu', 'Vert', 'Bordeaux', 'Blanc'];
-const eyeshadowShades = ['Or', 'Cuivré', 'Bronze', 'Marron', 'Chocolat', 'Taupe', 'Rose', 'Prune', 'Violet', 'Noir', 'Blanc', 'Nude', 'Doré', 'Argenté', 'Vert', 'Bleu', 'Turquoise'];
-const blushShades = ['Rose', 'Pêche', 'Terracotta', 'Prune', 'Brun rosé'];
-const highlighterShades = ['Doré', 'Or rose', 'Argenté', 'Beige'];
-
-const makeupColorsByType: Record<string, string[]> = {
-  'Fond de teint': skinToneShades,
-  'Anticernes': skinToneShades,
-  'Poudre': skinToneShades,
-  'Bronzer': skinToneShades,
-  'Highlighter': highlighterShades,
-  'Rouge à lèvres': lipShades,
-  'Gloss': lipShades,
-  'Crayon à lèvres': lipShades,
-  'Mascara': eyeShades,
-  'Eyeliner': eyeShades,
-  'Crayon à sourcils': eyeShades,
-  'Fard à paupières': eyeshadowShades,
-  'Palette': eyeshadowShades,
-  'Blush': blushShades,
-};
+// Maquillage : les teintes dépendent du type de produit (fond de teint, rouge à
+// lèvres, crayon à sourcils…) — voir src/data/makeupShades.ts.
+const makeupColorsByType = MAKEUP_SHADES_BY_TYPE;
 
 // Short placeholder examples for "Nom du produit" / "Description", to help the
 // seller without pre-filling the fields. Keyed by category/subcategory, with a
@@ -247,7 +226,7 @@ const examplesBySubcategory: Record<string, { name: string; description: string 
   'parfums/huiles-brumes': { name: 'Ex. Brume parfumée fleur de tiaré', description: 'Ex. Brume légère et fraîche, à vaporiser sur la peau ou les cheveux.' },
   'parfums/encens-parfums-maison': { name: 'Ex. Encens oud premium', description: 'Ex. Encens naturel au oud, parfum boisé et enveloppant.' },
   'bijoux/colliers': { name: 'Ex. Collier fin plaqué or', description: 'Ex. Collier fin et délicat, plaqué or, pour un port quotidien.' },
-  'lingerie/sous-vetements': { name: 'Ex. Culotte coton sans couture', description: 'Ex. Culotte confortable en coton doux, coupe invisible sous les vêtements.' },
+  'lingerie/lingerie': { name: 'Ex. Culotte coton sans couture', description: 'Ex. Culotte confortable en coton doux, coupe invisible sous les vêtements.' },
 };
 
 const examplesByCategory: Record<string, { name: string; description: string }> = {
@@ -273,6 +252,9 @@ interface OptionSelection {
 // apart.
 function computeOptionGroups(categoryId: string, subId: string, selectedTypeProduit: string | undefined, isMakeup: boolean): FilterGroup[] {
   if (!categoryId) return [];
+  // Catégorie à sous-catégories : rien tant que la sous-catégorie n'est pas choisie
+  // (sinon on mélangerait, par exemple, des types de maquillage et de skincare).
+  if (!subId && (categories.find((c) => c.id === categoryId)?.subcategories.length ?? 0) > 0) return [];
   let groups = getFilters(categoryId, subId || undefined).filter((g) => g.id !== 'prix');
 
   // Tissus: fabric_type and sale_mode are their own dedicated, required
@@ -1536,8 +1518,9 @@ export default function SellerProductForm({ productId }: { productId?: string })
           </div>
           {errors.category && <p className="mt-1 text-xs text-burgundy">{errors.category}</p>}
         </div>
-        {categoryId === 'bijoux' && (
-          <div className={`rounded-lg px-3.5 py-3 text-xs leading-relaxed ${errors.gold ? 'bg-burgundy/5 text-burgundy' : 'bg-amber-50 text-amber-900'}`} role={errors.gold ? 'alert' : undefined}>
+        {/* Règle de l'or véritable : rappelée seulement quand le produit la viole (la base la vérifie aussi). */}
+        {categoryId === 'bijoux' && errors.gold && (
+          <div className="rounded-lg bg-burgundy/5 px-3.5 py-3 text-xs leading-relaxed text-burgundy" role="alert">
             <p className="font-semibold">{GOLD_JEWELRY_MESSAGE}</p>
             <p className="mt-0.5 opacity-90">{GOLD_JEWELRY_HINT}</p>
           </div>
@@ -1560,10 +1543,7 @@ export default function SellerProductForm({ productId }: { productId?: string })
           tissus exclusion above). */}
       {isTissus && (
         <div className="card p-5 space-y-5">
-          <div>
-            <h2 className="text-sm font-semibold text-ink">Tissu</h2>
-            <p className="mt-1 text-xs text-ink/45">Type de tissu et mode de vente — obligatoires.</p>
-          </div>
+          <h2 className="text-sm font-semibold text-ink">Tissu</h2>
           <div>
             <label className="block text-xs font-medium text-ink/60 mb-1.5">Type de tissu</label>
             <select className="input-field" value={fabricType} onChange={(e) => setFabricType(e.target.value)}>
@@ -1595,10 +1575,7 @@ export default function SellerProductForm({ productId }: { productId?: string })
           see classificationGroups/variantGroups below. */}
       {(classificationGroups.length > 0 || showsNotes) && (
         <div className="card p-5 space-y-5">
-          <div>
-            <h2 className="text-sm font-semibold text-ink">Type et caractéristiques</h2>
-            <p className="mt-1 text-xs text-ink/45">Précisez le type de produit et ses caractéristiques descriptives.</p>
-          </div>
+          <h2 className="text-sm font-semibold text-ink">Type et caractéristiques</h2>
 
           {classificationGroups.map((group) => {
             const isSingle = SINGLE_CHOICE_IDS.has(group.id) && !isVetementsTypeGroup(categoryId, subId, group.id);
@@ -1627,7 +1604,7 @@ export default function SellerProductForm({ productId }: { productId?: string })
                 value={notesInput}
                 onChange={(e) => setNotesInput(e.target.value)}
               />
-              <p className="text-xs text-ink/45">Séparez les notes principales par des virgules. Purement descriptif — ne crée aucune variante.</p>
+              <p className="text-xs text-ink/45">Séparez les notes par des virgules.</p>
             </div>
           )}
         </div>
@@ -1658,7 +1635,7 @@ export default function SellerProductForm({ productId }: { productId?: string })
               onChange={(e) => setSupplier(e.target.value)}
             />
             {errors.supplier && <p className="mt-1 text-xs text-burgundy">{errors.supplier}</p>}
-            <p className="mt-1 text-xs text-ink/45">Champ réservé à Ezial Boutique. Le nom est affiché aux clients sur la fiche produit, à côté de la boutique qui vend : indiquez seulement le nom, sans téléphone, e-mail ni lien.</p>
+            <p className="mt-1 text-xs text-ink/45">Nom seulement, affiché aux clients (sans téléphone, e-mail ni lien).</p>
           </div>
         )}
       </div>
@@ -1677,7 +1654,7 @@ export default function SellerProductForm({ productId }: { productId?: string })
           </button>
           <span className="text-sm font-medium text-ink">Fait à la main</span>
         </label>
-        <p className="mt-1.5 text-xs text-ink/45">Produit artisanal, fabriqué à la main. N'affecte pas la catégorie — apparaît aussi dans « Made in Sénégal ».</p>
+        <p className="mt-1.5 text-xs text-ink/45">Apparaît aussi dans « Made in Sénégal ».</p>
       </div>
 
       {/* 5. Photos & vidéo */}
@@ -1685,7 +1662,7 @@ export default function SellerProductForm({ productId }: { productId?: string })
         <div>
           <h2 className="text-sm font-semibold text-ink">Photos et vidéo du produit</h2>
           <p className="mt-1 text-xs text-ink/45">
-            Jusqu'à {MAX_PRODUCT_MEDIA_ITEMS} photos et {MAX_PRODUCT_VIDEOS} vidéo par produit — y compris les photos déjà enregistrées. Flèches : réordonner. Étoile : photo principale. Recadrer : repositionner/zoomer. Remplacer : envoyer une nouvelle photo. Logo : superposer votre marque.
+            Jusqu'à {MAX_PRODUCT_MEDIA_ITEMS} photos et {MAX_PRODUCT_VIDEOS} vidéo. L'étoile choisit la photo principale.
           </p>
         </div>
 
@@ -1819,14 +1796,7 @@ export default function SellerProductForm({ productId }: { productId?: string })
           earlier, right under Catégorie — see classificationGroups above. */}
       {variantGroups.length > 0 && (
         <div className="card p-5 space-y-5">
-          <div>
-            <h2 className="text-sm font-semibold text-ink">Options du produit</h2>
-            <p className="mt-1 text-xs text-ink/45">
-              {isTissus
-                ? 'Sélectionnez les couleurs et imprimés disponibles pour ce tissu — le client choisira une combinaison avant d\'ajouter au panier.'
-                : 'Sélectionnez les options disponibles pour ce produit. Ezial génère automatiquement les combinaisons de stock pour les options qui créent une vraie variante (taille, couleur, volume...).'}
-            </p>
-          </div>
+          <h2 className="text-sm font-semibold text-ink">Options du produit</h2>
 
           {variantGroups.map((group) => {
             const isColor = COLOR_GROUP_IDS.has(group.id);
@@ -1865,7 +1835,7 @@ export default function SellerProductForm({ productId }: { productId?: string })
 
           {colorPrintMerged && (
             <p className="rounded-lg bg-cream px-3 py-2.5 text-xs text-ink/60">
-              Chaque imprimé est une variante à part entière, comme une couleur : il a sa propre ligne de stock et n'est jamais combiné avec une couleur (ex. Noir, Rouge et Léopard en S et M = 6 lignes de stock).
+              Chaque imprimé a son propre stock, comme une couleur.
             </p>
           )}
           {showsLegacyColorPrintNotice && (
@@ -1937,7 +1907,7 @@ export default function SellerProductForm({ productId }: { productId?: string })
             {(() => {
               const base = parseInt(price) || 0;
               const promo = parseInt(promoPrice) || 0;
-              const disc = discountPercent(promo, base);
+              const disc = promo > 0 && promo < base ? discountPercent(promo, base) : 0;
               return disc ? (
                 <p className="text-sm text-ink/70">
                   <span className="text-ink/40 line-through">{base.toLocaleString('fr-FR')} FCFA</span>{' '}
@@ -1946,18 +1916,19 @@ export default function SellerProductForm({ productId }: { productId?: string })
                 </p>
               ) : null;
             })()}
+            {/* min-w-0 : sur iPhone, un champ date a une largeur minimale propre et débordait de la carte. */}
             <div className="grid grid-cols-2 gap-3">
-              <div>
+              <div className="min-w-0">
                 <label className="block text-xs font-medium text-ink/60 mb-1.5">Début (optionnel)</label>
-                <input type="date" className="input-field" value={promoStart} onChange={(e) => setPromoStart(e.target.value)} />
+                <input type="date" className="input-field min-w-0 max-w-full appearance-none" value={promoStart} onChange={(e) => setPromoStart(e.target.value)} />
               </div>
-              <div>
+              <div className="min-w-0">
                 <label className="block text-xs font-medium text-ink/60 mb-1.5">Fin (optionnel)</label>
-                <input type="date" className="input-field" value={promoEnd} onChange={(e) => setPromoEnd(e.target.value)} />
+                <input type="date" className="input-field min-w-0 max-w-full appearance-none" value={promoEnd} onChange={(e) => setPromoEnd(e.target.value)} />
                 {errors.promoEnd && <p className="mt-1 text-xs text-burgundy">{errors.promoEnd}</p>}
               </div>
             </div>
-            <p className="text-xs text-ink/40">Sans dates, la promotion reste active tant qu'elle n'est pas désactivée.</p>
+            <p className="text-xs text-ink/40">Sans dates, la promotion reste active.</p>
           </div>
         )}
       </div>
@@ -1969,16 +1940,14 @@ export default function SellerProductForm({ productId }: { productId?: string })
         <div className="card p-5 space-y-4">
           <h2 className="text-sm font-semibold text-ink">Disponibilité</h2>
           <div className="flex flex-wrap gap-2">
-            {fabricAvailabilityStatuses.map((s) => (
+            {fabricAvailabilityStatuses.filter((s) => s !== 'disponible' || availabilityStatus === 'disponible').map((s) => (
               <SelectableChip key={s} label={fabricAvailabilityLabels[s]} selected={availabilityStatus === s} onClick={() => setAvailabilityStatus(s)} />
             ))}
           </div>
           {errors.availabilityStatus && <p className="mt-1 text-xs text-burgundy">{errors.availabilityStatus}</p>}
-          <p className="text-xs text-ink/45">
-            {saleMode === 'piece' && availabilityStatus === 'unique'
-              ? 'Une seule pièce : la vente d\'un deuxième exemplaire sera automatiquement bloquée.'
-              : 'Statut affiché au client — ne correspond pas à un suivi de quantité précis.'}
-          </p>
+          {saleMode === 'piece' && availabilityStatus === 'unique' && (
+            <p className="text-xs text-ink/45">Une seule pièce : un deuxième achat sera bloqué.</p>
+          )}
         </div>
       ) : (
         <div className="card p-5 space-y-4">
