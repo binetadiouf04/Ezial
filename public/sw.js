@@ -68,20 +68,25 @@ self.addEventListener('fetch', (event) => {
 });
 
 // Web Push — the payload is whatever JSON the send-push / send-push-campaign
-// Edge Functions sent: { title, body, url }. `url` is a site path (e.g.
-// "/pro/seller/commandes" for a seller order, "/compte/commandes" for a
-// customer order).
+// Edge Functions sent: { title, body, url } plus, for a campaign, an optional
+// { image, action }. `url` is a site path (e.g. "/pro/seller/commandes" for a
+// seller order, "/compte/commandes" for a customer order).
+// Android : `badge` = petite icône blanche de la barre d'état (silhouette du
+// papillon) ; `image` = grande image sous le texte ; `actions` = bouton. L'iPhone
+// ignore ces trois options (il n'affiche que l'icône, le titre et le texte).
 self.addEventListener('push', (event) => {
   if (!event.data) return;
   let payload;
   try { payload = event.data.json(); } catch { return; }
-  const { title, body, url, tag } = payload;
+  const { title, body, url, tag, image, action } = payload;
   const options = {
     body: body || '',
     icon: '/icons/icon-192.png',
-    badge: '/icons/icon-192.png',
+    badge: '/icons/badge-96.png',
     data: { url: url || '/' },
   };
+  if (typeof image === 'string' && image.startsWith('https://')) options.image = image;
+  if (typeof action === 'string' && action.trim()) options.actions = [{ action: 'open', title: action.trim().slice(0, 24) }];
   // Même « tag » = la notification remplace la précédente au lieu de s'empiler
   // (anti-doublon côté appareil). Facultatif : absent des envois actuels.
   if (typeof tag === 'string' && tag) options.tag = tag;
@@ -102,6 +107,7 @@ function targetUrlFor(path) {
 
 // Focuses an already-open Ezial window (tab or installed app) and loads the
 // page there, or opens a new one when none is open (or it cannot be navigated).
+// Le bouton d'une campagne (event.action === 'open') mène à la même page.
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
   const targetUrl = targetUrlFor(event.notification.data?.url);

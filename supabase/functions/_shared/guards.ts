@@ -147,3 +147,30 @@ export function normalizeVapidKey(raw: string | null | undefined, kind: 'private
   }
   return { ok: true, key: cleaned };
 }
+
+// ── Campagnes : image et bouton (Android) ────────────────────────────────────
+
+/**
+ * Image d'une campagne : seulement une image déposée par l'administration dans le
+ * stockage public d'Ezial (site-content/push/), en https. Toute autre adresse est ignorée
+ * (la notification part alors sans image).
+ */
+export function safeCampaignImage(value: unknown, supabaseUrl: string): string | null {
+  if (typeof value !== 'string' || !value || value.length > 500 || !supabaseUrl) return null;
+  if (/[\s"'<>\\]/.test(value)) return null;
+  const prefix = `${supabaseUrl.replace(/\/+$/, '')}/storage/v1/object/public/site-content/push/`;
+  if (!value.startsWith(prefix)) return null;
+  try {
+    return new URL(value).protocol === 'https:' ? value : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Texte du bouton d'une campagne : 24 caractères au plus, sans caractère de contrôle. */
+export function safeActionLabel(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  // deno-lint-ignore no-control-regex
+  const text = value.replace(/[\u0000-\u001f\u007f]/g, '').trim().slice(0, 24).trim();
+  return text || null;
+}

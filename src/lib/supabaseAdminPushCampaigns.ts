@@ -14,6 +14,9 @@ export interface PushCampaign {
   title: string;
   body: string;
   clickUrl: string | null;
+  // Android : grande image et texte du bouton (facultatifs).
+  imageUrl: string | null;
+  actionLabel: string | null;
   status: CampaignStatus;
   scheduledAt: string | null;
   sentAt: string | null;
@@ -30,6 +33,8 @@ function mapRow(row: Record<string, unknown>): PushCampaign {
     title: row.title as string,
     body: row.body as string,
     clickUrl: (row.click_url as string | null) ?? null,
+    imageUrl: (row.image_url as string | null) ?? null,
+    actionLabel: (row.action_label as string | null) ?? null,
     status: row.status as CampaignStatus,
     scheduledAt: (row.scheduled_at as string | null) ?? null,
     sentAt: (row.sent_at as string | null) ?? null,
@@ -57,6 +62,8 @@ export interface CreateCampaignInput {
   title: string;
   body: string;
   clickUrl: string;
+  imageUrl?: string | null;
+  actionLabel?: string | null;
   scheduledAt: string | null; // ISO, or null to leave as draft / send now
 }
 
@@ -66,6 +73,9 @@ export async function createPushCampaign(input: CreateCampaignInput): Promise<{ 
     title: input.title.trim(),
     body: input.body.trim(),
     click_url: input.clickUrl.trim() || null,
+    // Colonnes ajoutées par docs/sql/push-campagne-image.sql ; envoyées seulement si remplies.
+    ...(input.imageUrl ? { image_url: input.imageUrl } : {}),
+    ...(input.actionLabel?.trim() ? { action_label: input.actionLabel.trim().slice(0, 24) } : {}),
     status: input.scheduledAt ? 'scheduled' : 'draft',
     scheduled_at: input.scheduledAt,
     created_by: userData.user?.id ?? null,

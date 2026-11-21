@@ -15,7 +15,7 @@
 // every Edge Function already has, to resolve the admin's own JWT.
 import { createClient } from 'npm:@supabase/supabase-js@2';
 import webpush from 'npm:web-push@3.6.7';
-import { adminMfaSatisfied, checkSharedSecret, isUuid, jwtAssuranceLevel, safeInternalPath, normalizeVapidKey } from '../_shared/guards.ts';
+import { adminMfaSatisfied, checkSharedSecret, isUuid, jwtAssuranceLevel, safeInternalPath, normalizeVapidKey, safeCampaignImage, safeActionLabel } from '../_shared/guards.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? '';
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
@@ -60,6 +60,9 @@ interface Campaign {
   title: string;
   body: string;
   click_url: string | null;
+  // Android : grande image et bouton (colonnes facultatives, voir docs/sql/push-campagne-image.sql).
+  image_url?: string | null;
+  action_label?: string | null;
 }
 
 interface SubRow { user_id: string; endpoint: string; p256dh: string; auth: string }
@@ -97,7 +100,16 @@ async function sendCampaign(campaign: Campaign): Promise<void> {
       }
     }
 
-    const payload = JSON.stringify({ title: campaign.title, body: campaign.body, url: safeInternalPath(campaign.click_url) });
+    // Image et bouton : affichés par Android (et Chrome sur ordinateur) ; ignorés par l'iPhone.
+    const image = safeCampaignImage(campaign.image_url, SUPABASE_URL);
+    const action = safeActionLabel(campaign.action_label);
+    const payload = JSON.stringify({
+      title: campaign.title,
+      body: campaign.body,
+      url: safeInternalPath(campaign.click_url),
+      ...(image ? { image } : {}),
+      ...(action ? { action } : {}),
+    });
     let recipientCount = 0;
     let successCount = 0;
     let errorCount = 0;
