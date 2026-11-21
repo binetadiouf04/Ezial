@@ -19,6 +19,7 @@ interface OrderRow {
   products_subtotal: number;
   discount_amount: number;
   delivery_fee: number;
+  delivery_discount?: number | null;
   payment_method: string;
   first_name?: string;
   last_name?: string;
@@ -140,6 +141,7 @@ export async function fetchCustomerOrders(customerId: string): Promise<Order[]> 
       subtotal: o.products_subtotal,
       discount: o.discount_amount ?? 0,
       delivery: o.delivery_fee,
+      deliveryDiscount: o.delivery_discount ?? 0,
       total: o.total_amount,
       shopFulfillments: fulfillments,
       preference: o.preferred_delivery_date || o.preferred_delivery_slot

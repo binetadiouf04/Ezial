@@ -43,6 +43,8 @@ export interface Invoice {
   subtotal: number;
   discount: number;
   delivery: number;
+  /** Livraison offerte (campagne Ezial), déjà déduite du total. */
+  deliveryDiscount: number;
   total: number;
   paymentLabel: string;
 }
@@ -120,6 +122,7 @@ export function buildInvoice(order: Order, helpers: InvoiceHelpers, company: Inv
     subtotal: order.subtotal,
     discount: order.discount,
     delivery: order.delivery,
+    deliveryDiscount: order.deliveryDiscount ?? 0,
     total: order.total,
     paymentLabel: helpers.paymentLabel(order.payment),
   };

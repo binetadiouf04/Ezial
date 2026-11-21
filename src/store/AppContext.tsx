@@ -103,6 +103,8 @@ export interface Order {
   // real per-item prices reconcile instead of silently disagreeing.
   discount: number;
   delivery: number;
+  // Livraison offerte par une campagne Ezial (déjà déduite de `total`) ; `delivery` reste le montant initial.
+  deliveryDiscount?: number;
   total: number;
   shopFulfillments: ShopFulfillment[];
   preference?: DeliveryPreference;

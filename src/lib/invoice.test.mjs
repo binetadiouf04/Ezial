@@ -67,3 +67,11 @@ test('nom de fichier sûr', () => {
   assert.equal(invoiceFileName('EZI-261119-000044'), 'Facture-EZI-261119-000044.pdf');
   assert.equal(invoiceFileName('a/b c'), 'Facture-a-b-c.pdf');
 });
+
+test('livraison offerte : montant initial gardé, réduction à part, total cohérent', () => {
+  const withFree = { ...order, delivery: 1500, deliveryDiscount: 1500, total: 25000 };
+  const inv = buildInvoice(withFree, helpers, company);
+  assert.equal(inv.delivery, 1500);
+  assert.equal(inv.deliveryDiscount, 1500);
+  assert.equal(inv.subtotal - inv.discount + inv.delivery - inv.deliveryDiscount, inv.total);
+});

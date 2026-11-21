@@ -65,6 +65,7 @@ export default function InvoiceCard({ order, className = '', draft = false, show
         <div className="flex justify-between"><dt className="text-ink/70">Sous-total</dt><dd>{formatInvoiceMoney(invoice.subtotal)}</dd></div>
         {invoice.discount > 0 && <div className="flex justify-between"><dt className="text-ink/70">Remise</dt><dd>- {formatInvoiceMoney(invoice.discount)}</dd></div>}
         <div className="flex justify-between"><dt className="text-ink/70">Livraison</dt><dd>{invoice.delivery > 0 ? formatInvoiceMoney(invoice.delivery) : 'Gratuite'}</dd></div>
+        {invoice.deliveryDiscount > 0 && <div className="flex justify-between text-green-700"><dt>Livraison offerte</dt><dd>- {formatInvoiceMoney(invoice.deliveryDiscount)}</dd></div>}
         <div className="flex items-baseline justify-between border-t border-line pt-3">
           <dt className="text-base font-semibold">Total</dt>
           <dd className="font-display text-2xl font-semibold text-burgundy-ruby">{formatInvoiceMoney(invoice.total)}</dd>

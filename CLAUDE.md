@@ -21,6 +21,8 @@ Quand une option, un menu ou un bouton attendu n'apparaît pas sur une capture d
 
 Avancer sans attendre de validation sur tout ce qui est réversible et à portée (lecture, code, build, tests, commits et push sur la branche de travail). S'arrêter uniquement pour ce qui exige vraiment la personne : actions dans un dashboard externe auquel on n'a pas accès, décisions qui changent une règle établie, actions irréversibles.
 
+**Consigne de la personne (21 nov. 2026) : quand elle demande un travail, le faire jusqu'au bout, publication comprise, sans demander d'accord ni d'autorisation pour commencer, déployer ou publier.** Ne lui poser des questions que sur de vraies décisions ou incertitudes (de préférence avant de commencer). Les migrations SQL restent données en texte pour qu'elle les exécute (règle ci-dessous).
+
 Utiliser des sous-agents pour aller plus vite dès qu'une tâche se découpe en parties indépendantes (fichiers distincts), en parallèle. Garder la coordination : consignes précises, aucun commit par les sous-agents, relecture et tests de leur travail avant de l'annoncer.
 
 ## Règles permanentes
