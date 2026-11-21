@@ -4,6 +4,7 @@ import {
   countMarketingPushRecipients, type PushCampaign, type CampaignStatus,
 } from '@/lib/supabaseAdminPushCampaigns';
 import { Loader2, AlertCircle, Megaphone, Plus, X, Send, Trash2, Clock } from 'lucide-react';
+import IosNotificationPreview from '@/pro/components/IosNotificationPreview';
 
 const statusLabels: Record<CampaignStatus, string> = {
   draft: 'Brouillon',
@@ -177,16 +178,25 @@ function Composer({ onCancel, onCreated }: { onCancel: () => void; onCreated: ()
     <div className="card p-5 space-y-4">
       <div className="flex items-center justify-between">
         <h2 className="text-sm font-semibold text-ink">Nouvelle campagne</h2>
-        <button onClick={onCancel}><X size={18} className="text-ink/40" /></button>
+        <button onClick={onCancel} aria-label="Fermer"><X size={18} className="text-ink/40" /></button>
       </div>
 
+      <div className="grid gap-5 md:grid-cols-[1fr_360px] md:items-start">
+      <div className="space-y-4">
       <div>
-        <label className="block text-xs font-medium text-ink/60 mb-1.5">Titre</label>
-        <input className="input-field" placeholder="Nouvelle collection disponible !" value={title} onChange={(e) => setTitle(e.target.value)} maxLength={80} />
+        <div className="mb-1.5 flex items-baseline justify-between">
+          <label htmlFor="campagne-titre" className="block text-xs font-medium text-ink/60">Titre</label>
+          <span className={`text-[11px] ${title.trim().length > 30 ? 'text-amber-700' : 'text-ink/40'}`}>{title.trim().length} / 30 conseillés</span>
+        </div>
+        <input id="campagne-titre" className="input-field" placeholder="🎄 Promo de Noël" value={title} onChange={(e) => setTitle(e.target.value)} maxLength={80} />
       </div>
       <div>
-        <label className="block text-xs font-medium text-ink/60 mb-1.5">Message</label>
-        <textarea className="input-field" rows={3} placeholder="Découvrez les nouveautés de la semaine…" value={body} onChange={(e) => setBody(e.target.value)} maxLength={200} />
+        <div className="mb-1.5 flex items-baseline justify-between">
+          <label htmlFor="campagne-message" className="block text-xs font-medium text-ink/60">Message</label>
+          <span className={`text-[11px] ${body.trim().length > 110 ? 'text-amber-700' : 'text-ink/40'}`}>{body.trim().length} / 110 conseillés</span>
+        </div>
+        <textarea id="campagne-message" className="input-field" rows={3} placeholder="-20 % sur une sélection de produits. Découvrez les offres →" value={body} onChange={(e) => setBody(e.target.value)} maxLength={200} />
+        <p className="mt-1 text-xs text-ink/40">Une seule idée, une phrase qui donne envie de toucher la notification.</p>
       </div>
       <div>
         <label className="block text-xs font-medium text-ink/60 mb-1.5">Destination au clic (facultatif)</label>
@@ -197,6 +207,13 @@ function Composer({ onCancel, onCreated }: { onCancel: () => void; onCreated: ()
         <label className="block text-xs font-medium text-ink/60 mb-1.5">Programmer l'envoi (facultatif)</label>
         <input type="datetime-local" className="input-field" value={scheduledAt} onChange={(e) => setScheduledAt(e.target.value)} />
         <p className="mt-1 text-xs text-ink/40">Laissez vide pour envoyer immédiatement ou garder en brouillon.</p>
+      </div>
+
+      </div>
+
+      <div className="md:sticky md:top-4">
+        <IosNotificationPreview title={title} body={body} />
+      </div>
       </div>
 
       <p className="text-xs text-ink/50">
