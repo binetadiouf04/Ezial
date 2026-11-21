@@ -61,7 +61,7 @@ const blurOnWheel = (e: React.WheelEvent<HTMLInputElement>) => e.currentTarget.b
 // Which filter groups are single-choice (radio-like) vs descriptive multi-choice
 // (checkbox-like, but never split stock) vs true variant dimensions (checkbox-like
 // AND generate one stock/price line per selected value).
-const SINGLE_CHOICE_IDS = new Set(['type', 'style', 'texture', 'matiere', 'peau', 'typeproduit', 'longueurongles', ...WATCH_GROUP_IDS, ...GLASSES_GROUP_IDS]);
+const SINGLE_CHOICE_IDS = new Set(['type', 'style', 'texture', 'matiere', 'peau', 'typeproduit', 'longueurongles', 'typedecils', 'longueurdescils', 'matieredescils', ...WATCH_GROUP_IDS, ...GLASSES_GROUP_IDS]);
 // The one exception to 'type' being single-choice: for Vêtements (Femme and
 // Homme), several clothing types can describe the same product (e.g. "Robes"
 // and "Grande taille", or "T-shirts" and "Tenues de sport") — a product must
@@ -178,6 +178,14 @@ const ENCENS_TYPE_OPTIONS = ['Gowé', 'Sarkhtan', 'Nakk', 'Bant'];
 // same reasoning as ENCENS_TYPE_OPTIONS above.
 const ENCENS_MAISON_NOTES_OPTIONS = ['Orientale', 'Fruitée', 'Florale', 'Boisée'];
 
+// Maquillage > Faux cils uniquement (inspiré des fiches Shein) : caractéristiques
+// descriptives, jamais des variantes de stock (aucun de ces identifiants n'est dans
+// VARIANT_DIMENSION_IDS ; « longueurdescils » ≠ « longueur », qui est une variante).
+const LASH_TYPE_OPTIONS = ['Bande complète', 'Demi-cils', 'Cils individuels / extensions'];
+const LASH_EFFECT_OPTIONS = ['Naturel', 'Volume', 'Volume russe', 'Œil de chat', 'Fox eye (œil de renard)', 'Wispy / effilé', 'Dramatique'];
+const LASH_LENGTH_OPTIONS = ['Court (8 à 12 mm)', 'Moyen (13 à 16 mm)', 'Long (17 à 20 mm)', 'Très long (21 mm et plus)'];
+const LASH_MATERIAL_OPTIONS = ['Fibres synthétiques', 'Effet vison', 'Soie'];
+
 // Manucure & Pédicure > Faux ongles only — Longueur/Forme/Type de style are
 // purely descriptive (none of these ids are in VARIANT_DIMENSION_IDS), and
 // never shown for Soins, Henné or Vernis.
@@ -281,12 +289,22 @@ function computeOptionGroups(categoryId: string, subId: string, selectedTypeProd
     (categoryId === 'beaute' && (subId === 'skincare' || subId === 'hygiene')) ||
     (categoryId === 'parfums' && (subId === 'parfums-femme' || subId === 'parfums-homme' || subId === 'huiles-brumes')) ||
     showsEncensVolume;
+  const showsLashFields = isMakeup && selectedTypeProduit === 'Faux cils';
   const isManucurePedicure = categoryId === 'beaute' && subId === 'mains-et-pieds';
   const showsNailFields = isManucurePedicure && selectedTypeProduit === 'Faux ongles';
 
   if (showsVolume) groups = [...groups, { id: 'volume', label: 'Volume', options: VOLUME_BASE_OPTIONS }];
   if (showsEncensType) groups = [...groups, { id: 'typeencens', label: 'Type', options: ENCENS_TYPE_OPTIONS }];
   if (showsEncensNotesChips) groups = [...groups, { id: 'notesambiance', label: 'Notes', options: ENCENS_MAISON_NOTES_OPTIONS }];
+  if (showsLashFields) {
+    groups = [
+      ...groups,
+      { id: 'typedecils', label: 'Type de cils', options: LASH_TYPE_OPTIONS },
+      { id: 'effet', label: 'Effet', options: LASH_EFFECT_OPTIONS },
+      { id: 'longueurdescils', label: 'Longueur des cils', options: LASH_LENGTH_OPTIONS },
+      { id: 'matieredescils', label: 'Matière', options: LASH_MATERIAL_OPTIONS },
+    ];
+  }
   if (showsNailFields) {
     groups = [
       ...groups,
