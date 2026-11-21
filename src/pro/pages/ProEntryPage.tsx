@@ -18,16 +18,17 @@ const SellerLayout = lazy(() => import('../layouts/SellerLayout'));
 const DriverLayout = lazy(() => import('../layouts/DriverLayout'));
 const AdminLayout = lazy(() => import('../layouts/AdminLayout'));
 
-function ProRouteFallback() {
+function ProRouteFallback({ label }: { label?: string }) {
   return (
-    <div className="flex min-h-screen items-center justify-center bg-cream">
-      <Loader2 size={24} className="animate-spin text-ink/30" />
+    <div className="flex min-h-screen flex-col items-center justify-center gap-3 bg-cream" role="status" aria-live="polite">
+      <Loader2 size={24} className="animate-spin text-burgundy/60" />
+      {label && <p className="text-sm text-ink/60">{label}</p>}
     </div>
   );
 }
 
 export default function ProEntryPage() {
-  const { role, adminMfaChallenge, login, verifySellerLogin, signUpSellerAccount, requestSellerPasswordReset, resendSellerConfirmationEmail, resendSellerConfirmationForLogin, verifyAdminLogin, checkDriverUsername, createDriverPin, signInDriverWithPin } = usePro();
+  const { role, authRestoring, adminMfaChallenge, login, verifySellerLogin, signUpSellerAccount, requestSellerPasswordReset, resendSellerConfirmationEmail, resendSellerConfirmationForLogin, verifyAdminLogin, checkDriverUsername, createDriverPin, signInDriverWithPin } = usePro();
   const { navigate: navigateApp } = useApp();
   // admin.ezial.net → administrateur, livreur.ezial.net → livreur. Ces deux
   // espaces n'existent plus sur le site public : ni lien, ni écran, et une
@@ -49,6 +50,11 @@ export default function ProEntryPage() {
   // ne s'affiche dans l'espace administrateur tant qu'il n'est pas validé.
   if (adminMfaChallenge && staffSpace === 'admin') {
     return <AdminMfaChallenge />;
+  }
+
+  // Session existante en cours de vérification : jamais l'écran de connexion entre-temps.
+  if (authRestoring && !role) {
+    return <ProRouteFallback label={staffSpace === 'driver' ? 'Ouverture de votre espace…' : staffSpace === 'admin' ? 'Ouverture de l’administration…' : 'Ouverture de votre boutique…'} />;
   }
 
   // If seller is logged in, render the seller layout

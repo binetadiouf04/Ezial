@@ -2,6 +2,7 @@ import type { Order } from '@/store/AppContext';
 import { formatInvoiceMoney } from '@/lib/invoice';
 import { useBuildInvoice } from '@/lib/useBuildInvoice';
 import InvoiceButton from '@/components/InvoiceButton';
+import { formatDeliveryWish } from '@/lib/deliveryDay';
 
 // Facture de la commande, affichée dans l'appli (page de confirmation, détail
 // d'une commande), en tête de page : elle sert de récapitulatif (articles et total, sans doublon
@@ -15,7 +16,7 @@ export default function InvoiceCard({ order, className = '', draft = false, show
   const c = order.customer;
   const deliveryPlace = [c.address || c.quartier, c.landmark ? `repère : ${c.landmark}` : ''].filter(Boolean).join(' · ');
   const deliveryWhen = order.preference?.type === 'preferred' && order.preference.date
-    ? `${order.preference.date}${order.preference.window ? ` · ${order.preference.window}` : ''}`
+    ? formatDeliveryWish(order.preference.date, order.preference.window)
     : 'dès que possible';
   const date = new Date(invoice.date).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
   const hasSeveralShops = invoice.groups.length > 1;

@@ -10,6 +10,7 @@ import { paymentLabels } from '@/data/payments';
 import { Phone, MapPin, Package, Store, Check, Clock, KeySquare, Truck, Smartphone } from 'lucide-react';
 import SmartImage from '@/components/SmartImage';
 import { DeliveryCodeCard } from '@/components/OrderParts';
+import { formatDeliveryWish } from '@/lib/deliveryDay';
 import PaymentStatusBadge from '@/components/PaymentStatusBadge';
 
 const shopPrepLabels: Record<string, string> = { preparing: 'En préparation', ready: 'Prête', collected: 'Prête' };
@@ -159,7 +160,7 @@ export default function OrderTrackingPage({ orderId }: { orderId: string }) {
               <div className="flex items-start gap-2 text-sm text-ink/60"><MapPin size={15} className="mt-0.5 text-ink/40" /><span>{order.customer.firstName} {order.customer.lastName}<br />{order.customer.quartier}<br /><Phone size={11} className="inline mr-1" />{order.customer.phone}</span></div>
               {order.preference?.type === 'preferred' && (
                 <div className="border-t border-line pt-2 space-y-1">
-                  <div className="flex items-start gap-2 text-sm text-ink/60"><Clock size={15} className="mt-0.5 text-ink/40" /><span>Livraison souhaitée : {order.preference.date} · {order.preference.window}</span></div>
+                  <div className="flex items-start gap-2 text-sm text-ink/60"><Clock size={15} className="mt-0.5 text-ink/40" /><span>Livraison souhaitée : {formatDeliveryWish(order.preference.date, order.preference.window)}</span></div>
                 </div>
               )}
             </div>
