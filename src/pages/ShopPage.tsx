@@ -3,7 +3,7 @@ import { useApp } from '@/store/AppContext';
 import { getShop } from '@/data/shops';
 import ProductGrid from '@/components/ProductGrid';
 import Rating from '@/components/Rating';
-import { UserPlus, Check, Package, MapPin, Flag } from 'lucide-react';
+import { Package, MapPin, Flag } from 'lucide-react';
 import { ShopCover, ShopAvatar } from '@/components/ShopAvatar';
 import ShopReportModal from '@/components/ShopReportModal';
 import { createShopReport, type ShopReportReason } from '@/lib/supabaseShopReports';
@@ -36,7 +36,6 @@ export default function ShopPage({ shopKey }: { shopKey: string }) {
   const shop = getShop(shopKey);
   const shopId = shop?.id ?? shopKey;
   const [tab, setTab] = useState<Tab>('Accueil');
-  const [following, setFollowing] = useState(false);
   const [sort, setSort] = useState<SortId>('recent');
   const [showReportModal, setShowReportModal] = useState(false);
   const [shopFilters, setShopFilters] = useState<ShopFilters>({ enStock: false, enPromotion: false });
@@ -105,13 +104,11 @@ export default function ShopPage({ shopKey }: { shopKey: string }) {
               {shop.isPremium && <PremiumBadge size="md" />}
             </div>
             <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-ink/55">
-              {shop.followers > 0 && <span>{shop.followers.toLocaleString('fr-FR')} abonnés</span>}
               {shop.rating > 0 && <Rating rating={shop.rating} count={shop.reviewCount} />}
               <span className="flex items-center gap-1"><Package size={14} /> {allProducts.length} produit{allProducts.length !== 1 ? 's' : ''}</span>
               {location && <span className="flex items-center gap-1"><MapPin size={14} /> {location}</span>}
             </div>
           </div>
-          <button onClick={() => setFollowing((f) => !f)} className={following ? 'btn-outline flex-shrink-0' : 'btn-primary flex-shrink-0'}>{following ? <><Check size={16} /> Suivi</> : <><UserPlus size={16} /> Suivre</>}</button>
         </div>
         {shop.description && <p className="mt-5 max-w-2xl text-sm text-ink/65">{shop.description}</p>}
         <div className="mt-6 flex gap-5 border-b border-line overflow-x-auto no-scrollbar">

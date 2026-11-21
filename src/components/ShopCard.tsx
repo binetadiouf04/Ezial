@@ -21,7 +21,6 @@ export default function ShopCard({ shop }: { shop: Shop }) {
             <h3 className="truncate text-sm font-semibold text-ink group-hover:text-burgundy transition-colors">{shop.name}</h3>
             {shop.isPremium && <PremiumBadge />}
           </div>
-          {shop.followers > 0 && <p className="text-xs text-ink/50">{shop.followers.toLocaleString('fr-FR')} abonnés</p>}
         </div>
         {shop.rating > 0 && <Rating rating={shop.rating} count={shop.reviewCount} showCount={false} />}
       </div>
