@@ -1,5 +1,6 @@
 import { OrangeMoneyCollection } from './orange-money.ts';
 import type { FetchLike } from './orange-money.ts';
+import { WaveCollection } from './wave.ts';
 
 // Ezial — cœur des paiements Wave / Orange Money (encaissements et
 // décaissements vendeurs).
@@ -10,11 +11,12 @@ import type { FetchLike } from './orange-money.ts';
 // payouts-dispatch) et dans les tests
 // (`node --test supabase/functions/_shared/payments/core.test.ts`).
 //
-// ÉTAT ACTUEL : seul l'encaissement Orange Money « QR CODE – OM » est écrit
-// (./orange-money.ts, d'après la documentation officielle). Il n'est prêt que si
-// tous ses secrets sont présents, ET il ne sert que si
-// payment_settings.orange_money_enabled = true. Wave (encaissement et
-// décaissement) et le décaissement Orange Money restent « non configurés ». Les
+// ÉTAT ACTUEL : l'encaissement Orange Money « QR CODE – OM » (./orange-money.ts)
+// et l'encaissement Wave Checkout (./wave.ts) sont écrits d'après la documentation
+// officielle. Chacun n'est prêt que si tous ses secrets sont présents, ET il ne sert
+// que si son interrupteur est actif (payment_settings.orange_money_enabled pour
+// Orange Money, collections_enabled pour Wave). Le décaissement Wave et le
+// décaissement Orange Money restent « non configurés ». Les
 // fonctions d'orchestration s'arrêtent AVANT toute écriture en base quand
 // l'adaptateur n'est pas prêt.
 //
@@ -101,7 +103,18 @@ export interface WebhookVerification {
 }
 
 export type PaymentStatusResult =
-  | { status: PaymentStatus; amount: number | null; providerTransactionId?: string | null; successCount?: number }
+  | {
+    status: PaymentStatus;
+    amount: number | null;
+    providerTransactionId?: string | null;
+    successCount?: number;
+    /**
+     * Référence cliente (notre identifiant de transaction) telle que le fournisseur l'a enregistrée.
+     * Renseignée par Wave ; l'adaptateur Orange Money ne la renseigne jamais (champ absent = aucun contrôle).
+     * Si elle est présente et différente de la transaction trouvée en base (y compris null), rien n'est enregistré.
+     */
+    clientReference?: string | null;
+  }
   | { error: string; retryable: boolean };
 
 export interface CollectionAdapter {
@@ -220,19 +233,7 @@ class NotConfiguredDisbursement implements DisbursementAdapter {
   }
 }
 
-/**
- * Wave — encaissement.
- * // À IMPLÉMENTER à réception de la documentation officielle :
- * //   status()          : configuré seulement si tous les secrets WAVE_COLLECTION_* sont présents ;
- * //   createCheckout()  : création de la session de paiement (clé d'idempotence transmise) ;
- * //   verifyWebhook()   : vérification de la signature selon la méthode officielle, AVANT lecture ;
- * //   getPaymentStatus(): interrogation du statut réel + traduction vers PaymentStatus.
- */
-export class WaveCollection extends NotConfiguredCollection {
-  constructor(environment: PaymentsEnvironment) {
-    super('wave', environment);
-  }
-}
+// Wave — encaissement « Checkout » : voir ./wave.ts.
 
 /**
  * Wave — décaissement (versements aux vendeurs).
@@ -247,7 +248,7 @@ export class WaveDisbursement extends NotConfiguredDisbursement {
 }
 
 // Orange Money — encaissement « QR CODE – OM » : voir ./orange-money.ts.
-export { OrangeMoneyCollection };
+export { OrangeMoneyCollection, WaveCollection };
 
 /**
  * Orange Money — décaissement.
@@ -268,15 +269,15 @@ export interface Adapters {
 
 /**
  * Construit les quatre adaptateurs. PAYMENTS_ENVIRONMENT : 'sandbox' (défaut) ou
- * 'production'. Seul l'encaissement Orange Money lit ses secrets (ORANGE_MONEY_*) ;
- * les trois autres adaptateurs restent « non configurés ».
+ * 'production'. Les encaissements Orange Money (ORANGE_MONEY_*) et Wave (WAVE_*)
+ * lisent leurs secrets ; les deux décaissements restent « non configurés ».
  */
 export function createAdapters(env: Record<string, string | undefined>, fetchImpl?: FetchLike): Adapters {
   const environment: PaymentsEnvironment = env.PAYMENTS_ENVIRONMENT === 'production' ? 'production' : 'sandbox';
   return {
     environment,
     collection: {
-      wave: new WaveCollection(environment),
+      wave: new WaveCollection(environment, env, fetchImpl),
       orange_money: new OrangeMoneyCollection(environment, env, fetchImpl),
     },
     disbursement: {
@@ -666,6 +667,11 @@ export async function handleCollectionWebhook(
     if ('error' in real) {
       return await finish(`verification_impossible: ${redactPhones(real.error).slice(0, 150)}`, real.retryable ? 503 : 200);
     }
+    // La session du fournisseur doit appartenir à CETTE transaction (référence cliente = identifiant de transaction).
+    if (real.clientReference !== undefined && real.clientReference !== tx.id) {
+      log(`[paiements] ${tx.id} : la référence cliente du fournisseur ne correspond pas à la transaction — rien n'est enregistré`);
+      return await finish('client_reference_mismatch');
+    }
     if ((real.successCount ?? 0) > 1) log(`[paiements] ${tx.id} : ${real.successCount} paiements réussis pour une même référence — à vérifier`);
 
     // Base récente : les règles (confirmation, clôture, « introuvable ») sont appliquées par la base.
@@ -740,6 +746,11 @@ export async function reconcileCollections(
   for (const c of candidates) {
     const real = statuses.get(c.reference);
     if (!real || 'error' in real) continue;
+    if (real.clientReference !== undefined && real.clientReference !== c.transaction_id) {
+      log(`[paiements] ${c.transaction_id} : la référence cliente du fournisseur ne correspond pas à la transaction — rien n'est enregistré`);
+      summary.results['client_reference_mismatch'] = (summary.results['client_reference_mismatch'] ?? 0) + 1;
+      continue;
+    }
     if ((real.successCount ?? 0) > 1) log(`[paiements] ${c.transaction_id} : ${real.successCount} paiements réussis pour une même référence — à vérifier`);
     try {
       const res = await db.recordVerification(c.transaction_id, real.status, real.amount, real.providerTransactionId ?? null);

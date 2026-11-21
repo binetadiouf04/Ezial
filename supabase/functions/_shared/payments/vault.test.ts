@@ -38,3 +38,23 @@ test('coffre : secret de vérification lu dans le coffre en priorité ; exceptio
   const throwing: RpcClient = { rpc() { throw new Error('réseau'); } };
   assert.equal(await readVaultSecret(throwing, 'payments_reconcile_secret'), '');
 });
+
+test('coffre : le secret de webhook Wave du coffre remplace la variable d\'environnement', async () => {
+  const c = client({ wave_webhook_secret: ' secret-wave-du-coffre \n' });
+  const env = await paymentsEnv(c, { WAVE_WEBHOOK_SECRET: 'ancien', ORANGE_MONEY_CALLBACK_API_KEY: 'orange-secours', WAVE_COLLECTION_API_KEY: 'wave_sn_test_x' });
+  assert.equal(env.WAVE_WEBHOOK_SECRET, 'secret-wave-du-coffre', 'valeur du coffre, espaces retirés');
+  assert.equal(env.ORANGE_MONEY_CALLBACK_API_KEY, 'orange-secours', 'Orange : secours conservé si le coffre n\'a pas la clé');
+  assert.equal(env.WAVE_COLLECTION_API_KEY, 'wave_sn_test_x', 'autres variables conservées');
+  assert.deepEqual(c.calls.map((x) => (x as [string, { p_name: string }])[1].p_name), ['orange_money_callback_api_key', 'wave_webhook_secret']);
+});
+
+test('coffre : secret de webhook Wave absent ou coffre indisponible -> variable d\'environnement en secours', async () => {
+  const base = { WAVE_WEBHOOK_SECRET: 'secours-wave' };
+  assert.equal((await paymentsEnv(client({}), base)).WAVE_WEBHOOK_SECRET, 'secours-wave');
+  assert.equal((await paymentsEnv(client({}, true), base)).WAVE_WEBHOOK_SECRET, 'secours-wave');
+  assert.equal((await paymentsEnv(client({}), {})).WAVE_WEBHOOK_SECRET, undefined);
+  // Les deux secrets du coffre ensemble.
+  const both = await paymentsEnv(client({ orange_money_callback_api_key: 'cle-orange', wave_webhook_secret: 'cle-wave' }), {});
+  assert.equal(both.ORANGE_MONEY_CALLBACK_API_KEY, 'cle-orange');
+  assert.equal(both.WAVE_WEBHOOK_SECRET, 'cle-wave');
+});

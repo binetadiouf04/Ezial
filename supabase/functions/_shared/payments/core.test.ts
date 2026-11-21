@@ -16,6 +16,7 @@ import {
   handleCollectionWebhook,
   initiatePayment,
   maskPhone,
+  reconcileCollections,
   redactPhones,
   runPayouts,
 } from './core.ts';
@@ -37,6 +38,8 @@ import type {
   PayoutRow,
   PayoutStatusResult,
   Provider,
+  ReconcileCandidate,
+  ReconcileDb,
   RecordEventInput,
   TransactionRow,
   WebhookVerification,
@@ -247,7 +250,7 @@ function webhookEvent(status: PaymentStatus, eventId = 'evt_provider_1') {
 // Adaptateurs non configurés (état réel aujourd'hui)
 // ---------------------------------------------------------------------------
 
-test('createAdapters : sans secrets, aucun adaptateur n\'est prêt (Orange Money : configuration incomplète)', async () => {
+test('createAdapters : sans secrets, aucun adaptateur n\'est prêt (Orange Money et Wave : configuration incomplète)', async () => {
   const a: Adapters = createAdapters({ PAYMENTS_ENVIRONMENT: 'production', WAVE_PROVIDER: 'test', PAYMENTS_PROVIDER: 'test' });
   assert.equal(a.environment, 'production');
   assert.equal(createAdapters({}).environment, 'sandbox');
@@ -260,13 +263,16 @@ test('createAdapters : sans secrets, aucun adaptateur n\'est prêt (Orange Money
   assert.equal(om.ready, false);
   assert.equal(om.configured, false);
   assert.match(om.reason ?? '', /^Orange Money : configuration incomplète \(ORANGE_MONEY_CLIENT_ID, ORANGE_MONEY_CLIENT_SECRET, ORANGE_MONEY_MERCHANT_CODE/);
-  for (const ad of [a.collection.wave, a.disbursement.wave, a.disbursement.orange_money]) {
+  const wave = a.collection.wave.status();
+  assert.equal(wave.ready, false);
+  assert.equal(wave.configured, false);
+  assert.equal(wave.reason, 'Wave : configuration incomplète (WAVE_COLLECTION_API_KEY, WAVE_WEBHOOK_SECRET).');
+  for (const ad of [a.disbursement.wave, a.disbursement.orange_money]) {
     const s = ad.status();
     assert.equal(s.configured, false);
     assert.equal(s.ready, false);
     assert.match(s.reason ?? '', /^API officielle (Wave|Orange Money) (encaissement|décaissement) non intégrée\.$/);
   }
-  assert.equal(a.collection.wave.status().reason, 'API officielle Wave encaissement non intégrée.');
   assert.equal(a.disbursement.orange_money.status().reason, 'API officielle Orange Money décaissement non intégrée.');
   // Les opérations ne font rien et n'aboutissent jamais.
   assert.deepEqual(await a.collection.wave.verifyWebhook('{}', {}), { valid: false });
@@ -414,6 +420,85 @@ test('webhook pour une référence inconnue → aucune écriture', async () => {
   adapter.realStatus = { status: 'confirmed', amount: 25000 };
   await handleCollectionWebhook(db, adapter, '{}', {}, quiet);
   assert.equal(db.confirms.length, 0);
+});
+
+// ---------------------------------------------------------------------------
+// Référence cliente du fournisseur (Wave) : la session doit appartenir à la transaction
+// ---------------------------------------------------------------------------
+
+test('webhook : référence cliente différente de la transaction → client_reference_mismatch, aucune écriture', async () => {
+  const db = new FakeDb() as FakeDb & { recordVerification?: (...args: unknown[]) => Promise<string> };
+  const verifications: unknown[] = [];
+  db.recordVerification = (...args: unknown[]) => { verifications.push(args); return Promise.resolve('confirmed'); };
+  const adapter = new FakeCollection('wave');
+  adapter.webhook = webhookEvent('confirmed');
+  adapter.realStatus = { status: 'confirmed', amount: 25000, clientReference: '99999999-9999-4999-8999-999999999999' };
+  const lines: string[] = [];
+  const res = await handleCollectionWebhook(db, adapter, '{}', {}, { log: (l) => lines.push(l) });
+  assert.deepEqual(res, { status: 200, body: { ok: true, result: 'client_reference_mismatch' } });
+  assert.equal(db.confirms.length, 0);
+  assert.equal(db.fails.length, 0);
+  assert.equal(verifications.length, 0);
+  assert.equal([...db.events.values()][0].processed, 'client_reference_mismatch');
+  assert.ok(lines.some((l) => l.includes('ne correspond pas')));
+  // Même sans clé de transaction (null) : refus, jamais de confirmation.
+  const db2 = new FakeDb();
+  adapter.realStatus = { status: 'confirmed', amount: 25000, clientReference: null };
+  await handleCollectionWebhook(db2, adapter, '{}', {}, quiet);
+  assert.equal(db2.confirms.length, 0);
+});
+
+test('webhook : référence cliente identique à la transaction → traitement normal', async () => {
+  const db = new FakeDb();
+  const adapter = new FakeCollection('wave');
+  adapter.webhook = webhookEvent('confirmed');
+  adapter.realStatus = { status: 'confirmed', amount: 25000, clientReference: TX_ID };
+  const res = await handleCollectionWebhook(db, adapter, '{}', {}, quiet);
+  assert.equal(res.status, 200);
+  assert.deepEqual(db.confirms, [{ id: TX_ID, ref: 'ref_1', amount: 25000 }]);
+});
+
+test('webhook : résultat sans clientReference (style Orange Money) → comportement inchangé', async () => {
+  const db = new FakeDb();
+  const adapter = new FakeCollection('orange_money');
+  adapter.webhook = webhookEvent('confirmed');
+  adapter.realStatus = { status: 'confirmed', amount: 25000, providerTransactionId: 'MP-1' };
+  assert.equal('clientReference' in adapter.realStatus, false);
+  const res = await handleCollectionWebhook(db, adapter, '{}', {}, quiet);
+  assert.deepEqual(res, { status: 200, body: { ok: true, result: 'confirm:confirmed' } });
+  assert.deepEqual(db.confirms, [{ id: TX_ID, ref: 'ref_1', amount: 25000 }]);
+});
+
+class FakeReconcileDb implements ReconcileDb {
+  recorded: { id: string; status: PaymentStatus; amount: number | null }[] = [];
+  list: ReconcileCandidate[];
+  constructor(list: ReconcileCandidate[]) { this.list = list; }
+  candidates(): Promise<ReconcileCandidate[]> { return Promise.resolve(this.list); }
+  recordVerification(id: string, status: PaymentStatus, amount: number | null): Promise<string> {
+    this.recorded.push({ id, status, amount });
+    return Promise.resolve(status);
+  }
+}
+const candidate = (id: string, reference: string): ReconcileCandidate => ({
+  transaction_id: id, order_id: ORDER_ID, reference, status: 'pending', expires_at: null, created_at: '2026-11-20T10:00:00Z', check_count: 0,
+});
+
+test('vérification périodique : référence cliente différente → rien enregistré ; identique ou absente → enregistré', async () => {
+  const OTHER_TX = '44444444-4444-4444-8444-444444444444';
+  const adapter = new FakeCollection('wave');
+  const byRef: Record<string, PaymentStatusResult> = {
+    ref_a: { status: 'confirmed', amount: 1000, clientReference: '99999999-9999-4999-8999-999999999999' }, // autre transaction
+    ref_b: { status: 'confirmed', amount: 2000, clientReference: OTHER_TX },                               // conforme
+    ref_c: { status: 'pending', amount: null },                                                             // style Orange : pas de champ
+  };
+  adapter.getPaymentStatus = (ref: string) => { adapter.statusChecks.push(ref); return Promise.resolve(byRef[ref]); };
+  const db = new FakeReconcileDb([candidate(TX_ID, 'ref_a'), candidate(OTHER_TX, 'ref_b'), candidate('55555555-5555-4555-8555-555555555555', 'ref_c')]);
+  const lines: string[] = [];
+  const sum = await reconcileCollections(db, adapter, { log: (l) => lines.push(l) });
+  assert.deepEqual(db.recorded.map((r) => r.id), [OTHER_TX, '55555555-5555-4555-8555-555555555555']);
+  assert.equal(sum.checked, 2);
+  assert.equal(sum.results.client_reference_mismatch, 1);
+  assert.ok(lines.some((l) => l.includes(TX_ID) && l.includes('ne correspond pas')));
 });
 
 // ---------------------------------------------------------------------------
