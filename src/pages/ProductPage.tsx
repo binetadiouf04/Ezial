@@ -7,7 +7,7 @@ import { getShop, registerSupabaseShops } from '@/data/shops';
 import { fetchProductDetailFromSupabase, fetchPublicProductSupplier } from '@/lib/supabaseCatalog';
 import { useNoIndex } from '@/lib/seoHead';
 import { isProductUuid, productPath } from '@/lib/productUrl';
-import { fetchProductReviews, checkCanReview, submitReview, deleteReview, createReviewReport, type Review, type ReviewReportReason } from '@/lib/supabaseReviews';
+import { fetchProductReviews, submitReview, deleteReview, createReviewReport, type Review, type ReviewReportReason } from '@/lib/supabaseReviews';
 import ReviewReportModal from '@/components/ReviewReportModal';
 import {
   categoryMap, fabricQuantityRules, fabricSaleModeUnit, fabricAvailabilityLabels,
@@ -123,8 +123,6 @@ export default function ProductPage({ productId }: { productId: string }) {
   // below unchanged).
   const [reviews, setReviews] = useState<Review[]>([]);
   const [reviewStats, setReviewStats] = useState<{ average: number; count: number }>({ average: 0, count: 0 });
-  const [canReview, setCanReview] = useState(false);
-  const [canReviewChecked, setCanReviewChecked] = useState(false);
   const [myRating, setMyRating] = useState(0);
   const [myComment, setMyComment] = useState('');
   const [myPhotos, setMyPhotos] = useState<File[]>([]);
@@ -223,16 +221,22 @@ export default function ProductPage({ productId }: { productId: string }) {
     setQtyError('');
   };
 
-  // Purchase eligibility needs its own (3-query) check — only worth paying
-  // for once the customer actually opens the Avis tab, not on every single
-  // product-page visit (see checkCanReview's comment in supabaseReviews.ts).
-  const openTab = (t: Tab) => {
-    setTab(t);
-    if (t === 'Avis' && product && customerUser && isRealCatalogId(product.id) && !canReviewChecked) {
-      setCanReviewChecked(true);
-      checkCanReview(product.id, customerUser.id).then(setCanReview);
+  // Le droit de publier un avis est vérifié par la base à l'enregistrement
+  // (has_received_product) : aucune vérification préalable n'est nécessaire.
+  const openTab = (t: Tab) => setTab(t);
+
+  // Lien « Ajouter un commentaire » depuis une commande (?avis=1) : onglet Avis ouvert d'emblée.
+  const wantsReviewTab = typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('avis') === '1';
+  const reviewTabScrolled = useRef(false);
+  useEffect(() => {
+    if (!wantsReviewTab || !product) return;
+    if (tab !== 'Avis') openTab('Avis');
+    if (!reviewTabScrolled.current) {
+      reviewTabScrolled.current = true;
+      window.setTimeout(() => document.getElementById('avis')?.scrollIntoView({ block: 'start' }), 300);
     }
-  };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [wantsReviewTab, product?.id]);
 
   const handleSubmitReview = async () => {
     if (!product || !customerUser) return;
@@ -446,7 +450,7 @@ export default function ProductPage({ productId }: { productId: string }) {
               <div className="flex items-center gap-3 text-sm text-ink/75"><Store size={18} className="flex-shrink-0 text-burgundy" aria-hidden="true" /><span>{product.pickup}</span></div>
             </div>
           )}
-          <div className="border-t border-ink/10 pt-5">
+          <div id="avis" className="scroll-mt-24 border-t border-ink/10 pt-5">
             <div className="flex gap-6 border-b border-ink/10">
               {tabs.map((t) => {
                 const count = isRealCatalogId(product.id) ? reviewStats.count : product.reviewCount;
@@ -526,7 +530,8 @@ export default function ProductPage({ productId }: { productId: string }) {
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-2">
                             <span className="text-sm font-medium text-ink">{rev.userId ? 'Client Ezial' : 'Utilisateur introuvable'}</span>
-                            {rev.userId === customerUser?.id && canReview && <span className="flex items-center gap-1 rounded-full bg-cream px-2 py-0.5 text-[10px] font-semibold text-ink/60"><ShieldCheck size={11} /> Achat vérifié</span>}
+                            {/* Vrai pour chaque avis : la base n'accepte un avis que d'un client ayant reçu le produit (has_received_product). */}
+                            <span className="flex items-center gap-1 rounded-full bg-cream px-2 py-0.5 text-[10px] font-semibold text-ink/60"><ShieldCheck size={11} /> Achat vérifié</span>
                           </div>
                           <span className="text-xs text-ink/40">{new Date(rev.createdAt).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
                         </div>
