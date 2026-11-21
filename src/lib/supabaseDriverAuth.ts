@@ -35,14 +35,22 @@ function driverNameFrom(row: { first_name: string | null; last_name: string | nu
   return name || 'Livreur EZIAL';
 }
 
-async function fetchDriverProfile(userId: string): Promise<DriverAuthInfo | null> {
+// 'error' : lecture impossible (réseau, serveur) — rien ne dit que la personne n'est
+// plus livreur : on ne la déconnecte pas pour autant.
+async function fetchDriverProfileResult(userId: string): Promise<DriverAuthInfo | null | 'error'> {
   const { data, error } = await supabase
     .from('profiles')
     .select('first_name, last_name, role, is_suspended, username')
     .eq('id', userId)
     .maybeSingle();
-  if (error || !data || data.role !== 'driver' || data.is_suspended || !data.username) return null;
+  if (error) return 'error';
+  if (!data || data.role !== 'driver' || data.is_suspended || !data.username) return null;
   return { id: userId, username: data.username, name: driverNameFrom(data) };
+}
+
+async function fetchDriverProfile(userId: string): Promise<DriverAuthInfo | null> {
+  const result = await fetchDriverProfileResult(userId);
+  return result === 'error' ? null : result;
 }
 
 // Edge Function errors arrive as a non-2xx HTTP response, not in `data` —
@@ -76,7 +84,7 @@ async function establishDriverSession(tokenHash: string): Promise<DriverAuthInfo
 
   const driver = await fetchDriverProfile(userId);
   if (!driver) {
-    await supabase.auth.signOut();
+    await supabase.auth.signOut({ scope: 'local' });
     return { error: NOT_DRIVER_ERROR };
   }
   return driver;
@@ -119,9 +127,12 @@ export async function restoreDriverSession(): Promise<DriverAuthInfo | null> {
   const { data, error } = await supabase.auth.getSession();
   if (error || !data.session) return null;
 
-  const driver = await fetchDriverProfile(data.session.user.id);
+  const driver = await fetchDriverProfileResult(data.session.user.id);
+  // Erreur passagère : la session est gardée (la vérification sera refaite au prochain chargement).
+  if (driver === 'error') return null;
   if (!driver) {
-    await supabase.auth.signOut();
+    // Compte qui n'est (plus) livreur ou suspendu : déconnecté sur CET appareil seulement.
+    await supabase.auth.signOut({ scope: 'local' });
     return null;
   }
   return driver;

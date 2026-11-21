@@ -178,34 +178,7 @@ function notIntegratedReason(provider: Provider, capability: Capability): string
   return `API officielle ${PROVIDER_LABELS[provider]} ${what} non intégrée.`;
 }
 
-/** Base commune : n'appelle rien, ne fait rien, renvoie toujours un résultat non abouti. */
-class NotConfiguredCollection implements CollectionAdapter {
-  provider: Provider;
-  environment: PaymentsEnvironment;
-
-  constructor(provider: Provider, environment: PaymentsEnvironment) {
-    this.provider = provider;
-    this.environment = environment;
-  }
-
-  status(): AdapterStatus {
-    return { configured: false, ready: false, reason: notIntegratedReason(this.provider, 'collection') };
-  }
-
-  createCheckout(): Promise<CheckoutResult> {
-    return Promise.resolve({ ok: false, retryable: false, error: notIntegratedReason(this.provider, 'collection') });
-  }
-
-  verifyWebhook(): Promise<WebhookVerification> {
-    // Sans vérification de signature réelle, aucune notification n'est valide.
-    return Promise.resolve({ valid: false });
-  }
-
-  getPaymentStatus(): Promise<PaymentStatusResult> {
-    return Promise.resolve({ error: notIntegratedReason(this.provider, 'collection'), retryable: false });
-  }
-}
-
+/** Décaissement « non configuré » : n'appelle rien, ne fait rien, renvoie toujours un résultat non abouti. */
 class NotConfiguredDisbursement implements DisbursementAdapter {
   provider: Provider;
   environment: PaymentsEnvironment;

@@ -137,7 +137,7 @@ export async function signInCustomer(email: string, password: string): Promise<C
   const profile = await fetchOwnProfile();
   if (!profile) {
     // Authenticated but no profile row — never leave a half-set-up session.
-    await supabase.auth.signOut();
+    await supabase.auth.signOut({ scope: 'local' });
     return { error: GENERIC_LOGIN_ERROR };
   }
   return profile;
@@ -155,7 +155,7 @@ export async function signOutCustomer(): Promise<void> {
   // Avant la déconnexion (la RLS exige encore la session) : cet appareil ne
   // recevra plus les notifications de ce compte.
   await forgetThisDeviceOnSignOut();
-  await supabase.auth.signOut();
+  await supabase.auth.signOut({ scope: 'local' });
 }
 
 export interface UpdateCustomerProfileInput {
