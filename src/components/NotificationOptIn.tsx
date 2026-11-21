@@ -1,13 +1,16 @@
 import { useEffect, useState } from 'react';
-import { getPushSupportStatus, isDeviceRegisteredForUser, subscribeToPush, unsubscribeFromPush, type PushSupportStatus } from '@/lib/supabasePush';
-import { Bell, Check, AlertCircle, Loader2, Share, SquarePlus } from 'lucide-react';
+import { getPushSupportStatus, isDeviceRegisteredForUser, subscribeToPush, type PushSupportStatus } from '@/lib/supabasePush';
+import { Bell, AlertCircle, Loader2, Share, SquarePlus } from 'lucide-react';
 
-// Explicit opt-in only — Web Push never subscribes silently. Reused for
-// the customer account page, the seller "Ma boutique" page, the driver
-// home, and the admin layout; the only difference between call sites is
-// which userId (auth.uid()) subscriptions get tied to.
+// Explicit opt-in only — Web Push never subscribes silently. Utilisé sur
+// l'accueil livreur et le tableau de bord administrateur ; seule change la
+// personne (auth.uid()) à qui l'appareil est rattaché.
+// Notifications déjà actives sur cet appareil : rien n'est affiché (21 nov. 2026,
+// demande de la propriétaire) — l'encadré n'apparaît que s'il y a quelque chose à
+// faire (activer, autorisation refusée, iPhone sans l'application installée).
+// Rien non plus pendant la vérification au chargement (plus de « Activer » fugace).
 export default function NotificationOptIn({ userId, label }: { userId: string; label: string }) {
-  const [status, setStatus] = useState<PushSupportStatus>('default');
+  const [status, setStatus] = useState<PushSupportStatus | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -32,14 +35,9 @@ export default function NotificationOptIn({ userId, label }: { userId: string; l
     setStatus('granted');
   };
 
-  const handleDisable = async () => {
-    setLoading(true);
-    await unsubscribeFromPush(userId);
-    setLoading(false);
-    setStatus('default');
-  };
-
+  if (status === null) return null; // vérification en cours
   if (status === 'unsupported') return null; // no browser notifications on this browser/device
+  if (status === 'granted' && !loading && !error) return null; // déjà activées : rien à faire
 
   // iPhone / iPad dans Safari : les notifications n'existent que pour Ezial
   // ajouté à l'écran d'accueil. Simple explication, aucune fenêtre imposée.
@@ -88,11 +86,6 @@ export default function NotificationOptIn({ userId, label }: { userId: string; l
         {error && <p className="mt-0.5 flex items-center gap-1 text-xs text-burgundy"><AlertCircle size={11} /> {error}</p>}
         {status === 'denied' && <p className="mt-0.5 text-xs text-ink/45">Autorisation refusée — modifiable dans les réglages de votre navigateur.</p>}
       </div>
-      {status === 'granted' && (
-        <button onClick={() => void handleDisable()} disabled={loading} className="flex items-center gap-1.5 text-sm font-medium text-green-700 hover:text-ink/60 flex-shrink-0 transition-colors" title="Désactiver les notifications">
-          {loading ? <Loader2 size={15} className="animate-spin" /> : <><Check size={15} /> Activées</>}
-        </button>
-      )}
     </div>
   );
 }

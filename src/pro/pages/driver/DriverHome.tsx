@@ -174,15 +174,15 @@ export default function DriverHome() {
           <div className="grid grid-cols-3 gap-3 pt-2">
             <button onClick={() => navigate('/driver/livraisons')} className="card p-4 text-left">
               <p className="text-xs text-ink/45">À récupérer</p>
-              <p className="mt-1 font-display text-xl font-semibold text-ink">{toCollectCount}</p>
+              <p className="mt-1 font-display text-xl font-semibold text-ink [font-variant-numeric:lining-nums_tabular-nums]">{toCollectCount}</p>
             </button>
             <button onClick={() => navigate('/driver/livraisons')} className="card p-4 text-left">
               <p className="text-xs text-ink/45">En cours</p>
-              <p className="mt-1 font-display text-xl font-semibold text-ink">{activeMissions.length}</p>
+              <p className="mt-1 font-display text-xl font-semibold text-ink [font-variant-numeric:lining-nums_tabular-nums]">{activeMissions.length}</p>
             </button>
             <button onClick={() => navigate('/driver/livraisons')} className="card p-4 text-left">
               <p className="text-xs text-ink/45">Livrées aujourd'hui</p>
-              <p className="mt-1 font-display text-xl font-semibold text-ink">{completedToday}</p>
+              <p className="mt-1 font-display text-xl font-semibold text-ink [font-variant-numeric:lining-nums_tabular-nums]">{completedToday}</p>
             </button>
           </div>
         </>
