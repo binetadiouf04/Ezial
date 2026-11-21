@@ -3,7 +3,7 @@ import { useApp } from '@/store/AppContext';
 import { ensureOrderDeliveryCode } from '@/lib/supabaseOrders';
 import { CheckCircle2, Clock, AlertTriangle } from 'lucide-react';
 import InvoiceCard from '@/components/InvoiceCard';
-import OrangeMoneyPayment from '@/components/OrangeMoneyPayment';
+import OnlinePayment from '@/components/OnlinePayment';
 import { DeliveryCodeCard } from '@/components/OrderParts';
 import { paymentPhase } from '@/lib/orderPayment';
 
@@ -53,7 +53,7 @@ export default function OrderConfirmationPage({ orderId }: { orderId: string }) 
       </header>
 
       <div className="space-y-4">
-        {order.paymentRequired && <OrangeMoneyPayment order={order} autoStart autoOpen />}
+        {order.paymentRequired && <OnlinePayment order={order} autoStart autoOpen />}
 
         {confirmed && hasDelivery && deliveryCode && <DeliveryCodeCard code={deliveryCode} />}
 
