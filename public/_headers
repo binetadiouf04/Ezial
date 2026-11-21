@@ -36,6 +36,8 @@ https://:version.:project.pages.dev/*
   Cache-Control: no-cache
 /manifest-admin.webmanifest
   Cache-Control: no-cache
+/manifest-livreur.webmanifest
+  Cache-Control: no-cache
 /offline.html
   Cache-Control: no-cache
 # Favicons : un jour de cache seulement (les adresses portent « ?v=… », une

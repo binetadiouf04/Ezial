@@ -65,6 +65,27 @@ est une copie enregistrée par le téléphone au moment de l'ajout :
   dans la Search Console.
 
 
+### Ezial Livreur : icône propre (21 nov. 2026)
+
+`livreur.ezial.net` reçoit sa propre identité : l'icône fournie par la propriétaire (livreur à
+scooter crème sur fond rouge, sans texte ni papillon ; source `docs/identite/icone-livreur-source.png`).
+
+| Élément | Fichier |
+| --- | --- |
+| Manifeste | `/manifest-livreur.webmanifest` (« Ezial Livreur », `standalone`, thème et fond `#8C1024`) |
+| Icônes Android | `/icons/livreur/icon-192.png`, `icon-512.png` (carré arrondi, coins transparents) |
+| Icône adaptative | `/icons/livreur/icon-maskable-512.png` (pictogramme dans le cercle sûr de 40 %) |
+| iPhone / iPad | `/icons/livreur/apple-touch-icon.png` (180 px, coins remplis : iOS arrondit lui-même) |
+| Notifications | icône `/icons/livreur/icon-192.png` sur `livreur.*` (`public/sw.js`) |
+
+- Génération : `python3 scripts/generate-livreur-icons.py` (numpy + Pillow). Le dessin et les
+  couleurs ne sont pas modifiés ; seul le pourtour est adapté à chaque système.
+- Identité appliquée par `src/lib/pwaIdentity.ts` (hôte `livreur.*` seulement) ; favicon inchangé.
+- Autre origine que www et admin : installer Ezial Livreur ne remplace aucune autre application.
+- Icône déjà installée : l'icône d'écran d'accueil est une copie faite à l'installation. iPhone :
+  supprimer l'icône puis la rajouter depuis Safari. Android : se met à jour seule sous quelques
+  jours, ou désinstaller puis réinstaller depuis Chrome.
+
 ## 2. Mises à jour sans réinstallation
 
 - Chaque build porte un identifiant (`CF_PAGES_COMMIT_SHA`, sinon l'heure),

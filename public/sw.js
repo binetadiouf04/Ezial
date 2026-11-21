@@ -79,9 +79,11 @@ self.addEventListener('push', (event) => {
   let payload;
   try { payload = event.data.json(); } catch { return; }
   const { title, body, url, tag, image, action } = payload;
+  // Application Ezial Livreur (livreur.ezial.net) : son icône (scooter), pas celle de la marketplace.
+  const appIcon = self.location.hostname.toLowerCase().startsWith('livreur.') ? '/icons/livreur/icon-192.png' : '/icons/icon-192.png';
   const options = {
     body: body || '',
-    icon: '/icons/icon-192.png',
+    icon: appIcon,
     badge: '/icons/badge-96.png',
     data: { url: url || '/' },
   };

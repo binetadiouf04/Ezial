@@ -1,11 +1,13 @@
 import { staffSpaceFromHostname } from './staffSpace.ts';
 
 // Identité de l'application installée selon l'adresse d'où elle est ouverte.
-// admin.ezial.net est une application à part pour le navigateur (autre origine) :
-// elle reçoit son propre manifeste (nom « Ezial Admin ») et sa propre icône
-// (papillon bordeaux sur fond crème), pour ne pas être confondue avec Ezial
-// Marketplace (papillon crème sur fond bordeaux). Tous les autres hôtes
-// (www.ezial.net, livreur.ezial.net, aperçus Cloudflare, local) gardent
+// admin.ezial.net et livreur.ezial.net sont des applications à part pour le
+// navigateur (autres origines : installer l'une ne remplace jamais une autre) :
+// - Ezial Admin : son manifeste et son icône (papillon bordeaux sur fond crème) ;
+// - Ezial Livreur (21 nov. 2026) : son manifeste et l'icône fournie par la
+//   propriétaire (livreur à scooter crème sur fond rouge, sans papillon ni texte),
+//   couleur de thème rouge rubis #8C1024 ; favicon inchangé.
+// Tous les autres hôtes (www.ezial.net, aperçus Cloudflare, local) gardent
 // l'identité d'origine, inchangée. Aucun effet sur l'interface ni sur les droits.
 export interface PwaIdentity {
   manifest: string;
@@ -16,6 +18,8 @@ export interface PwaIdentity {
   /** Aperçu d'un lien partagé (feuille de partage iPhone, WhatsApp...) : adresse relative de l'image. */
   shareImage: string;
   shareDescription: string;
+  /** Couleur de la barre du navigateur / de l'application (balise theme-color), si différente. */
+  themeColor?: string;
 }
 
 // « ?v=2 » : nouvelle adresse pour les navigateurs qui gardent les favicons en cache.
@@ -34,11 +38,24 @@ const ADMIN_IDENTITY: PwaIdentity = {
   shareDescription: "Espace privé d'administration de la marketplace Ezial.",
 };
 
+const DRIVER_IDENTITY: PwaIdentity = {
+  manifest: '/manifest-livreur.webmanifest',
+  appleTouchIcon: '/icons/livreur/apple-touch-icon.png',
+  favicons: {},
+  appName: 'Ezial Livreur',
+  shareImage: '/icons/livreur/icon-512.png',
+  shareDescription: 'Espace réservé aux livreurs Ezial.',
+  themeColor: '#8C1024',
+};
+
 export function pwaIdentityForHostname(hostname: string): PwaIdentity | null {
-  return staffSpaceFromHostname(hostname) === 'admin' ? ADMIN_IDENTITY : null;
+  const space = staffSpaceFromHostname(hostname);
+  if (space === 'admin') return ADMIN_IDENTITY;
+  if (space === 'driver') return DRIVER_IDENTITY;
+  return null;
 }
 
-/** Remplace titre, description et image d'aperçu par ceux de l'application (admin seulement). */
+/** Remplace titre, description et image d'aperçu par ceux de l'application (admin, livreur). */
 export function overrideShareTags(tags: {
   title: string; description: string; ogTitle: string; ogDescription: string; ogImage: string;
 }, hostname: string, origin: string) {
@@ -69,6 +86,7 @@ export function applyPwaIdentity(): void {
     if (href) link.setAttribute('href', href);
   });
   set('meta[name="apple-mobile-web-app-title"]', 'content', identity.appName);
+  if (identity.themeColor) set('meta[name="theme-color"]', 'content', identity.themeColor);
   set('meta[name="application-name"]', 'content', identity.appName);
   const image = `${window.location.origin}${identity.shareImage}`;
   document.title = identity.appName;
