@@ -222,8 +222,9 @@ export const homeCircleTiles: HomeCircleTile[] = [
   { id: 'huiles-brumes', label: 'Huiles & brumes', image: '', route: '/categorie/parfums/huiles-brumes' },
   { id: 'bijoux', label: 'Bijoux', image: discover21, route: '/categorie/bijoux' },
   // Montres (21 nov. 2026, à la place de « Or », la vente d'or véritable étant retirée) :
-  // photo réelle du catalogue (montre Casio d'Ezial Boutique, miniature du stockage).
-  { id: 'montres', label: 'Montres', image: 'https://lkqezdrdbogtborgjvlw.supabase.co/storage/v1/object/public/product-images/616a8f9f-f96f-401b-8e46-001ccd500479/62106abe-4598-4619-8e98-a4b5a288e1f4/0-thumb-2e3rp9-photo-1795034118062-thumb.jpg', route: '/categorie/bijoux/montres' },
+  // photo réelle du catalogue choisie par la propriétaire (montre Rolex dorée d'Ezial
+  // Boutique, miniature du stockage).
+  { id: 'montres', label: 'Montres', image: 'https://lkqezdrdbogtborgjvlw.supabase.co/storage/v1/object/public/product-images/616a8f9f-f96f-401b-8e46-001ccd500479/843c3ab3-29e0-4b21-9325-e354e11f62b9/0-thumb-dx44tt-photo-1795035766861-thumb.jpg', route: '/categorie/bijoux/montres' },
   { id: 'pyjamas', label: 'Pyjamas', image: discover23, route: '/categorie/lingerie/pyjamas' },
   { id: 'sous-vetements', label: 'Sous-vêtements', image: discover24, route: '/categorie/lingerie/sous-vetements' },
 ];
