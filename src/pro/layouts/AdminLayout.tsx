@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { getStaffSpace, publicSiteOrigin } from '@/lib/staffSpace';
 import { usePro } from '../ProContext';
 import { navigateTo } from '@/store/AppContext';
+import RefreshMenuButton from '@/components/RefreshMenuButton';
 import { LayoutDashboard, ShoppingBag, Package, Store, Wallet, LogOut, ArrowLeft, Layers, Truck, AlertTriangle, Star, Megaphone, MessageCircle, Menu, X, Landmark, ShieldCheck } from 'lucide-react';
 import AdminDashboard from '../pages/admin/AdminDashboard';
 import AdminContent from '../pages/admin/AdminContent';
@@ -228,6 +229,11 @@ export default function AdminLayout() {
               >
                 <ArrowLeft size={18} /> Retourner sur Ezial Marketplace
               </button>
+              <RefreshMenuButton
+                iconSize={18}
+                onDone={() => setMenuOpen(false)}
+                className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-ink/60 hover:bg-cream hover:text-ink transition-colors"
+              />
               <button
                 onClick={() => { setMenuOpen(false); logout(); }}
                 className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-burgundy hover:bg-burgundy/5 transition-colors"

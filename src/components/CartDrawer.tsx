@@ -8,6 +8,7 @@ import { fabricQuantityRules, fabricSaleModeUnit, formatFabricQuantity } from '@
 import { getShop } from '@/data/shops';
 import PriceDisplay from './PriceDisplay';
 import SmartImage from './SmartImage';
+import { availableStock, lineStockIssue, lineStockMessage } from '@/lib/cartStock';
 
 interface CartRow extends CartItem { index: number; }
 
@@ -15,6 +16,9 @@ export default function CartDrawer() {
   const { cartOpen, setCartOpen, cart, removeFromCart, updateQuantity, updateWaist, cartSubtotal, navigate, catalogProducts } = useApp();
   if (!cartOpen) return null;
 
+  // Article devenu épuisé (ou quantité au-delà du stock) : signalé sur sa
+  // ligne et paiement bloqué tant qu'il n'est pas retiré ou réduit.
+  const hasStockIssue = cart.some((item) => lineStockIssue(catalogProducts.find((p) => p.id === item.productId), item) !== null);
   const groups: Record<string, CartRow[]> = {};
   cart.forEach((item, idx) => { (groups[item.shopId] ??= []).push({ ...item, index: idx }); });
 
@@ -45,6 +49,8 @@ export default function CartDrawer() {
                         const { oldPrice: unitOldPrice } = getVariantPrice(product, item.variants);
                         const lineOldTotal = unitOldPrice ? unitOldPrice * item.quantity : undefined;
                         const rules = product.saleMode ? fabricQuantityRules[product.saleMode] : null;
+                        const stockIssue = lineStockIssue(product, item);
+                        const lineMax = rules ? null : availableStock(product, item.variants, item.variantId);
                         return (
                         <div key={item.index} className="flex gap-3">
                           <SmartImage src={product.images[0]} alt="" className="h-20 w-16 flex-shrink-0 rounded-lg object-cover" />
@@ -52,6 +58,7 @@ export default function CartDrawer() {
                             <p className="text-sm font-medium text-ink leading-snug line-clamp-2">{product.name}</p>
                             {Object.entries(item.variants).map(([k, v]) => <p key={k} className="text-xs text-ink/45 mt-0.5">{k}: {v}</p>)}
                             {isBayaProduct(product) && <WaistEditor size="sm" value={item.waistCm} onSave={(cm) => updateWaist(item.index, cm)} />}
+                            {stockIssue && <p role="alert" className="mt-1 text-xs font-medium text-burgundy">{lineStockMessage(stockIssue)}</p>}
                             <div className="mt-2 flex items-center justify-between">
                               <div className="flex items-center border border-line rounded-full">
                                 <button
@@ -64,7 +71,7 @@ export default function CartDrawer() {
                                 </span>
                                 <button
                                   onClick={() => updateQuantity(item.index, +(item.quantity + (rules?.step ?? 1)).toFixed(2), rules?.min ?? 1)}
-                                  disabled={rules ? item.quantity >= rules.max : false}
+                                  disabled={rules ? item.quantity >= rules.max : (lineMax !== null && item.quantity >= lineMax)}
                                   className="flex h-7 w-7 items-center justify-center text-ink/60 hover:text-ink disabled:opacity-30"
                                 ><Plus size={13} /></button>
                               </div>
@@ -88,7 +95,8 @@ export default function CartDrawer() {
               {cart.some((item) => lineNeedsWaist(item, catalogProducts.find((p) => p.id === item.productId))) && (
                 <p role="alert" className="text-xs text-burgundy">Indiquez le tour de taille de votre baya pour passer au paiement.</p>
               )}
-              <button onClick={() => { setCartOpen(false); navigate('/checkout'); }} disabled={cart.some((item) => lineNeedsWaist(item, catalogProducts.find((p) => p.id === item.productId)))} className="btn-primary w-full disabled:opacity-50 disabled:cursor-not-allowed">Passer au paiement</button>
+              {hasStockIssue && <p role="alert" className="text-xs text-burgundy">Un article de votre panier est épuisé ou n'est plus disponible dans cette quantité.</p>}
+              <button onClick={() => { setCartOpen(false); navigate('/checkout'); }} disabled={hasStockIssue || cart.some((item) => lineNeedsWaist(item, catalogProducts.find((p) => p.id === item.productId)))} className="btn-primary w-full disabled:opacity-50 disabled:cursor-not-allowed">Passer au paiement</button>
             </div>
           </>
         )}

@@ -13,8 +13,9 @@ import { stockBadge } from '@/lib/stockBadge';
 export default function ProductCard({ product, priority = false }: { product: Product; priority?: boolean }) {
   const { navigate } = useApp();
   const shop = getShop(product.shopId);
-  // Badge posé sur la photo : « Épuisé » (stock nul) ou « Plus que X ! »
+  // Badge posé sur la photo : « Sold out » (stock nul) ou « Plus que X ! »
   // (1 à 3 unités, toutes variantes confondues) — voir src/lib/stockBadge.ts.
+  // Un produit épuisé garde sa photo intacte : ni gris, ni transparence.
   const badge = stockBadge(product);
   const outOfStock = badge?.kind === 'out';
   // Promo réelle (ancien prix supérieur au prix) : pourcentage bien visible sur la photo.
@@ -42,7 +43,7 @@ export default function ProductCard({ product, priority = false }: { product: Pr
           // proportions didn't match this card's 4:5 box. The product stays
           // fully visible; bg-cream on the wrapper is the neutral fill for
           // whatever space that leaves around it.
-          className={`h-full w-full object-contain transition-transform duration-700 group-hover:scale-105 ${outOfStock ? 'opacity-60 grayscale' : ''}`}
+          className="h-full w-full object-contain transition-transform duration-700 group-hover:scale-105"
         />
         <div className="absolute right-2.5 top-2.5"><FavoriteButton productId={product.id} /></div>
         {disc && !outOfStock && (
@@ -51,7 +52,7 @@ export default function ProductCard({ product, priority = false }: { product: Pr
         {product.isNew && !product.isPromo && !disc && <span className="absolute left-2.5 top-2.5 rounded-full bg-white/95 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-ink">Nouveau</span>}
         {/* Discret, en bas à gauche : ne masque pas le produit. */}
         {badge && (
-          <span className={`pointer-events-none absolute bottom-2 left-2 rounded-full px-2.5 py-1 text-[10px] font-semibold leading-none shadow-sm ${badge.kind === 'out' ? 'bg-white/95 text-ink/70' : 'bg-burgundy text-white'}`}>
+          <span className={`pointer-events-none absolute bottom-2 left-2 rounded-full px-2.5 py-1 text-[10px] font-semibold leading-none shadow-sm ${badge.kind === 'out' ? 'bg-ink text-white' : 'bg-burgundy text-white'}`}>
             {badge.label}
           </span>
         )}

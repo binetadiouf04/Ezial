@@ -5,8 +5,11 @@ import { staffSpaceFromHostname } from './staffSpace.ts';
 // navigateur (autres origines : installer l'une ne remplace jamais une autre) :
 // - Ezial Admin : son manifeste et son icône (papillon bordeaux sur fond crème) ;
 // - Ezial Livreur (21 nov. 2026) : son manifeste et l'icône fournie par la
-//   propriétaire (livreur à scooter crème sur fond rouge, sans papillon ni texte),
-//   couleur de thème rouge rubis #8C1024 ; favicon inchangé.
+//   propriétaire (livreur à scooter crème sur fond rouge, sans papillon ni texte) ;
+//   favicon inchangé. Son manifeste garde le rouge rubis #8C1024 (écran de
+//   démarrage Android), mais la balise theme-color reste blanche comme partout
+//   (index.html) : en rubis, elle peignait une bande rouge en haut de l'iPhone
+//   au-dessus de l'en-tête blanc de l'application.
 // Tous les autres hôtes (www.ezial.net, aperçus Cloudflare, local) gardent
 // l'identité d'origine, inchangée. Aucun effet sur l'interface ni sur les droits.
 export interface PwaIdentity {
@@ -18,8 +21,6 @@ export interface PwaIdentity {
   /** Aperçu d'un lien partagé (feuille de partage iPhone, WhatsApp...) : adresse relative de l'image. */
   shareImage: string;
   shareDescription: string;
-  /** Couleur de la barre du navigateur / de l'application (balise theme-color), si différente. */
-  themeColor?: string;
 }
 
 // « ?v=2 » : nouvelle adresse pour les navigateurs qui gardent les favicons en cache.
@@ -45,7 +46,6 @@ const DRIVER_IDENTITY: PwaIdentity = {
   appName: 'Ezial Livreur',
   shareImage: '/icons/livreur/icon-512.png',
   shareDescription: 'Espace réservé aux livreurs Ezial.',
-  themeColor: '#8C1024',
 };
 
 export function pwaIdentityForHostname(hostname: string): PwaIdentity | null {
@@ -86,7 +86,6 @@ export function applyPwaIdentity(): void {
     if (href) link.setAttribute('href', href);
   });
   set('meta[name="apple-mobile-web-app-title"]', 'content', identity.appName);
-  if (identity.themeColor) set('meta[name="theme-color"]', 'content', identity.themeColor);
   set('meta[name="application-name"]', 'content', identity.appName);
   const image = `${window.location.origin}${identity.shareImage}`;
   document.title = identity.appName;

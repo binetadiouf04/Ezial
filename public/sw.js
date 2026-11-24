@@ -17,6 +17,12 @@
 // parce qu'il ne sert aucun fichier de l'application ; la mise à jour de
 // l'application elle-même est proposée à l'utilisateur par la page
 // (src/lib/appUpdate.ts), jamais imposée.
+// Tous les workers déjà installés chez les clients (y compris le tout premier,
+// qui gardait une copie des fichiers /assets dans « ezial-static-v1 ») font
+// eux aussi skipWaiting et laissent passer sw.js au réseau : ce fichier les
+// remplace sans désinstallation, et « activate » efface leurs anciens caches.
+// Le message SKIP_WAITING (envoyé par le bouton « Mettre à jour ») ne sert que
+// si un worker attendait encore, par exemple installé pendant une coupure.
 
 const OFFLINE_CACHE = 'ezial-offline-v1';
 const OFFLINE_URL = '/offline.html';
@@ -46,6 +52,10 @@ self.addEventListener('activate', (event) => {
     }
     await self.clients.claim();
   })());
+});
+
+self.addEventListener('message', (event) => {
+  if (event.data && event.data.type === 'SKIP_WAITING') self.skipWaiting();
 });
 
 // Uniquement les navigations GET (ouverture d'une page) : réseau d'abord,

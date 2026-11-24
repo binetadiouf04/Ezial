@@ -190,6 +190,10 @@ export interface Mission {
   destinationLatitude?: number;
   destinationLongitude?: number;
   slot: string;
+  /** Jour souhaité (AAAA-MM-JJ), absent s'il n'y en a pas. */
+  slotDate?: string;
+  /** Livraison urgente (orders.is_urgent) : à livrer dans le créneau, en priorité. */
+  urgent?: boolean;
   distance: string;
   step: DeliveryStep;
   earnings: number;

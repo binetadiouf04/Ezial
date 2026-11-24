@@ -1,7 +1,7 @@
 import { useEffect, useState, Suspense, lazy } from 'react';
 import { getStaffSpace } from '@/lib/staffSpace';
 import { SEO } from '@/shared/siteInfo';
-import { categoryDescription, productFallbackDescription, shopFallbackDescription, SHOPS_INDEX_DESCRIPTION, UTILITY_DESCRIPTIONS } from '@/shared/seoText';
+import { categoryDescriptionFor, categoryHeading, categoryPageTitle, oneLineDescription, productFallbackDescription, shopFallbackDescription, SHOPS_INDEX_DESCRIPTION, UTILITY_DESCRIPTIONS } from '@/shared/seoText';
 import { AppProvider, useApp } from '@/store/AppContext';
 import { ProProvider } from '@/pro/ProContext';
 import type { Product } from '@/data/products';
@@ -234,7 +234,7 @@ function headTagsFor(route: string, { catalogProducts, catalogShops }: CatalogFo
     const p = findProductByKey(catalogProducts, parts[2]);
     if (p) {
       const title = `${p.name} — ${p.price.toLocaleString('fr-FR')} FCFA | ${SITE_TITLE}`;
-      const description = (p.description || productFallbackDescription(p.name)).slice(0, 160);
+      const description = oneLineDescription(p.description, productFallbackDescription(p.name));
       return pageTags(title, description, productPublicPath(p), p.images[0] ? absoluteUrl(p.images[0]) : DEFAULT_OG_IMAGE, 'product');
     }
     return null;
@@ -243,7 +243,7 @@ function headTagsFor(route: string, { catalogProducts, catalogShops }: CatalogFo
   if (parts[1] === 'boutique' && parts[2]) {
     const s = findShopByKey(catalogShops, parts[2]);
     if (s) {
-      const description = (s.description || shopFallbackDescription(s.name)).slice(0, 160);
+      const description = oneLineDescription(s.description, shopFallbackDescription(s.name));
       const logo = /^https?:\/\//.test(s.logo) ? s.logo : DEFAULT_OG_IMAGE;
       return pageTags(`${s.name} — Boutique ${SITE_TITLE}`, description, shopPublicPath(s), logo);
     }
@@ -255,8 +255,9 @@ function headTagsFor(route: string, { catalogProducts, catalogShops }: CatalogFo
     if (cat) {
       const subId = parts[3];
       const sub = subId ? (cat.subcategories.find((item) => item.id === subId)?.label ?? subId) : null;
-      const title = sub ? `${sub} — ${cat.label} au Sénégal | ${SITE_TITLE}` : `${cat.label} au Sénégal | ${SITE_TITLE}`;
-      const description = categoryDescription(cat.label, sub);
+      const heading = categoryHeading(cat.id, cat.label);
+      const title = categoryPageTitle(heading, sub, SITE_TITLE);
+      const description = categoryDescriptionFor(cat.id, cat.label, sub);
       return pageTags(title, description, sub ? `/categorie/${cat.id}/${subId}/` : `/categorie/${cat.id}/`);
     }
     return plainTags(DEFAULT_TITLE, DEFAULT_DESCRIPTION);

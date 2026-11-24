@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import UrgentBadge from '@/components/UrgentBadge';
 import { usePro } from '../../ProContext';
 import { fetchSellerOrders, type SellerOrderSummary } from '@/lib/supabaseSellerOrders';
 import { formatFCFA } from '@/data/products';
@@ -112,6 +113,7 @@ export default function SellerOrders() {
                         <div className="flex flex-wrap items-center gap-2">
                           <span className="font-mono text-sm font-semibold text-ink">{order.orderNumber}</span>
                           <StatusChip status={order.status} />
+                          {order.isUrgent && <UrgentBadge />}
                         </div>
                         <p className="mt-1 text-xs text-ink/45">{formatDateTime(order.createdAt)} · {order.customerName}</p>
                       </div>

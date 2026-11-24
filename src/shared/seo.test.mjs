@@ -95,3 +95,34 @@ test('page Livraison : dès 800 FCFA en 4 à 48 h à Dakar', () => {
   const l = INFO_PAGES.livraison;
   assert.ok(l.description.includes('dès 800 FCFA') && l.description.includes('4 à 48 h') && l.description.length <= 160);
 });
+
+test('catégorie « Autres » : titre ≤ 60, description ≤ 160 propre à la page, H1 explicite', async () => {
+  const { categoryHeading, categoryDescriptionFor } = await import('./seoText.js');
+  const heading = categoryHeading('autres', 'Autres');
+  assert.equal(heading, 'Autres articles');
+  assert.ok(`${heading} au Sénégal | Ezial`.length <= 60);
+  const d = categoryDescriptionFor('autres', 'Autres');
+  assert.ok(d.length <= 160 && d.includes('Dakar') && d.includes('Sénégal') && !d.endsWith('…'), d);
+  assert.notEqual(d, categoryDescriptionFor('vetements', 'Vêtements'));
+  // Les autres catégories gardent exactement leur texte.
+  assert.equal(categoryHeading('bijoux', 'Bijoux & Accessoires'), 'Bijoux & Accessoires');
+  assert.equal(categoryDescriptionFor('bijoux', 'Bijoux & Accessoires', 'Montres'), categoryDescription('Bijoux & Accessoires', 'Montres'));
+});
+
+test('description produit : paragraphes conservés à l’affichage, meta description sur une seule ligne', async () => {
+  const { oneLineDescription, textParagraphs } = await import('./seoText.js');
+  assert.deepEqual(textParagraphs('Robe longue.\nCoupe ample.\r\n\r\n\nTaille unique.  \n'), ['Robe longue.\nCoupe ample.', 'Taille unique.']);
+  assert.deepEqual(textParagraphs(''), []);
+  assert.deepEqual(textParagraphs(null), []);
+  assert.equal(oneLineDescription('Robe longue.\n\nTaille unique.', 'repli'), 'Robe longue. Taille unique.');
+  assert.equal(oneLineDescription('  \n ', 'repli'), 'repli');
+  assert.ok(oneLineDescription('mot '.repeat(80), 'x').length <= 160);
+});
+
+test('titres de catégorie et de sous-catégorie : 60 caractères au plus', async () => {
+  const { categoryPageTitle } = await import('./seoText.js');
+  assert.equal(categoryPageTitle('Bijoux & Accessoires', 'Montres'), 'Montres — Bijoux & Accessoires au Sénégal | Ezial');
+  assert.equal(categoryPageTitle('Bijoux & Accessoires', 'Accessoires de mode'), 'Accessoires de mode au Sénégal | Ezial');
+  assert.equal(categoryPageTitle('Autres articles'), 'Autres articles au Sénégal | Ezial');
+  for (const t of [categoryPageTitle('Beauté', 'Hygiène & soins corporels'), categoryPageTitle('Parfums & Senteurs', 'Encens & Parfums de maison')]) assert.ok(t.length <= 60, t);
+});

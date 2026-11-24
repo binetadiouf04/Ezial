@@ -11,6 +11,7 @@ import { Phone, MapPin, Package, Store, Check, Clock, KeySquare, Truck, Smartpho
 import SmartImage from '@/components/SmartImage';
 import { DeliveryCodeCard } from '@/components/OrderParts';
 import { formatDeliveryWish } from '@/lib/deliveryDay';
+import UrgentBadge from '@/components/UrgentBadge';
 import PaymentStatusBadge from '@/components/PaymentStatusBadge';
 
 const shopPrepLabels: Record<string, string> = { preparing: 'En préparation', ready: 'Prête', collected: 'Prête' };
@@ -151,6 +152,7 @@ export default function OrderTrackingPage({ orderId }: { orderId: string }) {
               <div className="flex justify-between"><span className="text-ink/60">Produits</span><span className="font-medium">{formatFCFA(order.subtotal)}</span></div>
               {order.discount > 0 && <div className="flex justify-between text-green-700"><span>Réduction</span><span className="font-medium">-{formatFCFA(order.discount)}</span></div>}
               <div className="flex justify-between"><span className="text-ink/60">Livraison Ezial</span><span className="font-medium">{order.delivery > 0 ? formatFCFA(order.delivery) : 'Gratuit'}</span></div>
+              {(order.urgentFee ?? 0) > 0 && <div className="flex justify-between"><span className="text-ink/60">Livraison urgente</span><span className="font-medium">{formatFCFA(order.urgentFee ?? 0)}</span></div>}
               <div className="border-t border-line pt-1.5 flex justify-between"><span className="font-medium text-ink">Total</span><span className="font-semibold text-ink">{formatFCFA(order.total)}</span></div>
             </div>
           </div>
@@ -160,7 +162,7 @@ export default function OrderTrackingPage({ orderId }: { orderId: string }) {
               <div className="flex items-start gap-2 text-sm text-ink/60"><MapPin size={15} className="mt-0.5 text-ink/40" /><span>{order.customer.firstName} {order.customer.lastName}<br />{order.customer.quartier}<br /><Phone size={11} className="inline mr-1" />{order.customer.phone}</span></div>
               {order.preference?.type === 'preferred' && (
                 <div className="border-t border-line pt-2 space-y-1">
-                  <div className="flex items-start gap-2 text-sm text-ink/60"><Clock size={15} className="mt-0.5 text-ink/40" /><span>Livraison souhaitée : {formatDeliveryWish(order.preference.date, order.preference.window)}</span></div>
+                  <div className="flex items-start gap-2 text-sm text-ink/60"><Clock size={15} className="mt-0.5 text-ink/40" /><span>{(order.urgentFee ?? 0) > 0 ? 'Livraison urgente' : 'Livraison souhaitée'} : {formatDeliveryWish(order.preference.date, order.preference.window)}</span>{(order.urgentFee ?? 0) > 0 && <UrgentBadge className="ml-auto" />}</div>
                 </div>
               )}
             </div>

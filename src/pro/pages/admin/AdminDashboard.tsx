@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
+import UrgentBadge from '@/components/UrgentBadge';
 import { usePro } from '../../ProContext';
 import { fetchAdminDashboardStats, type AdminDashboardStats } from '@/lib/supabaseAdminData';
 import { fetchAdminSalesStats } from '@/lib/supabaseAdminStats';
@@ -331,7 +332,7 @@ export default function AdminDashboard() {
               {overview.recentOrders.map((order) => (
                 <button key={order.id} onClick={() => navigate(`/admin/commandes/${order.id}`)} className="flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-cream/40">
                   <div className="min-w-0 flex-1">
-                    <p className="font-mono text-sm font-semibold text-ink">{order.orderNumber}</p>
+                    <p className="flex items-center gap-2 font-mono text-sm font-semibold text-ink">{order.orderNumber}{order.isUrgent && <UrgentBadge />}</p>
                     <p className="mt-0.5 truncate text-xs text-ink/45">{order.customerName} · {order.fulfillmentType === 'pickup' ? 'Retrait' : 'Livraison'} · {formatDateTime(order.createdAt)}</p>
                   </div>
                   <div className="flex-shrink-0 text-right">

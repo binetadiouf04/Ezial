@@ -64,7 +64,7 @@ function Block({ block }: { block: MarkdownBlock }): ReactNode {
     case 'image':
       return (
         <figure className="mt-6">
-          <img src={block.src} alt={block.alt} loading="lazy" className="w-full rounded-xl object-cover" />
+          <img src={block.src} alt={block.alt} loading="lazy" decoding="async" className="w-full rounded-xl object-cover" />
         </figure>
       );
     case 'hr':

@@ -25,6 +25,9 @@ import MobileBuyBar from '@/components/MobileBuyBar';
 import { isBayaProduct, parseWaistCm, waistError, WAIST_LABEL, WAIST_HINT } from '@/lib/waistMeasure';
 import { CopyReference, ShareProduct } from '@/components/ProductShareActions';
 import { DELIVERY } from '@/shared/siteInfo';
+import { textParagraphs } from '@/shared/seoText';
+import { availableStock } from '@/lib/cartStock';
+import { SOLD_OUT_LABEL } from '@/lib/stockBadge';
 import { ChevronRight, Store, Plus, Minus, Check, Star, Camera, X, ShieldCheck, Loader2, Truck, ShoppingBag } from 'lucide-react';
 
 const tabs = ['Description', 'Avis'] as const;
@@ -289,6 +292,22 @@ export default function ProductPage({ productId }: { productId: string }) {
 
   const handleVariant = (name: string, value: string) => { setVariants((prev) => ({ ...prev, [name]: value })); setError(''); };
 
+  // Stock de la variante choisie (ou du produit sans variante) : une variante
+  // épuisée ne peut pas être ajoutée au panier, même si d'autres restent en
+  // stock. Simple garde-fou : create_order() revérifie le stock réel.
+  const selectedStock = allSelected ? availableStock(product, variants, dynamicPrice.variantId) : null;
+  const variantSoldOut = !outOfStock && selectedStock === 0;
+  const soldOut = outOfStock || variantSoldOut;
+  // Quantité maximale proposée (hors tissus, qui ont leurs propres bornes).
+  const maxQty = !product.saleMode && selectedStock !== null && selectedStock > 0 ? selectedStock : null;
+  // Une valeur d'option est épuisée quand toutes les variantes qui la portent
+  // (compte tenu des autres options déjà choisies) ont un stock nul.
+  const isValueSoldOut = (name: string, value: string): boolean => {
+    const rows = (product.variantPrices ?? []).filter((vp) => vp.conditions[name] === value
+      && Object.entries(variants).every(([k, v]) => k === name || vp.conditions[k] === undefined || vp.conditions[k] === v));
+    return rows.length > 0 && rows.every((vp) => vp.stock === 0);
+  };
+
   // Tissus only — blocks "Ajouter au panier"/"Acheter maintenant" while the
   // quantity field holds anything that isn't a currently-valid quantity
   // (empty, or failed validateFabricQuantity).
@@ -310,6 +329,8 @@ export default function ProductPage({ productId }: { productId: string }) {
     }
     if (!allSelected) { setError('Veuillez sélectionner: ' + requiredVariants.filter((v) => !variants[v]).join(', ')); return; }
     if (fabricQtyInvalid) return;
+    if (soldOut) { setError('Ce produit est épuisé dans cette option.'); return; }
+    if (maxQty !== null && qty > maxQty) { setQty(maxQty); setError(maxQty === 1 ? 'Un seul exemplaire disponible.' : `Plus que ${maxQty} exemplaires disponibles.`); return; }
     addToCart({ productId: product.id, shopId: product.shopId, quantity: qty, variants, unitPrice: dynamicPrice.price, variantId: dynamicPrice.variantId, ...(waistCm !== undefined ? { waistCm } : {}) });
     if (buyNow) navigate('/checkout'); else { setAdded(true); setTimeout(() => setAdded(false), 2000); }
   };
@@ -356,8 +377,11 @@ export default function ProductPage({ productId }: { productId: string }) {
               {fabricAvailabilityLabels[product.availabilityStatus]}
             </span>
           )}
-          {outOfStock ? <p className="text-sm font-medium text-ink/50">Rupture de stock</p> : (lowStock && !product.saleMode) ? <p className="text-sm font-medium text-burgundy">Plus que {product.stock} disponibles</p> : null}
-          {product.variants.length > 0 && <div className="border-t border-ink/10 pt-5"><VariantSelector variants={product.variants} selected={variants} onChange={handleVariant} /></div>}
+          {outOfStock ? (
+            <span className="inline-flex w-fit items-center rounded-full bg-ink px-3 py-1 text-xs font-semibold text-white">{SOLD_OUT_LABEL}</span>
+          ) : (lowStock && !product.saleMode) ? <p className="text-sm font-medium text-burgundy">Plus que {product.stock} disponibles</p> : null}
+          {product.variants.length > 0 && <div className="border-t border-ink/10 pt-5"><VariantSelector variants={product.variants} selected={variants} onChange={handleVariant} isValueSoldOut={isValueSoldOut} /></div>}
+          {variantSoldOut && <p className="text-sm font-medium text-burgundy">Cette option est épuisée : choisissez-en une autre.</p>}
           <div className="space-y-4">
             {isBaya && (
               <div>
@@ -415,7 +439,7 @@ export default function ProductPage({ productId }: { productId: string }) {
                 <div className="inline-flex items-center rounded-lg border border-ink/20">
                   <button onClick={() => setQty((q) => Math.max(1, q - 1))} aria-label="Diminuer la quantité" className="flex h-10 w-10 items-center justify-center text-ink/60 hover:text-ink"><Minus size={15} /></button>
                   <span className="w-10 text-center text-sm font-medium">{qty}</span>
-                  <button onClick={() => setQty((q) => q + 1)} aria-label="Augmenter la quantité" className="flex h-10 w-10 items-center justify-center text-ink/60 hover:text-ink"><Plus size={15} /></button>
+                  <button onClick={() => setQty((q) => (maxQty !== null ? Math.min(maxQty, q + 1) : q + 1))} disabled={maxQty !== null && qty >= maxQty} aria-label="Augmenter la quantité" className="flex h-10 w-10 items-center justify-center text-ink/60 hover:text-ink disabled:opacity-30"><Plus size={15} /></button>
                 </div>
               )}
             </div>
@@ -432,8 +456,14 @@ export default function ProductPage({ productId }: { productId: string }) {
           {/* Barre d'achat : fixée en bas de l'écran sur mobile (stable,
               masquée pendant la saisie), intégrée à la page sur ordinateur. */}
           <MobileBuyBar>
-            <button onClick={() => handleAdd(false)} disabled={outOfStock || fabricQtyInvalid} className="btn-shop min-w-0 flex-1 whitespace-nowrap !px-3 !text-sm sm:!text-[15px]">{added ? <><Check size={17} /> Ajouté</> : <><ShoppingBag size={17} aria-hidden="true" /> Ajouter au panier</>}</button>
-            <button onClick={() => handleAdd(true)} disabled={outOfStock || fabricQtyInvalid} className="btn-shop-line flex-none whitespace-nowrap !px-4 !text-sm sm:!text-[15px]">Acheter maintenant</button>
+            {soldOut ? (
+              <button type="button" disabled className="btn-shop min-w-0 flex-1 whitespace-nowrap !px-3 !text-sm sm:!text-[15px]">Épuisé</button>
+            ) : (
+              <>
+                <button onClick={() => handleAdd(false)} disabled={fabricQtyInvalid} className="btn-shop min-w-0 flex-1 whitespace-nowrap !px-3 !text-sm sm:!text-[15px]">{added ? <><Check size={17} /> Ajouté</> : <><ShoppingBag size={17} aria-hidden="true" /> Ajouter au panier</>}</button>
+                <button onClick={() => handleAdd(true)} disabled={fabricQtyInvalid} className="btn-shop-line flex-none whitespace-nowrap !px-4 !text-sm sm:!text-[15px]">Acheter maintenant</button>
+              </>
+            )}
           </MobileBuyBar>
           {/* Delivery promise (src/shared/siteInfo.js) — information only,
               the order flow and delivery fee are unchanged. */}
@@ -458,7 +488,8 @@ export default function ProductPage({ productId }: { productId: string }) {
             <div className="py-5 text-sm text-ink/70">
               {tab === 'Description' && (
                 <div className="space-y-5">
-                  <p>{product.description}</p>
+                  {/* Retours à la ligne et paragraphes du vendeur conservés, en texte brut (jamais de HTML). */}
+                  <div className="space-y-3">{textParagraphs(product.description).map((par, i) => <p key={i} className="whitespace-pre-line">{par}</p>)}</div>
                   {product.details.length > 0 && (
                     <div className="border-t border-ink/10 pt-5">
                       <h3 className="mb-3 text-sm font-semibold text-ink">Caractéristiques</h3>

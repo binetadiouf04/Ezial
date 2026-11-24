@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react';
 import { ChevronLeft, ChevronRight, Play } from 'lucide-react';
 import SmartImage from './SmartImage';
+import ProductVideo from './ProductVideo';
 
 export interface GalleryMediaItem {
   url: string;
@@ -9,14 +10,6 @@ export interface GalleryMediaItem {
    * thumbnail strip below so it never downloads N full-size gallery images
    * (~80-200 Ko each) just to render N 56px squares. Falls back to `url`. */
   thumbnailUrl?: string;
-}
-
-// iOS/iPadOS Safari never fetches a video's first frame on its own, even
-// with preload="metadata": the player stays an empty box until the buyer
-// taps play. A media fragment start time (#t=0.1) makes Safari decode and
-// show that frame as the poster; other browsers simply ignore it.
-function withFirstFrame(url: string): string {
-  return url.includes('#') ? url : `${url}#t=0.1`;
 }
 
 // Responsive at every width, not just "mobile vs desktop": a fixed
@@ -36,6 +29,10 @@ export default function ProductGallery({ media, alt }: { media: GalleryMediaItem
   const current = media[active] ?? media[0];
 
   const goTo = (i: number) => setActive(((i % count) + count) % count);
+  // Couverture des vidéos : la première photo du produit (déjà chargée par la
+  // fiche dans la plupart des cas). Voir ProductVideo.
+  const firstPhotoIndex = media.findIndex((m) => m.type === 'image');
+  const firstPhoto = firstPhotoIndex >= 0 ? media[firstPhotoIndex] : undefined;
 
   // Same safe swipe technique as HeroCarousel: only compares touchstart to
   // touchend clientX, never touches touchmove or preventDefault, so a
@@ -60,14 +57,12 @@ export default function ProductGallery({ media, alt }: { media: GalleryMediaItem
         onTouchEnd={onTouchEnd}
       >
         {current.type === 'video' ? (
-          <video
+          <ProductVideo
             key={active}
-            src={withFirstFrame(current.url)}
-            className="h-full w-full object-cover fade-in"
-            controls
-            muted
-            playsInline
-            preload="metadata"
+            src={current.url}
+            poster={firstPhoto?.url}
+            title={alt}
+            onShowPhotos={firstPhotoIndex >= 0 ? () => setActive(firstPhotoIndex) : undefined}
           />
         ) : (
           <>
@@ -77,7 +72,7 @@ export default function ProductGallery({ media, alt }: { media: GalleryMediaItem
             {current.thumbnailUrl && (
               <img src={current.thumbnailUrl} alt="" aria-hidden="true" decoding="async" className="absolute inset-0 h-full w-full scale-110 object-cover blur-md" />
             )}
-            <SmartImage key={active} src={current.url} alt={alt} className="relative h-full w-full object-cover fade-in" loading="eager" fetchPriority="high" />
+            <SmartImage key={active} src={current.url} alt={alt} width={960} height={1200} className="relative h-full w-full object-cover fade-in" loading="eager" fetchPriority={active === 0 ? 'high' : undefined} />
           </>
         )}
 
@@ -116,11 +111,12 @@ export default function ProductGallery({ media, alt }: { media: GalleryMediaItem
               className={`relative flex-shrink-0 overflow-hidden rounded-md border-2 transition-colors ${active === i ? 'border-burgundy' : 'border-transparent hover:border-ink/20'}`}
             >
               {item.type === 'video' ? (
-                <div className="flex h-16 w-[52px] items-center justify-center bg-ink/5">
-                  <Play size={16} className="text-ink/60" />
+                <div className="relative flex h-16 w-[52px] items-center justify-center bg-ink/5">
+                  {firstPhoto && <SmartImage src={firstPhoto.thumbnailUrl || firstPhoto.url} alt="" width={240} height={300} className="absolute inset-0 h-full w-full object-cover opacity-70" />}
+                  <Play size={16} fill="currentColor" className="relative text-burgundy" />
                 </div>
               ) : (
-                <SmartImage src={item.thumbnailUrl || item.url} alt="" className="h-16 w-[52px] object-cover" />
+                <SmartImage src={item.thumbnailUrl || item.url} alt="" width={240} height={300} className="h-16 w-[52px] object-cover" />
               )}
             </button>
           ))}

@@ -8,6 +8,7 @@ import {
 import { formatFCFA } from '@/data/products';
 import { fabricSaleModeUnit, formatFabricQuantity } from '@/data/categories';
 import { StatusChip } from '../../components/StatusChip';
+import UrgentBadge from '@/components/UrgentBadge';
 import { ArrowLeft, Truck, Store, Phone, Check, Package, Loader2, AlertCircle, Clock, MessageSquare, Gift } from 'lucide-react';
 import SmartImage from '@/components/SmartImage';
 
@@ -102,7 +103,10 @@ export default function SellerOrderDetail({ orderId }: { orderId: string }) {
           <h1 className="font-display text-2xl font-semibold text-ink break-all">Commande {order.orderNumber}</h1>
           <p className="mt-1 text-sm text-ink/55">{formatDateTime(order.createdAt)}</p>
         </div>
-        <StatusChip status={order.status} size="md" />
+        <div className="flex items-center gap-2">
+          <StatusChip status={order.status} size="md" />
+          {order.isUrgent && <UrgentBadge />}
+        </div>
       </div>
 
       {/* Products — this shop's items only */}
@@ -132,6 +136,15 @@ export default function SellerOrderDetail({ orderId }: { orderId: string }) {
           <span className="font-semibold text-ink">{formatFCFA(order.shopSubtotal)}</span>
         </div>
       </div>
+
+      {order.isUrgent && (
+        <div className="card flex items-start gap-3 border-burgundy-ruby/30 bg-burgundy-ruby/5 p-4">
+          <UrgentBadge />
+          <p className="text-sm text-ink/75">
+            Livraison urgente demandée par le client{(preferredDate || order.preferredSlot) ? ` pour ${[preferredDate, order.preferredSlot].filter(Boolean).join(' · ')}` : ''} : préparez cette commande en priorité.
+          </p>
+        </div>
+      )}
 
       {/* Customer & fulfillment info */}
       <div className="card p-5 space-y-3">

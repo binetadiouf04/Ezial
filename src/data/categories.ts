@@ -33,7 +33,8 @@ export type CategoryId =
   | 'parfums'
   | 'bijoux'
   | 'lingerie'
-  | 'tissus';
+  | 'tissus'
+  | 'autres';
 
 // Full fabric-type list for the Tissus category — a dedicated filter
 // dimension (data/filters.ts), not a subcategory: a Tissus product has no
@@ -138,6 +139,9 @@ export const categories: Category[] = [
     { id: 'boucles-oreilles', label: 'Boucles d\'oreilles' }, { id: 'montres', label: 'Montres' },
     { id: 'lunettes', label: 'Lunettes' }, { id: 'baya', label: 'Baya' },
     { id: 'ensemble-parure', label: 'Ensemble / Parure' },
+    // Accessoires portés qui ne sont pas des bijoux (bonnet, voile, foulard…) :
+    // le type précis est une caractéristique (« Type d'accessoire », filters.ts).
+    { id: 'accessoires-mode', label: 'Accessoires de mode' },
   ]},
   { id: 'lingerie', label: 'Pyjamas & Lingerie', subcategories: [
     { id: 'pyjamas', label: 'Pyjamas & nuisettes' }, { id: 'lingerie', label: 'Lingerie & sous-vêtements' },
@@ -145,6 +149,10 @@ export const categories: Category[] = [
   // No subcategories — a Tissus product is differentiated by fabric_type
   // (see fabricTypes above), a dedicated filter, not a subcategory.
   { id: 'tissus', label: 'Tissus', subcategories: [] },
+  // « Autres » : tout produit qui n'entre dans aucune catégorie ci-dessus.
+  // Pas de sous-catégorie ; le vendeur nomme et décrit librement le produit.
+  // Titre et description de page : CATEGORY_HEADINGS (src/shared/seoText.js).
+  { id: 'autres', label: 'Autres', subcategories: [] },
 ];
 
 /**

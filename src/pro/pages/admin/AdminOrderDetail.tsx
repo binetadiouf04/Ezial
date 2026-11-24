@@ -6,6 +6,8 @@ import { formatFCFA } from '../../data';
 import { fabricSaleModeUnit, formatFabricQuantity } from '@/data/categories';
 import { paymentLabels } from '@/data/payments';
 import { StatusChip } from '../../components/StatusChip';
+import UrgentBadge from '@/components/UrgentBadge';
+import { formatDeliveryWish } from '@/lib/deliveryDay';
 import { ArrowLeft, Store, CreditCard, Phone, Loader2, Truck, Clock, Gift } from 'lucide-react';
 
 function formatDateTime(iso: string): string {
@@ -59,6 +61,7 @@ export default function AdminOrderDetail({ orderId }: { orderId: string }) {
       <div className="flex items-center justify-between flex-wrap gap-2">
         <h1 className="font-display text-xl font-semibold text-ink break-all">{order.orderNumber}</h1>
         <StatusChip status={order.status} size="md" />
+        {order.urgentFee > 0 && <UrgentBadge />}
       </div>
 
       {/* Order info */}
@@ -93,6 +96,12 @@ export default function AdminOrderDetail({ orderId }: { orderId: string }) {
             <span className="text-ink/55">Livraison Ezial</span>
             <span className="font-medium text-ink">{order.deliveryFee > 0 ? formatFCFA(order.deliveryFee) : 'Gratuit'}</span>
           </div>
+          {order.urgentFee > 0 && (
+            <div className="flex justify-between text-sm">
+              <span className="text-ink/55">Livraison urgente</span>
+              <span className="font-medium text-ink">{formatFCFA(order.urgentFee)}</span>
+            </div>
+          )}
           {order.giftWrap && (
             <div className="flex justify-between text-sm">
               <span className="text-ink/55">Emballage cadeau</span>
@@ -129,7 +138,7 @@ export default function AdminOrderDetail({ orderId }: { orderId: string }) {
             <p className="text-sm text-ink">{[order.deliveryAddress, order.deliveryNeighborhood].filter(Boolean).join(', ')}</p>
           )}
           {(order.preferredDeliveryDate || order.preferredDeliverySlot) && (
-            <p className="text-sm text-ink/70 flex items-center gap-1.5"><Clock size={13} className="text-ink/40" /> {[order.preferredDeliveryDate, order.preferredDeliverySlot].filter(Boolean).join(' · ')}</p>
+            <p className="text-sm text-ink/70 flex flex-wrap items-center gap-1.5"><Clock size={13} className="text-ink/40" /> {order.urgentFee > 0 ? 'Livraison urgente : ' : ''}{formatDeliveryWish(order.preferredDeliveryDate, order.preferredDeliverySlot)}{order.urgentFee > 0 && <UrgentBadge />}</p>
           )}
           {order.deliveryNotes && <p className="text-sm text-ink/55 italic">"{order.deliveryNotes}"</p>}
         </div>

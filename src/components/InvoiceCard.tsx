@@ -3,6 +3,7 @@ import { formatInvoiceMoney } from '@/lib/invoice';
 import { useBuildInvoice } from '@/lib/useBuildInvoice';
 import InvoiceButton from '@/components/InvoiceButton';
 import { formatDeliveryWish } from '@/lib/deliveryDay';
+import UrgentBadge from '@/components/UrgentBadge';
 
 // Facture de la commande, affichée dans l'appli (page de confirmation, détail
 // d'une commande), en tête de page : elle sert de récapitulatif (articles et total, sans doublon
@@ -65,6 +66,12 @@ export default function InvoiceCard({ order, className = '', draft = false, show
         <div className="flex justify-between"><dt className="text-ink/70">Sous-total</dt><dd>{formatInvoiceMoney(invoice.subtotal)}</dd></div>
         {invoice.discount > 0 && <div className="flex justify-between"><dt className="text-ink/70">Remise</dt><dd>- {formatInvoiceMoney(invoice.discount)}</dd></div>}
         <div className="flex justify-between"><dt className="text-ink/70">Livraison</dt><dd>{invoice.delivery > 0 ? formatInvoiceMoney(invoice.delivery) : 'Gratuite'}</dd></div>
+        {invoice.urgentFee > 0 && (
+          <div className="flex justify-between gap-3">
+            <dt className="text-ink/70"><span className="flex items-center gap-1.5">Livraison urgente <UrgentBadge /></span>{invoice.urgentWhen && <span className="block text-xs text-ink/55">{invoice.urgentWhen}</span>}</dt>
+            <dd className="flex-shrink-0">{formatInvoiceMoney(invoice.urgentFee)}</dd>
+          </div>
+        )}
         <div className="flex items-baseline justify-between border-t border-line pt-3">
           <dt className="text-base font-semibold">Total</dt>
           <dd className="font-display text-2xl font-semibold text-burgundy-ruby">{formatInvoiceMoney(invoice.total)}</dd>
@@ -76,7 +83,7 @@ export default function InvoiceCard({ order, className = '', draft = false, show
           <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-ink/55">Livraison</p>
           {deliveryPlace && <p className="mt-1 text-ink">{deliveryPlace}</p>}
           {c.instructions && <p className="text-ink/60">« {c.instructions} »</p>}
-          <p className="text-ink/60">Souhaitée : {deliveryWhen}</p>
+          <p className="text-ink/60">{invoice.urgentFee > 0 ? 'Livraison urgente' : 'Souhaitée'} : {deliveryWhen}</p>
         </div>
       )}
 

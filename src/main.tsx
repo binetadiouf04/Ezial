@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import App from './App.tsx';
 import UpdateBanner from './components/UpdateBanner.tsx';
 import AppErrorBoundary from './components/AppErrorBoundary.tsx';
+import PullToRefresh from './components/PullToRefresh.tsx';
 import { startAppUpdates } from './lib/appUpdate';
 import { applyPwaIdentity } from './lib/pwaIdentity';
 import './index.css';
@@ -16,6 +17,7 @@ createRoot(document.getElementById('root')!).render(
       <App />
     </AppErrorBoundary>
     <UpdateBanner />
+    <PullToRefresh />
   </StrictMode>
 );
 

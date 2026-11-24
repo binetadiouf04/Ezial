@@ -133,13 +133,13 @@ export default function SellerAuthPanel({ onBack, onLogin, verifySeller, signUpS
 
       <div className="card p-8">
         <h2 className="font-display text-2xl font-semibold text-ink">
-          {view === 'login' ? 'Se connecter à Ezial Pro' : view === 'signup' ? 'Créer ma boutique' : 'Espace Vendeur'}
+          {view === 'login' ? 'Se connecter à Ezial Pro' : view === 'signup' ? 'Créer ma boutique' : view === 'pending_confirmation' ? 'Confirmez votre e-mail' : 'Espace Vendeur'}
         </h2>
         <p className="mt-1.5 text-sm text-ink/55">
           {view === 'current_account' && 'Créez votre boutique avec votre compte Ezial.'}
           {view === 'login' && 'Connectez-vous avec votre identifiant et votre mot de passe.'}
           {view === 'signup' && 'Créez le compte de votre boutique Ezial.'}
-          {view === 'pending_confirmation' && 'Vérifiez votre boîte mail.'}
+          {view === 'pending_confirmation' && 'Dernière étape avant la mise en ligne de votre boutique.'}
           {view === 'forgot' && 'Réinitialisez votre mot de passe.'}
         </p>
 
@@ -233,7 +233,10 @@ export default function SellerAuthPanel({ onBack, onLogin, verifySeller, signUpS
         {view === 'pending_confirmation' && (
           <div className="mt-5 space-y-4 text-center">
             <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-green-50 text-green-700"><MailCheck size={22} /></div>
-            <p className="text-sm text-ink/70">Un lien de confirmation vous a été envoyé par email.</p>
+            <p className="text-sm text-ink/70">
+              Un lien de confirmation vient d'être envoyé à {email.trim() ? <strong className="font-medium text-ink">{email.trim()}</strong> : 'votre adresse e-mail'}.
+            </p>
+            <p className="text-sm text-ink/70">Ouvrez-le : votre boutique sera aussitôt en ligne et vous arriverez directement sur Ezial Pro, sans validation à attendre.</p>
             <p className="text-xs text-ink/45">Vous ne voyez rien ? Vérifiez vos spams.</p>
             <button onClick={() => void handleResendConfirmation()} disabled={resending} className="text-xs font-medium text-burgundy hover:underline">
               {resending ? 'Envoi...' : 'Renvoyer le lien'}

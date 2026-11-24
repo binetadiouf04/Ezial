@@ -106,8 +106,45 @@ scooter crème sur fond rouge, sans texte ni papillon ; source `docs/identite/ic
   l'application. L'ancien rechargement automatique de tous les onglets à chaque
   nouveau worker a été supprimé (il pouvait couper un paiement).
 - Cache HTTP Cloudflare (`public/_headers`) : `/assets/*` un an (noms de
-  fichiers versionnés) ; `sw.js`, `manifest.webmanifest`, `offline.html`
-  revalidés à chaque fois ; `version.json` jamais en cache.
+  fichiers versionnés) ; `sw.js`, `/`, `/index.html`, les trois manifestes et
+  `offline.html` revalidés à chaque fois (les autres pages HTML : réglage par
+  défaut de Cloudflare Pages, `max-age=0, must-revalidate`) ; `version.json`
+  jamais en cache.
+- Anciens workers déjà installés (dont le tout premier, qui gardait les
+  fichiers `/assets` dans `ezial-static-v1`) : tous faisaient `skipWaiting` et
+  laissaient passer `sw.js` au réseau ; ils sont remplacés sans désinstaller,
+  et `activate` efface leurs caches. « Mettre à jour » envoie aussi
+  `SKIP_WAITING` à un worker resté en attente (cas rare).
+
+### Actualiser dans l'application installée (24 nov. 2026)
+
+En mode écran d'accueil, ni l'iPhone ni Chrome Android n'offrent de geste
+« tirer pour actualiser » ni de bouton recharger. Ezial en fournit un, actif
+**seulement dans l'application installée** (le navigateur garde le sien) :
+
+- Geste (`src/components/PullToRefresh.tsx`, règles pures dans
+  `src/lib/pullToRefreshCore.ts`) : page tout en haut, un doigt, mouvement
+  nettement vertical vers le bas, seuil de 72 px après amortissement, petit
+  indicateur rond. Ignoré sur un carrousel (geste horizontal), un champ de
+  saisie, une fenêtre modale, un tiroir, la barre d'achat ou tout élément fixe,
+  une liste défilante qui n'est pas en haut.
+- **Jamais** au paiement, sur une commande, le panier ou une saisie vendeur
+  (mêmes pages que le bandeau, `isSensitivePath`), ni quand un formulaire a été
+  modifié sans être enregistré (saisie repérée par `src/lib/pageRefresh.ts` ;
+  recherche, cases à cocher et listes de filtres exclues).
+- Entrée « Actualiser » (`src/components/RefreshMenuButton.tsx`) : menu de la
+  marketplace, menu mobile Admin, barre du haut Livreur. Absente aux pages
+  sensibles ; demande confirmation si des modifications ne sont pas enregistrées.
+
+### Barre d'état (haut de l'écran) : blanche
+
+Bande rouge signalée en haut de l'iPhone 13 : la balise `theme-color` valait
+bordeaux `#5A0D1E` (rubis `#8C1024` sur `livreur.*`, via `pwaIdentity.ts`) alors
+que tous les en-têtes sont blancs ; Safari (iOS 15 et suivants) et l'application
+installée peignent la zone de la barre d'état avec cette couleur. Elle vaut
+maintenant `#FFFFFF` partout (le fond de `html` aussi, pour le rebond), la page
+hors connexion `#F8F3EE` (son fond). Les manifestes gardent leurs couleurs
+(écran de démarrage Android) ; une fois la page chargée, Android suit la balise.
 
 ## 3. Données sensibles
 

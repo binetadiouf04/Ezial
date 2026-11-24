@@ -1,4 +1,5 @@
 import { supabase } from './supabaseClient';
+import { fetchUrgentOrderIds } from './supabaseUrgentDelivery';
 import { uploadSecurePhoto, resolveSecurePhotoUrl } from './secureStorage';
 import { optimizeImageFile } from '@/utils/imageOptimize';
 import { isRpcMissing } from './supabaseFeatureDetect';
@@ -63,6 +64,7 @@ interface OrderRow {
   delivery_latitude: number | null;
   delivery_longitude: number | null;
   preferred_delivery_slot: string | null;
+  preferred_delivery_date: string | null;
 }
 
 interface ShopRow {
@@ -93,9 +95,10 @@ export async function fetchDriverMissions(): Promise<Mission[]> {
   const missionIds = rows.map((r) => r.id);
   const orderIds = [...new Set(rows.map((r) => r.order_id))];
 
-  const [{ data: stopRows }, { data: orderRows }] = await Promise.all([
+  const [{ data: stopRows }, { data: orderRows }, urgentOrderIds] = await Promise.all([
     supabase.from('delivery_stops').select('id, mission_id, shop_id, stop_order, status, picked_up_at').in('mission_id', missionIds).order('stop_order', { ascending: true }),
-    supabase.from('orders').select('id, order_number, first_name, last_name, phone, neighborhood, delivery_address, delivery_notes, delivery_latitude, delivery_longitude, preferred_delivery_slot').in('id', orderIds),
+    supabase.from('orders').select('id, order_number, first_name, last_name, phone, neighborhood, delivery_address, delivery_notes, delivery_latitude, delivery_longitude, preferred_delivery_slot, preferred_delivery_date').in('id', orderIds),
+    fetchUrgentOrderIds(orderIds),
   ]);
 
   const stops = (stopRows ?? []) as DeliveryStopRow[];
@@ -159,6 +162,8 @@ export async function fetchDriverMissions(): Promise<Mission[]> {
       destinationLatitude: order?.delivery_latitude ?? undefined,
       destinationLongitude: order?.delivery_longitude ?? undefined,
       slot: order?.preferred_delivery_slot ?? '',
+      slotDate: order?.preferred_delivery_date ?? undefined,
+      urgent: urgentOrderIds.has(row.order_id),
       distance: '',
       step: row.status === MISSION_STATUS.delivered ? 'delivered'
         : row.status === MISSION_STATUS.outForDelivery ? 'to_customer'
