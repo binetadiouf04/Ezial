@@ -10,7 +10,8 @@ import {
   fabricAvailabilityStatuses, fabricAvailabilityLabels,
   type FabricSaleMode, type FabricAvailabilityStatus,
 } from '@/data/categories';
-import { getFilters, WATCH_GROUP_IDS, GLASSES_GROUP_IDS, type FilterGroup } from '@/data/filters';
+import { getFilters, WATCH_GROUP_IDS, GLASSES_GROUP_IDS, FASHION_ACCESSORY_GROUP_ID, type FilterGroup } from '@/data/filters';
+import { OTHER_OPTION, OTHER_DETAIL_MAX_LENGTH, splitOtherValues, joinOtherValues, toggleSkinType } from '@/lib/otherOption';
 import { MAKEUP_SHADES_BY_TYPE } from '@/data/makeupShades';
 import { discountPercent, COLOR_PRINT_VARIANT_KEY } from '@/data/products';
 import { getColor } from '@/data/colors';
@@ -36,6 +37,7 @@ import {
   type NewProductMedia,
 } from '@/lib/supabaseSellerProducts';
 import { resolveImageUrl } from '@/lib/supabaseCatalog';
+import { inspectVideoFile, judgeVideo } from '@/lib/videoInspect';
 import ImageCropModal from '../../components/ImageCropModal';
 import LogoOverlayModal, { type OverlayResult } from '../../components/LogoOverlayModal';
 import { X, Package, ChevronDown, Check, Camera, Star, Video, ArrowUp, ArrowDown, Sparkles, Crop, RefreshCw, Plus } from 'lucide-react';
@@ -61,7 +63,10 @@ const blurOnWheel = (e: React.WheelEvent<HTMLInputElement>) => e.currentTarget.b
 // Which filter groups are single-choice (radio-like) vs descriptive multi-choice
 // (checkbox-like, but never split stock) vs true variant dimensions (checkbox-like
 // AND generate one stock/price line per selected value).
-const SINGLE_CHOICE_IDS = new Set(['type', 'style', 'texture', 'matiere', 'peau', 'typeproduit', 'longueurongles', 'typedecils', 'longueurdescils', 'matieredescils', ...WATCH_GROUP_IDS, ...GLASSES_GROUP_IDS]);
+// « peau » (Type de peau) est à choix multiple depuis le 24 nov. 2026, avec
+// « Tous types de peau » exclusif (toggleSkinType) : un produit enregistré
+// avec une seule valeur se relit tel quel.
+const SINGLE_CHOICE_IDS = new Set(['type', 'style', 'texture', 'matiere', 'typeproduit', 'longueurongles', 'typedecils', 'longueurdescils', 'matieredescils', FASHION_ACCESSORY_GROUP_ID, ...WATCH_GROUP_IDS, ...GLASSES_GROUP_IDS]);
 // The one exception to 'type' being single-choice: for Vêtements (Femme and
 // Homme), several clothing types can describe the same product (e.g. "Robes"
 // and "Grande taille", or "T-shirts" and "Tenues de sport") — a product must
@@ -234,6 +239,7 @@ const examplesBySubcategory: Record<string, { name: string; description: string 
   'parfums/huiles-brumes': { name: 'Ex. Brume parfumée fleur de tiaré', description: 'Ex. Brume légère et fraîche, à vaporiser sur la peau ou les cheveux.' },
   'parfums/encens-parfums-maison': { name: 'Ex. Encens oud premium', description: 'Ex. Encens naturel au oud, parfum boisé et enveloppant.' },
   'bijoux/colliers': { name: 'Ex. Collier fin plaqué or', description: 'Ex. Collier fin et délicat, plaqué or, pour un port quotidien.' },
+  'bijoux/accessoires-mode': { name: 'Ex. Foulard en soie imprimé', description: 'Ex. Foulard léger et doux, à porter en turban, en voile ou autour du cou.' },
   'lingerie/lingerie': { name: 'Ex. Culotte coton sans couture', description: 'Ex. Culotte confortable en coton doux, coupe invisible sous les vêtements.' },
 };
 
@@ -245,6 +251,7 @@ const examplesByCategory: Record<string, { name: string; description: string }> 
   parfums: { name: 'Ex. Eau de parfum vanille ambrée', description: 'Ex. Parfum femme aux notes vanillées, ambrées et florales.' },
   bijoux: { name: 'Ex. Collier fin plaqué or', description: 'Ex. Collier délicat pour un port quotidien.' },
   lingerie: { name: 'Ex. Pyjama deux pièces en coton', description: 'Ex. Pyjama doux et confortable, idéal pour les soirées fraîches.' },
+  autres: { name: 'Ex. Nom précis du produit', description: 'Ex. Ce que c\'est, sa matière, ses dimensions et son usage.' },
 };
 
 interface OptionSelection {
@@ -444,6 +451,10 @@ export default function SellerProductForm({ productId }: { productId?: string })
 
   // Manual value when "Autre" is picked for Volume
   const [customVolumeMl, setCustomVolumeMl] = useState('');
+  // « Préciser » (facultatif) quand « Autre » est choisi dans une
+  // caractéristique descriptive, par identifiant de groupe. Enregistré dans la
+  // valeur elle-même : « Autre (turban en wax) » (src/lib/otherOption.ts).
+  const [otherDetails, setOtherDetails] = useState<Record<string, string>>({});
   // Brumes: free-text scent notes, comma-separated (ex. "caramel, vanille
   // fouettée, cassonade") — descriptive only, saved under its own
   // descriptive_attributes key, never a variant dimension.
@@ -544,7 +555,11 @@ export default function SellerProductForm({ productId }: { productId?: string })
         },
       })));
 
-      const typeproduitValues = data.descriptiveAttributes['Type de produit'];
+      // « Autre (…) » redevient la puce « Autre » + sa précision (otherDetails).
+      const loadedOtherDetails: Record<string, string> = {};
+      const typeproduitSplit = splitOtherValues(data.descriptiveAttributes['Type de produit'] ?? []);
+      const typeproduitValues = typeproduitSplit.values;
+      if (typeproduitSplit.detail) loadedOtherDetails.typeproduit = typeproduitSplit.detail;
       const isMakeupCat = data.category === 'beaute' && data.subcategory === 'maquillage';
       const groups = computeOptionGroups(data.category, data.subcategory, typeproduitValues?.[0], isMakeupCat);
       const colorGroup = groups.find((g) => g.id === 'couleur');
@@ -581,8 +596,9 @@ export default function SellerProductForm({ productId }: { productId?: string })
           for (const v of data.variants) { const val = v.attributes[g.label]; if (val) values.add(val); }
           if (values.size > 0) newSelections[g.id] = [...values];
         } else {
-          const values = data.descriptiveAttributes[g.label];
-          if (values && values.length > 0) newSelections[g.id] = values;
+          const { values, detail } = splitOtherValues(data.descriptiveAttributes[g.label] ?? []);
+          if (values.length > 0) newSelections[g.id] = values;
+          if (detail) loadedOtherDetails[g.id] = detail;
         }
       }
       // Combined "Couleur / Imprimé" values go back to the chip group they
@@ -608,6 +624,7 @@ export default function SellerProductForm({ productId }: { productId?: string })
         if (printGroup && printValues.size > 0) newSelections.motif = [...printValues];
       }
       setSelections(newSelections);
+      setOtherDetails(loadedOtherDetails);
       setCrossColorPrint(legacyCrossColorPrint);
       if (customMl) setCustomVolumeMl(customMl);
 
@@ -740,7 +757,7 @@ export default function SellerProductForm({ productId }: { productId?: string })
   };
   const handleCropCancel = () => setPendingCropFiles((prev) => prev.slice(1));
 
-  const handleAddVideo = (files: FileList | null) => {
+  const handleAddVideo = async (files: FileList | null) => {
     const file = files?.[0];
     if (!file) return;
     setImageActionError('');
@@ -755,6 +772,13 @@ export default function SellerProductForm({ productId }: { productId?: string })
       setImageActionError(`La vidéo fait ${sizeMb} Mo : la taille maximale est de ${MAX_VIDEO_SIZE_MB} Mo. Raccourcissez-la (Photos > Modifier) ou filmez en 1080p plutôt qu'en 4K.`);
       return;
     }
+    // Lecture des en-têtes (quelques Ko, aucun envoi) : une vidéo HEVC est
+    // refusée avec la marche à suivre, une vidéo lourde ou en 4K est signalée.
+    // Si la lecture échoue, la vidéo est acceptée comme avant (jamais bloquée
+    // par une erreur de vérification).
+    const verdict = await inspectVideoFile(file).then((info) => judgeVideo(info, file.size)).catch(() => ({ error: undefined, warnings: [] as string[] }));
+    if (verdict.error) { setImageActionError(verdict.error); return; }
+    if (verdict.warnings.length > 0) setImageActionError(`Vidéo ajoutée. ${verdict.warnings.join(' ')}`);
     // Same bytes, but carrying its real type — that's what Supabase Storage
     // stores (and later serves) as the video's Content-Type.
     const typedFile = withContentType(file, contentType);
@@ -995,12 +1019,19 @@ export default function SellerProductForm({ productId }: { productId?: string })
     if (groupId === 'typeproduit') {
       setComboData({});
       if (isEncensMaison) setCustomVolumeMl('');
+      setOtherDetails((prev) => {
+        const next = { ...prev };
+        for (const id of ['typeencens', 'notesambiance', 'longueurongles', 'formeongles', 'styleongles', 'typedecils', 'effet', 'longueurdescils', 'matieredescils']) delete next[id];
+        return next;
+      });
     }
   };
 
   const toggleMultiChoice = (groupId: string, value: string) => {
     setSelections((prev) => {
       const current = prev[groupId] ?? [];
+      // Type de peau : « Tous types de peau » exclut les autres choix (et inversement).
+      if (groupId === 'peau') return { ...prev, peau: toggleSkinType(current, value) };
       return {
         ...prev,
         [groupId]: current.includes(value) ? current.filter((v) => v !== value) : [...current, value],
@@ -1027,6 +1058,7 @@ export default function SellerProductForm({ productId }: { productId?: string })
     setCategoryId(newCatId);
     setSubId('');
     setSelections({});
+    setOtherDetails({});
     setCustomColorInput('');
     setCustomColorError('');
     setComboData({});
@@ -1038,6 +1070,7 @@ export default function SellerProductForm({ productId }: { productId?: string })
   const handleSubCategoryChange = (newSubId: string) => {
     setSubId(newSubId);
     setSelections({});
+    setOtherDetails({});
     setCustomColorInput('');
     setCustomColorError('');
     setComboData({});
@@ -1133,7 +1166,8 @@ export default function SellerProductForm({ productId }: { productId?: string })
     const result: Record<string, string[]> = {};
     for (const g of optionGroups) {
       if (VARIANT_DIMENSION_IDS.has(g.id)) continue;
-      const values = effectiveValues(g.id);
+      // « Autre » reçoit sa précision éventuelle : « Autre (turban en wax) ».
+      const values = joinOtherValues(effectiveValues(g.id), otherDetails[g.id]);
       if (values.length > 0) result[g.label] = values;
     }
     if (showsNotes && notesInput.trim()) {
@@ -1608,6 +1642,20 @@ export default function SellerProductForm({ productId }: { productId?: string })
                   </span>
                 </div>
                 {renderChips(group, isSingle)}
+                {(selections[group.id] ?? []).includes(OTHER_OPTION) && (
+                  <div>
+                    <label htmlFor={`autre-${group.id}`} className="block text-xs font-medium text-ink/60 mb-1.5">Préciser (facultatif)</label>
+                    <input
+                      id={`autre-${group.id}`}
+                      type="text"
+                      className="input-field"
+                      maxLength={OTHER_DETAIL_MAX_LENGTH}
+                      placeholder={group.id === FASHION_ACCESSORY_GROUP_ID ? 'Ex. turban en wax' : 'Ex. ce qui décrit le mieux le produit'}
+                      value={otherDetails[group.id] ?? ''}
+                      onChange={(e) => setOtherDetails((prev) => ({ ...prev, [group.id]: e.target.value }))}
+                    />
+                  </div>
+                )}
               </div>
             );
           })}
@@ -1638,7 +1686,8 @@ export default function SellerProductForm({ productId }: { productId?: string })
         </div>
         <div>
           <label className="block text-xs font-medium text-ink/60 mb-1.5">Description</label>
-          <textarea className="input-field" rows={3} placeholder={descriptionExample} value={description} onChange={(e) => setDescription(e.target.value)} />
+          <textarea className="input-field" rows={5} placeholder={descriptionExample} value={description} onChange={(e) => setDescription(e.target.value)} />
+          <p className="mt-1 text-xs text-ink/45">Les retours à la ligne et les paragraphes sont conservés sur la fiche produit.</p>
           {errors.description && <p className="mt-1 text-xs text-burgundy">{errors.description}</p>}
         </div>
         {sellerShopIsOfficial && (
@@ -1785,7 +1834,7 @@ export default function SellerProductForm({ productId }: { productId?: string })
             <Video size={22} className="text-ink/30" />
             <span className="mt-2 text-sm font-medium text-ink/60">Ajouter une vidéo</span>
             <span className="mt-0.5 text-xs text-ink/35">MP4/MOV/WebM, {MAX_VIDEO_SIZE_MB} Mo max</span>
-            <input type="file" accept={VIDEO_INPUT_ACCEPT} disabled={videoCount >= MAX_PRODUCT_VIDEOS} className="hidden" onChange={(e) => { handleAddVideo(e.target.files); e.target.value = ''; }} />
+            <input type="file" accept={VIDEO_INPUT_ACCEPT} disabled={videoCount >= MAX_PRODUCT_VIDEOS} className="hidden" onChange={(e) => { void handleAddVideo(e.target.files); e.target.value = ''; }} />
           </label>
         </div>
 

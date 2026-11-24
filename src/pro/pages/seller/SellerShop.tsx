@@ -5,7 +5,7 @@ import VendorNoticeBanner, { type VendorNotice } from '../../components/VendorNo
 import GoogleLocationPickerMap from '@/components/GoogleLocationPickerMap';
 import {
   fetchShopLocation, updateShopLocation, fetchShopOnboarding, updateShopOnboarding,
-  submitShopForReview, activateShopIfReady, uploadShopAsset, removeShopAsset, setShopPaused, type ShopOnboardingData,
+  activateShopIfReady, uploadShopAsset, removeShopAsset, setShopPaused, type ShopOnboardingData,
 } from '@/lib/supabaseSellerShop';
 import ImageCropModal from '@/components/ImageCropModal';
 import LogoCropModal from '../../components/LogoCropModal';
@@ -15,7 +15,7 @@ import { useAddressSearch } from '@/lib/useAddressSearch';
 import { quartiers, navigateTo } from '@/store/AppContext';
 import { categories } from '@/data/categories';
 import { ownsCustomerProfileForDeletionWarning } from '@/lib/supabaseAccountDeletion';
-import { Check, Image as ImageIcon, Camera, MapPin, Loader2, AlertTriangle, AlertCircle, Navigation, Pencil, Search, Send, Trash2, PauseCircle, PlayCircle } from 'lucide-react';
+import { Check, Image as ImageIcon, Camera, MapPin, Loader2, AlertTriangle, AlertCircle, Navigation, Pencil, Search, Trash2, PauseCircle, PlayCircle } from 'lucide-react';
 import SmartImage from '@/components/SmartImage';
 
 type LocationStatus = 'idle' | 'requesting' | 'denied' | 'unsupported' | 'error';
@@ -72,18 +72,24 @@ export default function SellerShop() {
   const [saved, setSaved] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState('');
-  const [submitting, setSubmitting] = useState(false);
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const [uploadingCover, setUploadingCover] = useState(false);
 
   useEffect(() => {
     if (!sellerSupabaseShopId) { setFormLoaded(true); return; }
     let cancelled = false;
-    fetchShopOnboarding(sellerSupabaseShopId).then((data) => {
+    (async () => {
+      const data = await fetchShopOnboarding(sellerSupabaseShopId);
       if (cancelled) return;
       if (data) setForm(data);
       setFormLoaded(true);
-    });
+      // Boutique encore en brouillon (activation automatique pas encore
+      // passée) : on retente, elle s'active si l'e-mail est confirmé.
+      if (data?.status === 'draft') {
+        const activation = await activateShopIfReady();
+        if (!cancelled && activation.ready) setForm((f) => ({ ...f, status: 'active' }));
+      }
+    })();
     return () => { cancelled = true; };
   }, [sellerSupabaseShopId]);
 
@@ -190,11 +196,8 @@ export default function SellerShop() {
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
 
-    // No more manual admin review for a normal signup: the moment the
-    // required fields are genuinely complete, the shop activates itself —
-    // activate_shop_if_ready() re-checks them server-side and simply
-    // returns ready:false (silently, not an error) if something's still
-    // missing, so this is safe to call after every save.
+    // Filet de sécurité : une boutique encore en brouillon s'active dès que
+    // l'e-mail du propriétaire est confirmé (vérifié côté serveur).
     if (form.status === 'draft') {
       const activation = await activateShopIfReady();
       if (activation.ready) setForm((f) => ({ ...f, status: 'active' }));
@@ -213,15 +216,6 @@ export default function SellerShop() {
     setConfirmPause(false);
     if (result.error || !result.status) { setPauseError(result.error ?? 'Impossible de modifier le statut de la boutique. Réessayez.'); return; }
     setForm((f) => ({ ...f, status: result.status as 'active' | 'paused' }));
-  };
-
-  const handleSubmitForReview = async () => {
-    setSaveError('');
-    setSubmitting(true);
-    const result = await submitShopForReview();
-    setSubmitting(false);
-    if (result.error) { setSaveError(result.error); return; }
-    setForm((f) => ({ ...f, status: 'pending' }));
   };
 
   // File picker only stages the raw file — the crop modal (opened from
@@ -281,34 +275,23 @@ export default function SellerShop() {
 
       <ShopLinkCard shopId={sellerSupabaseShopId} />
 
-      {/* Onboarding status — a normal signup never goes through admin
-          review any more: saving the required fields (ci-dessous) active
-          la boutique automatiquement via activate_shop_if_ready() (see
-          handleSave). 'rejected' is now only reachable if Ezial flags an
-          existing shop for another reason afterward — submitShopForReview()
-          (draft/rejected → pending) stays for that one case. 'active' is
-          otherwise never reachable from the client (admin + safety trigger
-          enforce that server-side). */}
-      {/* No "Statut de la boutique" label any more (owner's request): only a
-          message when there is something to do or know, and the pause
-          control for a shop that is online or paused. */}
+      {/* Plus aucune validation par Ezial : la boutique passe en ligne toute
+          seule dès que l'e-mail est confirmé (déclencheurs en base). Un
+          message n'apparaît que s'il y a quelque chose à faire ou à savoir ;
+          la pause a son propre encadré plus bas. */}
       {formLoaded && form.status !== 'active' && form.status !== 'paused' && (
-        <div className="card p-4 space-y-3">
-          {form.status === 'draft' && <p className="text-xs text-ink/55">Complétez les informations obligatoires ci-dessous (description, téléphone, quartier ou adresse) : votre boutique s'active automatiquement dès qu'elles sont enregistrées, sans validation à attendre.</p>}
-          {form.status === 'pending' && <p className="text-xs text-ink/55">Votre demande est en cours d'examen par l'équipe Ezial. Vous pouvez continuer à préparer vos produits.</p>}
-          {form.status === 'rejected' && (
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <p className="text-xs text-burgundy">Ezial a signalé un problème sur votre boutique. Mettez à jour les informations puis soumettez à nouveau.</p>
-              <button onClick={() => void handleSubmitForReview()} disabled={submitting} className="btn-primary flex-shrink-0">
-                {submitting ? <><Loader2 size={15} className="animate-spin" /> Envoi...</> : <><Send size={15} /> Soumettre pour validation</>}
-              </button>
-            </div>
+        <div className="card p-4">
+          {form.status === 'draft' && (
+            <p className="text-xs text-ink/55">Votre boutique sera en ligne dès que votre adresse e-mail sera confirmée : ouvrez le lien reçu par e-mail à l'inscription.</p>
           )}
           {form.status === 'suspended' && (
             <p className="text-xs text-burgundy">
               Votre boutique est actuellement désactivée par Ezial.
               {form.suspensionReason ? ` Motif : ${form.suspensionReason}` : ' Contactez l\'équipe Ezial pour plus d\'informations.'}
             </p>
+          )}
+          {(form.status === 'pending' || form.status === 'rejected') && (
+            <p className="text-xs text-burgundy">Votre boutique n'est pas visible sur Ezial pour le moment. Contactez l'équipe Ezial pour la remettre en ligne.</p>
           )}
         </div>
       )}

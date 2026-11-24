@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import UrgentBadge from '@/components/UrgentBadge';
 import { usePro } from '../../ProContext';
 import { supabase } from '@/lib/supabaseClient';
 import NotificationOptIn from '@/components/NotificationOptIn';
@@ -78,7 +79,7 @@ export default function DriverHome() {
                         className="w-full text-left"
                       >
                         <div className="flex items-center justify-between mb-3">
-                          <span className="font-mono text-sm font-semibold text-burgundy">{mission.orderId}</span>
+                          <span className="flex items-center gap-2 font-mono text-sm font-semibold text-burgundy">{mission.orderId}{mission.urgent && <UrgentBadge />}</span>
                           <span className="text-xs font-medium text-burgundy flex items-center gap-1">
                             {mission.step === 'to_collection' && <><Truck size={13} /> En collecte</>}
                             {mission.step === 'all_collected' && <><CheckCircle2 size={13} /> Colis récupérés</>}
@@ -144,7 +145,7 @@ export default function DriverHome() {
                 {availableMissions.map((mission) => (
                   <div key={mission.id} className="card p-4">
                     <div className="flex items-center justify-between mb-2">
-                      <span className="font-mono text-sm font-semibold text-ink">{mission.orderId}</span>
+                      <span className="flex items-center gap-2 font-mono text-sm font-semibold text-ink">{mission.orderId}{mission.urgent && <UrgentBadge />}</span>
                       <span className="text-xs text-ink/45">{mission.collections.length} points de collecte</span>
                     </div>
                     <div className="space-y-1 mb-3">

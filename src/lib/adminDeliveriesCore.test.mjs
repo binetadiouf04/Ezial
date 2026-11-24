@@ -53,6 +53,8 @@ test('assemblage : plus récent d’abord, arrêts dans l’ordre, aucune donné
   const m3 = list.find((d) => d.id === 'm3');
   assert.equal(m3.customerName, '');
   assert.equal(m3.slot, '12h–15h');
+  assert.equal(m3.slotDate, '');
+  assert.equal(m3.urgent, false);
   assert.equal(m3.stops[0].collected, false);
 });
 
@@ -62,4 +64,11 @@ test('compteurs et filtres', () => {
   assert.equal(filterDeliveries(list, 'delivered').length, 1);
   assert.equal(filterDeliveries(list, 'all').length, 3);
   assert.equal(filterDeliveries(list, 'collecting').length, 0);
+});
+
+test('livraison urgente : badge seulement pour les commandes signalées, jour souhaité repris', () => {
+  const withDate = orders.map((o) => (o.id === 'o3' ? { ...o, preferred_delivery_date: '2026-11-28' } : o));
+  const list = buildAdminDeliveries(missions, stops, withDate, shops, drivers, new Set(['o3']));
+  assert.deepEqual(list.map((d) => [d.id, d.urgent]), [['m3', true], ['m2', false], ['m1', false]]);
+  assert.equal(list.find((d) => d.id === 'm3').slotDate, '2026-11-28');
 });

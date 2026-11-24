@@ -1,5 +1,6 @@
 import { supabase } from './supabaseClient';
 import { resolveSecurePhotoUrl } from './secureStorage';
+import { fetchUrgentOrderIds } from './supabaseUrgentDelivery';
 import {
   buildAdminDeliveries,
   type AdminDelivery, type MissionRow, type StopRow, type OrderRow, type ShopRow, type DriverRow,
@@ -25,12 +26,13 @@ export async function fetchAdminDeliveries(): Promise<{ deliveries: AdminDeliver
   const orderIds = [...new Set(missions.map((m) => m.order_id))];
   const driverIds = [...new Set(missions.map((m) => m.driver_id).filter((id): id is string => Boolean(id)))];
 
-  const [stopsRes, ordersRes, driversRes] = await Promise.all([
+  const [stopsRes, ordersRes, driversRes, urgentIds] = await Promise.all([
     supabase.from('delivery_stops').select('id, mission_id, shop_id, stop_order, status, picked_up_at').in('mission_id', missionIds),
-    supabase.from('orders').select('id, order_number, first_name, last_name, phone, neighborhood, delivery_address, preferred_delivery_slot').in('id', orderIds),
+    supabase.from('orders').select('id, order_number, first_name, last_name, phone, neighborhood, delivery_address, preferred_delivery_slot, preferred_delivery_date').in('id', orderIds),
     driverIds.length > 0
       ? supabase.from('profiles').select('id, first_name, last_name, username').in('id', driverIds)
       : Promise.resolve({ data: [] as DriverRow[], error: null }),
+    fetchUrgentOrderIds(orderIds),
   ]);
   if (stopsRes.error || ordersRes.error || driversRes.error) return { error: 'Impossible de charger le détail des livraisons. Réessayez.' };
 
@@ -43,6 +45,7 @@ export async function fetchAdminDeliveries(): Promise<{ deliveries: AdminDeliver
   return {
     deliveries: buildAdminDeliveries(
       missions, stops, (ordersRes.data ?? []) as OrderRow[], (shopsRes.data ?? []) as ShopRow[], (driversRes.data ?? []) as DriverRow[],
+      urgentIds,
     ),
   };
 }

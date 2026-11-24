@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import UrgentBadge from '@/components/UrgentBadge';
 import { usePro } from '../../ProContext';
 import { formatDate } from '../../data';
 import { Truck, MapPin, Store, CheckCircle2, Navigation, Clock } from 'lucide-react';
@@ -22,7 +23,7 @@ export default function DriverMissions() {
       className={`card w-full p-4 text-left transition-all hover:card-shadow ${isActive ? 'border-burgundy/30 bg-burgundy/5' : ''}`}
     >
       <div className="flex items-center justify-between mb-2">
-        <span className="font-mono text-sm font-semibold text-ink">{mission.orderId}</span>
+        <span className="flex items-center gap-2 font-mono text-sm font-semibold text-ink">{mission.orderId}{mission.urgent && <UrgentBadge />}</span>
         {isActive && (
           <span className="text-xs font-medium text-burgundy flex items-center gap-1">
             {mission.step === 'to_collection' && <><Truck size={13} /> En collecte</>}

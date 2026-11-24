@@ -1,4 +1,5 @@
 import type { Order } from '@/store/AppContext';
+import { formatDeliveryWish } from './deliveryDay.ts';
 
 // Facture simple d'une commande : construite à partir de la commande déjà
 // affichée au client (montants fixés par le serveur à la création de la
@@ -43,6 +44,10 @@ export interface Invoice {
   subtotal: number;
   discount: number;
   delivery: number;
+  /** Supplément « Livraison urgente » (déjà compris dans total) ; 0 sinon. */
+  urgentFee: number;
+  /** Jour et créneau de la livraison urgente, en clair (vide si la commande n'est pas urgente). */
+  urgentWhen: string;
   total: number;
   paymentLabel: string;
 }
@@ -103,6 +108,8 @@ export function buildInvoice(order: Order, helpers: InvoiceHelpers, company: Inv
   const reach = [company.address, company.email, company.phone].filter(Boolean);
   const issuerFooter = [legal.join(' · '), reach.join(' · ')].filter(Boolean);
 
+  const urgentFee = order.urgentFee && order.urgentFee > 0 ? order.urgentFee : 0;
+
   const buyerName = `${order.customer.firstName} ${order.customer.lastName}`.trim();
   const buyerDetails: string[] = [];
   if (order.customer.phone) buyerDetails.push(`Tél. : ${order.customer.phone}`);
@@ -120,6 +127,8 @@ export function buildInvoice(order: Order, helpers: InvoiceHelpers, company: Inv
     subtotal: order.subtotal,
     discount: order.discount,
     delivery: order.delivery,
+    urgentFee,
+    urgentWhen: urgentFee > 0 && order.preference?.type === 'preferred' ? formatDeliveryWish(order.preference.date, order.preference.window) : '',
     total: order.total,
     paymentLabel: helpers.paymentLabel(order.payment),
   };

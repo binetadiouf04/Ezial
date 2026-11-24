@@ -6,6 +6,9 @@ import {
   type AdminDelivery, type DeliveryFilter, type DeliveryPhase,
 } from '@/lib/adminDeliveriesCore';
 import { formatDateTime } from '../../data';
+import UrgentBadge from '@/components/UrgentBadge';
+import { formatDeliveryWish } from '@/lib/deliveryDay';
+import UrgentDeliverySettingsCard from '../../components/UrgentDeliverySettingsCard';
 import { ChevronRight, Loader2, AlertCircle, Camera, RefreshCw } from 'lucide-react';
 
 const PHASE_STYLE: Record<DeliveryPhase, string> = {
@@ -45,6 +48,8 @@ export default function AdminDeliveries() {
         </button>
       </div>
 
+      <UrgentDeliverySettingsCard />
+
       <div className="-mx-4 flex gap-1.5 overflow-x-auto px-4 pb-1 sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0" role="group" aria-label="Filtrer les livraisons">
         {DELIVERY_FILTERS.map((f) => (
           <button
@@ -75,13 +80,16 @@ export default function AdminDeliveries() {
           {filtered.map((d) => (
             <button key={d.id} onClick={() => navigate(`/admin/livraisons/${d.id}`)} className="card w-full p-4 text-left transition-all hover:card-shadow">
               <div className="mb-2 flex items-center justify-between gap-2">
-                <p className="font-mono text-sm font-semibold text-ink">{d.orderNumber || 'Commande'}</p>
+                <p className="flex min-w-0 items-center gap-2 font-mono text-sm font-semibold text-ink">{d.orderNumber || 'Commande'}{d.urgent && <UrgentBadge />}</p>
                 <span className={`rounded-full border px-2.5 py-1 text-xs font-medium ${PHASE_STYLE[d.phase]}`}>{PHASE_LABEL[d.phase]}</span>
               </div>
               <div className="flex items-center gap-2 text-sm text-ink/65">
                 <span className="text-xs text-ink/45">Livreur :</span>
                 <span className="font-medium text-ink/80">{d.driverName || 'Non assigné'}</span>
               </div>
+              {d.urgent && (d.slot || d.slotDate) && (
+                <p className="mt-1 text-xs font-medium text-burgundy-ruby">Livraison urgente : {formatDeliveryWish(d.slotDate, d.slot)}</p>
+              )}
               <div className="mt-2 flex items-center justify-between gap-3 text-xs text-ink/45">
                 <span className="min-w-0 truncate">
                   {d.stops.length} collecte{d.stops.length > 1 ? 's' : ''}{d.neighborhood ? ` · → ${d.neighborhood}` : ''} · {formatDateTime(d.createdAt)}

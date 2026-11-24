@@ -3,6 +3,7 @@ import { X, ChevronRight, ChevronLeft, User, Home, LayoutGrid, Store, Percent, L
 import { categories, type CategoryId } from '@/data/categories';
 import { useApp } from '@/store/AppContext';
 import { useSellerEntry } from '@/lib/sellerIntent';
+import RefreshMenuButton from '@/components/RefreshMenuButton';
 
 type View = 'main' | 'categories';
 
@@ -72,6 +73,8 @@ export default function MobileCategoryDrawer() {
                 <button onClick={() => navigate('/profil')} className="flex w-full items-center gap-3 px-4 py-4 text-left hover:bg-cream">
                   <User size={19} strokeWidth={1.5} className="text-ink/60" /><span className="text-[15px] font-medium text-ink">Mon compte</span>
                 </button>
+                {/* Application installée seulement (sinon rien ne s'affiche). */}
+                <RefreshMenuButton className="flex w-full items-center gap-3 px-4 py-4 text-left text-[15px] font-medium text-ink hover:bg-cream" />
               </nav>
             </>
           )}

@@ -13,6 +13,10 @@ const suspensionReasons = ['Produits suspects ou contrefaits', 'Informations tro
 // du site public). StatusChip garde « En pause » pour les campagnes ; ici
 // on précise qui a mis la boutique en pause.
 const PAUSED_BY_SELLER_LABEL = 'En pause (par le vendeur)';
+// Plus de validation par Ezial : une boutique en brouillon est une boutique
+// dont le propriétaire n'a pas encore confirmé son e-mail (activation
+// automatique à la confirmation, voir docs/sql/lancement-boutiques.sql).
+const DRAFT_LABEL = 'E-mail non confirmé';
 
 type PlanFilter = 'all' | 'trial' | 'plus' | 'gift' | 'free';
 const PLAN_FILTERS: { id: PlanFilter; label: string }[] = [
@@ -150,7 +154,7 @@ export default function AdminShops() {
                       {shop.status === 'suspended' && shop.suspensionReason && <p className="text-xs text-burgundy mt-1">Motif : {shop.suspensionReason}</p>}
                     </div>
                   </button>
-                  <StatusChip status={shop.status} size="md" label={shop.status === 'paused' ? PAUSED_BY_SELLER_LABEL : undefined} />
+                  <StatusChip status={shop.status} size="md" label={shop.status === 'paused' ? PAUSED_BY_SELLER_LABEL : shop.status === 'draft' ? DRAFT_LABEL : undefined} />
                   {shop.status === 'active' && (
                     <button onClick={() => setSuspendTarget(shop.id)} disabled={acting === shop.id} title="Désactiver la boutique" className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full text-ink/40 hover:bg-burgundy/5 hover:text-burgundy"><Ban size={16} /></button>
                   )}

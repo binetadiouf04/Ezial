@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import UrgentBadge from '@/components/UrgentBadge';
 import { usePro } from '../../ProContext';
 import { fetchAdminOrders, type AdminOrderSummary } from '@/lib/supabaseAdminData';
 import { formatFCFA } from '../../data';
@@ -92,6 +93,7 @@ export default function AdminOrders() {
                   <div className="flex flex-wrap items-center gap-2">
                     <p className="font-mono text-sm font-semibold text-ink">{order.orderNumber}</p>
                     {order.fulfillmentType === 'pickup' && <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-ink/5 text-ink/50">Retrait</span>}
+                    {order.isUrgent && <UrgentBadge />}
                   </div>
                   <p className="text-xs text-ink/45 mt-0.5">{order.customerName} · {formatDate(order.createdAt)}</p>
                 </div>

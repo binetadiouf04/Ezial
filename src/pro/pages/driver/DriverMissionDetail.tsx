@@ -1,4 +1,6 @@
 import { useState } from 'react';
+import UrgentBadge from '@/components/UrgentBadge';
+import { formatDeliveryWish } from '@/lib/deliveryDay';
 import { usePro, type Incident } from '../../ProContext';
 import { StatusChip } from '../../components/StatusChip';
 import DeliveryLabel from '../../components/DeliveryLabel';
@@ -202,7 +204,7 @@ export default function DriverMissionDetail({ missionId }: { missionId: string }
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="font-display text-xl font-semibold text-ink">{mission.orderId}</h1>
+          <h1 className="flex flex-wrap items-center gap-2 font-display text-xl font-semibold text-ink">{mission.orderId}{mission.urgent && <UrgentBadge />}</h1>
           <p className="text-xs text-ink/45 mt-0.5">{mission.collections.length} collectes · 1 livraison</p>
         </div>
         {isDelivered && <StatusChip status="delivered" size="md" />}
@@ -352,10 +354,10 @@ export default function DriverMissionDetail({ missionId }: { missionId: string }
               <p className="text-ink flex items-center gap-1.5"><MapPin size={14} className="text-ink/40" /> {mission.destinationAddress}</p>
               {currentLegDistanceKm != null && <p className="mt-1 text-xs font-medium text-ink/50">Distance estimée : {formatDistanceKm(currentLegDistanceKm)}</p>}
             </div>
-            {mission.slot && (
+            {(mission.slot || mission.slotDate) && (
               <div>
-                <p className="text-xs text-ink/45 mb-0.5">Créneau</p>
-                <p className="text-ink">{mission.slot}</p>
+                <p className={`text-xs mb-0.5 ${mission.urgent ? 'font-semibold text-burgundy-ruby' : 'text-ink/45'}`}>{mission.urgent ? 'Livraison urgente — créneau à respecter' : 'Créneau'}</p>
+                <p className="text-ink">{formatDeliveryWish(mission.slotDate, mission.slot)}</p>
               </div>
             )}
           </div>

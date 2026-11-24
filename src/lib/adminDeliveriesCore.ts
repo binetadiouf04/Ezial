@@ -60,6 +60,10 @@ export interface AdminDelivery {
   customerName: string;
   customerPhone: string;
   slot: string;
+  /** Jour souhaité (AAAA-MM-JJ), vide s'il n'y en a pas. */
+  slotDate: string;
+  /** Livraison urgente (orders.is_urgent). */
+  urgent: boolean;
   proofPath: string | null;
 }
 
@@ -73,6 +77,7 @@ export interface StopRow {
 export interface OrderRow {
   id: string; order_number: string | null; first_name: string | null; last_name: string | null; phone: string | null;
   neighborhood: string | null; delivery_address: string | null; preferred_delivery_slot: string | null;
+  preferred_delivery_date?: string | null;
 }
 export interface ShopRow { id: string; name: string | null; address_text: string | null; neighborhood: string | null }
 export interface DriverRow { id: string; first_name: string | null; last_name: string | null; username: string | null }
@@ -84,6 +89,7 @@ function joinName(first: string | null | undefined, last: string | null | undefi
 /** Assemble les lignes lues dans Supabase. Aucune valeur n'est inventée : un champ absent reste vide. */
 export function buildAdminDeliveries(
   missions: MissionRow[], stops: StopRow[], orders: OrderRow[], shops: ShopRow[], drivers: DriverRow[],
+  urgentOrderIds: ReadonlySet<string> = new Set(),
 ): AdminDelivery[] {
   const orderById = new Map(orders.map((o) => [o.id, o]));
   const shopById = new Map(shops.map((s) => [s.id, s]));
@@ -125,6 +131,8 @@ export function buildAdminDeliveries(
         customerName: joinName(order?.first_name, order?.last_name),
         customerPhone: order?.phone ?? '',
         slot: order?.preferred_delivery_slot ?? '',
+        slotDate: order?.preferred_delivery_date ?? '',
+        urgent: urgentOrderIds.has(m.order_id),
         proofPath: m.proof_photo_path,
       };
     });

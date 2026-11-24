@@ -1,4 +1,5 @@
 import { supabase } from './supabaseClient';
+import { isUrgentRow, urgentFeeOfRow } from './urgentDelivery';
 import { normalizeStoredWaist } from '@/lib/waistMeasure';
 import { isDeletedShop, DELETED_SHOP_NAME } from './deletedShop';
 import { resolveImageUrl } from './supabaseCatalog';
@@ -54,6 +55,8 @@ export interface AdminOrderSummary {
   // cours" filter, folding delivery tracking into Commandes instead of a
   // separate main section.
   hasActiveDelivery: boolean;
+  /** Livraison urgente (orders.is_urgent ; faux tant que la migration n'est pas exécutée). */
+  isUrgent: boolean;
 }
 
 function mapOrderSummary(row: OrderRow, activeDeliveryOrderIds: Set<string>): AdminOrderSummary {
@@ -66,6 +69,7 @@ function mapOrderSummary(row: OrderRow, activeDeliveryOrderIds: Set<string>): Ad
     fulfillmentType: (row.fulfillment_type as string) ?? 'delivery',
     status: (row.status as string) ?? 'confirmed',
     hasActiveDelivery: activeDeliveryOrderIds.has(row.id),
+    isUrgent: isUrgentRow(row),
   };
 }
 
@@ -164,6 +168,8 @@ export interface AdminOrderDetail {
   giftMessage: string | null;
   giftWrap: boolean;
   giftWrapFee: number;
+  /** Livraison urgente : supplément (déjà compris dans totalAmount), 0 sinon. Jour et créneau : preferredDelivery*. */
+  urgentFee: number;
 }
 
 export async function fetchAdminOrderDetail(orderId: string): Promise<AdminOrderDetail | null> {
@@ -235,6 +241,7 @@ export async function fetchAdminOrderDetail(orderId: string): Promise<AdminOrder
     giftMessage: firstString(order.gift_message),
     giftWrap: Boolean(order.gift_wrap),
     giftWrapFee: (order.gift_wrap_fee as number) ?? 0,
+    urgentFee: urgentFeeOfRow(order),
   };
 }
 
@@ -272,8 +279,8 @@ export interface AdminShopSubscription {
   daysLeft: number | null;
 }
 
-// Newest first — surfaces new onboarding requests (status 'pending') at the
-// top by default, matching how the admin Boutiques page uses this list.
+// Newest first — les nouvelles boutiques (activées automatiquement à la
+// confirmation de l'e-mail, sans file d'approbation) apparaissent en haut.
 // Excludes 'deleted' shops — account deletion anonymizes a shop to this
 // status instead of removing the row (order/finance history depends on it
 // surviving), but it has no place in the normal admin management list.

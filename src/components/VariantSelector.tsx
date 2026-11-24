@@ -2,7 +2,10 @@ import { COLOR_PRINT_VARIANT_KEY, type VariantOption } from '@/data/products';
 import { getColor } from '@/data/colors';
 import { commonPrints } from '@/data/filters';
 
-function ColorSwatch({ colorName, selected, onClick }: { colorName: string; selected: boolean; onClick: () => void }) {
+// Option épuisée : barrée (texte) ou traversée d'un trait (pastille), sans
+// transparence ni gris ; elle reste cliquable pour que le client voie
+// « Épuisé » à la place du bouton d'achat.
+function ColorSwatch({ colorName, selected, soldOut = false, onClick }: { colorName: string; selected: boolean; soldOut?: boolean; onClick: () => void }) {
   const def = getColor(colorName);
   const hex = def?.hex ?? '#ccc';
   const isLight = def?.light ?? false;
@@ -16,8 +19,8 @@ function ColorSwatch({ colorName, selected, onClick }: { colorName: string; sele
     <button
       type="button"
       onClick={onClick}
-      aria-label={colorName}
-      title={colorName}
+      aria-label={soldOut ? `${colorName} (épuisé)` : colorName}
+      title={soldOut ? `${colorName} — épuisé` : colorName}
       aria-pressed={selected}
       className={`relative flex h-9 w-9 items-center justify-center rounded-full transition-all ${
         selected
@@ -29,21 +32,24 @@ function ColorSwatch({ colorName, selected, onClick }: { colorName: string; sele
         className={`h-7 w-7 rounded-full ${isLight ? 'ring-1 ring-ink/15' : ''}`}
         style={{ background }}
       />
+      {soldOut && <span aria-hidden="true" className="pointer-events-none absolute left-1/2 top-1/2 h-[2px] w-9 -translate-x-1/2 -translate-y-1/2 -rotate-45 rounded-full bg-ink ring-1 ring-white" />}
     </button>
   );
 }
 
-function OptionChip({ label, selected, onClick }: { label: string; selected: boolean; onClick: () => void }) {
+function OptionChip({ label, selected, soldOut = false, onClick }: { label: string; selected: boolean; soldOut?: boolean; onClick: () => void }) {
   return (
     <button
       type="button"
       onClick={onClick}
       aria-pressed={selected}
+      aria-label={soldOut ? `${label} (épuisé)` : undefined}
+      title={soldOut ? `${label} — épuisé` : undefined}
       className={`min-h-[40px] min-w-[44px] rounded-lg border px-3.5 py-2 text-[13px] font-medium transition-colors ${
         selected
           ? 'border-burgundy bg-burgundy text-white'
           : 'border-ink/20 bg-white text-ink/75 hover:border-ink/50'
-      }`}
+      }${soldOut ? ' line-through' : ''}`}
     >
       {label}
     </button>
@@ -58,7 +64,8 @@ function isPrintValue(value: string): boolean {
   return commonPrints.includes(value) && !getColor(value);
 }
 
-export default function VariantSelector({ variants, selected, onChange }: { variants: VariantOption[]; selected: Record<string, string>; onChange: (name: string, value: string) => void }) {
+export default function VariantSelector({ variants, selected, onChange, isValueSoldOut }: { variants: VariantOption[]; selected: Record<string, string>; onChange: (name: string, value: string) => void; isValueSoldOut?: (name: string, value: string) => boolean }) {
+  const soldOut = (name: string, value: string) => isValueSoldOut?.(name, value) ?? false;
   return (
     <div className="space-y-4">
       {variants.map((v) => {
@@ -85,6 +92,7 @@ export default function VariantSelector({ variants, selected, onChange }: { vari
                     key={val}
                     colorName={val}
                     selected={selected[v.name] === val}
+                    soldOut={soldOut(v.name, val)}
                     onClick={() => onChange(v.name, val)}
                   />
                 ))}
@@ -93,6 +101,7 @@ export default function VariantSelector({ variants, selected, onChange }: { vari
                     key={val}
                     label={val}
                     selected={selected[v.name] === val}
+                    soldOut={soldOut(v.name, val)}
                     onClick={() => onChange(v.name, val)}
                   />
                 ))}
@@ -113,6 +122,7 @@ export default function VariantSelector({ variants, selected, onChange }: { vari
                   key={val}
                   label={val}
                   selected={selected[v.name] === val}
+                  soldOut={soldOut(v.name, val)}
                   onClick={() => onChange(v.name, val)}
                 />
               ))}

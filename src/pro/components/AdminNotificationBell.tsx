@@ -14,7 +14,8 @@ function formatDateTime(iso: string): string {
 }
 
 // Purely informational broadcast feed (new claims/litiges via notify_admins(),
-// and new-shop-signup events where that DB trigger exists) — never blocks or
+// and « Nouvelle boutique inscrite », type 'shop_registered', écrite par
+// l'activation automatique d'une boutique) — never blocks or
 // reverses anything it reports on. `onNavigate` receives the notification's
 // stored `url` and decides how to get there (the caller's own router).
 export default function AdminNotificationBell({ onNavigate }: { onNavigate: (url: string) => void }) {
@@ -91,6 +92,7 @@ export default function AdminNotificationBell({ onNavigate }: { onNavigate: (url
             <div className="divide-y divide-line">
               {notifications.map((n) => (
                 <button key={n.id} onClick={() => void handleClickNotification(n)} className={`block w-full p-3 text-left transition-colors hover:bg-cream ${n.isRead ? '' : 'bg-burgundy/5'}`}>
+                  {n.type === 'shop_registered' && <p className="text-xs font-semibold text-burgundy">Nouvelle boutique inscrite</p>}
                   <p className={`text-sm ${n.isRead ? 'text-ink/60' : 'font-medium text-ink'}`}>{n.message}</p>
                   <p className="mt-0.5 text-xs text-ink/40">{formatDateTime(n.createdAt)}</p>
                 </button>

@@ -67,3 +67,14 @@ test('nom de fichier sûr', () => {
   assert.equal(invoiceFileName('EZI-261119-000044'), 'Facture-EZI-261119-000044.pdf');
   assert.equal(invoiceFileName('a/b c'), 'Facture-a-b-c.pdf');
 });
+
+test('livraison urgente : supplément et créneau sur la facture, total inchangé (déjà compris)', () => {
+  const urgent = { ...order, urgentFee: 500, total: 27000, preference: { type: 'preferred', date: '2026-11-28', window: '18h–20h' } };
+  const inv = buildInvoice(urgent, helpers, company);
+  assert.equal(inv.urgentFee, 500);
+  assert.equal(inv.urgentWhen, 'samedi 28 novembre · 18h–20h');
+  assert.equal(inv.subtotal - inv.discount + inv.delivery + inv.urgentFee, inv.total);
+  const normal = buildInvoice(order, helpers, company);
+  assert.equal(normal.urgentFee, 0);
+  assert.equal(normal.urgentWhen, '');
+});

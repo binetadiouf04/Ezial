@@ -28,6 +28,63 @@ export function categoryDescription(categoryLabel, subLabel) {
     : `${categoryLabel} à ${DELIVERY.area} sur Ezial, marketplace 100 % en ligne : découvrez les produits de plusieurs boutiques. ${DELIVERY_SENTENCE}`);
 }
 
+// Catégories dont le libellé de menu ne suffit pas comme titre de page :
+// « Autres » seul ne dit rien à un moteur de recherche ni à un lecteur.
+// Le menu garde le libellé court ; le titre, le H1 et la description
+// utilisent ces textes (site et HTML statique).
+export const CATEGORY_HEADINGS = {
+  autres: 'Autres articles',
+};
+
+const CATEGORY_DESCRIPTIONS = {
+  autres: `Autres articles à acheter en ligne à ${DELIVERY.area} sur Ezial : produits hors catégories des boutiques du Sénégal. ${DELIVERY_SENTENCE}`,
+};
+
+/** Titre de page (H1) d'une catégorie : son libellé, sauf exception ci-dessus. */
+export function categoryHeading(categoryId, categoryLabel) {
+  return CATEGORY_HEADINGS[categoryId] ?? categoryLabel;
+}
+
+/**
+ * Titre (<title>) d'une page catégorie ou sous-catégorie, 60 caractères au
+ * plus : « Sous-catégorie — Catégorie au Sénégal | Ezial », ou sans le nom
+ * de la catégorie quand l'ensemble dépasserait 60 caractères.
+ */
+export function categoryPageTitle(heading, subLabel, siteTitle = 'Ezial') {
+  if (!subLabel) return `${heading} au Sénégal | ${siteTitle}`;
+  const full = `${subLabel} — ${heading} au Sénégal | ${siteTitle}`;
+  return full.length <= 60 ? full : `${subLabel} au Sénégal | ${siteTitle}`;
+}
+
+/** Description d'une catégorie (sans sous-catégorie) ou d'une sous-catégorie, selon son identifiant. */
+export function categoryDescriptionFor(categoryId, categoryLabel, subLabel) {
+  if (!subLabel && CATEGORY_DESCRIPTIONS[categoryId]) return clipDescription(CATEGORY_DESCRIPTIONS[categoryId]);
+  return categoryDescription(categoryHeading(categoryId, categoryLabel), subLabel);
+}
+
+/**
+ * Meta description d'un produit ou d'une boutique à partir de son texte :
+ * toujours sur une seule ligne (les retours à la ligne de la description
+ * deviennent des espaces) et coupée à 160 caractères au dernier mot entier.
+ */
+export function oneLineDescription(text, fallback) {
+  const value = String(text ?? '').replace(/\s+/g, ' ').trim();
+  return value ? clipDescription(value) : fallback;
+}
+
+/**
+ * Découpe un texte saisi (description produit) en paragraphes : une ligne
+ * vide sépare deux paragraphes ; un simple retour à la ligne est gardé dans
+ * le paragraphe (affiché avec whitespace-pre-line ou <br>). Aucun HTML.
+ */
+export function textParagraphs(text) {
+  return String(text ?? '')
+    .replace(/\r\n?/g, '\n')
+    .split(/\n[ \t]*\n+/)
+    .map((p) => p.replace(/^\s+|\s+$/g, '').replace(/[ \t]+\n/g, '\n'))
+    .filter((p) => p.trim() !== '');
+}
+
 export function productFallbackDescription(name) {
   return clipDescription(`${name} sur Ezial, marketplace 100 % en ligne à ${DELIVERY.area}. ${DELIVERY_SENTENCE}`);
 }

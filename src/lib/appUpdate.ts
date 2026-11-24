@@ -70,6 +70,8 @@ export function dismissUpdate(build: string): void {
 
 /** Rechargement demandé par l'utilisateur (bouton « Mettre à jour »). */
 export function applyUpdate(): void {
+  // Un worker en attente (rare : le nôtre s'active seul) prend la main avant le rechargement.
+  registration?.waiting?.postMessage({ type: 'SKIP_WAITING' });
   window.location.reload();
 }
 

@@ -52,6 +52,17 @@ export function resolveImageUrl(storagePath: string): string {
   return supabase.storage.from(PRODUCT_IMAGES_BUCKET).getPublicUrl(storagePath).data.publicUrl;
 }
 
+// Colonnes lues pour l'affichage public — jamais select('*') : une liste
+// explicite n'envoie que ce que mapShop/mapProduct utilisent (mesuré le
+// 24 nov. 2026 sur les 71 produits actifs : ~184 Ko de JSON avec '*', ~146 Ko
+// avec ces colonnes) et ne transporte plus vers le navigateur des champs
+// internes des boutiques (pin_hash, seller_code, owner_id, téléphone...).
+// Chaque nom ci-dessous existe en production (information_schema vérifié).
+export const PUBLIC_SHOP_COLUMNS = 'id, name, slug, description, neighborhood, address_text, logo_url, cover_url, status, is_official, pickup_enabled, latitude, longitude, created_at';
+export const PUBLIC_PRODUCT_COLUMNS = 'id, slug, shop_id, reference, name, description, category, subcategory, base_price, status, is_promo, promo_price, promo_start, promo_end, descriptive_attributes, created_at, fabric_type, sale_mode, availability_status';
+export const PUBLIC_PRODUCT_IMAGE_COLUMNS = 'id, product_id, storage_path, is_primary, sort_order, media_type, thumbnail_storage_path';
+export const PUBLIC_PRODUCT_VARIANT_COLUMNS = 'id, product_id, attributes, price, stock';
+
 interface ShopRow {
   id: string;
   owner_id?: string | null;
@@ -342,9 +353,9 @@ export async function fetchActiveCatalogFromSupabase(): Promise<SupabaseCatalogR
   // 1 000 lignes par réponse, le catalogue serait tronqué en silence au-delà.
   // Tri stable (date puis identifiant) pour que les pages ne se chevauchent pas.
   const [shopsRes, productsRes, premiumRes] = await Promise.all([
-    fetchAllRows<ShopRow>((from, to) => supabase.from('shops').select('*').eq('status', 'active').order('created_at').order('id').range(from, to)),
+    fetchAllRows<ShopRow>((from, to) => supabase.from('shops').select(PUBLIC_SHOP_COLUMNS).eq('status', 'active').order('created_at').order('id').range(from, to)),
     fetchAllRows<ProductRow & { product_images?: ProductImageRow[]; product_variants?: ProductVariantRow[] }>((from, to) =>
-      supabase.from('products').select('*, product_images(*), product_variants(*)').eq('status', 'active').order('created_at').order('id').range(from, to)),
+      supabase.from('products').select(`${PUBLIC_PRODUCT_COLUMNS}, product_images(${PUBLIC_PRODUCT_IMAGE_COLUMNS}), product_variants(${PUBLIC_PRODUCT_VARIANT_COLUMNS})`).eq('status', 'active').order('created_at').order('id').range(from, to)),
     // Non-fatal on its own: a seller_subscriptions row or a stale deploy
     // of this RPC never blocks the rest of the catalog — every shop just
     // falls back to isPremium = false until it resolves.
@@ -355,7 +366,7 @@ export async function fetchActiveCatalogFromSupabase(): Promise<SupabaseCatalogR
   const groupedRead = !productsRes.error;
   if (!groupedRead) {
     // Repli : lecture simple des produits (par pages), puis photos et variantes à part.
-    const plain = await fetchAllRows<ProductRow>((from, to) => supabase.from('products').select('*').eq('status', 'active').order('created_at').order('id').range(from, to));
+    const plain = await fetchAllRows<ProductRow>((from, to) => supabase.from('products').select(PUBLIC_PRODUCT_COLUMNS).eq('status', 'active').order('created_at').order('id').range(from, to));
     if (plain.error) errors.push(`products: ${plain.error.message}`);
     productsData = plain.data;
   }
@@ -384,8 +395,8 @@ export async function fetchActiveCatalogFromSupabase(): Promise<SupabaseCatalogR
     // Lots d'identifiants : jamais une adresse de requête démesurée.
     const batches = chunk(productIds, ID_BATCH);
     const [imagesRes, variantsRes] = await Promise.all([
-      Promise.all(batches.map((ids) => supabase.from('product_images').select('*').in('product_id', ids))),
-      Promise.all(batches.map((ids) => supabase.from('product_variants').select('*').in('product_id', ids))),
+      Promise.all(batches.map((ids) => supabase.from('product_images').select(PUBLIC_PRODUCT_IMAGE_COLUMNS).in('product_id', ids))),
+      Promise.all(batches.map((ids) => supabase.from('product_variants').select(PUBLIC_PRODUCT_VARIANT_COLUMNS).in('product_id', ids))),
     ]);
     for (const r of imagesRes) { if (r.error) errors.push(`product_images: ${r.error.message}`); else imageRows.push(...((r.data ?? []) as ProductImageRow[])); }
     for (const r of variantsRes) { if (r.error) errors.push(`product_variants: ${r.error.message}`); else variantRows.push(...((r.data ?? []) as ProductVariantRow[])); }
@@ -440,7 +451,7 @@ export async function fetchProductDetailFromSupabase(productKey: string): Promis
   const premiumPromise = supabase.rpc('active_premium_shop_ids');
   const grouped = await supabase
     .from('products')
-    .select('*, product_images(*), product_variants(*), shops(*)')
+    .select(`${PUBLIC_PRODUCT_COLUMNS}, product_images(${PUBLIC_PRODUCT_IMAGE_COLUMNS}), product_variants(${PUBLIC_PRODUCT_VARIANT_COLUMNS}), shops(${PUBLIC_SHOP_COLUMNS})`)
     .eq(isProductUuid(productKey) ? 'id' : 'slug', productKey)
     .eq('status', 'active')
     .maybeSingle();
@@ -466,7 +477,7 @@ export async function fetchProductDetailFromSupabase(productKey: string): Promis
 async function fetchProductDetailStepByStep(productKey: string): Promise<SupabaseProductDetailResult> {
   const { data: productRow, error: productError } = await supabase
     .from('products')
-    .select('*')
+    .select(PUBLIC_PRODUCT_COLUMNS)
     .eq(isProductUuid(productKey) ? 'id' : 'slug', productKey)
     .eq('status', 'active')
     .maybeSingle();
@@ -477,9 +488,9 @@ async function fetchProductDetailStepByStep(productKey: string): Promise<Supabas
   const row = productRow as ProductRow;
 
   const [imagesRes, variantsRes, shopRes, premiumRes] = await Promise.all([
-    supabase.from('product_images').select('*').eq('product_id', row.id),
-    supabase.from('product_variants').select('*').eq('product_id', row.id),
-    supabase.from('shops').select('*').eq('id', row.shop_id).maybeSingle(),
+    supabase.from('product_images').select(PUBLIC_PRODUCT_IMAGE_COLUMNS).eq('product_id', row.id),
+    supabase.from('product_variants').select(PUBLIC_PRODUCT_VARIANT_COLUMNS).eq('product_id', row.id),
+    supabase.from('shops').select(PUBLIC_SHOP_COLUMNS).eq('id', row.shop_id).maybeSingle(),
     supabase.rpc('active_premium_shop_ids'),
   ]);
 
