@@ -1,7 +1,6 @@
 import { usePro } from '../ProContext';
 import { getStaffSpace } from '@/lib/staffSpace';
 import { navigateTo } from '@/store/AppContext';
-import RefreshMenuButton from '@/components/RefreshMenuButton';
 import { Home, Truck, History, User, LogOut, ArrowLeft, X } from 'lucide-react';
 import NotificationBell from '@/components/NotificationBell';
 import DriverHome from '../pages/driver/DriverHome';
@@ -70,11 +69,6 @@ export default function DriverLayout() {
               <span className="sm:hidden">Marketplace</span>
             </button>
           )}
-          {/* Application installée seulement (sinon rien ne s'affiche). */}
-          <RefreshMenuButton
-            iconSize={14}
-            className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-ink/60 hover:bg-cream hover:text-ink transition-colors"
-          />
           <button onClick={logout} className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-burgundy hover:bg-burgundy/5 transition-colors">
             <LogOut size={14} /> Déconnexion
           </button>

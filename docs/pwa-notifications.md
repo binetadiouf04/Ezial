@@ -132,9 +132,8 @@ En mode écran d'accueil, ni l'iPhone ni Chrome Android n'offrent de geste
   (mêmes pages que le bandeau, `isSensitivePath`), ni quand un formulaire a été
   modifié sans être enregistré (saisie repérée par `src/lib/pageRefresh.ts` ;
   recherche, cases à cocher et listes de filtres exclues).
-- Entrée « Actualiser » (`src/components/RefreshMenuButton.tsx`) : menu de la
-  marketplace, menu mobile Admin, barre du haut Livreur. Absente aux pages
-  sensibles ; demande confirmation si des modifications ne sont pas enregistrées.
+- Pas de bouton « Actualiser » dans les menus : retiré à la demande de la propriétaire
+  (24 nov. 2026) ; seul le geste reste.
 
 ### Barre d'état (haut de l'écran) : blanche
 
