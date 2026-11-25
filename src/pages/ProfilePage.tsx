@@ -6,7 +6,9 @@ import { formatFCFA } from '@/data/products';
 import ProductGrid from '@/components/ProductGrid';
 import SmartImage from '@/components/SmartImage';
 import PaymentStatusBadge from '@/components/PaymentStatusBadge';
-import { canResumePayment } from '@/lib/orderPayment';
+import { canResumePayment, paymentPhase } from '@/lib/orderPayment';
+import { readLaunch } from '@/lib/paymentReturn';
+import { fetchOrderPaymentState } from '@/lib/supabaseOrangeMoney';
 import CustomerAuthPanel from '@/components/CustomerAuthPanel';
 import PasswordField from '@/components/PasswordField';
 import PhoneField from '@/components/PhoneField';
@@ -213,8 +215,35 @@ function AddressesTab() {
 }
 
 export default function ProfilePage() {
-  const { orders, favorites, navigate, catalogProducts, customerUser, authLoading, signOutCustomerAccount, updateCustomerAccount, deleteCustomerAccount, changePassword } = useApp();
+  const { orders, patchOrder, favorites, navigate, catalogProducts, customerUser, authLoading, signOutCustomerAccount, updateCustomerAccount, deleteCustomerAccount, changePassword } = useApp();
   const [tab, setTab] = useState<Tab>('orders');
+  // Paiement Orange Money lancé depuis ce navigateur et pas encore confirmé : la liste affiche
+  // « Vérification du paiement » (jamais « Payer maintenant ») et relit l'état toutes les 5 s.
+  const verifyingIds = orders
+    .filter((o) => o.supabaseOrderId && o.payment !== 'wave' && paymentPhase(o, Date.now()) === 'awaiting' && readLaunch(o.id))
+    .map((o) => o.id);
+  const verifyingKey = verifyingIds.join(',');
+  useEffect(() => {
+    if (!verifyingKey) return;
+    const poll = () => {
+      for (const o of orders) {
+        if (!o.supabaseOrderId || !verifyingKey.split(',').includes(o.id)) continue;
+        void fetchOrderPaymentState(o.supabaseOrderId).then((state) => {
+          if (state && (state.paymentStatus !== o.paymentStatus || state.orderStatus !== o.orderStatus)) patchOrder(o.id, state);
+        });
+      }
+    };
+    const t = window.setInterval(poll, 5000);
+    const onBack = () => { if (document.visibilityState === 'visible') poll(); };
+    document.addEventListener('visibilitychange', onBack);
+    window.addEventListener('focus', onBack);
+    return () => {
+      window.clearInterval(t);
+      document.removeEventListener('visibilitychange', onBack);
+      window.removeEventListener('focus', onBack);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- relancé quand la liste des commandes en vérification change
+  }, [verifyingKey, patchOrder]);
   const [authStep, setAuthStep] = useState<'entry' | 'login' | 'signup'>('entry');
   // orders.status is never updated after creation (see computeDeliveryStepStatus)
   // — this fetches each order's real delivery_missions.status in one batched
@@ -383,7 +412,7 @@ export default function ProfilePage() {
                       <p className="text-xs text-ink/45 mt-0.5">{new Date(order.date).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</p>
                     </div>
                     {order.paymentRequired && order.paymentStatus !== 'paid'
-                      ? <PaymentStatusBadge order={order} className="px-3 py-1" />
+                      ? <PaymentStatusBadge order={order} verifying={verifyingIds.includes(order.id)} className="px-3 py-1" />
                       : <span className={`rounded-full px-3 py-1 text-xs font-medium ${getOrderStatusColor(order, effectiveStatus)}`}>{getOrderStatusLabel(order, effectiveStatus)}</span>}
                   </div>
                   <div className="flex gap-2 mb-3">
@@ -403,7 +432,7 @@ export default function ProfilePage() {
                       <span className="text-ink/50">{order.items.length} article{order.items.length > 1 ? 's' : ''} · </span>
                       <span className="font-semibold text-ink">{formatFCFA(order.total)}</span>
                     </div>
-                    {canResumePayment(order, Date.now())
+                    {canResumePayment(order, Date.now()) && !verifyingIds.includes(order.id)
                       ? <button onClick={() => navigate(`/compte/commande/${order.id}?payer=1`)} className="btn-primary !px-4 !py-2 text-sm">Payer maintenant</button>
                       : <button onClick={() => navigate(`/compte/commande/${order.id}`)} className="flex items-center gap-1 text-sm font-medium text-burgundy hover:underline">Voir la commande <ChevronRight size={14} /></button>}
                   </div>

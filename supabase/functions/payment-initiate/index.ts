@@ -22,6 +22,8 @@
 //   SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY — fournis automatiquement
 //   PAYMENTS_ENVIRONMENT  — « sandbox » (défaut) ou « production »
 //   PAYMENTS_RETURN_URL   — adresse de retour après paiement ; « {orderNumber} » est remplacé
+//                           par le numéro de commande, « {transactionId} » par l'uuid de la
+//                           tentative (lu par la page de retour, sans connexion : ref=…)
 //   PAYMENTS_CANCEL_URL   — adresse de retour après abandon ; idem
 //   ORANGE_MONEY_* — voir docs/orange-money/ ; la clé de callback est lue dans le coffre
 //   Supabase (payments_internal_secret, migration 6), la variable ne sert que de secours.
@@ -33,8 +35,8 @@ import { paymentsEnv } from '../_shared/payments/vault.ts';
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? '';
 const ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY') ?? '';
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
-const DEFAULT_RETURN_URL = 'https://www.ezial.net/compte/commande/{orderNumber}?paiement=retour';
-const DEFAULT_CANCEL_URL = 'https://www.ezial.net/compte/commande/{orderNumber}?paiement=annule';
+const DEFAULT_RETURN_URL = 'https://www.ezial.net/compte/commande/{orderNumber}?paiement=retour&ref={transactionId}';
+const DEFAULT_CANCEL_URL = 'https://www.ezial.net/compte/commande/{orderNumber}?paiement=annule&ref={transactionId}';
 
 const admin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, { auth: { persistSession: false, autoRefreshToken: false } });
 

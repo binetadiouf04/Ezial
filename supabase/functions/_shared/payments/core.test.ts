@@ -13,6 +13,7 @@ import {
   WaveCollection,
   WaveDisbursement,
   createAdapters,
+  fillUrl,
   handleCollectionWebhook,
   initiatePayment,
   maskPhone,
@@ -308,8 +309,22 @@ test('initiatePayment : adaptateur prêt → transaction, page de paiement, stat
   assert.equal(db.createCalls, 1);
   assert.equal(adapter.checkouts[0].amount, 25000);
   assert.equal(adapter.checkouts[0].idempotencyKey, 'pay_abc');
-  assert.equal(adapter.checkouts[0].returnUrl, 'https://www.ezial.net/compte/commande/EZ-0042?paiement=retour');
+  assert.equal(adapter.checkouts[0].returnUrl, `https://www.ezial.net/compte/commande/EZ-0042?paiement=retour&ref=${TX_ID}`);
   assert.deepEqual(db.pending, [{ id: TX_ID, ref: 'ref_1', url: 'https://paiement.example.test/session/1' }]);
+});
+
+test('adresse de retour : {transactionId} remplacé par l’uuid de la tentative (page de retour sans connexion)', async () => {
+  assert.equal(fillUrl('https://www.ezial.net/compte/commande/{orderNumber}?paiement=retour&ref={transactionId}', 'EZ-0042', TX_ID),
+    `https://www.ezial.net/compte/commande/EZ-0042?paiement=retour&ref=${TX_ID}`);
+  assert.equal(fillUrl('https://www.ezial.net/compte/commande/{orderNumber}?paiement=retour', 'EZ-0042', TX_ID),
+    `https://www.ezial.net/compte/commande/EZ-0042?paiement=retour&ref=${TX_ID}`, 'ancien modèle sans {transactionId} : référence ajoutée');
+  assert.equal(fillUrl('https://www.ezial.net/merci/{orderNumber}', 'EZ-0042', TX_ID),
+    `https://www.ezial.net/merci/EZ-0042?ref=${TX_ID}`, 'sans paramètre : ?ref= ajouté');
+  const db = new FakeDb();
+  const adapter = new FakeCollection('wave');
+  await initiatePayment(db, adapter, { orderId: ORDER_ID, provider: 'wave', userId: USER_ID, returnUrl: 'https://www.ezial.net/compte/commande/{orderNumber}?paiement=retour&ref={transactionId}', cancelUrl: 'https://www.ezial.net/compte/commande/{orderNumber}?paiement=annule&ref={transactionId}' }, { settings: ENABLED, ...quiet });
+  assert.equal(adapter.checkouts[0].returnUrl, `https://www.ezial.net/compte/commande/EZ-0042?paiement=retour&ref=${TX_ID}`);
+  assert.equal(adapter.checkouts[0].cancelUrl, `https://www.ezial.net/compte/commande/EZ-0042?paiement=annule&ref=${TX_ID}`);
 });
 
 test('initiatePayment : refus métier de la base → message français transmis', async () => {
