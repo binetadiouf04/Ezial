@@ -2,12 +2,12 @@
 //
 // En mode « application » (écran d'accueil), ni l'iPhone ni Chrome Android ne
 // proposent de « tirer vers le bas pour actualiser » ni de bouton recharger :
-// Ezial fournit le geste (src/components/PullToRefresh.tsx) et une entrée
-// « Actualiser » dans les menus (src/components/RefreshMenuButton.tsx).
+// Ezial fournit le geste (src/components/PullToRefresh.tsx). Le bouton
+// « Actualiser » des menus a été retiré à la demande de la propriétaire (24 nov. 2026).
 //
 // Jamais d'actualisation par le geste pendant un paiement, une commande, une
 // saisie vendeur (isSensitivePath) ou quand un formulaire a été modifié sans
-// être enregistré. Le bouton, lui, demande confirmation dans ce dernier cas.
+// être enregistré.
 import { refreshBlockReason, isUnsavedEntryField, type RefreshBlock } from './pullToRefreshCore';
 
 /** Application ouverte depuis l'écran d'accueil (pas un onglet du navigateur). */
