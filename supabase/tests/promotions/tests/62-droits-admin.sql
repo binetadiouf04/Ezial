@@ -1,4 +1,4 @@
--- DROITS (anonyme, client, vendeur, administrateur, double authentification) et FONCTIONS D'ADMINISTRATION.
+-- DROITS (anonyme, client, vendeur, administrateur) et FONCTIONS D'ADMINISTRATION.
 select tests.reset_promo();
 select tests.new_promo('DROITS', 'percent', 10);
 select tests.put('o', to_jsonb((tests.buy_code(tests.uid('c1'), jsonb_build_array(tests.it('1'), tests.it('2')), 'DROITS')->>'id')::uuid));
@@ -9,8 +9,8 @@ begin
   perform tests.as_user(null, 'anon');
   ok := false; begin perform count(*) from public.promotions; exception when insufficient_privilege then ok := true; end;
   perform tests.check(ok, 'Anonyme : ne peut pas lire les campagnes');
-  ok := false; begin perform count(*) from public.promotion_compensations; exception when insufficient_privilege then ok := true; end;
-  perform tests.check(ok, 'Anonyme : ne peut pas lire les compensations');
+  ok := false; begin perform count(*) from public.promotion_redemptions; exception when insufficient_privilege then ok := true; end;
+  perform tests.check(ok, 'Anonyme : ne peut pas lire les utilisations');
   ok := false; begin perform public.promotions_preview('{}'); exception when insufficient_privilege then ok := true; end;
   perform tests.check(ok, 'Anonyme : ne peut pas appeler l''aperçu (clients connectés)');
   ok := false; begin perform public.admin_promotions_list(); exception when insufficient_privilege then ok := true; end;
@@ -21,7 +21,6 @@ begin
   perform tests.as_user(tests.uid('c1'));
   select count(*) into n from public.promotions; perform tests.check(n = 0, 'Client : ne voit aucune campagne (même avec code)');
   select count(*) into n from public.promotion_redemptions; perform tests.check(n = 0, 'Client : ne voit aucune utilisation');
-  select count(*) into n from public.promotion_compensations; perform tests.check(n = 0, 'Client : ne voit aucune compensation');
   ok := false; begin insert into public.promotions (name, code, kind, value, ends_at, status) values ('Pirate', 'PIRATE', 'fixed', 50000, now() + interval '1 day', 'active');
     exception when insufficient_privilege or check_violation then ok := true; end;
   perform tests.check(ok, 'Client : ne peut pas créer de campagne');
@@ -33,55 +32,47 @@ begin
   select count(*) into n from public.promotion_seller_shares; perform tests.check(n = 0, 'Client : ne voit aucune part vendeur');
   ok := false; begin perform public.admin_promotions_list(); exception when insufficient_privilege then ok := true; end;
   perform tests.check(ok, 'Client : admin_promotions_list refusé');
-  ok := false; begin perform public.admin_mark_compensations_paid(array[gen_random_uuid()], 'wave', null, null); exception when insufficient_privilege then ok := true; end;
-  perform tests.check(ok, 'Client : admin_mark_compensations_paid refusé');
   ok := false; begin perform public.admin_promotion_save('{"name": "x"}'); exception when insufficient_privilege then ok := true; end;
   perform tests.check(ok, 'Client : admin_promotion_save refusé');
-  ok := false; begin perform public.seller_promotion_compensations(tests.uid('b1')); exception when insufficient_privilege then ok := true; end;
-  perform tests.check(ok, 'Client : ne lit pas les compensations d''une boutique');
+  ok := false; begin perform public.admin_promotion_set_status(gen_random_uuid(), 'active'); exception when insufficient_privilege then ok := true; end;
+  perform tests.check(ok, 'Client : admin_promotion_set_status refusé');
   -- Vendeur
   perform tests.as_user(tests.uid('d1'));
-  select count(*) into n from public.promotion_compensations; perform tests.check(n = 1, 'Vendeur : ne voit que la compensation de SA boutique (table)');
-  select count(*) into n from public.promotion_compensations where shop_id <> tests.uid('b1'); perform tests.check(n = 0, 'Vendeur : aucune compensation d''une autre boutique');
-  r := public.seller_promotion_compensations(tests.uid('b1'));
-  perform tests.check(jsonb_array_length(r) = 1 and (r->0->>'amount')::int = 1000 and r->0->>'status' = 'due' and r->0 ? 'order_number' and r->0 ? 'paid_at'
-    and r->0 ? 'paid_method' and r->0 ? 'created_at' and r->0 ? 'id' and (select count(*) from jsonb_object_keys(r->0)) = 7,
-    'Vendeur : seller_promotion_compensations -> [{id, order_number, amount, status, paid_at, paid_method, created_at}]');
-  ok := false; begin perform public.seller_promotion_compensations(tests.uid('b2')); exception when insufficient_privilege then ok := true; end;
-  perform tests.check(ok, 'Vendeur : refusé pour la boutique d''un autre vendeur');
   select count(*) into n from public.promotions; perform tests.check(n = 0, 'Vendeur : ne voit aucune campagne');
-  ok := false; begin perform public.admin_promotion_compensations(); exception when insufficient_privilege then ok := true; end;
+  select count(*) into n from public.promotion_redemptions; perform tests.check(n = 0, 'Vendeur : ne voit aucune utilisation');
+  ok := false; begin perform public.admin_promotions_list(); exception when insufficient_privilege then ok := true; end;
   perform tests.check(ok, 'Vendeur : fonctions admin refusées');
-  -- Administrateur, double authentification
+  -- Administrateur : même contrôle que les autres fonctions admin (ligne dans admins), sans double authentification
   perform tests.as_system();
   insert into auth.mfa_factors (user_id, status) values (a, 'verified');
   perform tests.as_user_aal(a, 'aal1');
-  ok := false; begin perform public.admin_promotions_list(); exception when insufficient_privilege then ok := sqlerrm = 'mfa_required'; end;
-  perform tests.check(ok, 'Admin avec double authentification non validée (aal1) : refusé (mfa_required)');
-  perform tests.as_user_aal(a, 'aal2');
-  perform tests.check(jsonb_array_length(public.admin_promotions_list()) = 2, 'Admin validé (aal2) : accès accordé');
+  perform tests.check(jsonb_array_length(public.admin_promotions_list()) = 2, 'Admin (facteur inscrit, session aal1) : accès accordé, comme les autres fonctions admin');
   perform tests.as_system();
   delete from auth.mfa_factors;
-  perform tests.as_user_aal(a, 'aal1');
-  perform tests.check(jsonb_array_length(public.admin_promotions_list()) = 2, 'Admin sans facteur : accès accordé (comme les autres fonctions admin)');
+  perform tests.as_user(a);
+  perform tests.check(jsonb_array_length(public.admin_promotions_list()) = 2, 'Admin sans facteur : accès accordé');
   select count(*) into n from public.promotions; perform tests.check(n = 2, 'Admin : lit les campagnes (table)');
-  select count(*) into n from public.promotion_compensations; perform tests.check(n = 2, 'Admin : lit les compensations (table)');
+  select count(*) into n from public.promotion_redemptions; perform tests.check(n = 1, 'Admin : lit les utilisations (table)');
   -- Même un administrateur n'écrit jamais directement dans les tables : tout passe par les fonctions serveur
   ok := false; begin update public.promotions set budget_used = 0; exception when insufficient_privilege then ok := true; end;
   perform tests.check(ok, 'Admin : écriture directe dans promotions refusée (passer par admin_promotion_save)');
   ok := false; begin insert into public.promotion_seller_shares (promotion_id, shop_id, share_type, share_value, agreed)
     select id, tests.uid('b1'), 'percent', 100, true from public.promotions limit 1; exception when insufficient_privilege then ok := true; end;
   perform tests.check(ok, 'Admin : écriture directe dans les parts vendeurs refusée');
-  ok := false; begin update public.promotion_compensations set status = 'paid', paid_at = now(), paid_method = 'wave'; exception when insufficient_privilege then ok := true; end;
-  perform tests.check(ok, 'Admin : écriture directe dans les compensations refusée (passer par admin_mark_compensations_paid)');
+  ok := false; begin update public.promotion_redemptions set ezial_cost = 0; exception when insufficient_privilege then ok := true; end;
+  perform tests.check(ok, 'Admin : écriture directe dans les utilisations refusée');
   perform tests.as_system();
+  -- Plus de compensation manuelle (décision du 25 nov. 2026) : ni table, ni fonction
+  perform tests.check(to_regclass('public.promotion_compensations') is null and to_regprocedure('public.admin_promotion_compensations(text)') is null
+    and to_regprocedure('public.admin_mark_compensations_paid(uuid[],text,text,text)') is null and to_regprocedure('public.seller_promotion_compensations(uuid)') is null,
+    'Compensations manuelles supprimées : aucune table promotion_compensations, aucune fonction de compensation');
 end $$;
 
--- Fonctions d'administration : formes JSON, validations, statistiques, paiement manuel
+-- Fonctions d'administration : formes JSON, validations, statistiques
 do $$
 declare a uuid := tests.uid('a1'); r jsonb; p jsonb; v uuid; v2 uuid; ok boolean; msg text; n integer;
 begin
-  perform tests.as_user_aal(a, 'aal2');
+  perform tests.as_user(a);
   -- Liste + statistiques
   r := public.admin_promotions_list();
   select x into p from jsonb_array_elements(r) x where x->>'code' = 'DROITS';
@@ -150,34 +141,10 @@ begin
   perform tests.as_system();
   ok := false; begin update public.promotions set status = 'active' where id = v; exception when others then ok := true; end;
   perform tests.check(ok, 'Base : « terminée » définitif même par écriture directe');
-  perform tests.as_user_aal(a, 'aal2');
+  perform tests.as_user(a);
   v2 := public.admin_promotion_save(jsonb_build_object('name', 'Passée', 'kind', 'fixed', 'value', 10, 'starts_at', now() - interval '2 days', 'ends_at', now() - interval '1 day'));
   msg := null; begin perform public.admin_promotion_set_status(v2, 'active'); exception when others then msg := sqlerrm; end;
   perform tests.check(msg like 'La date de fin est déjà passée%', 'Admin : activation refusée si la fin est passée');
-  -- Compensations : liste (numéros de versement APPROUVÉS de la boutique), paiement manuel
-  perform tests.as_system();
-  insert into public.seller_payout_methods (shop_id, provider, phone, status, submitted_by, reviewed_at) values
-    (tests.uid('b1'), 'orange_money', '+221770000001', 'superseded', tests.uid('d1'), now() - interval '9 days'),
-    (tests.uid('b1'), 'orange_money', '+221770000002', 'approved', tests.uid('d1'), now() - interval '1 day'),
-    (tests.uid('b1'), 'wave', '+221770000003', 'pending_review', tests.uid('d1'), null),
-    (tests.uid('b2'), 'wave', '+221770000004', 'approved', tests.uid('d2'), now());
-  perform tests.as_user_aal(a, 'aal2');
-  r := public.admin_promotion_compensations('due');
-  perform tests.check((select x->>'payout_orange_money' = '+221770000002' and x->'payout_wave' = 'null'::jsonb and (x->>'seller_share')::int = 0 and (x->>'gross_allocation')::int = 1000
-      from jsonb_array_elements(r) x where (x->>'shop_id')::uuid = tests.uid('b1'))
-    and (select x->'payout_orange_money' = 'null'::jsonb and x->>'payout_wave' = '+221770000004' from jsonb_array_elements(r) x where (x->>'shop_id')::uuid = tests.uid('b2')),
-    'Admin : numéros de versement approuvés seulement (Orange Money / Wave), seller_share et gross_allocation');
-  perform tests.check(jsonb_array_length(r) = 2 and r->0 ?& array['id', 'order_id', 'order_number', 'shop_id', 'shop_name', 'amount', 'status', 'paid_at', 'paid_method', 'paid_reference', 'note', 'created_at', 'promotion_name', 'seller_share', 'gross_allocation', 'payout_orange_money', 'payout_wave']
-    and (select bool_and(x->>'promotion_name' = 'DROITS' and x->>'shop_name' like 'Boutique%' and x->>'order_number' like 'EZI-%') from jsonb_array_elements(r) x),
-    'Admin : compensations à reverser, noms joints (boutique, commande, campagne)');
-  perform tests.check(public.admin_mark_compensations_paid(array[(r->0->>'id')::uuid], 'wave', ' TX-42 ', null) = 1, 'Admin : paiement manuel enregistré');
-  select x into p from jsonb_array_elements(public.admin_promotion_compensations('paid')) x;
-  perform tests.check(p->>'paid_method' = 'wave' and p->>'paid_reference' = 'TX-42' and p->>'paid_at' is not null, 'Admin : moyen, référence et date du paiement');
-  msg := null; begin perform public.admin_mark_compensations_paid(array[(r->0->>'id')::uuid, (r->1->>'id')::uuid], 'especes', null, 'note'); exception when others then msg := sqlerrm; end;
-  perform tests.check(msg like 'Certaines compensations ne sont plus à reverser%' and jsonb_array_length(public.admin_promotion_compensations('due')) = 1,
-    'Admin : paiement refusé en bloc si une compensation n''est plus « à reverser » (rien n''est enregistré)');
-  msg := null; begin perform public.admin_mark_compensations_paid(array[(r->1->>'id')::uuid], 'cheque', null, null); exception when others then msg := sqlerrm; end;
-  perform tests.check(msg = 'Moyen de paiement invalide.', 'Admin : moyen de paiement contrôlé');
   perform tests.as_system();
 end $$;
 
@@ -194,13 +161,12 @@ begin
   bad := '{}';
   for v in select * from (values
       ('public.admin_promotions_list()', false, true), ('public.admin_promotion_save(jsonb)', false, true),
-      ('public.admin_promotion_set_status(uuid,text)', false, true), ('public.admin_promotion_compensations(text)', false, true),
-      ('public.admin_mark_compensations_paid(uuid[],text,text,text)', false, true), ('public.seller_promotion_compensations(uuid)', false, true),
+      ('public.admin_promotion_set_status(uuid,text)', false, true),
       ('public.promotions_preview(jsonb)', false, true), ('public.public_active_promotions()', true, true)) t(sig, anon_ok, auth_ok) loop
     if has_function_privilege('anon', v.sig::regprocedure, 'execute') <> v.anon_ok
        or has_function_privilege('authenticated', v.sig::regprocedure, 'execute') <> v.auth_ok then bad := bad || v.sig; end if;
   end loop;
-  perform tests.check(cardinality(bad) = 0, 'Droits : anon n''exécute que public_active_promotions ; fonctions admin réservées aux connectés (contrôle admins + double authentification à l''intérieur) ' || coalesce(array_to_string(bad, ', '), ''));
+  perform tests.check(cardinality(bad) = 0, 'Droits : anon n''exécute que public_active_promotions ; fonctions admin réservées aux connectés (contrôle de la table admins à l''intérieur) ' || coalesce(array_to_string(bad, ', '), ''));
   perform tests.check((select bool_and(p.prosecdef and array_to_string(p.proconfig, ',') = 'search_path=""') from pg_proc p
      where (p.pronamespace = 'public'::regnamespace and (p.proname like '%promotion%' or p.proname = 'validate_promo_code'))
         or (p.pronamespace = 'ezial_private'::regnamespace and (p.proname like 'promotion%' or p.proname like 'trg_promotions%') and p.proname <> 'promotion_fcfa')),

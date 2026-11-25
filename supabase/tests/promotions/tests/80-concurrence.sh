@@ -35,14 +35,14 @@ okc=$(cat "$TMPD"/*.out | grep -c '^ok$'); rm -f "$TMPD"/*.out
 [ "$okc" = "12" ] && [ "$(Q "select count(*) from public.orders where promotion_id is not null")" = "1" ] && [ "$(Q "select uses_count from public.promotions where code is null")" = "1" ] \
   && ok "Concurrence : campagne automatique limitée -> 12 commandes acceptées, 1 seule avec la livraison offerte" || ko "Concurrence : automatique ($okc commandes)"
 
-# 4. Annulations simultanées de la même commande -> utilisation, budget et compensation rendus une fois
+# 4. Annulations simultanées de la même commande -> utilisation et budget rendus une fois
 Q "select tests.reset_promo(); update public.product_variants set stock = 100; select tests.new_promo('ANNUL', 'percent', 10);" >/dev/null
 oid=$(Q "select tests.buy_code('$(client 1)', jsonb_build_array(tests.it('1'), tests.it('2')), 'ANNUL')->>'id'")
 Q "select tests.buy_code('$(client 2)', jsonb_build_array(tests.it('1')), 'ANNUL')" >/dev/null
 for i in $(seq 1 10); do Q "update public.orders set status = 'cancelled', updated_at = now() where id = '$oid'" >/dev/null & done; wait
 [ "$(Q "select uses_count || '/' || budget_used from public.promotions where code = 'ANNUL'")" = "1/1000" ] && ok "Concurrence : 10 annulations simultanées -> rendu une seule fois (2 -> 1 utilisation, budget 4 000 -> 1 000)" || ko "Concurrence : annulation $(Q "select uses_count || '/' || budget_used from public.promotions where code = 'ANNUL'")"
-[ "$(Q "select count(*) from public.finance_audit_log where action = 'promotion_released'")" = "1" ] && [ "$(Q "select string_agg(status, ',' order by shop_id) from public.promotion_compensations where order_id = '$oid'")" = "cancelled,cancelled" ] \
-  && ok "Concurrence : une seule restitution, compensations annulées" || ko "Concurrence : restitutions multiples"
+[ "$(Q "select count(*) from public.finance_audit_log where action = 'promotion_released'")" = "1" ] && [ "$(Q "select string_agg(status, ',' order by shop_id) from public.seller_transactions where order_id = '$oid' and type = 'sale'")" = "cancelled,cancelled" ] \
+  && ok "Concurrence : une seule restitution, ventes annulées par le circuit habituel" || ko "Concurrence : restitutions multiples"
 
 # 5. Impayés Orange Money annulés par plusieurs passages simultanés -> rendus une fois
 Q "select tests.reset_promo(); update public.product_variants set stock = 100; update public.payment_settings set orange_money_enabled = true; select tests.new_promo('IMPAYE', 'fixed', 1000);" >/dev/null
