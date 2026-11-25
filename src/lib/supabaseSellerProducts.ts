@@ -4,6 +4,7 @@ import { supplierNameError, normalizeSupplierName } from '@/lib/supplierName';
 import { PRODUCT_IMAGES_BUCKET, resolveImageUrl } from './supabaseCatalog';
 import { assignShopPrefixes, formatReference } from '@/utils/reference';
 import { generateThumbnail } from '@/utils/imageOptimize';
+import { MAX_VIDEO_UPLOAD_MB } from './videoOptimizeCore';
 
 // Writes a seller-created product to Supabase: products, then
 // product_variants, then the image uploads + product_images. Each step
@@ -33,7 +34,11 @@ export const PRODUCT_MEDIA_ASPECT_RATIO = 4 / 5;
 // not just documented here.
 export const MAX_PRODUCT_MEDIA_ITEMS = 10;
 export const MAX_PRODUCT_VIDEOS = 1;
-export const MAX_VIDEO_SIZE_MB = 50;
+// Poids maximal du fichier vidéo réellement envoyé (après optimisation dans le
+// navigateur du vendeur, voir videoOptimize.ts). Le bucket Storage accepte plus
+// (50 Mo) : cette limite est appliquée ici et proposée en base dans
+// docs/sql/videos-limites.sql.
+export const MAX_VIDEO_SIZE_MB = MAX_VIDEO_UPLOAD_MB;
 export const ACCEPTED_VIDEO_MIME_TYPES = ['video/mp4', 'video/x-m4v', 'video/quicktime', 'video/webm'];
 // iPhone/iPad (and some Android pickers) hand over videos typed
 // 'video/x-m4v', 'application/octet-stream' or with an empty file.type:
@@ -92,6 +97,8 @@ export interface BrandingOverlay {
 export interface NewProductMedia {
   file: File;
   mediaType: MediaType;
+  /** Vidéo seulement : image de couverture (~720 px) extraite à l'import, envoyée comme miniature de la ligne. */
+  coverFile?: File;
   originalFile?: File;
   logoFile?: File;
   brandingOverlay?: Omit<BrandingOverlay, 'logoStoragePath'>;
@@ -243,6 +250,10 @@ async function uploadMedia(
     };
 
     try {
+      // Plafond de poids côté code, quelle que soit l'origine du fichier.
+      if (item.mediaType === 'video' && item.file.size > MAX_VIDEO_SIZE_MB * 1024 * 1024) {
+        throw new Error(`La vidéo fait plus de ${MAX_VIDEO_SIZE_MB} Mo : raccourcissez-la ou filmez en 720p.`);
+      }
       const storagePath = await upload(item.file, '');
       let originalStoragePath: string | undefined;
       let brandingOverlay: BrandingOverlay | undefined;
@@ -258,6 +269,15 @@ async function uploadMedia(
       // any product that predates this feature — never a reason to fail an
       // otherwise-successful photo upload.
       let thumbnailStoragePath: string | undefined;
+      if (item.mediaType === 'video' && item.coverFile) {
+        // Couverture de la vidéo : le lecteur l'affiche instantanément, sans rien
+        // télécharger de la vidéo. Même mécanisme que les miniatures de photos.
+        try {
+          thumbnailStoragePath = await upload(item.coverFile, '-thumb');
+        } catch {
+          thumbnailStoragePath = undefined;
+        }
+      }
       if (item.mediaType === 'image') {
         const thumbFile = await generateThumbnail(item.file);
         if (thumbFile) {
