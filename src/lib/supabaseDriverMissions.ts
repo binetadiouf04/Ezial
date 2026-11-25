@@ -3,44 +3,37 @@ import { fetchUrgentOrderIds } from './supabaseUrgentDelivery';
 import { uploadSecurePhoto, resolveSecurePhotoUrl } from './secureStorage';
 import { optimizeImageFile } from '@/utils/imageOptimize';
 import { isRpcMissing } from './supabaseFeatureDetect';
+import {
+  MISSION_STATUS,
+  STOP_STATUS,
+  buildDriverMission,
+  buildAvailableMissionFromRpc,
+  isMissionAssigned,
+  type AvailableMissionRpcRow,
+  type DriverMissionRow,
+  type MissionCustomer,
+  type MissionDestination,
+  type MissionStop,
+} from './driverMissionsCore';
 import type { Mission } from '@/pro/data';
 
 // Real driver missions, backed by delivery_missions / delivery_stops /
-// orders / shops — replaces the local mock array in pro/data.ts entirely.
-// Mapped into the exact same Mission shape the driver UI already renders,
-// so DriverHome/DriverMissions/DriverMissionDetail/DriverHistory needed no
-// redesign, only a real data source.
+// orders / shops. Mapped into the Mission shape the driver UI renders
+// (mapping pur et testé : driverMissionsCore.ts).
 //
-// Status vocabulary matches the real delivery_missions_status_check
-// constraint exactly: available, accepted, picking_up, out_for_delivery,
-// delivered, cancelled. 'picking_up' and 'cancelled' aren't written by
-// this file yet (collection progress is tracked per-stop on delivery_stops
-// instead, and there's no cancellation flow here), but the allowed set is
-// listed in full so a future addition doesn't have to rediscover it.
-export const MISSION_STATUS = {
-  available: 'available',
-  accepted: 'accepted',
-  pickingUp: 'picking_up',
-  outForDelivery: 'out_for_delivery',
-  delivered: 'delivered',
-  cancelled: 'cancelled',
-} as const;
+// Confidentialité (25 nov. 2026) : une mission encore disponible ne montre
+// jamais le téléphone, le nom ni l'e-mail du client. Ses informations
+// viennent de la fonction serveur driver_available_missions(), qui ne
+// renvoie que le lieu de livraison, le créneau, l'urgence et les boutiques.
+// La lecture directe de la commande (téléphone compris) ne sert qu'aux
+// missions attribuées au livreur connecté, seules autorisées par la RLS
+// après docs/sql/livreur-telephone-masque.sql.
+export { MISSION_STATUS };
 
-const STOP_STATUS = {
-  pending: 'pending',
-  pickedUp: 'picked_up',
-} as const;
-
-interface DeliveryMissionRow {
-  id: string;
-  order_id: string;
-  driver_id: string | null;
-  status: string;
+interface DeliveryMissionRow extends DriverMissionRow {
   proof_photo_path: string | null;
   accepted_at: string | null;
   picked_up_at: string | null;
-  delivered_at: string | null;
-  created_at: string;
 }
 
 interface DeliveryStopRow {
@@ -52,21 +45,6 @@ interface DeliveryStopRow {
   picked_up_at: string | null;
 }
 
-interface OrderRow {
-  id: string;
-  order_number: string;
-  first_name: string | null;
-  last_name: string | null;
-  phone: string | null;
-  neighborhood: string | null;
-  delivery_address: string | null;
-  delivery_notes: string | null;
-  delivery_latitude: number | null;
-  delivery_longitude: number | null;
-  preferred_delivery_slot: string | null;
-  preferred_delivery_date: string | null;
-}
-
 interface ShopRow {
   id: string;
   name: string;
@@ -76,29 +54,42 @@ interface ShopRow {
   longitude: number | null;
 }
 
-function fullName(firstName: string | null, lastName: string | null): string {
-  return [firstName, lastName].filter(Boolean).join(' ').trim() || 'Client Ezial';
+type OrderRow = MissionDestination & Partial<MissionCustomer> & { id: string };
+
+// Colonnes sans aucune coordonnée du client : seules lues pour une mission
+// non attribuée (repli tant que la fonction serveur n'est pas installée).
+const DESTINATION_COLUMNS = 'id, order_number, neighborhood, delivery_address, delivery_latitude, delivery_longitude, preferred_delivery_slot, preferred_delivery_date';
+// Mission attribuée au livreur : il doit pouvoir joindre le client.
+const ASSIGNED_ORDER_COLUMNS = `${DESTINATION_COLUMNS}, first_name, last_name, phone`;
+
+async function fetchAvailableMissionsFromServer(): Promise<{ missions: Mission[] } | { unavailable: true }> {
+  const { data, error } = await supabase.rpc('driver_available_missions');
+  if (error) {
+    // Fonction pas encore installée (migration non exécutée) ou erreur :
+    // repli sur la lecture directe, limitée aux colonnes sans coordonnées.
+    if (!isRpcMissing(error)) console.warn('driver_available_missions :', error.message);
+    return { unavailable: true };
+  }
+  return { missions: ((data ?? []) as AvailableMissionRpcRow[]).map(buildAvailableMissionFromRpc) };
 }
 
-// Every mission the signed-in driver can currently see: their own
-// (accepted/out_for_delivery/delivered) plus every still-unclaimed one,
-// exactly mirroring the RLS policies on delivery_missions/delivery_stops/
-// orders — never a broader fetch than what those policies already allow.
-export async function fetchDriverMissions(): Promise<Mission[]> {
-  const { data: missionRows, error: missionsError } = await supabase
-    .from('delivery_missions')
-    .select('id, order_id, driver_id, status, proof_photo_path, accepted_at, picked_up_at, delivered_at, created_at')
-    .order('created_at', { ascending: false });
-  if (missionsError || !missionRows || missionRows.length === 0) return [];
-
-  const rows = missionRows as DeliveryMissionRow[];
+// Lecture directe (missions attribuées, et missions disponibles en repli).
+async function fetchMissionsDirect(rows: DeliveryMissionRow[]): Promise<Mission[]> {
+  if (rows.length === 0) return [];
   const missionIds = rows.map((r) => r.id);
-  const orderIds = [...new Set(rows.map((r) => r.order_id))];
+  const assignedOrderIds = [...new Set(rows.filter(isMissionAssigned).map((r) => r.order_id))];
+  const unassignedOrderIds = [...new Set(rows.filter((r) => !isMissionAssigned(r)).map((r) => r.order_id))];
+  const allOrderIds = [...new Set(rows.map((r) => r.order_id))];
 
-  const [{ data: stopRows }, { data: orderRows }, urgentOrderIds] = await Promise.all([
+  const [{ data: stopRows }, { data: assignedOrders }, { data: unassignedOrders }, urgentOrderIds] = await Promise.all([
     supabase.from('delivery_stops').select('id, mission_id, shop_id, stop_order, status, picked_up_at').in('mission_id', missionIds).order('stop_order', { ascending: true }),
-    supabase.from('orders').select('id, order_number, first_name, last_name, phone, neighborhood, delivery_address, delivery_notes, delivery_latitude, delivery_longitude, preferred_delivery_slot, preferred_delivery_date').in('id', orderIds),
-    fetchUrgentOrderIds(orderIds),
+    assignedOrderIds.length > 0
+      ? supabase.from('orders').select(ASSIGNED_ORDER_COLUMNS).in('id', assignedOrderIds)
+      : Promise.resolve({ data: [] as OrderRow[] }),
+    unassignedOrderIds.length > 0
+      ? supabase.from('orders').select(DESTINATION_COLUMNS).in('id', unassignedOrderIds)
+      : Promise.resolve({ data: [] as OrderRow[] }),
+    fetchUrgentOrderIds(allOrderIds),
   ]);
 
   const stops = (stopRows ?? []) as DeliveryStopRow[];
@@ -107,12 +98,26 @@ export async function fetchDriverMissions(): Promise<Mission[]> {
     ? await supabase.from('shops').select('id, name, neighborhood, address_text, latitude, longitude').in('id', shopIds)
     : { data: [] as ShopRow[] };
 
-  const shopsById = new Map((shopRows ?? []).map((s) => [s.id as string, s as ShopRow]));
-  const ordersById = new Map((orderRows ?? []).map((o) => [o.id as string, o as OrderRow]));
-  const stopsByMission = new Map<string, DeliveryStopRow[]>();
+  const shopsById = new Map(((shopRows ?? []) as ShopRow[]).map((s) => [s.id, s]));
+  const ordersById = new Map(
+    [...((unassignedOrders ?? []) as OrderRow[]), ...((assignedOrders ?? []) as OrderRow[])].map((o) => [o.id, o]),
+  );
+  const stopsByMission = new Map<string, MissionStop[]>();
   for (const stop of stops) {
+    const shop = stop.shop_id ? shopsById.get(stop.shop_id) : undefined;
     const list = stopsByMission.get(stop.mission_id) ?? [];
-    list.push(stop);
+    list.push({
+      stop_id: stop.id,
+      shop_id: stop.shop_id,
+      stop_order: stop.stop_order,
+      status: stop.status,
+      picked_up_at: stop.picked_up_at,
+      shop_name: shop?.name ?? null,
+      shop_neighborhood: shop?.neighborhood ?? null,
+      shop_address: shop?.address_text ?? null,
+      shop_latitude: shop?.latitude ?? null,
+      shop_longitude: shop?.longitude ?? null,
+    });
     stopsByMission.set(stop.mission_id, list);
   }
 
@@ -123,63 +128,49 @@ export async function fetchDriverMissions(): Promise<Mission[]> {
     if (url) proofUrlsByMissionId.set(row.id, url);
   }));
 
-  return rows.map((row): Mission => {
+  return rows.map((row) => {
     const order = ordersById.get(row.order_id);
-    const missionStops = stopsByMission.get(row.id) ?? [];
-    const collections = missionStops.map((stop) => {
-      const shop = stop.shop_id ? shopsById.get(stop.shop_id) : undefined;
-      return {
-        shopId: stop.shop_id ?? stop.id,
-        stopId: stop.id,
-        shopName: shop?.name ?? 'Boutique',
-        area: shop?.neighborhood ?? '',
-        address: shop?.address_text ?? '',
-        latitude: shop?.latitude ?? undefined,
-        longitude: shop?.longitude ?? undefined,
-        // Real per-stop status has no "ready"/"preparing" sub-state in
-        // this schema — a mission only ever exists once every shop
-        // portion is genuinely ready to collect, so every stop is
-        // treated as ready. `collected` is the only distinction that
-        // matters to the driver UI.
-        status: 'ready' as const,
-        collected: Boolean(stop.picked_up_at) || stop.status === STOP_STATUS.pickedUp,
-        collectedAt: stop.picked_up_at ?? undefined,
-        // No physical parcel count exists on delivery_stops — one
-        // pickup point is treated as one parcel until a real count is
-        // added to the schema.
-        parcelCount: 1,
-      };
-    });
-    const allCollected = collections.length > 0 && collections.every((c) => c.collected);
-
-    return {
-      id: row.id,
-      orderId: order?.order_number ?? row.order_id,
-      driverId: row.driver_id ?? undefined,
-      collections,
-      destination: order?.neighborhood ?? '',
-      destinationAddress: order?.delivery_address ?? undefined,
-      destinationLatitude: order?.delivery_latitude ?? undefined,
-      destinationLongitude: order?.delivery_longitude ?? undefined,
-      slot: order?.preferred_delivery_slot ?? '',
-      slotDate: order?.preferred_delivery_date ?? undefined,
+    return buildDriverMission({
+      row,
+      destination: order,
+      customer: isMissionAssigned(row) && order
+        ? { first_name: order.first_name ?? null, last_name: order.last_name ?? null, phone: order.phone ?? null }
+        : undefined,
+      stops: stopsByMission.get(row.id) ?? [],
       urgent: urgentOrderIds.has(row.order_id),
-      distance: '',
-      step: row.status === MISSION_STATUS.delivered ? 'delivered'
-        : row.status === MISSION_STATUS.outForDelivery ? 'to_customer'
-        : allCollected ? 'all_collected'
-        : 'to_collection',
-      // Never read/displayed by the driver UI — the driver is paid
-      // monthly outside this app (see driver_earning on delivery_missions,
-      // deliberately never selected above).
-      earnings: 0,
-      customerName: fullName(order?.first_name ?? null, order?.last_name ?? null),
-      customerPhone: order?.phone ?? '',
-      date: row.created_at,
       proofPhoto: proofUrlsByMissionId.get(row.id),
-      deliveredAt: row.delivered_at ?? undefined,
-    };
+    });
   });
+}
+
+// Every mission the signed-in driver can currently see: their own
+// (accepted/out_for_delivery/delivered) plus every still-unclaimed one,
+// never a broader fetch than what the RLS policies already allow.
+export async function fetchDriverMissions(): Promise<Mission[]> {
+  const [{ data: missionRows, error: missionsError }, available] = await Promise.all([
+    supabase
+      .from('delivery_missions')
+      .select('id, order_id, driver_id, status, proof_photo_path, accepted_at, picked_up_at, delivered_at, created_at')
+      .order('created_at', { ascending: false }),
+    fetchAvailableMissionsFromServer(),
+  ]);
+  if (missionsError) return [];
+
+  const rows = (missionRows ?? []) as DeliveryMissionRow[];
+  const assignedRows = rows.filter(isMissionAssigned);
+
+  let missions: Mission[];
+  if ('missions' in available) {
+    // Une mission acceptée entre les deux lectures n'apparaît qu'une fois, comme attribuée.
+    const assignedIds = new Set(assignedRows.map((r) => r.id));
+    missions = [
+      ...await fetchMissionsDirect(assignedRows),
+      ...available.missions.filter((m) => !assignedIds.has(m.id)),
+    ];
+  } else {
+    missions = await fetchMissionsDirect(rows);
+  }
+  return missions.sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
 }
 
 export async function acceptDeliveryMission(missionId: string): Promise<{ error?: string }> {
