@@ -60,7 +60,8 @@ export default function ProductGallery({ media, alt }: { media: GalleryMediaItem
           <ProductVideo
             key={active}
             src={current.url}
-            poster={firstPhoto?.url}
+            poster={current.thumbnailUrl ?? firstPhoto?.url}
+            ownCover={Boolean(current.thumbnailUrl)}
             title={alt}
             onShowPhotos={firstPhotoIndex >= 0 ? () => setActive(firstPhotoIndex) : undefined}
           />
@@ -112,7 +113,7 @@ export default function ProductGallery({ media, alt }: { media: GalleryMediaItem
             >
               {item.type === 'video' ? (
                 <div className="relative flex h-16 w-[52px] items-center justify-center bg-ink/5">
-                  {firstPhoto && <SmartImage src={firstPhoto.thumbnailUrl || firstPhoto.url} alt="" width={240} height={300} className="absolute inset-0 h-full w-full object-cover opacity-70" />}
+                  {(item.thumbnailUrl || firstPhoto) && <SmartImage src={item.thumbnailUrl || firstPhoto?.thumbnailUrl || firstPhoto?.url || ''} alt="" width={240} height={300} className="absolute inset-0 h-full w-full object-cover opacity-70" />}
                   <Play size={16} fill="currentColor" className="relative text-burgundy" />
                 </div>
               ) : (

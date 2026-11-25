@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { isRealGoldJewelry, GOLD_JEWELRY_MESSAGE, GOLD_JEWELRY_HINT } from '@/lib/goldJewelry';
 import { allowsCustomColorCombos, addCustomColor, CUSTOM_COLOR_MAX_LENGTH } from '@/lib/variantValues';
 import { supplierNameError, SUPPLIER_NAME_MAX_LENGTH } from '@/lib/supplierName';
@@ -28,7 +28,6 @@ import {
   saveProductSupplier,
   MAX_PRODUCT_MEDIA_ITEMS,
   MAX_PRODUCT_VIDEOS,
-  MAX_VIDEO_SIZE_MB,
   ACCEPTED_VIDEO_MIME_TYPES,
   ACCEPTED_VIDEO_EXTENSIONS,
   resolveVideoContentType,
@@ -37,7 +36,8 @@ import {
   type NewProductMedia,
 } from '@/lib/supabaseSellerProducts';
 import { resolveImageUrl } from '@/lib/supabaseCatalog';
-import { inspectVideoFile, judgeVideo } from '@/lib/videoInspect';
+import { MAX_VIDEO_SECONDS, MAX_VIDEO_SOURCE_MB, sizeSummary, formatMo } from '@/lib/videoOptimizeCore';
+import type { VideoOptimizeError } from '@/lib/videoOptimize';
 import ImageCropModal from '../../components/ImageCropModal';
 import LogoOverlayModal, { type OverlayResult } from '../../components/LogoOverlayModal';
 import { X, Package, ChevronDown, Check, Camera, Star, Video, ArrowUp, ArrowDown, Sparkles, Crop, RefreshCw, Plus } from 'lucide-react';
@@ -375,6 +375,9 @@ interface MediaItem {
   file?: File;
   originalFile?: File;
   logoFile?: File;
+  /** Vidéo : couverture extraite à l'import (envoyée comme miniature de la ligne). */
+  coverFile?: File;
+  coverUrl?: string;
   brandingOverlay?: { x: number; y: number; width: number; opacity: number };
   existing?: {
     id: string;
@@ -430,6 +433,13 @@ export default function SellerProductForm({ productId }: { productId?: string })
   const [images, setImages] = useState<MediaItem[]>([]);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [imageActionError, setImageActionError] = useState('');
+  // Optimisation de la vidéo choisie (dans le navigateur, avant l'envoi) :
+  // le formulaire reste utilisable pendant ce temps.
+  const [videoJob, setVideoJob] = useState<{ progress: number } | null>(null);
+  const [videoNotice, setVideoNotice] = useState('');
+  const [longVideo, setLongVideo] = useState<{ file: File; durationSec: number } | null>(null);
+  const videoAbort = useRef<AbortController | null>(null);
+  useEffect(() => () => videoAbort.current?.abort(), []);
   const [submitError, setSubmitError] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   // Photos awaiting the crop/reposition step, processed one at a time.
@@ -761,28 +771,61 @@ export default function SellerProductForm({ productId }: { productId?: string })
     const file = files?.[0];
     if (!file) return;
     setImageActionError('');
+    setVideoNotice('');
+    setLongVideo(null);
+    if (videoJob) return;
     if (videoCount >= MAX_PRODUCT_VIDEOS) { setImageActionError('Une seule vidéo par produit est autorisée.'); return; }
     if (totalMediaCount >= MAX_PRODUCT_MEDIA_ITEMS) { setImageActionError(`Limite de ${MAX_PRODUCT_MEDIA_ITEMS} photos/vidéos par produit atteinte.`); return; }
     // iPhone/iPad can hand over 'video/x-m4v' or an empty file.type: the
     // format is then recognised from the extension (.mp4, .m4v, .mov, .webm).
     const contentType = resolveVideoContentType(file);
     if (!contentType) { setImageActionError('Format vidéo non supporté (MP4, MOV, M4V ou WebM uniquement).'); return; }
-    if (file.size > MAX_VIDEO_SIZE_MB * 1024 * 1024) {
-      const sizeMb = Math.ceil(file.size / (1024 * 1024));
-      setImageActionError(`La vidéo fait ${sizeMb} Mo : la taille maximale est de ${MAX_VIDEO_SIZE_MB} Mo. Raccourcissez-la (Photos > Modifier) ou filmez en 1080p plutôt qu'en 4K.`);
+    if (file.size > MAX_VIDEO_SOURCE_MB * 1024 * 1024) {
+      setImageActionError(`La vidéo fait ${formatMo(file.size)} : choisissez une vidéo plus courte (${MAX_VIDEO_SECONDS} secondes maximum).`);
       return;
     }
-    // Lecture des en-têtes (quelques Ko, aucun envoi) : une vidéo HEVC est
-    // refusée avec la marche à suivre, une vidéo lourde ou en 4K est signalée.
-    // Si la lecture échoue, la vidéo est acceptée comme avant (jamais bloquée
-    // par une erreur de vérification).
-    const verdict = await inspectVideoFile(file).then((info) => judgeVideo(info, file.size)).catch(() => ({ error: undefined, warnings: [] as string[] }));
-    if (verdict.error) { setImageActionError(verdict.error); return; }
-    if (verdict.warnings.length > 0) setImageActionError(`Vidéo ajoutée. ${verdict.warnings.join(' ')}`);
-    // Same bytes, but carrying its real type — that's what Supabase Storage
-    // stores (and later serves) as the video's Content-Type.
-    const typedFile = withContentType(file, contentType);
-    setImages((prev) => [...prev, { key: `local-video-${Date.now()}`, kind: 'video', previewUrl: URL.createObjectURL(typedFile), file: typedFile }]);
+    await optimizeAndAddVideo(file, false);
+  };
+
+  // Optimise la vidéo (MP4 H.264 720p, index en tête, couverture) puis l'ajoute à
+  // la galerie. La bibliothèque de transcodage n'est chargée qu'ici.
+  const optimizeAndAddVideo = async (file: File, trimToLimit: boolean) => {
+    const controller = new AbortController();
+    videoAbort.current = controller;
+    setVideoJob({ progress: 0 });
+    try {
+      const { optimizeVideo } = await import('@/lib/videoOptimize');
+      const result = await optimizeVideo(file, {
+        signal: controller.signal,
+        trimToLimit,
+        onProgress: (progress) => setVideoJob({ progress }),
+      });
+      // Same bytes, but carrying its real type — that's what Supabase Storage
+      // stores (and later serves) as the video's Content-Type.
+      const typedFile = withContentType(result.file, resolveVideoContentType(result.file) ?? 'video/mp4');
+      setImages((prev) => [...prev, {
+        key: `local-video-${Date.now()}`,
+        kind: 'video',
+        previewUrl: URL.createObjectURL(typedFile),
+        file: typedFile,
+        coverFile: result.cover ?? undefined,
+        coverUrl: result.cover ? URL.createObjectURL(result.cover) : undefined,
+      }]);
+      const parts: string[] = [];
+      if (result.keptOriginal) parts.push(`Votre appareil ne peut pas optimiser cette vidéo, mais elle est déjà légère (${formatMo(result.afterBytes)}) : elle est gardée telle quelle.`);
+      else if (result.plan === 'keep') parts.push(`Vidéo ajoutée (${formatMo(result.afterBytes)}) : elle est déjà légère.`);
+      else parts.push(`Vidéo optimisée : ${sizeSummary(result.beforeBytes, result.afterBytes)}.`);
+      if (result.audioDropped) parts.push('Le son n’a pas pu être conservé sur cet appareil : la vidéo sera muette.');
+      setVideoNotice(parts.join(' '));
+    } catch (err) {
+      const failure = err as Partial<VideoOptimizeError>;
+      if (failure.code === 'canceled') setVideoNotice('Optimisation annulée.');
+      else if (failure.code === 'too_long') setLongVideo({ file, durationSec: failure.durationSec ?? 0 });
+      else setImageActionError(err instanceof Error && failure.code ? err.message : 'La vidéo n’a pas pu être préparée. Réessayez avec une vidéo plus courte (30 secondes maximum).');
+    } finally {
+      if (videoAbort.current === controller) videoAbort.current = null;
+      setVideoJob(null);
+    }
   };
 
   // The main photo (products' is_primary row) is the first PHOTO in the
@@ -1179,6 +1222,10 @@ export default function SellerProductForm({ productId }: { productId?: string })
   };
 
   const handleSubmit = async (status: 'draft' | 'published') => {
+    if (videoJob) {
+      setSubmitError('La vidéo est en cours d’optimisation : patientez quelques secondes, puis enregistrez.');
+      return;
+    }
     const validationErrors = validate(status);
     if (Object.keys(validationErrors).length > 0) {
       // Shown right above the action buttons (via submitError) instead of
@@ -1206,6 +1253,7 @@ export default function SellerProductForm({ productId }: { productId?: string })
       const toNewMedia = (img: MediaItem): NewProductMedia => ({
         file: img.file as File,
         mediaType: img.kind,
+        coverFile: img.coverFile,
         originalFile: img.originalFile,
         logoFile: img.logoFile,
         brandingOverlay: img.brandingOverlay,
@@ -1743,7 +1791,9 @@ export default function SellerProductForm({ productId }: { productId?: string })
               <div key={img.key} className="rounded-xl border border-line bg-white p-3 space-y-2.5">
                 <div className="flex items-center gap-3">
                   <div className="relative h-16 w-16 flex-shrink-0 overflow-hidden rounded-lg bg-cream">
-                    {img.kind === 'video' ? (
+                    {img.kind === 'video' && img.coverUrl ? (
+                      <img src={img.coverUrl} alt="Couverture de la vidéo" className="h-full w-full object-cover" />
+                    ) : img.kind === 'video' ? (
                       <video src={withFirstFrame(img.previewUrl)} className="h-full w-full object-cover" muted playsInline preload="metadata" />
                     ) : (
                       <img src={img.previewUrl} alt={`Photo ${i + 1}`} className="h-full w-full object-cover" />
@@ -1822,6 +1872,34 @@ export default function SellerProductForm({ productId }: { productId?: string })
           </div>
         )}
         {imageActionError && <p className="text-xs text-burgundy">{imageActionError}</p>}
+        {videoNotice && !videoJob && <p className="text-xs text-ink/70" role="status">{videoNotice}</p>}
+
+        {videoJob && (
+          <div className="rounded-xl border border-line bg-white p-3" role="status" aria-live="polite">
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-sm font-medium text-ink">Optimisation de la vidéo… {Math.round(videoJob.progress * 100)} %</p>
+              <button type="button" onClick={() => videoAbort.current?.abort()} className="rounded-full border border-line px-3 py-1 text-xs font-semibold text-ink hover:bg-cream">Annuler</button>
+            </div>
+            <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-cream" aria-hidden="true">
+              <div className="h-full rounded-full bg-burgundy transition-[width]" style={{ width: `${Math.round(videoJob.progress * 100)}%` }} />
+            </div>
+            <p className="mt-1.5 text-xs text-ink/50">Vous pouvez continuer à remplir le formulaire ; gardez cette page ouverte.</p>
+          </div>
+        )}
+
+        {longVideo && (
+          <div className="rounded-xl border border-burgundy/30 bg-cream p-3" role="alert">
+            <p className="text-sm text-ink">
+              Cette vidéo dure {Math.ceil(longVideo.durationSec)} secondes : la durée maximale est de {MAX_VIDEO_SECONDS} secondes pour qu’elle se charge vite chez vos clients.
+            </p>
+            <div className="mt-2 flex flex-wrap gap-2">
+              <button type="button" onClick={() => { const f = longVideo.file; setLongVideo(null); void optimizeAndAddVideo(f, true); }} className="rounded-full bg-burgundy px-3 py-1.5 text-xs font-semibold text-cream hover:bg-burgundy-ruby">
+                Garder les {MAX_VIDEO_SECONDS} premières secondes
+              </button>
+              <button type="button" onClick={() => setLongVideo(null)} className="rounded-full border border-line px-3 py-1.5 text-xs font-semibold text-ink hover:bg-white">Choisir une autre vidéo</button>
+            </div>
+          </div>
+        )}
 
         <div className="grid gap-2.5 sm:grid-cols-2">
           <label className="flex flex-col items-center justify-center rounded-lg border-2 border-dashed border-line cursor-pointer hover:border-burgundy/30 transition-colors py-6">
@@ -1830,11 +1908,11 @@ export default function SellerProductForm({ productId }: { productId?: string })
             <span className="mt-0.5 text-xs text-ink/35">{images.length}/{MAX_PRODUCT_MEDIA_ITEMS} médias</span>
             <input type="file" accept="image/*" multiple className="hidden" onChange={(e) => { handleAddFiles(e.target.files); e.target.value = ''; }} />
           </label>
-          <label className={`flex flex-col items-center justify-center rounded-lg border-2 border-dashed border-line py-6 transition-colors ${videoCount >= MAX_PRODUCT_VIDEOS ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer hover:border-burgundy/30'}`}>
+          <label className={`flex flex-col items-center justify-center rounded-lg border-2 border-dashed border-line py-6 transition-colors ${videoCount >= MAX_PRODUCT_VIDEOS || videoJob ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer hover:border-burgundy/30'}`}>
             <Video size={22} className="text-ink/30" />
             <span className="mt-2 text-sm font-medium text-ink/60">Ajouter une vidéo</span>
-            <span className="mt-0.5 text-xs text-ink/35">MP4/MOV/WebM, {MAX_VIDEO_SIZE_MB} Mo max</span>
-            <input type="file" accept={VIDEO_INPUT_ACCEPT} disabled={videoCount >= MAX_PRODUCT_VIDEOS} className="hidden" onChange={(e) => { void handleAddVideo(e.target.files); e.target.value = ''; }} />
+            <span className="mt-0.5 text-xs text-ink/35">{MAX_VIDEO_SECONDS} s max, optimisée automatiquement</span>
+            <input type="file" accept={VIDEO_INPUT_ACCEPT} disabled={videoCount >= MAX_PRODUCT_VIDEOS || Boolean(videoJob)} className="hidden" onChange={(e) => { void handleAddVideo(e.target.files); e.target.value = ''; }} />
           </label>
         </div>
 

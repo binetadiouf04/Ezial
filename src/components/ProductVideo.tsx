@@ -2,17 +2,26 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Loader2, Play, RotateCcw, VideoOff } from 'lucide-react';
 
 // Vidéo d'une fiche produit, pensée pour l'iPhone et les connexions mobiles :
-// - rien n'est téléchargé tant que la vidéo n'est pas à l'écran (IntersectionObserver)
-//   et, quand une image de couverture existe, tant que l'acheteur n'a pas touché
-//   « Lire » (preload="none") : la page produit ne paie jamais le poids d'une
-//   vidéo (jusqu'à 50 Mo) qu'on ne regarde pas ;
+// - rien n'est téléchargé tant que la vidéo n'est pas à l'écran (IntersectionObserver) ;
+// - vidéo optimisée à l'import (couverture propre à la vidéo = signe d'un fichier
+//   MP4 « faststart » de ~2 Mo) : preload="metadata" (quelques Ko) puis la lecture
+//   démarre au toucher presque sans attente ;
+// - ancienne vidéo non optimisée (sans couverture propre, jusqu'à 50 Mo, index
+//   parfois en fin de fichier) : preload="none" tant que l'acheteur n'a pas touché
+//   « Lire » : la page produit ne paie jamais le poids d'une vidéo qu'on ne regarde pas ;
+// - une seule vidéo lue à la fois (les autres sont mises en pause) ;
+// - en quittant la fiche, le téléchargement est arrêté (src retiré) ;
 // - jamais de lecture automatique : la lecture démarre au toucher (geste de
 //   l'utilisateur, donc autorisée avec le son sur iOS) ; playsInline évite le
 //   plein écran forcé de l'iPhone ;
-// - couverture : la première photo du produit ; sans photo, la première image
-//   de la vidéo (fragment #t=0.1, seul moyen pour Safari iOS de l'afficher) ;
+// - couverture : celle de la vidéo, sinon la première photo du produit ; sans
+//   photo, la première image de la vidéo (fragment #t=0.1, seul moyen pour Safari
+//   iOS de l'afficher) ;
 // - indicateur de chargement pendant l'attente, et en cas d'échec un message
 //   clair en français, avec « Réessayer » et le retour aux photos.
+
+// Une seule vidéo en lecture à la fois sur la page.
+let playingVideo: HTMLVideoElement | null = null;
 
 type Phase = 'idle' | 'loading' | 'playing' | 'paused' | 'error';
 
@@ -23,12 +32,15 @@ function withFirstFrame(url: string): string {
 export default function ProductVideo({
   src,
   poster,
+  ownCover = false,
   title,
   onShowPhotos,
 }: {
   src: string;
   /** Première photo du produit (ou sa miniature), affichée avant la lecture. */
   poster?: string;
+  /** La couverture est celle de la vidéo elle-même : fichier optimisé (index en tête), préchargement des seules métadonnées. */
+  ownCover?: boolean;
   /** Nom du produit, pour les lecteurs d'écran. */
   title: string;
   /** Retour à la première photo quand la vidéo ne peut pas être lue. */
@@ -54,6 +66,19 @@ export default function ProductVideo({
     observer.observe(el);
     return () => observer.disconnect();
   }, []);
+
+  // En quittant la fiche (ou en changeant de média) : arrêt de la lecture ET du
+  // téléchargement en cours.
+  useEffect(() => {
+    const video = videoRef.current;
+    return () => {
+      if (!video) return;
+      if (playingVideo === video) playingVideo = null;
+      video.pause();
+      video.removeAttribute('src');
+      video.load();
+    };
+  }, [visible, attempt]);
 
   const play = useCallback(() => {
     const video = videoRef.current;
@@ -88,12 +113,16 @@ export default function ProductVideo({
           // Sans couverture, la première image de la vidéo en tient lieu.
           src={hasPoster ? src : withFirstFrame(src)}
           poster={hasPoster ? poster : undefined}
-          preload={hasPoster ? 'none' : 'metadata'}
+          preload={hasPoster && !ownCover ? 'none' : 'metadata'}
           playsInline
           controls={phase === 'playing' || phase === 'paused'}
           aria-label={`Vidéo du produit ${title}`}
           className="h-full w-full object-cover"
           onWaiting={() => setPhase((p) => (p === 'playing' ? 'loading' : p))}
+          onPlay={(e) => {
+            if (playingVideo && playingVideo !== e.currentTarget) playingVideo.pause();
+            playingVideo = e.currentTarget;
+          }}
           onPlaying={() => setPhase('playing')}
           onPause={() => setPhase((p) => (p === 'error' ? p : 'paused'))}
           onLoadedMetadata={(e) => {
