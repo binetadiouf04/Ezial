@@ -25,6 +25,7 @@ import MobileBuyBar from '@/components/MobileBuyBar';
 import { isBayaProduct, parseWaistCm, waistError, WAIST_LABEL, WAIST_HINT } from '@/lib/waistMeasure';
 import { CopyReference, ShareProduct } from '@/components/ProductShareActions';
 import { DELIVERY } from '@/shared/siteInfo';
+import FreeDeliveryNote from '@/components/FreeDeliveryNote';
 import { textParagraphs } from '@/shared/seoText';
 import { availableStock } from '@/lib/cartStock';
 import { SOLD_OUT_LABEL } from '@/lib/stockBadge';
@@ -473,6 +474,7 @@ export default function ProductPage({ productId }: { productId: string }) {
               <span className="font-semibold text-ink">Livraison en {DELIVERY.delay}</span> à {DELIVERY.area}
             </p>
           </div>
+          <FreeDeliveryNote product={product} />
           {product.pickup && (
             <div className="rounded-lg border border-ink/10 px-3.5 py-3">
               <div className="flex items-center gap-3 text-sm text-ink/75"><Store size={18} className="flex-shrink-0 text-burgundy" aria-hidden="true" /><span>{product.pickup}</span></div>

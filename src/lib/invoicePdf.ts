@@ -163,6 +163,7 @@ export async function createInvoicePdf(invoice: Invoice): Promise<{ blob: Blob; 
   row('Produits', formatInvoiceMoney(invoice.subtotal));
   if (invoice.discount > 0) row('Remise', `- ${formatInvoiceMoney(invoice.discount)}`);
   row('Livraison', invoice.delivery > 0 ? formatInvoiceMoney(invoice.delivery) : 'Gratuite');
+  if (invoice.deliveryDiscount > 0) row('Livraison offerte', `- ${formatInvoiceMoney(invoice.deliveryDiscount)}`);
   if (invoice.urgentFee > 0) row('Livraison urgente', formatInvoiceMoney(invoice.urgentFee));
   y += 1;
   hair(y - 2, LBL, RIGHT, INK);

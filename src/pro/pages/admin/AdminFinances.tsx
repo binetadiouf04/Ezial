@@ -4,7 +4,7 @@ import { fetchAdminFinanceOverview, type AdminFinanceOverview } from '@/lib/supa
 import { formatFCFA } from '../../data';
 import { TrendingUp, Wallet, ArrowDownCircle, ArrowUpCircle, Loader2, AlertCircle } from 'lucide-react';
 import SmartImage from '@/components/SmartImage';
-import AdminPromoCodes from './AdminPromoCodes';
+import AdminPromotions from './AdminPromotions';
 
 const statusLabels: Record<AdminFinanceOverview['shops'][number]['status'], string> = {
   no_sales: 'Aucune vente',
@@ -17,7 +17,7 @@ const statusStyles: Record<AdminFinanceOverview['shops'][number]['status'], stri
   owing: 'bg-amber-50 text-amber-700 border-amber-100',
 };
 
-type Tab = 'overview' | 'promo';
+type Tab = 'overview' | 'campaigns';
 
 export default function AdminFinances() {
   const { navigate } = usePro();
@@ -53,10 +53,10 @@ export default function AdminFinances() {
 
       <div className="flex rounded-full border border-line p-1 w-fit">
         <button onClick={() => setTab('overview')} className={`rounded-full px-4 py-1.5 text-sm font-medium transition-colors ${tab === 'overview' ? 'bg-burgundy text-white' : 'text-ink/60'}`}>Vue d'ensemble</button>
-        <button onClick={() => setTab('promo')} className={`rounded-full px-4 py-1.5 text-sm font-medium transition-colors ${tab === 'promo' ? 'bg-burgundy text-white' : 'text-ink/60'}`}>Codes promo</button>
+        <button onClick={() => setTab('campaigns')} className={`rounded-full px-4 py-1.5 text-sm font-medium transition-colors ${tab === 'campaigns' ? 'bg-burgundy text-white' : 'text-ink/60'}`}>Campagnes</button>
       </div>
 
-      {tab === 'promo' && <AdminPromoCodes />}
+      {tab === 'campaigns' && <AdminPromotions />}
 
       {tab === 'overview' && (
       <>
