@@ -151,7 +151,9 @@ function resolveImageUrl(storagePath) {
 console.log('prerender-seo: fetching catalog from Supabase...');
 
 const [shopsRes, productsRes] = await Promise.all([
-  supabase.from('shops').select('*').eq('status', 'active'),
+  // Colonnes publiques seulement : le téléphone, le propriétaire et les champs internes
+  // des boutiques ne sont pas lisibles sans connexion (docs/sql/boutiques-colonnes-privees.sql).
+  supabase.from('shops').select('id, name, slug, description, neighborhood, logo_url, cover_url, status, is_official, created_at, updated_at').eq('status', 'active'),
   supabase.from('products').select('*').eq('status', 'active'),
 ]);
 if (shopsRes.error) { console.error('prerender-seo: shops query failed —', shopsRes.error.message); process.exit(1); }
