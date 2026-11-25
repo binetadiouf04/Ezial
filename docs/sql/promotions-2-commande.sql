@@ -230,7 +230,8 @@ begin
     v_amount := (s->>'amount')::integer;          -- A : part de la réduction rattachée à la boutique (payée par Ezial, journal)
     v_seller := (s->>'seller_share')::integer;    -- V : part acceptée par la boutique (0 sans accord)
     continue when v_amount <= 0;
-    update public.order_shops set promo_allocation = v_amount, promo_seller_share = v_seller
+    -- net_amount (lu par record_seller_payout et par les écrans Finances) suit la même règle : − V seulement.
+    update public.order_shops set promo_allocation = v_amount, promo_seller_share = v_seller, net_amount = net_amount - v_seller
      where order_id = o.id and shop_id = (s->>'shop_id')::uuid;
     -- Vente déjà créée (commande sans paiement préalable) : seule la part ACCEPTÉE V sort de la vente
     -- automatique ; la commission ne change pas. Commande « à payer » : la vente sera créée au paiement

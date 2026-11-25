@@ -19,7 +19,11 @@ begin
   oid := (o->>'id')::uuid; s := tests.snap(oid);
   perform tests.check((o->>'promo_discount')::int = 4500 and (o->>'total_amount')::int = 45000 - 4500 + 1500 and tests.total_ok(oid),
     'Part vendeur : le client a toujours 4 500 de réduction ; total = formule du contrat');
-  perform tests.check(s->'shops' = ref->'shops' and s->'items' = ref->'items', 'Part vendeur : commissions et sous-totaux INCHANGÉS');
+  perform tests.check((select jsonb_agg(x - 'net') from jsonb_array_elements(s->'shops') x) = (select jsonb_agg(x - 'net') from jsonb_array_elements(ref->'shops') x)
+    and s->'items' = ref->'items', 'Part vendeur : commissions et sous-totaux INCHANGÉS');
+  perform tests.check((select bool_and(os.net_amount = st.net_amount) from public.order_shops os join public.seller_transactions st on st.order_id = os.order_id and st.shop_id = os.shop_id and st.type = 'sale'
+     where os.order_id = oid) and (select net_amount from public.order_shops where order_id = oid and shop_id = tests.uid('b1')) = 8700,
+    'Part vendeur : order_shops.net_amount (lu par record_seller_payout / Finances) = net de la vente, − V seulement (8 700)');
   select array_agg(row(os.shop_id, os.promo_allocation, os.promo_seller_share)::text order by os.shop_id) as a into r from public.order_shops os where os.order_id = oid;
   perform tests.check(r.a = array[row(tests.uid('b1'), 1000, 300)::text, row(tests.uid('b2'), 2000, 500)::text, row(tests.uid('b3'), 1500, 0)::text],
     'Part vendeur : order_shops A / V = 1 000 / 300 ; 2 000 / 500 ; 1 500 / 0');
