@@ -1,6 +1,7 @@
 import { FunctionsHttpError } from '@supabase/supabase-js';
 import { supabase } from './supabaseClient';
 import { isOrangeLink } from './orderPayment';
+import { isReturnState, type ReturnState } from './paymentReturn';
 
 // Paiement Orange Money (« QR CODE – OM ») côté site.
 //   * le QR est créé par la fonction Edge payment-initiate (identifiants Orange
@@ -53,20 +54,58 @@ export async function startOrangeMoneyPayment(orderId: string): Promise<{ qr: Or
   return { qr };
 }
 
-/** QR encore valable déjà créé pour cette commande (rechargement de la page) : aucun appel à Orange. */
-export async function fetchOpenOrangeQr(orderId: string): Promise<OrangeQr | null> {
+export interface OrangeAttempt {
+  transactionId: string;
+  /** payment_transactions.status réel (initiated, pending, confirmed, failed, cancelled, expired, superseded, duplicate). */
+  status: string;
+  /** QR / liens encore valables (tentative en attente uniquement). */
+  qr: OrangeQr | null;
+}
+
+/**
+ * Dernière tentative Orange Money de la commande (droits du client : RLS, uniquement SES commandes).
+ * undefined = lecture impossible (réseau) ; null = aucune tentative.
+ */
+export async function fetchLatestOrangeAttempt(orderId: string): Promise<OrangeAttempt | null | undefined> {
   const { data, error } = await supabase
     .from('payment_transactions')
     .select('id, status, checkout_data, expires_at')
     .eq('order_id', orderId)
     .eq('provider', 'orange_money')
-    .eq('status', 'pending')
-    .gt('expires_at', new Date().toISOString())
     .order('created_at', { ascending: false })
     .limit(1)
     .maybeSingle();
-  if (error || !data) return null;
-  return toQr(data.id as string, data.checkout_data as CheckoutDataJson | null, data.expires_at);
+  if (error) return undefined;
+  if (!data) return null;
+  const status = String(data.status ?? '');
+  const expiresAt = typeof data.expires_at === 'string' ? Date.parse(data.expires_at) : NaN;
+  const open = status === 'pending' && (!Number.isFinite(expiresAt) || expiresAt > Date.now());
+  const qr = open ? toQr(data.id as string, data.checkout_data as CheckoutDataJson | null, data.expires_at) : null;
+  return { transactionId: data.id as string, status, qr: qr && Date.parse(qr.validUntil) > Date.now() ? qr : null };
+}
+
+/**
+ * État du paiement SANS connexion, pour la page de retour (Safari n'a pas la session
+ * de l'application installée). Fonction serveur payment_return_status (docs/sql/retour-paiement.sql) :
+ * numéro de commande + état, à partir de l'uuid de la tentative ; aucune donnée personnelle.
+ *   - { state, orderNumber } : réponse de la base ;
+ *   - 'unknown'     : identifiant inconnu ;
+ *   - 'unavailable' : fonction absente (migration pas encore exécutée) ;
+ *   - 'error'       : réseau / erreur passagère.
+ */
+export async function fetchPaymentReturnStatus(ref: string): Promise<{ state: ReturnState; orderNumber: string } | 'unknown' | 'unavailable' | 'error'> {
+  const { data, error } = await supabase.rpc('payment_return_status', { p_ref: ref });
+  if (error) {
+    // PGRST202 : fonction introuvable (migration absente) ; 42883 : idem côté Postgres.
+    if (error.code === 'PGRST202' || error.code === '42883') return 'unavailable';
+    return 'error';
+  }
+  const row = Array.isArray(data) ? data[0] : data;
+  if (!row) return 'unknown';
+  const state = (row as { payment_state?: unknown }).payment_state;
+  const orderNumber = (row as { order_number?: unknown }).order_number;
+  if (!isReturnState(state) || typeof orderNumber !== 'string') return 'error';
+  return { state, orderNumber };
 }
 
 export interface OrderPaymentState {

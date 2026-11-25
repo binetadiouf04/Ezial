@@ -11,6 +11,8 @@ import OnlinePayment from '@/components/OnlinePayment';
 import PaymentStatusBadge from '@/components/PaymentStatusBadge';
 import { DeliveryCodeCard, PickupPlace } from '@/components/OrderParts';
 import RateOrderItems from '@/components/RateOrderItems';
+import PaymentReturnStatus from '@/components/PaymentReturnStatus';
+import { parseReturnParams, readLaunch } from '@/lib/paymentReturn';
 
 const deliveryStatusColors: Record<DeliveryStepStatus, string> = {
   confirmed: 'bg-blue-50 text-blue-700', preparing: 'bg-amber-50 text-amber-700', ready: 'bg-green-50 text-green-700',
@@ -40,6 +42,8 @@ export default function OrderDetailPage({ orderId }: { orderId: string }) {
   const [deliveryCode, setDeliveryCode] = useState<string | null>(null);
   const [missionStatus, setMissionStatus] = useState<string | null>(null);
   const [claimModal, setClaimModal] = useState<'retour_echange' | 'probleme' | null>(null);
+  // Arrivée par l'adresse de retour du paiement (souvent dans Safari, sans la session de l'application).
+  const [paymentReturn] = useState(() => (typeof window === 'undefined' ? { kind: null, ref: null } : parseReturnParams(window.location.search)));
 
   // Commande Orange Money pas encore payée, ou annulée : ni code de livraison ni facture.
   const awaitingOnlinePayment = !!order?.paymentRequired && order.paymentStatus !== 'paid';
@@ -49,6 +53,12 @@ export default function OrderDetailPage({ orderId }: { orderId: string }) {
     if (!awaitingOnlinePayment) void ensureOrderDeliveryCode(order.supabaseOrderId).then(setDeliveryCode);
     void fetchOrderDeliveryMissionStatus(order.supabaseOrderId).then(setMissionStatus);
   }, [order?.supabaseOrderId, awaitingOnlinePayment, cancelled]);
+
+  if (!order && paymentReturn.kind) {
+    let orderNumber = orderId;
+    try { orderNumber = decodeURIComponent(orderId); } catch { /* adresse mal formée : affichée telle quelle */ }
+    return <PaymentReturnStatus orderNumber={orderNumber.slice(0, 40)} kind={paymentReturn.kind} paymentRef={paymentReturn.ref} />;
+  }
 
   if (!order) {
     return (
@@ -78,7 +88,7 @@ export default function OrderDetailPage({ orderId }: { orderId: string }) {
           {cancelled
             ? <span className="rounded-full bg-red-50 px-3 py-1 text-xs font-medium text-red-700">Annulée</span>
             : awaitingOnlinePayment
-              ? <PaymentStatusBadge order={order} className="px-3 py-1" />
+              ? <PaymentStatusBadge order={order} verifying={order.payment !== 'wave' && (paymentReturn.kind === 'retour' || !!readLaunch(order.id))} className="px-3 py-1" />
               : <span className={`rounded-full px-3 py-1 text-xs font-medium ${status.color}`}>{status.label}</span>}
         </div>
         <p className="mt-1 text-sm text-ink/55">{date}</p>

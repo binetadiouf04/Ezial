@@ -10,7 +10,9 @@ const toneClasses: Record<BadgeTone, string> = {
 };
 
 // Statut de paiement RÉEL de la commande (jamais « Payé » sans paiement confirmé).
-export default function PaymentStatusBadge({ order, className = '' }: { order: Order; className?: string }) {
-  const { label, tone } = paymentBadge(order, Date.now());
+// verifying : paiement lancé depuis ce navigateur, confirmation attendue (jamais « Payé »).
+export default function PaymentStatusBadge({ order, className = '', verifying = false }: { order: Order; className?: string; verifying?: boolean }) {
+  const badge = paymentBadge(order, Date.now());
+  const { label, tone } = verifying && badge.label === 'En attente de paiement' ? { label: 'Vérification du paiement', tone: 'info' as BadgeTone } : badge;
   return <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${toneClasses[tone]} ${className}`}>{label}</span>;
 }

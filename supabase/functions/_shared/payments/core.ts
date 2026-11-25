@@ -437,13 +437,29 @@ export interface InitiateInput {
   provider: Provider;
   /** Identifiant issu du jeton vérifié, jamais du corps de la requête. */
   userId: string;
-  /** « {orderNumber} » est remplacé par le numéro de commande. */
+  /**
+   * « {orderNumber} » est remplacé par le numéro de commande ; « {transactionId} » par
+   * l'identifiant (uuid aléatoire) de la tentative, que la page de retour utilise pour
+   * afficher l'état du paiement sans connexion (Safari n'a pas la session de l'application).
+   */
   returnUrl: string;
   cancelUrl: string;
 }
 
-function fillUrl(template: string, orderNumber: string): string {
-  return template.split('{orderNumber}').join(encodeURIComponent(orderNumber));
+export function fillUrl(template: string, orderNumber: string, transactionId: string): string {
+  const hadRef = template.includes('{transactionId}');
+  let url = template
+    .split('{orderNumber}').join(encodeURIComponent(orderNumber))
+    .split('{transactionId}').join(encodeURIComponent(transactionId));
+  // Ancienne adresse configurée sans {transactionId} : la référence non devinable
+  // est ajoutée quand même, pour que la page de retour fonctionne sans connexion.
+  if (!hadRef && !/[?&]ref=/.test(url)) {
+    const hashAt = url.indexOf('#');
+    const base = hashAt >= 0 ? url.slice(0, hashAt) : url;
+    const hash = hashAt >= 0 ? url.slice(hashAt) : '';
+    url = `${base}${base.includes('?') ? '&' : '?'}ref=${encodeURIComponent(transactionId)}${hash}`;
+  }
+  return url;
 }
 
 function isHttpsUrl(value: string): boolean {
@@ -519,8 +535,8 @@ export async function initiatePayment(
       amount: tx.amount,
       currency: 'XOF',
       orderNumber,
-      returnUrl: fillUrl(input.returnUrl, orderNumber),
-      cancelUrl: fillUrl(input.cancelUrl, orderNumber),
+      returnUrl: fillUrl(input.returnUrl, orderNumber, tx.id),
+      cancelUrl: fillUrl(input.cancelUrl, orderNumber, tx.id),
       validitySeconds,
     });
 

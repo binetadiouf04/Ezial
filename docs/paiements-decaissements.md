@@ -162,8 +162,8 @@ l'adaptateur, à partir de la documentation officielle. Liste à compléter :
 | Secret | Valeur |
 |---|---|
 | `PAYMENTS_ENVIRONMENT` | `sandbox` (défaut) ou `production` |
-| `PAYMENTS_RETURN_URL` | adresse de retour après paiement ; `{orderNumber}` est remplacé par le numéro de commande. Défaut : `https://www.ezial.net/compte/commande/{orderNumber}?paiement=retour` |
-| `PAYMENTS_CANCEL_URL` | adresse de retour après abandon. Défaut : `https://www.ezial.net/compte/commande/{orderNumber}?paiement=annule` |
+| `PAYMENTS_RETURN_URL` | adresse de retour après paiement ; `{orderNumber}` est remplacé par le numéro de commande, `{transactionId}` par l'uuid de la tentative (la page de retour l'utilise pour afficher l'état du paiement sans connexion, fonction `payment_return_status`, `docs/sql/retour-paiement.sql`). Défaut : `https://www.ezial.net/compte/commande/{orderNumber}?paiement=retour&ref={transactionId}` |
+| `PAYMENTS_CANCEL_URL` | adresse de retour après abandon. Défaut : `https://www.ezial.net/compte/commande/{orderNumber}?paiement=annule&ref={transactionId}` |
 | `PAYOUTS_DISPATCH_SECRET` | secret partagé de payouts-dispatch (même valeur que le secret Vault `payouts_dispatch_secret`) |
 
 Pour **chacun** des quatre adaptateurs — préfixes `WAVE_COLLECTION_*`,
