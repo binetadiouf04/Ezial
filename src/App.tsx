@@ -38,6 +38,7 @@ const OrderConfirmationPage = lazy(() => import('@/pages/OrderConfirmationPage')
 const OrderTrackingPage = lazy(() => import('@/pages/OrderTrackingPage'));
 const ProfilePage = lazy(() => import('@/pages/ProfilePage'));
 const OrderDetailPage = lazy(() => import('@/pages/OrderDetailPage'));
+const SubscriptionReturnPage = lazy(() => import('@/pages/SubscriptionReturnPage'));
 const ProEntryPage = lazy(() => import('@/pro/pages/ProEntryPage'));
 const InfoPage = lazy(() => import('@/pages/InfoPage'));
 const BecomeSellerPage = lazy(() => import('@/pages/BecomeSellerPage'));
@@ -168,6 +169,9 @@ function RouteView() {
     if (orderId) return <OrderDetailPage orderId={orderId} />;
   }
 
+  // Retour du paiement d'abonnement Ezial Plus (Orange Money) : lisible sans connexion.
+  if (clean === '/abonnement/retour') return <SubscriptionReturnPage />;
+
   // Info pages: /info/:slug
   if (clean.startsWith('/info/')) {
     const slug = clean.split('/')[2];
@@ -276,6 +280,7 @@ function headTagsFor(route: string, { catalogProducts, catalogShops }: CatalogFo
   if (clean.startsWith('/commande/')) return plainTags(`Confirmation de commande — ${SITE_TITLE}`, UTILITY_DESCRIPTIONS.confirmation);
   if (clean.startsWith('/suivi/')) return plainTags(`Suivi de commande — ${SITE_TITLE}`, UTILITY_DESCRIPTIONS.suivi);
   if (clean.startsWith('/compte/commande/')) return plainTags(`Détail de commande — ${SITE_TITLE}`, UTILITY_DESCRIPTIONS.detailCommande);
+  if (clean === '/abonnement/retour') return plainTags(`Paiement de l’abonnement — ${SITE_TITLE}`, 'Retour après le paiement de l’abonnement Ezial Plus d’une boutique avec Orange Money : état du paiement.');
   if (clean === '/favoris') return plainTags(`Favoris — ${SITE_TITLE}`, UTILITY_DESCRIPTIONS.favoris);
   if (clean === '/profil' || clean === '/commandes' || clean === '/compte/commandes') return plainTags(`Mon compte — ${SITE_TITLE}`, UTILITY_DESCRIPTIONS.compte);
   if (clean === '/promos') return plainTags(`Promotions — ${SITE_TITLE}`, UTILITY_DESCRIPTIONS.promos);

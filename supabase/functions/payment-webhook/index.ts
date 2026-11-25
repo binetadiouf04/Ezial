@@ -26,7 +26,7 @@
 //   coffre Supabase (payments_internal_secret, migration 6).
 import { createClient } from 'npm:@supabase/supabase-js@2';
 import { createAdapters, handleCollectionWebhook, isProvider, isUuid } from '../_shared/payments/core.ts';
-import type { PaymentStatus, Provider, RecordEventInput, WebhookDb } from '../_shared/payments/core.ts';
+import type { AttemptKind, PaymentStatus, Provider, RecordEventInput, WebhookDb } from '../_shared/payments/core.ts';
 import { paymentsEnv } from '../_shared/payments/vault.ts';
 
 const MAX_BODY_BYTES = 64 * 1024;
@@ -76,9 +76,26 @@ const db: WebhookDb = {
     if (!isUuid(providerReference)) return null;
     const byId = await supabase.from('payment_transactions').select('id, amount, status').eq('provider', provider).eq('id', providerReference).maybeSingle();
     if (byId.error) throw new Error(byId.error.message);
-    return (byId.data as { id: string; amount: number; status: string } | null) ?? null;
+    if (byId.data) return byId.data as { id: string; amount: number; status: string };
+    // Pas une commande : tentative de paiement d'ABONNEMENT (table subscription_payment_attempts). Table absente
+    // (migration abonnement-om pas encore exécutée) ou lecture impossible : traité comme « introuvable », les commandes
+    // ne sont jamais affectées.
+    const sub = await supabase.from('subscription_payment_attempts').select('id, amount, status').eq('provider', provider).eq('id', providerReference).maybeSingle();
+    if (sub.error || !sub.data) return null;
+    return { ...(sub.data as { id: string; amount: number; status: string }), kind: 'subscription' as const };
   },
-  async recordVerification(transactionId: string, status: PaymentStatus, amount: number | null, providerTransactionId: string | null) {
+  async recordVerification(transactionId: string, status: PaymentStatus, amount: number | null, providerTransactionId: string | null, kind?: AttemptKind) {
+    if (kind === 'subscription') {
+      // L'activation de l'abonnement est faite par la base (idempotente, verrouillée par boutique), jamais ici.
+      const { data, error } = await supabase.rpc('subscription_payments_record_verification', {
+        p_attempt_id: transactionId,
+        p_provider_status: status,
+        p_amount: amount,
+        p_provider_transaction_id: providerTransactionId,
+      });
+      if (error) throw new Error(error.message);
+      return data as string;
+    }
     const { data, error } = await supabase.rpc('payments_record_verification', {
       p_transaction_id: transactionId,
       p_provider_status: status,

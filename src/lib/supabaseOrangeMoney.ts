@@ -27,7 +27,7 @@ interface CheckoutDataJson {
   qrCode?: unknown; deepLink?: unknown; deepLinks?: { maxit?: unknown; om?: unknown }; shortLink?: unknown; validUntil?: unknown;
 }
 
-function toQr(transactionId: string, data: CheckoutDataJson | null | undefined, expiresAt: unknown): OrangeQr | null {
+export function toQr(transactionId: string, data: CheckoutDataJson | null | undefined, expiresAt: unknown): OrangeQr | null {
   if (!data) return null;
   const qrCode = typeof data.qrCode === 'string' && /^[A-Za-z0-9+/=]+$/.test(data.qrCode) ? data.qrCode : null;
   const maxit = isOrangeLink(data.deepLinks?.maxit) ? data.deepLinks?.maxit as string : (isOrangeLink(data.deepLink) ? data.deepLink as string : null);
