@@ -42,7 +42,7 @@ end $$;
 -- 0. Copie des définitions d'origine (contrôle du retour arrière). Seule la PREMIÈRE exécution enregistre.
 create table if not exists ezial_private.promotions_saved_functions (
   sig text primary key, def text not null, saved_at timestamptz not null default now());
-revoke all on ezial_private.promotions_saved_functions from public;
+revoke all on ezial_private.promotions_saved_functions from public, anon, authenticated;
 insert into ezial_private.promotions_saved_functions (sig, def)
 select v.sig, pg_get_functiondef(v.sig::regprocedure)
   from (values ('public.create_order(jsonb)'), ('ezial_private.trg_orders_on_paid()'), ('public.validate_promo_code(text,integer)')) v(sig)
@@ -303,7 +303,7 @@ revoke all on function ezial_private.promotion_line_matches(uuid, jsonb), ezial_
   ezial_private.promotion_best_automatic(jsonb, uuid, integer, uuid, boolean),
   ezial_private.promotion_apply_to_order(uuid, text, integer), ezial_private.promotion_note_paid_cancelled(uuid, uuid),
   ezial_private.promotion_release_order(uuid), ezial_private.trg_promotions_order_cancelled(),
-  ezial_private.trg_promotions_order_shop_cancelled() from public;
+  ezial_private.trg_promotions_order_shop_cancelled() from public, anon, authenticated;
 
 -- 6. Aperçu pour le panier (n'enregistre rien ; create_order recalcule tout)
 create or replace function public.promotions_preview(payload jsonb) returns jsonb

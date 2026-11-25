@@ -25,8 +25,9 @@ begin
   ok := false; begin insert into public.promotions (name, code, kind, value, ends_at, status) values ('Pirate', 'PIRATE', 'fixed', 50000, now() + interval '1 day', 'active');
     exception when insufficient_privilege or check_violation then ok := true; end;
   perform tests.check(ok, 'Client : ne peut pas créer de campagne');
-  update public.promotions set budget_used = 0, status = 'active'; get diagnostics n = row_count;
-  perform tests.check(n = 0, 'Client : ne peut modifier aucune campagne');
+  n := 0; ok := false;
+  begin update public.promotions set budget_used = 0, status = 'active'; get diagnostics n = row_count; exception when insufficient_privilege then ok := true; end;
+  perform tests.check(ok and n = 0, 'Client : ne peut modifier aucune campagne (droit refusé)');
   ok := false; begin insert into public.promotion_redemptions (promotion_id, order_id) values (gen_random_uuid(), gen_random_uuid()); exception when insufficient_privilege then ok := true; end;
   perform tests.check(ok, 'Client : ne peut pas écrire d''utilisation');
   select count(*) into n from public.promotion_seller_shares; perform tests.check(n = 0, 'Client : ne voit aucune part vendeur');
@@ -65,6 +66,14 @@ begin
   perform tests.check(jsonb_array_length(public.admin_promotions_list()) = 2, 'Admin sans facteur : accès accordé (comme les autres fonctions admin)');
   select count(*) into n from public.promotions; perform tests.check(n = 2, 'Admin : lit les campagnes (table)');
   select count(*) into n from public.promotion_compensations; perform tests.check(n = 2, 'Admin : lit les compensations (table)');
+  -- Même un administrateur n'écrit jamais directement dans les tables : tout passe par les fonctions serveur
+  ok := false; begin update public.promotions set budget_used = 0; exception when insufficient_privilege then ok := true; end;
+  perform tests.check(ok, 'Admin : écriture directe dans promotions refusée (passer par admin_promotion_save)');
+  ok := false; begin insert into public.promotion_seller_shares (promotion_id, shop_id, share_type, share_value, agreed)
+    select id, tests.uid('b1'), 'percent', 100, true from public.promotions limit 1; exception when insufficient_privilege then ok := true; end;
+  perform tests.check(ok, 'Admin : écriture directe dans les parts vendeurs refusée');
+  ok := false; begin update public.promotion_compensations set status = 'paid', paid_at = now(), paid_method = 'wave'; exception when insufficient_privilege then ok := true; end;
+  perform tests.check(ok, 'Admin : écriture directe dans les compensations refusée (passer par admin_mark_compensations_paid)');
   perform tests.as_system();
 end $$;
 
@@ -170,4 +179,30 @@ begin
   msg := null; begin perform public.admin_mark_compensations_paid(array[(r->1->>'id')::uuid], 'cheque', null, null); exception when others then msg := sqlerrm; end;
   perform tests.check(msg = 'Moyen de paiement invalide.', 'Admin : moyen de paiement contrôlé');
   perform tests.as_system();
+end $$;
+
+-- Droits d'exécution (catalogue) : aucune fonction interne des campagnes n'est exécutable par anon / authenticated ;
+-- fonctions publiques : seulement celles prévues par le contrat.
+do $$
+declare v record; bad text[] := '{}';
+begin
+  for v in select p.oid, p.oid::regprocedure::text sig from pg_proc p
+            where p.pronamespace = 'ezial_private'::regnamespace and (p.proname like 'promotion%' or p.proname like 'trg_promotions%') loop
+    if has_function_privilege('anon', v.oid, 'execute') or has_function_privilege('authenticated', v.oid, 'execute') then bad := bad || v.sig; end if;
+  end loop;
+  perform tests.check(cardinality(bad) = 0, 'Droits : fonctions internes des campagnes non exécutables par anon / authenticated ' || coalesce(array_to_string(bad, ', '), ''));
+  bad := '{}';
+  for v in select * from (values
+      ('public.admin_promotions_list()', false, true), ('public.admin_promotion_save(jsonb)', false, true),
+      ('public.admin_promotion_set_status(uuid,text)', false, true), ('public.admin_promotion_compensations(text)', false, true),
+      ('public.admin_mark_compensations_paid(uuid[],text,text,text)', false, true), ('public.seller_promotion_compensations(uuid)', false, true),
+      ('public.promotions_preview(jsonb)', false, true), ('public.public_active_promotions()', true, true)) t(sig, anon_ok, auth_ok) loop
+    if has_function_privilege('anon', v.sig::regprocedure, 'execute') <> v.anon_ok
+       or has_function_privilege('authenticated', v.sig::regprocedure, 'execute') <> v.auth_ok then bad := bad || v.sig; end if;
+  end loop;
+  perform tests.check(cardinality(bad) = 0, 'Droits : anon n''exécute que public_active_promotions ; fonctions admin réservées aux connectés (contrôle admins + double authentification à l''intérieur) ' || coalesce(array_to_string(bad, ', '), ''));
+  perform tests.check((select bool_and(p.prosecdef and array_to_string(p.proconfig, ',') = 'search_path=""') from pg_proc p
+     where (p.pronamespace = 'public'::regnamespace and (p.proname like '%promotion%' or p.proname = 'validate_promo_code'))
+        or (p.pronamespace = 'ezial_private'::regnamespace and (p.proname like 'promotion%' or p.proname like 'trg_promotions%') and p.proname <> 'promotion_fcfa')),
+    'Droits : toutes les fonctions des campagnes en SECURITY DEFINER avec search_path vide');
 end $$;

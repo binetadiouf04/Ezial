@@ -1,10 +1,13 @@
 -- ÉTAT DE DÉPART = PRODUCTION : les fonctions utilisées par les tests sont le texte EXACT de production
--- (empreintes md5 relues en lecture seule le 21 nov. 2026, calculées sans les « \r »).
+-- (empreintes md5 relues en lecture seule le 21 nov. 2026, create_order et livraison urgente le 25 nov. 2026, sans les « \r »).
 do $$
 declare v record;
 begin
   for v in select * from (values
-    ('create_order(jsonb)', 'a8b3bf935cbb6c1a7b36e44c82d4d02e'),
+    ('create_order(jsonb)', '10178f6554882cf5390eb6f0a7a13381'),
+    ('ezial_private.order_urgent_fee(jsonb,boolean)', '5d24b3e2bdcfe9f31e6c94f68e167042'),
+    ('ezial_private.urgent_delivery_refusal(date,text,timestamp with time zone)', 'a634263283ea9c74ffaae1d06ac4eb3d'),
+    ('ezial_private.urgent_delivery_fee()', 'e433b56ee0e85294f6792eb697822de8'),
     ('ezial_private.trg_orders_on_paid()', '0b3d5a31187d24b38dc0e1f88d809e10'),
     ('validate_promo_code(text,integer)', 'e201da3dc59f4e72e8b74073bcdf670d'),
     ('ezial_private.orders_finalize_unpaid()', '11eebc87ef5cd368df6568cd4646d3da'),

@@ -9,7 +9,7 @@ begin
     (select p.oid::regprocedure::text, pg_get_functiondef(p.oid), coalesce(p.proacl::text, '') from pg_proc p where p.pronamespace in ('public'::regnamespace, 'ezial_private'::regnamespace)
      except select sig, def, acl from tests.base_defs)) x;
   perform tests.check(n = 0, 'Retour arrière : fonctions et droits d''exécution identiques à la production (texte exact)');
-  perform tests.check(md5(pg_get_functiondef('public.create_order(jsonb)'::regprocedure)) = 'a8b3bf935cbb6c1a7b36e44c82d4d02e', 'Retour arrière : create_order = empreinte de production');
+  perform tests.check(md5(pg_get_functiondef('public.create_order(jsonb)'::regprocedure)) = '10178f6554882cf5390eb6f0a7a13381', 'Retour arrière : create_order = empreinte de production (avec livraison urgente)');
   perform tests.check(md5(pg_get_functiondef('ezial_private.trg_orders_on_paid()'::regprocedure)) = '0b3d5a31187d24b38dc0e1f88d809e10', 'Retour arrière : trg_orders_on_paid = empreinte de production');
   perform tests.check(md5(pg_get_functiondef('public.validate_promo_code(text,integer)'::regprocedure)) = 'e201da3dc59f4e72e8b74073bcdf670d', 'Retour arrière : validate_promo_code = empreinte de production');
   select count(*) into n from ((select * from tests.base_policies except select c.relname::text, p.polname::text, p.polcmd::text, coalesce(pg_get_expr(p.polqual, p.polrelid), ''), coalesce(pg_get_expr(p.polwithcheck, p.polrelid), '') from pg_policy p join pg_class c on c.oid = p.polrelid where c.relnamespace = 'public'::regnamespace)

@@ -15,7 +15,8 @@
 --   habituelle ; la part de la réduction rattachée à chaque boutique sort de son solde automatique et lui est
 --   reversée à la main (compensation), moins la part qu'elle a acceptée de financer (part vendeur, facultative).
 -- RÈGLES D'ACCÈS
---   * campagnes, cibles, parts vendeurs : administrateurs uniquement (lecture et écriture) ;
+--   * campagnes, cibles, parts vendeurs : LECTURE pour les administrateurs uniquement ; écriture seulement par
+--     les fonctions admin_promotion_save / admin_promotion_set_status (migration 3) ;
 --   * utilisations et compensations : LECTURE seule pour les administrateurs (elles ne s'écrivent que
 --     par les fonctions serveur : commande, annulation, paiement manuel) ; un vendeur lit les
 --     compensations de SES boutiques ; aucun client ne lit ni n'écrit rien d'autre.
@@ -71,7 +72,7 @@ begin
   end if;
   return new;
 end $$;
-revoke all on function ezial_private.trg_promotions_guard() from public;
+revoke all on function ezial_private.trg_promotions_guard() from public, anon, authenticated;
 drop trigger if exists trg_promotions_guard on public.promotions;
 create trigger trg_promotions_guard before update on public.promotions for each row execute function ezial_private.trg_promotions_guard();
 
@@ -159,23 +160,25 @@ alter table public.promotion_compensations enable row level security;
 
 revoke all on public.promotions, public.promotion_targets, public.promotion_seller_shares,
   public.promotion_redemptions, public.promotion_compensations from anon, authenticated;
-grant select, insert, update, delete on public.promotions, public.promotion_targets, public.promotion_seller_shares to authenticated;
-grant select on public.promotion_redemptions, public.promotion_compensations to authenticated;
+-- LECTURE seule, même pour les administrateurs : toute écriture passe par les fonctions serveur
+-- (admin_promotion_save / admin_promotion_set_status : contrôles, double authentification, journal).
+grant select on public.promotions, public.promotion_targets, public.promotion_seller_shares,
+  public.promotion_redemptions, public.promotion_compensations to authenticated;
 grant all on public.promotions, public.promotion_targets, public.promotion_seller_shares,
   public.promotion_redemptions, public.promotion_compensations to service_role;
 
 drop policy if exists promotions_admin_all on public.promotions;
-create policy promotions_admin_all on public.promotions for all to authenticated
-  using (exists (select 1 from public.admins a where a.user_id = (select auth.uid())))
-  with check (exists (select 1 from public.admins a where a.user_id = (select auth.uid())));
+drop policy if exists promotions_admin_select on public.promotions;
+create policy promotions_admin_select on public.promotions for select to authenticated
+  using (exists (select 1 from public.admins a where a.user_id = (select auth.uid())));
 drop policy if exists promotion_targets_admin_all on public.promotion_targets;
-create policy promotion_targets_admin_all on public.promotion_targets for all to authenticated
-  using (exists (select 1 from public.admins a where a.user_id = (select auth.uid())))
-  with check (exists (select 1 from public.admins a where a.user_id = (select auth.uid())));
+drop policy if exists promotion_targets_admin_select on public.promotion_targets;
+create policy promotion_targets_admin_select on public.promotion_targets for select to authenticated
+  using (exists (select 1 from public.admins a where a.user_id = (select auth.uid())));
 drop policy if exists promotion_seller_shares_admin_all on public.promotion_seller_shares;
-create policy promotion_seller_shares_admin_all on public.promotion_seller_shares for all to authenticated
-  using (exists (select 1 from public.admins a where a.user_id = (select auth.uid())))
-  with check (exists (select 1 from public.admins a where a.user_id = (select auth.uid())));
+drop policy if exists promotion_seller_shares_admin_select on public.promotion_seller_shares;
+create policy promotion_seller_shares_admin_select on public.promotion_seller_shares for select to authenticated
+  using (exists (select 1 from public.admins a where a.user_id = (select auth.uid())));
 drop policy if exists promotion_redemptions_admin_select on public.promotion_redemptions;
 create policy promotion_redemptions_admin_select on public.promotion_redemptions for select to authenticated
   using (exists (select 1 from public.admins a where a.user_id = (select auth.uid())));

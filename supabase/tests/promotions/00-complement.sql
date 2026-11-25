@@ -91,7 +91,8 @@ create function tests.snap(p_order uuid) returns jsonb language sql as $$
   select jsonb_build_object(
     'order', (select jsonb_build_object('status', status, 'payment_status', payment_status, 'products_subtotal', products_subtotal,
         'delivery_fee', delivery_fee, 'discount_amount', discount_amount, 'total_amount', total_amount, 'promo_code', promo_code,
-        'payment_required', payment_required, 'fulfillment_type', fulfillment_type, 'gift_wrap_fee', gift_wrap_fee) from public.orders where id = p_order),
+        'payment_required', payment_required, 'fulfillment_type', fulfillment_type, 'gift_wrap_fee', gift_wrap_fee,
+        'is_urgent', is_urgent, 'urgent_fee', urgent_fee) from public.orders where id = p_order),
     'shops', (select jsonb_agg(jsonb_build_object('shop', shop_id, 'subtotal', subtotal, 'commission', commission_amount, 'net', net_amount,
         'status', status, 'fulfillment', fulfillment_type) order by shop_id) from public.order_shops where order_id = p_order),
     'items', (select jsonb_agg(jsonb_build_object('product', product_id, 'qty', quantity, 'orig', original_unit_price, 'unit', unit_price,
@@ -112,6 +113,9 @@ begin
   res := res || jsonb_build_object('retrait_et_livraison', tests.snap((o->>'id')::uuid));
   o := tests.buy(tests.uid('c2'), jsonb_build_array(tests.it('2')), jsonb_build_object('shopFulfillments', jsonb_build_object(tests.uid('b2'), jsonb_build_object('type', 'pickup'))));
   res := res || jsonb_build_object('retrait_seul', tests.snap((o->>'id')::uuid));
+  -- Livraison urgente (+500, en production depuis le 24-25 nov. 2026) : deux boutiques livrées + emballage cadeau
+  o := tests.buy(tests.uid('c1'), jsonb_build_array(tests.it('1'), tests.it('2')), tests.urgent() || '{"giftWrap": true}');
+  res := res || jsonb_build_object('urgente_2_boutiques', tests.snap((o->>'id')::uuid));
   -- Orange Money : commande à payer, puis paiement confirmé
   update public.payment_settings set orange_money_enabled = true;
   o := tests.buy(tests.uid('c1'), jsonb_build_array(tests.it('1'), tests.it('3')), '{}', 'orange_money');
@@ -166,7 +170,7 @@ create function tests.pickup(p_shop text) returns jsonb language sql as
 $$ select jsonb_build_object('shopFulfillments', jsonb_build_object(tests.uid('b' || p_shop), jsonb_build_object('type', 'pickup'))) $$;
 -- Formule du contrat vérifiée sur une commande
 create function tests.total_ok(p_order uuid) returns boolean language sql as $$
-  select o.total_amount = (o.products_subtotal - (o.discount_amount - o.promo_discount) - o.promo_discount) + o.delivery_fee - o.delivery_discount + o.gift_wrap_fee
+  select o.total_amount = (o.products_subtotal - (o.discount_amount - o.promo_discount) - o.promo_discount) + o.delivery_fee - o.delivery_discount + o.gift_wrap_fee + o.urgent_fee
      and o.discount_amount - o.promo_discount = (select coalesce(sum(oi.discount_amount), 0) from public.order_items oi where oi.order_id = o.id)
     from public.orders o where o.id = p_order $$;
 -- Compensation reversée par Ezial (A − V) à une boutique pour une commande

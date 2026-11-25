@@ -53,5 +53,23 @@ total=$(cat "$TMPD"/*.out | paste -sd+ | bc); rm -f "$TMPD"/*.out
 [ "$total" = "3" ] && [ "$(Q "select uses_count || '/' || budget_used from public.promotions where code = 'IMPAYE'")" = "0/0" ] \
   && [ "$(Q "select count(*) from public.promotion_redemptions where status = 'cancelled'")" = "3" ] \
   && ok "Concurrence : 8 passages simultanés de l'annulation des impayés -> 3 annulations, utilisations et budget rendus une fois (0/0)" || ko "Concurrence : impayés ($total, $(Q "select uses_count || '/' || budget_used from public.promotions where code = 'IMPAYE'"))"
+# 6. Limite PAR CLIENT : le même client envoie 6 commandes simultanées (limite 1 par client, aucune limite totale)
+Q "select tests.reset_promo(); update public.product_variants set stock = 100; select tests.new_promo('UNPARCLIENT', 'percent', 10, '{\"max_uses_per_customer\": 1}');" >/dev/null
+for i in $(seq 1 6); do Q "select tests.try_buy_msg('$(client 1)', jsonb_build_array(tests.it('1')), '{\"promoCode\": \"UNPARCLIENT\"}')" > "$TMPD/$i.out" & done; wait
+okc=$(cat "$TMPD"/*.out | grep -c '^ok$'); refus=$(cat "$TMPD"/*.out | grep -c "^Vous avez déjà utilisé ce code.$"); rm -f "$TMPD"/*.out
+[ "$okc" = "1" ] && [ "$refus" = "5" ] && [ "$(Q "select uses_count || '/' || (select count(*) from public.orders) from public.promotions where code = 'UNPARCLIENT'")" = "1/1" ] \
+  && ok "Concurrence : même client, 6 commandes simultanées, limite 1 par client -> 1 acceptée, 5 refusées (« déjà utilisé »), 1 utilisation" \
+  || ko "Concurrence : limite par client ($okc acceptées, $refus refus)"
+# Un autre client peut toujours l'utiliser
+[ "$(Q "select tests.try_buy_msg('$(client 2)', jsonb_build_array(tests.it('1')), '{\"promoCode\": \"UNPARCLIENT\"}')")" = "ok" ] \
+  && ok "Concurrence : limite par client -> un autre client peut encore utiliser le code" || ko "Concurrence : limite par client bloque un autre client"
+
+# 7. Nouveaux clients : un client sans commande envoie 6 commandes simultanées avec un code « nouveaux clients »
+Q "select tests.reset_promo(); update public.product_variants set stock = 100; select tests.new_promo('BIENVENUE', 'fixed', 1000, '{\"audience\": \"new_customers\"}');" >/dev/null
+for i in $(seq 1 6); do Q "select tests.try_buy_msg('$(client 3)', jsonb_build_array(tests.it('1')), '{\"promoCode\": \"BIENVENUE\"}')" > "$TMPD/$i.out" & done; wait
+okc=$(cat "$TMPD"/*.out | grep -c '^ok$'); refus=$(cat "$TMPD"/*.out | grep -c "^Ce code est réservé aux nouveaux clients.$"); rm -f "$TMPD"/*.out
+[ "$okc" = "1" ] && [ "$refus" = "5" ] && ok "Concurrence : nouveau client, 6 commandes simultanées -> 1 seule avec le code « nouveaux clients », 5 refusées" \
+  || ko "Concurrence : nouveaux clients ($okc acceptées, $refus refus)"
+
 rmdir "$TMPD" 2>/dev/null
 exit $fail

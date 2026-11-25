@@ -2,8 +2,8 @@
 -- Ezial — Campagnes promotionnelles — RETOUR ARRIÈRE de la MIGRATION 2 (promotions-2-commande.sql)
 -- Fichier GÉNÉRÉ par supabase/tests/promotions/build-rollback.sh (ne pas modifier à la main).
 --
--- QUOI : rétablit EXACTEMENT les fonctions de production d'avant les campagnes (create_order,
---   ezial_private.trg_orders_on_paid, validate_promo_code : texte lu en production le 21 nov. 2026),
+-- QUOI : rétablit EXACTEMENT les fonctions de production d'avant les campagnes (create_order AVEC la livraison
+--   urgente, relue le 25 nov. 2026 ; ezial_private.trg_orders_on_paid, validate_promo_code : lues le 21 nov. 2026),
 --   retire l'aperçu, la liste publique, le calcul, l'application et les déclencheurs d'annulation.
 --   Les tables et colonnes (migration 1) et leurs données sont CONSERVÉES.
 -- REFUSÉ (rien n'est modifié) si une commande non annulée utilise encore une campagne (utilisation « comptée ») :
@@ -14,6 +14,9 @@
 -- ATTENTION : si create_order a été modifiée par une AUTRE migration après les campagnes, ce retour arrière
 --   effacerait cette modification ; il le détecte quand la version d'origine enregistrée par la migration 2
 --   diffère du texte ci-dessous, et s'arrête alors sans rien modifier.
+-- LIVRAISON URGENTE : tant que les campagnes sont en place, NE PAS exécuter
+--   docs/sql/lancement-livraison-urgente-retour-arriere.sql (il réécrit create_order entièrement et
+--   effacerait les campagnes) : faire d'abord ce retour arrière-ci (3, 2, 1), puis seulement celui de l'urgence.
 -- ============================================================================
 begin;
 
@@ -85,6 +88,7 @@ v_gift_wrap_fee numeric := 0;
 v_promo_code text;
 v_promo_result jsonb;
 v_promo_discount numeric := 0;
+v_urgent_fee integer := 0; -- livraison urgente
 
 v_shops_out jsonb := '[]'::jsonb;
 v_items_out jsonb := '[]'::jsonb;
@@ -602,13 +606,17 @@ if v_promo_code is not null then
   end if;
 end if;
 
+v_urgent_fee := ezial_private.order_urgent_fee(payload, v_needs_delivery); -- livraison urgente
+
 update public.orders
 set
 products_subtotal = v_products_subtotal,
 discount_amount = v_discount_total + v_promo_discount,
 delivery_fee = v_delivery_fee,
 promo_code = v_promo_code,
-total_amount = (v_products_subtotal - v_discount_total - v_promo_discount) + v_delivery_fee + v_gift_wrap_fee,
+is_urgent = (v_urgent_fee > 0),
+urgent_fee = v_urgent_fee,
+total_amount = (v_products_subtotal - v_discount_total - v_promo_discount) + v_delivery_fee + v_gift_wrap_fee + v_urgent_fee,
 updated_at = now()
 where id = v_order.id
 returning *

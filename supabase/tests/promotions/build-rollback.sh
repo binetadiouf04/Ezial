@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Génère docs/sql/promotions-2-retour-arriere.sql : les trois fonctions de PRODUCTION (create_order,
 # trg_orders_on_paid, validate_promo_code) sont recopiées TELLES QUELLES depuis 10-production.sql
-# (blocs « @@ restaure »), le texte exact lu en production le 21 nov. 2026 et contrôlé par empreinte md5.
+# (blocs « @@ restaure »), le texte exact lu en production (create_order le 25 nov. 2026, avec la livraison
+# urgente) et contrôlé par empreinte md5.
 set -euo pipefail
 cd "$(dirname "$0")"
 OUT=../../../docs/sql/promotions-2-retour-arriere.sql
@@ -10,8 +11,8 @@ cat > "$OUT" <<'HEAD'
 -- Ezial — Campagnes promotionnelles — RETOUR ARRIÈRE de la MIGRATION 2 (promotions-2-commande.sql)
 -- Fichier GÉNÉRÉ par supabase/tests/promotions/build-rollback.sh (ne pas modifier à la main).
 --
--- QUOI : rétablit EXACTEMENT les fonctions de production d'avant les campagnes (create_order,
---   ezial_private.trg_orders_on_paid, validate_promo_code : texte lu en production le 21 nov. 2026),
+-- QUOI : rétablit EXACTEMENT les fonctions de production d'avant les campagnes (create_order AVEC la livraison
+--   urgente, relue le 25 nov. 2026 ; ezial_private.trg_orders_on_paid, validate_promo_code : lues le 21 nov. 2026),
 --   retire l'aperçu, la liste publique, le calcul, l'application et les déclencheurs d'annulation.
 --   Les tables et colonnes (migration 1) et leurs données sont CONSERVÉES.
 -- REFUSÉ (rien n'est modifié) si une commande non annulée utilise encore une campagne (utilisation « comptée ») :
@@ -22,6 +23,9 @@ cat > "$OUT" <<'HEAD'
 -- ATTENTION : si create_order a été modifiée par une AUTRE migration après les campagnes, ce retour arrière
 --   effacerait cette modification ; il le détecte quand la version d'origine enregistrée par la migration 2
 --   diffère du texte ci-dessous, et s'arrête alors sans rien modifier.
+-- LIVRAISON URGENTE : tant que les campagnes sont en place, NE PAS exécuter
+--   docs/sql/lancement-livraison-urgente-retour-arriere.sql (il réécrit create_order entièrement et
+--   effacerait les campagnes) : faire d'abord ce retour arrière-ci (3, 2, 1), puis seulement celui de l'urgence.
 -- ============================================================================
 begin;
 

@@ -12,6 +12,9 @@
 # Usage : PGHOST=/tmp PGPORT=54555 PGUSER=postgres ./run.sh
 set -euo pipefail
 cd "$(dirname "$0")"
+# Tout est aussi recopié dans un journal pour le bilan final (nombre de vérifications OK / en échec).
+LOGRES=$(mktemp)
+exec > >(tee "$LOGRES") 2>&1
 export PGHOST="${PGHOST:-/tmp}" PGPORT="${PGPORT:-54555}" PGUSER="${PGUSER:-postgres}"
 export DB=ezial_promo_test
 SQL=../../../docs/sql
@@ -26,7 +29,7 @@ P() { PGOPTIONS="-c client_min_messages=notice" psql -qX -v ON_ERROR_STOP=1 -d $
 T() { echo "-- $1"; P -f "$1" 2>&1 | grep -E "OK|ÉCHEC|ERROR" || true; }
 for f in $OM/00-scaffold.sql $OM/10-baseline.sql $OM/11-baseline-remplacees.sql $OM/12-baseline-autres.sql $OM/20-fixtures.sql $OM/14-vault-simule.sql \
          $SQL/orange-money-1-structure.sql $SQL/orange-money-2-commandes.sql $SQL/orange-money-3-stock.sql $SQL/orange-money-4-verification.sql \
-         $SQL/orange-money-5-testeurs.sql $SQL/orange-money-6-cles-coffre.sql "$URGENT" 00-complement.sql 10-production.sql 05-complement-urgent.sql; do
+         $SQL/orange-money-5-testeurs.sql $SQL/orange-money-6-cles-coffre.sql "$URGENT" 00-complement.sql 10-production.sql 11-aides-urgent.sql; do
   P -f "$f" >/dev/null
 done
 # Photographie de l'état de production (référence des retours arrière)
@@ -73,3 +76,15 @@ if grep -q "promotions-2-retour-arriere" <<<"$out"; then echo "OK    : retour ar
 P -f $SQL/promotions-2-retour-arriere.sql >/dev/null
 P -f $SQL/promotions-1-retour-arriere.sql >/dev/null
 T tests/90-retour-arriere.sql
+
+echo "== Réapplication après retour arrière (1, 2, 3)"
+for m in promotions-1-structure promotions-2-commande promotions-3-admin; do P -f $SQL/$m.sql >/dev/null; done
+P -c "drop table tests.after_first; create table tests.after_first as select p.oid::regprocedure::text sig, md5(pg_get_functiondef(p.oid)) h from pg_proc p where p.pronamespace in ('public'::regnamespace, 'ezial_private'::regnamespace)" >/dev/null
+T tests/20-migrations.sql
+T tests/70-non-regression.sql
+T tests/56-livraison-urgente.sql
+
+echo
+ok=$(grep -c "OK    :" "$LOGRES" || true); ko=$(grep -cE "ÉCHEC|ERROR" "$LOGRES" || true)
+echo "Bilan : $ok vérifications OK, $ko échec(s) ou erreur(s)"
+[ "$ko" -eq 0 ]

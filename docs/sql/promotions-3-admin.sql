@@ -33,7 +33,7 @@ begin
       detail = 'La double authentification doit être validée pour ce compte administrateur.';
   end if;
 end $$;
-revoke all on function ezial_private.promotions_assert_admin() from public;
+revoke all on function ezial_private.promotions_assert_admin() from public, anon, authenticated;
 
 -- Liste des campagnes avec cibles, quartiers et statistiques
 create or replace function public.admin_promotions_list() returns jsonb
