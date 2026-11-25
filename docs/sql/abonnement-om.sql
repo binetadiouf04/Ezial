@@ -37,6 +37,12 @@
 --      trial_used (l'essai gratuit reste disponible), et n'écrit PAS dans subscription_payments (le test ne fausse ni l'historique
 --      ni les statistiques de revenus) : il reste visible dans la liste admin « Abonnements » (tentatives). Retrait après le lancement :
 --      voir la ligne SQL en fin de fichier.
+--      BOUTIQUE OFFICIELLE (is_official = true, jamais modifié) : le test_25 d'un testeur y est accepté (les plans 3 mois / annuel restent refusés :
+--      « La boutique officielle Ezial est déjà toujours Ezial Plus. »). Seule la ligne seller_subscriptions est mise à jour (pro_until +1 jour).
+--      Aucun effet de bord, relu en production : commission 0 % décidée par shops.is_official dans create_order (pas par l'abonnement) ; limite de
+--      produits ignorée pour une boutique officielle (enforce_product_limit) ; active_premium_shop_ids / interface = « Ezial Plus » par is_official.
+--      Après 1 jour la tâche d'expiration remet la ligne à « free » SANS notification à la boutique officielle (ajout ci-dessous) ; l'interface
+--      ignore cette ligne pour une boutique officielle.
 --   5. Fonctions de production modifiées (texte relu en production le 25 nov. 2026, empreintes md5 contrôlées : si une
 --      fonction a changé depuis, la migration s'arrête SANS RIEN MODIFIER) :
 --        - notify_admin_new_subscription_payment : n'alerte « Nouvelle demande » que pour une ligne « pending_review »
@@ -207,7 +213,8 @@ begin
 
   select * into v_shop from public.shops where id = p_shop_id for update;     -- sérialise les initiations d'une même boutique
   if v_shop.id is null or v_shop.owner_id is distinct from p_user_id then raise exception 'Boutique introuvable.' using errcode = 'P0001'; end if;
-  if coalesce(v_shop.is_official, false) then raise exception 'La boutique officielle Ezial est déjà Ezial Plus : rien à payer.' using errcode = 'P0001'; end if;
+  -- Boutique officielle (toujours Ezial Plus) : rien à payer, SAUF le plan de test « test_25 » d'un compte testeur (déjà vérifié plus haut).
+  if coalesce(v_shop.is_official, false) and p_billing_period <> 'test_25' then raise exception 'La boutique officielle Ezial est déjà toujours Ezial Plus.' using errcode = 'P0001'; end if;
 
   -- Tentative encore utilisable : réutilisée (jamais de second QR inutile).
   select * into t from public.subscription_payment_attempts
@@ -686,6 +693,8 @@ begin
       update public.seller_subscriptions set plan = 'free', expiry_warned_at = null, downgraded_at = now(), updated_at = now() where id = v_row.id;
     end if;
 
+    -- abonnement-om : la boutique officielle (toujours Ezial Plus) n'est jamais prévenue d'un « retour au plan gratuit » après un test.
+    if not v_row.is_official then
     perform public.notify_user(v_row.owner_id, 'subscription_expired',
       case when v_row.billing_period is null and not v_row.premium_paid_ever then 'Votre essai Ezial Plus est terminé' else 'Votre abonnement Ezial Plus a expiré' end,
       'Votre boutique "' || coalesce(v_row.shop_name, '') || '" est repassée au forfait Free : 10 produits publiés maximum et commission de 10 % sur les nouvelles ventes.'
@@ -694,6 +703,7 @@ begin
         || ' Vous pouvez vous abonner à Ezial Plus à tout moment.',
       case when v_unpublished > 0 then '/pro/seller/produits/selection' else '/pro/seller/abonnement' end,
       null, null, null, v_row.shop_id);
+    end if;
   end loop;
 end;
 $fn$;

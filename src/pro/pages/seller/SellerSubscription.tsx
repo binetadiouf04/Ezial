@@ -22,6 +22,9 @@ import { BILLING_PERIOD_LABEL, PLUS_PLAN_NAME, formatFcfa } from '@/data/subscri
 import { CANCELLATION_RULES } from '@/shared/plans.js';
 import { isRenewalDue, renewalDaysLeft } from '@/lib/subscriptionPaymentCore';
 import { Crown, Loader2 } from 'lucide-react';
+import SubscriptionOrangePayment from '../../components/SubscriptionOrangePayment';
+import { fetchTestPlanAvailable } from '@/lib/supabaseSubscriptionPayment';
+import { TEST_PLAN_PRICE_FCFA } from '@/lib/subscriptionPaymentCore';
 
 // "Mon abonnement". A Free shop sees the Free / Ezial Plus cards to
 // subscribe. A shop that is (or was) on Ezial Plus sees only its current
@@ -49,6 +52,16 @@ export default function SellerSubscription() {
   const [cancelAccepted, setCancelAccepted] = useState(false);
   const [cancelBusy, setCancelBusy] = useState(false);
   const [cancelError, setCancelError] = useState('');
+  // Boutique officielle + compte testeur (réponse du serveur) : bloc « Test de paiement » à 25 FCFA.
+  const [testerOfficial, setTesterOfficial] = useState(false);
+  const [testOpen, setTestOpen] = useState(false);
+
+  useEffect(() => {
+    if (!sellerShopIsOfficial) { setTesterOfficial(false); return; }
+    let alive = true;
+    void fetchTestPlanAvailable().then((ok) => { if (alive) setTesterOfficial(ok); });
+    return () => { alive = false; };
+  }, [sellerShopIsOfficial]);
 
   useEffect(() => {
     if (!sellerSupabaseShopId) {
@@ -226,6 +239,22 @@ export default function SellerSubscription() {
           </button>
         )}
       </div>
+
+      {isOfficial && testerOfficial && (
+        <section className="card border-dashed border-amber-300 bg-amber-50 p-5" aria-labelledby="test-officiel-titre">
+          <h2 id="test-officiel-titre" className="flex items-center gap-2 text-sm font-semibold text-amber-900">
+            <span className="rounded bg-amber-200 px-1.5 py-0.5 text-[11px] font-bold uppercase tracking-wide">Test</span> Test de paiement (boutique officielle)
+          </h2>
+          <p className="mt-1.5 text-xs leading-relaxed text-amber-900/80">Réservé aux comptes testeurs : payez {TEST_PLAN_PRICE_FCFA} FCFA avec Orange Money pour vérifier toute la chaîne de paiement. La boutique officielle reste Ezial Plus quoi qu’il arrive.</p>
+          {!testOpen ? (
+            <button type="button" onClick={() => setTestOpen(true)} className="btn-outline mt-3 w-full sm:w-auto">Test {TEST_PLAN_PRICE_FCFA} FCFA</button>
+          ) : (
+            <div className="mt-3">
+              <SubscriptionOrangePayment shopId={sellerSupabaseShopId} period="test_25" amount={TEST_PLAN_PRICE_FCFA} onPaid={() => undefined} officialTest />
+            </div>
+          )}
+        </section>
+      )}
 
       {/* Avertissement permanent sur les abonnements (voir la politique de résiliation) */}
       {!isOfficial && !gift && (

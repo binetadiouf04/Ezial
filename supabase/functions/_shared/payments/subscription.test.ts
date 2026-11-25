@@ -93,6 +93,15 @@ test('refus de la base (boutique d\'un autre) : message métier, 409', async () 
   const r = await initiateSubscriptionPayment(db, new Fake(), input, on);
   assert.ok(!r.ok && r.code === 'refused' && r.message === 'Boutique introuvable.');
 });
+test('boutique officielle : le refus de la base (plans réels) est renvoyé tel quel ; test_25 testeur passe jusqu\'à la base', async () => {
+  const a = new Fake();
+  let f = fakeDb({}, new UserFacingError('La boutique officielle Ezial est déjà toujours Ezial Plus.'));
+  let r = await initiateSubscriptionPayment(f.db, a, input, on);
+  assert.ok(!r.ok && r.code === 'refused' && /déjà toujours Ezial Plus/.test(r.message));
+  f = fakeDb({ amount: 25, billing_period: 'test_25' });
+  r = await initiateSubscriptionPayment(f.db, a, { ...input, billingPeriod: 'test_25' }, { ...on, isTester: true });
+  assert.ok(r.ok && r.amount === 25 && f.calls[0] === 'create');
+});
 test('Orange refuse : tentative close si définitif, gardée si passager', async () => {
   const a = new Fake(); a.result = { ok: false, retryable: false, error: 'refusé' };
   let f = fakeDb(); let r = await initiateSubscriptionPayment(f.db, a, input, on);
