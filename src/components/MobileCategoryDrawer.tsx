@@ -32,7 +32,7 @@ export default function MobileCategoryDrawer() {
           <button onClick={() => setCategoryDrawerOpen(false)} className="flex h-9 w-9 items-center justify-center rounded-full hover:bg-cream" aria-label="Fermer"><X size={20} /></button>
         </div>
 
-        <div className="flex-1 overflow-y-auto flex flex-col">
+        <div className="flex flex-1 flex-col overflow-y-auto pb-[env(safe-area-inset-bottom)]">
           {view === 'main' && (
             // Deliberately short and mobile-first: two destinations up top
             // (Home, then the categories drill-in — never the full category
