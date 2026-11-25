@@ -2,7 +2,7 @@
 //
 // Appelée uniquement par pg_cron / pg_net (chaque minute, une fois planifiée),
 // jamais par le site. Pour chaque tentative non close (QR en cours, anciens QR
-// remplacés, créations incertaines), UNE recherche groupée chez Orange
+// remplacés, créations incertaines ; commandes ET abonnements des boutiques), UNE recherche groupée chez Orange
 // (limite de 60 requêtes/minute en sandbox), puis payments_record_verification.
 // Aucune conclusion locale : une commande n'est annulée que par
 // orders_finalize_unpaid, quand toutes ses tentatives sont closes chez Orange.
@@ -22,7 +22,7 @@
 //   SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY — fournis automatiquement.
 import { createClient } from 'npm:@supabase/supabase-js@2';
 import { createAdapters, reconcileCollections } from '../_shared/payments/core.ts';
-import type { PaymentStatus, ReconcileCandidate, ReconcileDb } from '../_shared/payments/core.ts';
+import type { AttemptKind, PaymentStatus, ReconcileCandidate, ReconcileDb } from '../_shared/payments/core.ts';
 import { OrangeMoneyCollection, fetchSandboxTestNumbers, safeEqual } from '../_shared/payments/orange-money.ts';
 import { paymentsEnv, reconcileSecret } from '../_shared/payments/vault.ts';
 
@@ -40,9 +40,24 @@ const db: ReconcileDb = {
   async candidates(limit: number) {
     const { data, error } = await supabase.rpc('payments_reconcile_candidates', { p_limit: limit });
     if (error) throw new Error(error.message);
-    return (data ?? []) as ReconcileCandidate[];
+    const orders = ((data ?? []) as ReconcileCandidate[]).map((c) => ({ ...c, kind: 'order' as const }));
+    // Tentatives de paiement d'ABONNEMENT (même format, order_id vide). Fonction absente (migration abonnement-om pas
+    // encore exécutée) ou erreur : ignorées, la vérification des commandes continue exactement comme avant.
+    const subs = await supabase.rpc('subscription_payments_reconcile_candidates', { p_limit: Math.min(limit, 25) });
+    if (subs.error) return orders;
+    return [...orders, ...((subs.data ?? []) as ReconcileCandidate[]).map((c) => ({ ...c, kind: 'subscription' as const }))];
   },
-  async recordVerification(transactionId: string, status: PaymentStatus, amount: number | null, providerTransactionId: string | null) {
+  async recordVerification(transactionId: string, status: PaymentStatus, amount: number | null, providerTransactionId: string | null, kind?: AttemptKind) {
+    if (kind === 'subscription') {
+      const { data, error } = await supabase.rpc('subscription_payments_record_verification', {
+        p_attempt_id: transactionId,
+        p_provider_status: status,
+        p_amount: amount,
+        p_provider_transaction_id: providerTransactionId,
+      });
+      if (error) throw new Error(error.message);
+      return data as string;
+    }
     const { data, error } = await supabase.rpc('payments_record_verification', {
       p_transaction_id: transactionId,
       p_provider_status: status,

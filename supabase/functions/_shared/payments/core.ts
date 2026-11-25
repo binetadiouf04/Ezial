@@ -351,8 +351,12 @@ export interface WebhookDb {
   recordEvent(input: RecordEventInput): Promise<{ new: boolean; id: string | null; processed: boolean }>;
   /** payments_mark_event_processed */
   markEventProcessed(eventId: string, result: string): Promise<void>;
-  /** Lecture de payment_transactions par (fournisseur, référence) avec la clé serveur. */
-  findTransactionByReference(provider: Provider, providerReference: string): Promise<{ id: string; amount: number; status: string } | null>;
+  /**
+   * Lecture de payment_transactions par (fournisseur, référence) avec la clé serveur.
+   * `kind` : 'subscription' quand la référence est celle d'une tentative de paiement d'ABONNEMENT
+   * (subscription_payment_attempts) ; absent ou 'order' pour une commande.
+   */
+  findTransactionByReference(provider: Provider, providerReference: string): Promise<{ id: string; amount: number; status: string; kind?: AttemptKind } | null>;
   /** payments_confirm — uniquement après vérification du statut auprès du fournisseur. */
   confirm(transactionId: string, providerReference: string, confirmedAmount: number): Promise<string>;
   /** payments_fail */
@@ -362,13 +366,18 @@ export interface WebhookDb {
    * les règles de la base (confirmation, clôture, « introuvable » seulement après la fin de validité).
    * Quand il est fourni, il remplace confirm/fail.
    */
-  recordVerification?(transactionId: string, status: PaymentStatus, amount: number | null, providerTransactionId: string | null): Promise<string>;
+  recordVerification?(transactionId: string, status: PaymentStatus, amount: number | null, providerTransactionId: string | null, kind?: AttemptKind): Promise<string>;
 }
 
-/** Ligne renvoyée par payments_reconcile_candidates. */
+/** Nature d'une tentative de paiement : commande (défaut) ou abonnement d'une boutique. */
+export type AttemptKind = 'order' | 'subscription';
+
+/** Ligne renvoyée par payments_reconcile_candidates (ou subscription_payments_reconcile_candidates : order_id vide). */
 export interface ReconcileCandidate {
   transaction_id: string;
-  order_id: string;
+  order_id: string | null;
+  /** Absent = commande. */
+  kind?: AttemptKind;
   reference: string;
   status: string;
   expires_at: string | null;
@@ -378,7 +387,7 @@ export interface ReconcileCandidate {
 
 export interface ReconcileDb {
   candidates(limit: number): Promise<ReconcileCandidate[]>;
-  recordVerification(transactionId: string, status: PaymentStatus, amount: number | null, providerTransactionId: string | null): Promise<string>;
+  recordVerification(transactionId: string, status: PaymentStatus, amount: number | null, providerTransactionId: string | null, kind?: AttemptKind): Promise<string>;
 }
 
 /** Ligne de public.seller_payouts. */
@@ -665,7 +674,9 @@ export async function handleCollectionWebhook(
 
     // Base récente : les règles (confirmation, clôture, « introuvable ») sont appliquées par la base.
     if (db.recordVerification) {
-      const res = await db.recordVerification(tx.id, real.status, real.amount, real.providerTransactionId ?? null);
+      const res = tx.kind === 'subscription'
+        ? await db.recordVerification(tx.id, real.status, real.amount, real.providerTransactionId ?? null, 'subscription')
+        : await db.recordVerification(tx.id, real.status, real.amount, real.providerTransactionId ?? null);
       return await finish(`verify:${res}`);
     }
 
@@ -742,7 +753,9 @@ export async function reconcileCollections(
     }
     if ((real.successCount ?? 0) > 1) log(`[paiements] ${c.transaction_id} : ${real.successCount} paiements réussis pour une même référence — à vérifier`);
     try {
-      const res = await db.recordVerification(c.transaction_id, real.status, real.amount, real.providerTransactionId ?? null);
+      const res = c.kind === 'subscription'
+        ? await db.recordVerification(c.transaction_id, real.status, real.amount, real.providerTransactionId ?? null, 'subscription')
+        : await db.recordVerification(c.transaction_id, real.status, real.amount, real.providerTransactionId ?? null);
       summary.checked += 1;
       summary.results[res] = (summary.results[res] ?? 0) + 1;
     } catch (err) {

@@ -20,6 +20,7 @@ import {
 } from '@/lib/supabaseSellerSubscription';
 import { BILLING_PERIOD_LABEL, PLUS_PLAN_NAME, formatFcfa } from '@/data/subscriptionPlans';
 import { CANCELLATION_RULES } from '@/shared/plans.js';
+import { isRenewalDue, renewalDaysLeft } from '@/lib/subscriptionPaymentCore';
 import { Crown, Loader2 } from 'lucide-react';
 
 // "Mon abonnement". A Free shop sees the Free / Ezial Plus cards to
@@ -99,6 +100,9 @@ export default function SellerSubscription() {
   // A renewal or a trial → paid subscription starts on the seller's last
   // paid billing period; the payment page lets them switch it.
   const subscribeRoute = subscriptionPaymentRoute(summary.billingPeriod ?? 'quarterly');
+  // Rappel : à 7 jours ou moins de la fin, « Renouveler » mène au paiement Orange Money (aucun prélèvement automatique).
+  const renewalDue = !isOfficial && !gift && info.isProActive && isRenewalDue(info.proUntil, Date.now());
+  const renewalDays = renewalDaysLeft(info.proUntil, Date.now());
 
   // Résiliation : seulement pour un abonnement payant en cours (pas l'essai).
   const canCancel = isPaidActive && cancellation.supported;
@@ -162,6 +166,14 @@ export default function SellerSubscription() {
           <p className="mt-3 rounded-lg bg-amber-50 border border-amber-100 px-3 py-2 text-xs text-amber-700">
             Votre demande de paiement est en cours de vérification par Ezial.
           </p>
+        )}
+
+        {renewalDue && renewalDays !== null && (
+          <div className="mt-4 rounded-lg border border-amber-100 bg-amber-50 px-3.5 py-3 text-sm text-amber-800" role="status">
+            <p className="font-medium">Votre {info.isTrialActive ? 'essai' : 'abonnement'} se termine dans {renewalDays} jour{renewalDays > 1 ? 's' : ''}</p>
+            <p className="mt-1 text-xs leading-relaxed">Payez avec Orange Money pour conserver vos {info.productLimit} produits et vos avantages. Aucun prélèvement automatique : sans paiement, {PLUS_PLAN_NAME} n’est pas prolongé.</p>
+            <button onClick={() => navigate(subscribeRoute)} className="btn-primary mt-3 w-full sm:w-auto">{info.isTrialActive ? `S’abonner à ${PLUS_PLAN_NAME}` : 'Renouveler'}</button>
+          </div>
         )}
 
         {gift && (

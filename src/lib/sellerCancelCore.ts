@@ -38,9 +38,9 @@ export function customerCancellationLines(c: { shopName: string; reason: CancelR
 
 // --- Remboursements (administration) ---
 
-export type RefundMethod = 'orange_money' | 'wave' | 'especes' | 'virement' | 'autre';
+export type RefundMethod = 'orange_money' | 'wave' | 'virement' | 'autre';
 export const REFUND_METHOD_LABELS: Record<RefundMethod, string> = {
-  orange_money: 'Orange Money', wave: 'Wave', especes: 'Espèces', virement: 'Virement', autre: 'Autre',
+  orange_money: 'Orange Money', wave: 'Wave', virement: 'Virement', autre: 'Autre',
 };
 
 export interface RefundRow {
