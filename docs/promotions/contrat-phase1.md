@@ -1,6 +1,30 @@
 # Campagnes promotionnelles — phase 1 : contrat commun (base ↔ admin ↔ marketplace)
 
-**Mise à jour du 21 nov. 2026 (soir), prioritaire sur le reste de ce fichier :**
+**Mise à jour du 25 nov. 2026, PRIORITAIRE sur tout le reste de ce fichier (y compris la mise à jour du 21 nov.) :**
+- **Plus aucune compensation manuelle.** Le vendeur est payé **automatiquement**, comme sans promotion : sa vente
+  (`seller_transactions` 'sale', `order_shops.net_amount`) = ses articles au prix habituel (après ses propres promos
+  produits) − sa commission habituelle (inchangée). La réduction de la campagne est **entièrement payée par Ezial**.
+- **Seule exception : la part vendeur facultative acceptée** (`promotion_seller_shares`, agreed = true) : V = min(A, valeur)
+  (fixe, par commande) ou round(A × % / 100), **déduite automatiquement** de la vente (et de `order_shops.net_amount`),
+  **plafonnée** au net de la vente (articles − commission) : le solde vendeur ne devient jamais négatif. Jamais sur la
+  livraison offerte.
+- **Supprimés** (n'existent pas en base) : table `promotion_compensations`, fonctions `admin_promotion_compensations`,
+  `admin_mark_compensations_paid`, `seller_promotion_compensations` (et les champs `payout_orange_money`, `payout_wave`,
+  `seller_share`, `gross_allocation`, `paid_*`).
+- **Renommé** : `order_shops.promo_compensation` → `order_shops.promo_allocation` (A : part de la réduction produits
+  rattachée à la boutique, information seulement ; coût Ezial de la boutique = `promo_allocation − promo_seller_share`).
+  `order_shops.promo_seller_share` = V (part déduite). Le vendeur voit V dans le détail de sa commande
+  (« Participation à la campagne »).
+- **Statistiques** (`admin_promotions_list().stats`) : `ezial_cost` = réductions produits + livraison offerte − parts
+  vendeurs ; `ezial_net` = commissions − `ezial_cost` ; `seller_funded` = total des parts vendeurs.
+- **Pas de double authentification propre aux campagnes** : les fonctions admin des campagnes vérifient seulement la
+  ligne dans `admins`, comme les autres fonctions admin existantes.
+- Annulation / impayé : utilisation et budget rendus une seule fois ; la vente du vendeur suit le circuit habituel
+  d'annulation. Annulation d'une seule boutique : l'utilisation du code n'est pas rendue.
+- `create_order` conserve la livraison urgente : total = (sous-total − promos produits − promo_discount) + delivery_fee
+  − delivery_discount + gift_wrap_fee + urgent_fee.
+
+**Mise à jour du 21 nov. 2026 (soir), remplacée sur les compensations par celle du 25 nov. ci-dessus :**
 - **Quartiers retirés** des campagnes (pas de delivery_neighborhoods / promotion_neighborhoods) : toute la région
   de Dakar est livrée ; `public_active_promotions.neighborhoods` et `admin_promotions_list.neighborhoods` = tableaux vides.
 - **Part vendeur facultative** : `promotion_seller_shares(promotion_id, shop_id, share_type 'fixed'|'percent',
