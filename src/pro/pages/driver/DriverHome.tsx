@@ -4,10 +4,20 @@ import { usePro } from '../../ProContext';
 import { supabase } from '@/lib/supabaseClient';
 import NotificationOptIn from '@/components/NotificationOptIn';
 import NotificationGateModal from '@/components/NotificationGateModal';
-import { Truck, MapPin, Store, ChevronRight, Navigation, CheckCircle2, Power, Package } from 'lucide-react';
+import { Truck, MapPin, Store, ChevronRight, Power } from 'lucide-react';
 
 export default function DriverHome() {
-  const { name, driverAvailable, setDriverAvailable, navigate, activeMissions, availableMissions, acceptMission, completedMissions, collectParcel, startDelivery } = usePro();
+  const { name, driverAvailable, setDriverAvailable, navigate, activeMissions, availableMissions, acceptMission, completedMissions } = usePro();
+  const [acceptingId, setAcceptingId] = useState<string | null>(null);
+
+  // Après acceptation, le livreur arrive directement sur la page unique de
+  // la mission (récupérations puis livraison), sans autre étape.
+  const handleAccept = async (missionId: string) => {
+    setAcceptingId(missionId);
+    const { error } = await acceptMission(missionId);
+    setAcceptingId(null);
+    if (!error) navigate(`/driver/livraisons/${missionId}`);
+  };
   const [authUserId, setAuthUserId] = useState<string | null>(null);
   useEffect(() => { void supabase.auth.getUser().then(({ data }) => setAuthUserId(data.user?.id ?? null)); }, []);
 
@@ -71,60 +81,28 @@ export default function DriverHome() {
               </p>
               <div className="space-y-3">
                 {activeMissions.map((mission) => {
+                  const collected = mission.collections.filter((c) => c.collected).length;
+                  const total = mission.collections.length;
                   const nextCollection = mission.collections.find((c) => !c.collected);
                   return (
-                    <div key={mission.id} className="card p-4 border-burgundy/30 bg-burgundy/5">
-                      <button
-                        onClick={() => navigate(`/driver/livraisons/${mission.id}`)}
-                        className="w-full text-left"
-                      >
-                        <div className="flex items-center justify-between mb-3">
-                          <span className="flex items-center gap-2 font-mono text-sm font-semibold text-burgundy">{mission.orderId}{mission.urgent && <UrgentBadge />}</span>
-                          <span className="text-xs font-medium text-burgundy flex items-center gap-1">
-                            {mission.step === 'to_collection' && <><Truck size={13} /> En collecte</>}
-                            {mission.step === 'all_collected' && <><CheckCircle2 size={13} /> Colis récupérés</>}
-                            {mission.step === 'to_customer' && <><Navigation size={13} /> En livraison</>}
-                          </span>
-                        </div>
-                        <div className="space-y-1.5 mb-3">
-                          {mission.collections.map((c) => (
-                            <div key={c.shopId} className="flex items-center gap-2 text-sm">
-                              {c.collected ? (
-                                <CheckCircle2 size={16} className="text-green-600 flex-shrink-0" />
-                              ) : (
-                                <div className="h-4 w-4 rounded-full border-2 border-ink/20 flex-shrink-0" />
-                              )}
-                              <span className={c.collected ? 'text-ink/50 line-through' : 'text-ink font-medium'}>{c.shopName}</span>
-                            </div>
-                          ))}
-                        </div>
-                        <div className="flex items-center gap-1 text-xs text-ink/50 mb-1">
-                          <MapPin size={12} /> → {mission.destination}
-                        </div>
-                      </button>
-
-                      {/* Direct action for the current step — no extra navigation needed */}
-                      <div className="mt-3 pt-3 border-t border-burgundy/10 space-y-2">
-                        {mission.step === 'to_collection' && nextCollection && (
-                          <button onClick={() => collectParcel(mission.id, nextCollection.shopId)} className="btn-primary w-full flex items-center justify-center gap-2">
-                            <Package size={16} /> Confirmer la récupération
-                          </button>
-                        )}
-                        {mission.step === 'all_collected' && (
-                          <button onClick={() => startDelivery(mission.id)} className="btn-primary w-full flex items-center justify-center gap-2">
-                            <Navigation size={16} /> Commencer la livraison
-                          </button>
-                        )}
-                        {mission.step === 'to_customer' && (
-                          <button onClick={() => navigate(`/driver/livraisons/${mission.id}`)} className="btn-primary w-full flex items-center justify-center gap-2">
-                            <CheckCircle2 size={16} /> Confirmer la livraison
-                          </button>
-                        )}
-                        <button onClick={() => navigate(`/driver/livraisons/${mission.id}`)} className="w-full text-center text-xs text-ink/45 hover:text-burgundy flex items-center justify-center gap-1 py-1">
-                          Voir le détail <ChevronRight size={12} />
-                        </button>
+                    <button
+                      key={mission.id}
+                      onClick={() => navigate(`/driver/livraisons/${mission.id}`)}
+                      className="card w-full p-4 text-left border-burgundy/30 bg-burgundy/5"
+                    >
+                      <div className="flex items-center justify-between gap-2 mb-2">
+                        <span className="flex items-center gap-2 font-mono text-sm font-semibold text-burgundy">{mission.orderId}{mission.urgent && <UrgentBadge />}</span>
+                        <span className="text-xs font-medium text-ink/60">{collected}/{total} récupérée{collected > 1 ? 's' : ''}</span>
                       </div>
-                    </div>
+                      <p className="flex items-center gap-1.5 text-sm font-medium text-ink">
+                        {nextCollection
+                          ? <><Store size={14} className="text-ink/40" /> Prochaine étape : {nextCollection.shopName}</>
+                          : <><MapPin size={14} className="text-ink/40" /> Prochaine étape : livrer à {mission.destination || 'au client'}</>}
+                      </p>
+                      <span className="btn-primary mt-3 min-h-[48px] w-full">
+                        Continuer <ChevronRight size={16} />
+                      </span>
+                    </button>
                   );
                 })}
               </div>
@@ -156,12 +134,19 @@ export default function DriverHome() {
                         <MapPin size={13} className="text-ink/35" /> → {mission.destination}
                       </p>
                     </div>
-                    <div className="flex items-center justify-end border-t border-line pt-3">
+                    <div className="flex items-center justify-between gap-2 border-t border-line pt-3">
                       <button
-                        onClick={() => acceptMission(mission.id)}
-                        className="btn-primary"
+                        onClick={() => navigate(`/driver/livraisons/${mission.id}`)}
+                        className="min-h-[44px] px-2 text-sm text-ink/55 hover:text-burgundy"
                       >
-                        Accepter la livraison
+                        Détails
+                      </button>
+                      <button
+                        onClick={() => void handleAccept(mission.id)}
+                        disabled={acceptingId !== null}
+                        className="btn-primary min-h-[44px]"
+                      >
+                        {acceptingId === mission.id ? 'Acceptation…' : 'Accepter la livraison'}
                       </button>
                     </div>
                   </div>
