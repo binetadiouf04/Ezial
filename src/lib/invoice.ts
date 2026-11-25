@@ -44,6 +44,8 @@ export interface Invoice {
   subtotal: number;
   discount: number;
   delivery: number;
+  /** Livraison offerte (campagne Ezial), déjà déduite du total. */
+  deliveryDiscount: number;
   /** Supplément « Livraison urgente » (déjà compris dans total) ; 0 sinon. */
   urgentFee: number;
   /** Jour et créneau de la livraison urgente, en clair (vide si la commande n'est pas urgente). */
@@ -127,6 +129,7 @@ export function buildInvoice(order: Order, helpers: InvoiceHelpers, company: Inv
     subtotal: order.subtotal,
     discount: order.discount,
     delivery: order.delivery,
+    deliveryDiscount: order.deliveryDiscount ?? 0,
     urgentFee,
     urgentWhen: urgentFee > 0 && order.preference?.type === 'preferred' ? formatDeliveryWish(order.preference.date, order.preference.window) : '',
     total: order.total,

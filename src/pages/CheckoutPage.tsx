@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useState } from 'react';
+import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { optionsLine, lineNeedsWaist, normalizeStoredWaist } from '@/lib/waistMeasure';
 import { useApp, type Order, type ShopFulfillment, type DeliveryPreference, type DeliveryStepStatus, quartierToZone, deliveryWindows } from '@/store/AppContext';
 import { formatFCFA, isRealCatalogId, getVariantPrice } from '@/data/products';
@@ -7,7 +7,7 @@ import PriceDisplay from '@/components/PriceDisplay';
 import { getShop } from '@/data/shops';
 import { paymentMethods as paymentMethodsData } from '@/data/payments';
 import { createOrderInSupabase, recordOrderCgvConsent, type CreateOrderPayload, type CreateOrderShopFulfillmentInput, type CreatedOrderResult } from '@/lib/supabaseOrders';
-import { validatePromoCode } from '@/lib/supabasePromoCode';
+import { previewPromotion, type AppliedPromotion, type PromotionPreview } from '@/lib/supabasePromotions';
 import { reverseGeocode, type GeocodeResult } from '@/lib/geocoding';
 import { useAddressSearch } from '@/lib/useAddressSearch';
 import { estimateDeliveryFee, DELIVERY_FEE_FLOOR } from '@/lib/deliveryEstimate';
@@ -113,6 +113,23 @@ function CheckoutAccountStep({ onBackToCart }: { onBackToCart: () => void }) {
 type LocationStatus = 'idle' | 'requesting' | 'granted' | 'denied' | 'unsupported';
 type LocationMode = 'gps' | 'manual' | 'saved';
 
+// Aperçu des offres, recalculé (avec un court délai) dès que le panier, la réception, le
+// quartier ou les frais changent. Composant à part : ses hooks ne dépendent d'aucun
+// retour anticipé de la page.
+function PromotionPreviewSync({ previewKey, onResult }: { previewKey: string; onResult: (res: PromotionPreview) => void }) {
+  const onResultRef = useRef(onResult);
+  onResultRef.current = onResult;
+  useEffect(() => {
+    let cancelled = false;
+    const t = window.setTimeout(async () => {
+      const res = await previewPromotion(JSON.parse(previewKey));
+      if (!cancelled) onResultRef.current(res);
+    }, 500);
+    return () => { cancelled = true; window.clearTimeout(t); };
+  }, [previewKey]);
+  return null;
+}
+
 export default function CheckoutPage() {
   const { cart, cartSubtotal, clearCart, navigate, addOrder, catalogProducts, customerUser, authLoading } = useApp();
   // Article épuisé ou quantité au-delà du stock : paiement bloqué (create_order le refuse aussi).
@@ -168,8 +185,11 @@ export default function CheckoutPage() {
   // re-validates and recomputes the discount itself server-side, so a code
   // that becomes invalid between the preview and payment is simply rejected
   // there, never silently trusted here.
+  // Une seule offre par commande : le code saisi (promoCode), sinon la meilleure
+  // campagne automatique en cours. Montants calculés par le serveur (aperçu).
   const [promoInput, setPromoInput] = useState('');
-  const [appliedPromo, setAppliedPromo] = useState<{ code: string; discountAmount: number } | null>(null);
+  const [promoCode, setPromoCode] = useState<string | null>(null);
+  const [appliedPromo, setAppliedPromo] = useState<AppliedPromotion | null>(null);
   const [promoChecking, setPromoChecking] = useState(false);
   const [promoError, setPromoError] = useState('');
 
@@ -358,11 +378,15 @@ export default function CheckoutPage() {
       : `à partir de ${formatFCFA(DELIVERY_FEE_FLOOR)}`;
   const estimatedDeliveryFee = hasDeliveryShops ? (deliveryFeeKnown ? effectiveDeliveryFeeEstimate : DELIVERY_FEE_FLOOR) : 0;
   const estimatedGiftWrapFee = giftWrap ? GIFT_WRAP_FEE : 0;
-  const promoDiscount = appliedPromo?.discountAmount ?? 0;
+  const promoDiscount = appliedPromo?.productDiscount ?? 0;
+  // La livraison offerte n'est jamais déduite d'une estimation « à partir de » : seulement
+  // quand les frais sont connus (le serveur recalcule de toute façon à la commande).
+  // Elle est plafonnée aux frais de livraison : le supplément urgent n'est jamais offert.
+  const deliveryDiscount = hasDeliveryShops && deliveryFeeKnown ? Math.min(appliedPromo?.deliveryDiscount ?? 0, estimatedDeliveryFee) : 0;
   // Urgence seulement avec au moins une boutique livrée (jamais pour un retrait seul).
   const urgentActive = urgent && hasDeliveryShops && urgentOptions !== null;
   const estimatedUrgentFee = urgentActive && urgentOptions ? urgentOptions.fee : 0;
-  const estimatedTotal = Math.max(0, cartSubtotal + estimatedDeliveryFee + estimatedGiftWrapFee + estimatedUrgentFee - promoDiscount);
+  const estimatedTotal = Math.max(0, cartSubtotal + estimatedDeliveryFee + estimatedGiftWrapFee + estimatedUrgentFee - promoDiscount - deliveryDiscount);
   const todayDakar = new Date().toISOString().slice(0, 10); // Dakar = UTC toute l'année
   const urgentDayLabel = (date: string) => (date === todayDakar ? `Aujourd'hui (${formatDeliveryDay(date)})` : formatDeliveryDay(date));
   const urgentDay = urgentOptions?.days.find((d) => d.date === preference.date) ?? null;
@@ -374,21 +398,49 @@ export default function CheckoutPage() {
     setPreference({ type: 'preferred', ...first });
   };
 
+  // Données envoyées à l'aperçu : jamais de prix (le serveur les relit).
+  const previewInput = (code: string | null) => ({
+    items: cart.map((item) => ({ productId: item.productId, variantId: item.variantId ?? null, quantity: item.quantity, selectedOptions: item.variants })),
+    shopFulfillments: Object.fromEntries(shopsInCart.map((shop) => [shop.id, { type: getShopFulfillment(shop.id) }])),
+    neighborhood: form.quartier,
+    promoCode: code ?? undefined,
+    deliveryFeeEstimate: hasDeliveryShops ? estimatedDeliveryFee : 0,
+    cartSubtotal,
+  });
+  const previewKey = JSON.stringify(previewInput(promoCode));
+
+  // Résultat de l'aperçu recalculé (voir PromotionPreviewSync) : campagne automatique
+  // éventuelle, ou montant du code déjà appliqué.
+  const handlePreviewResult = (res: PromotionPreview) => {
+    if (!res.valid && promoCode) {
+      // Le code ne s'applique plus (panier modifié, quartier…) : on l'explique et on le retire.
+      setPromoError(res.message ?? 'Ce code ne s’applique plus à votre panier.');
+      setPromoCode(null);
+      return;
+    }
+    setAppliedPromo(res.valid ? res.applied : null);
+  };
+
   const handleApplyPromo = async () => {
-    if (!promoInput.trim() || promoChecking) return;
+    const code = promoInput.trim().toUpperCase();
+    if (!code || promoChecking) return;
     setPromoError('');
     setPromoChecking(true);
-    const result = await validatePromoCode(promoInput, cartSubtotal);
+    const result = await previewPromotion(previewInput(code));
     setPromoChecking(false);
-    if (!result.valid) { setPromoError(result.message ?? 'Code promo invalide.'); setAppliedPromo(null); return; }
-    setAppliedPromo({ code: result.code ?? promoInput.trim().toUpperCase(), discountAmount: result.discountAmount ?? 0 });
+    if (!result.valid || !result.applied) { setPromoError(result.message ?? 'Code promo invalide.'); return; }
+    setPromoCode(result.applied.code ?? code);
+    setAppliedPromo(result.applied);
   };
 
   const handleRemovePromo = () => {
+    setPromoCode(null);
     setAppliedPromo(null);
     setPromoInput('');
     setPromoError('');
   };
+
+  const promoLabel = appliedPromo ? (appliedPromo.code ? `Code ${appliedPromo.code}` : appliedPromo.name || 'Offre Ezial') : '';
 
   const validateContactInfo = () => {
     const e: Record<string, string> = {};
@@ -488,6 +540,7 @@ export default function CheckoutPage() {
       subtotal: result.order.products_subtotal,
       discount: result.order.discount_amount ?? 0,
       delivery: result.order.delivery_fee,
+      deliveryDiscount: (result.order as { delivery_discount?: number | null }).delivery_discount ?? 0,
       urgentFee: urgentFeeOfRow(result.order),
       total: result.order.total_amount,
       shopFulfillments: fulfillments,
@@ -564,7 +617,7 @@ export default function CheckoutPage() {
         giftShowBuyerName: isGift ? giftShowBuyerName : undefined,
         giftMessage: isGift ? (giftMessage.trim() || undefined) : undefined,
         giftWrap: isGift ? giftWrap : undefined,
-        promoCode: appliedPromo?.code,
+        promoCode: promoCode ?? undefined,
         // Seulement le souhait : le serveur fixe le supplément et revérifie le créneau.
         ...(urgentActive ? { urgentDelivery: true } : {}),
         shopFulfillments: shopFulfillmentsPayload,
@@ -640,7 +693,8 @@ export default function CheckoutPage() {
       <div className="flex justify-between gap-3"><span className="text-ink/60">{hasDeliveryShops && deliveryFeeKnown ? 'Livraison Ezial (estimation)' : 'Livraison Ezial'}</span><span className="text-right font-medium text-ink">{!hasDeliveryShops ? 'Gratuit' : deliveryFeeKnown ? formatFCFA(effectiveDeliveryFeeEstimate) : `À partir de ${formatFCFA(DELIVERY_FEE_FLOOR)}`}</span></div>
       {urgentActive && <div className="flex justify-between"><span className="text-ink/60">Livraison urgente</span><span className="font-medium text-ink">{formatFCFA(estimatedUrgentFee)}</span></div>}
       {isGift && giftWrap && <div className="flex justify-between"><span className="text-ink/60">Emballage cadeau</span><span className="font-medium text-ink">{formatFCFA(GIFT_WRAP_FEE)}</span></div>}
-      {appliedPromo && <div className="flex justify-between text-green-700"><span>Code promo {appliedPromo.code}</span><span className="font-medium">-{formatFCFA(appliedPromo.discountAmount)}</span></div>}
+      {deliveryDiscount > 0 && <div className="flex justify-between gap-3 text-green-700"><span>Livraison offerte{appliedPromo?.code ? ` (code ${appliedPromo.code})` : ''}</span><span className="font-medium">-{formatFCFA(deliveryDiscount)}</span></div>}
+      {promoDiscount > 0 && <div className="flex justify-between gap-3 text-green-700"><span>{promoLabel}</span><span className="font-medium">-{formatFCFA(promoDiscount)}</span></div>}
       <div className="flex items-baseline justify-between rounded-lg bg-burgundy/[0.06] px-3 py-3">
         <span className="text-sm font-semibold text-ink">{hasDeliveryShops && !deliveryFeeKnown ? 'Total à partir de' : 'Total estimé'}</span>
         <span className="text-lg font-bold leading-none text-burgundy">{formatFCFA(estimatedTotal)}</span>
@@ -656,6 +710,7 @@ export default function CheckoutPage() {
 
   return (
     <div className="container-pro max-w-5xl py-5 sm:py-8">
+      <PromotionPreviewSync previewKey={previewKey} onResult={handlePreviewResult} />
       <button
         type="button"
         onClick={() => (step === 0 ? navigate('/panier') : setStep(step - 1))}
@@ -1043,9 +1098,9 @@ export default function CheckoutPage() {
                   re-validates and recomputes it again authoritatively. */}
               <div className="space-y-2">
                 <label className="co-label">Code promo</label>
-                {appliedPromo ? (
+                {promoCode && appliedPromo ? (
                   <div className="flex items-center justify-between gap-3 rounded-lg border border-green-300 bg-green-50 px-3 py-2.5">
-                    <span className="flex items-center gap-1.5 text-sm font-medium text-green-700"><Check size={15} /> {appliedPromo.code} appliqué — économie {formatFCFA(appliedPromo.discountAmount)}</span>
+                    <span className="flex items-center gap-1.5 text-sm font-medium text-green-700"><Check size={15} /> {promoCode} appliqué — économie {formatFCFA(appliedPromo.productDiscount + (hasDeliveryShops && deliveryFeeKnown ? appliedPromo.deliveryDiscount : 0))}</span>
                     <button onClick={handleRemovePromo} className="flex-shrink-0 text-xs font-medium text-ink/55 hover:text-burgundy">Retirer</button>
                   </div>
                 ) : (
@@ -1057,6 +1112,9 @@ export default function CheckoutPage() {
                   </div>
                 )}
                 {promoError && <p className="text-xs text-burgundy">{promoError}</p>}
+                {!promoCode && appliedPromo?.automatic && (appliedPromo.productDiscount > 0 || appliedPromo.deliveryDiscount > 0) && (
+                  <p className="text-xs text-green-700">Offre appliquée automatiquement : {appliedPromo.name}. Saisir un code la remplace (une seule offre par commande).</p>
+                )}
               </div>
 
               <div className="space-y-3">

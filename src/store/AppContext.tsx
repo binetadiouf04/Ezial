@@ -103,6 +103,8 @@ export interface Order {
   // real per-item prices reconcile instead of silently disagreeing.
   discount: number;
   delivery: number;
+  // Livraison offerte par une campagne Ezial (déjà déduite de `total`) ; `delivery` reste le montant initial.
+  deliveryDiscount?: number;
   // Livraison urgente (orders.urgent_fee, fixé par create_order) : déjà compris dans total ; 0 ou absent sinon.
   urgentFee?: number;
   total: number;
