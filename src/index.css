@@ -6,6 +6,10 @@
 
 @layer base {
   html {
+    /* Fond blanc explicite, comme l'en-tête et la balise theme-color : le
+       rebond iOS en haut de page et la zone de la barre d'état ne montrent
+       jamais une autre couleur. */
+    background-color: #fff;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     scroll-behavior: smooth;

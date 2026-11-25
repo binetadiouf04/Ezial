@@ -105,6 +105,8 @@ export interface Order {
   delivery: number;
   // Livraison offerte par une campagne Ezial (déjà déduite de `total`) ; `delivery` reste le montant initial.
   deliveryDiscount?: number;
+  // Livraison urgente (orders.urgent_fee, fixé par create_order) : déjà compris dans total ; 0 ou absent sinon.
+  urgentFee?: number;
   total: number;
   shopFulfillments: ShopFulfillment[];
   preference?: DeliveryPreference;

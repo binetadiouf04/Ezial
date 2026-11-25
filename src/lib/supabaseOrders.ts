@@ -65,6 +65,11 @@ export interface CreateOrderPayload {
   // dates/minimum) via validate_promo_code() and computes the real
   // discount server-side; never trust a discount amount computed here.
   promoCode?: string;
+  // Livraison urgente : seulement le souhait (true). Le supplément est fixé par
+  // le serveur, qui revérifie le jour et le créneau (preferredDeliveryDate /
+  // preferredDeliverySlot ci-dessus) et refuse un créneau passé, désactivé ou
+  // trop proche. Jamais envoyé tant que la migration n'est pas exécutée.
+  urgentDelivery?: boolean;
   shopFulfillments: Record<string, CreateOrderShopFulfillmentInput>;
   items: CreateOrderItemInput[];
 }
@@ -94,6 +99,9 @@ export interface CreatedOrderRow {
   // product promotions already used) — no separate column, reusing the
   // real existing schema rather than inventing a new one.
   promo_code?: string | null;
+  // Livraison urgente (absents tant que la migration n'est pas exécutée).
+  is_urgent?: boolean;
+  urgent_fee?: number;
   [key: string]: unknown;
 }
 export interface CreatedOrderShopRow {

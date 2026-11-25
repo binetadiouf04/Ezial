@@ -1,6 +1,7 @@
 import { supabase } from './supabaseClient';
 import { normalizeStoredWaist } from '@/lib/waistMeasure';
 import { resolveImageUrl } from './supabaseCatalog';
+import { isUrgentRow } from './urgentDelivery';
 
 // Real Supabase-backed seller order list/detail — orders/order_shops/
 // order_items are read directly (never through create_order(), which is
@@ -83,6 +84,8 @@ export interface SellerOrderSummary {
   shopSubtotal: number;
   fulfillmentType: 'delivery' | 'pickup';
   status: string;
+  /** Livraison urgente demandée par le client (seulement si cette boutique est livrée). */
+  isUrgent: boolean;
 }
 
 // Every order that includes this shop, newest first. Scoped by
@@ -125,6 +128,7 @@ export async function fetchSellerOrders(shopId: string): Promise<SellerOrderSumm
         shopSubtotal: row.subtotal ?? 0,
         fulfillmentType: row.fulfillment_type ?? 'delivery',
         status: row.status ?? 'confirmed',
+        isUrgent: isUrgentRow(order) && (row.fulfillment_type ?? 'delivery') === 'delivery',
       };
     })
     .filter((r): r is SellerOrderSummary => r !== null)
@@ -172,6 +176,8 @@ export interface SellerOrderDetail {
   giftMessage: string | null;
   giftWrap: boolean;
   giftWrapFee: number;
+  /** Livraison urgente (jour et créneau : preferredDate / preferredSlot). Le supplément revient à Ezial, pas à la boutique. */
+  isUrgent: boolean;
   items: SellerOrderItem[];
 }
 
@@ -240,6 +246,7 @@ export async function fetchSellerOrderDetail(shopId: string, orderShopId: string
     giftMessage: firstString(order.gift_message),
     giftWrap: Boolean(order.gift_wrap),
     giftWrapFee: (order.gift_wrap_fee as number) ?? 0,
+    isUrgent: isUrgentRow(order) && (row.fulfillment_type ?? 'delivery') === 'delivery',
     items: items.map((it) => ({
       id: it.id,
       productId: it.product_id,

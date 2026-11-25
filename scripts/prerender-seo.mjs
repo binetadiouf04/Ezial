@@ -31,7 +31,7 @@ import { buildBlogPages } from './seo/blog.mjs';
 import { buildBecomeSellerPage } from './seo/become-seller.mjs';
 import { isSafeSegment, isSafeFilePath, describeValue } from './seo/safe-segment.mjs';
 import { COMPANY, CONTACT, SEO } from '../src/shared/siteInfo.js';
-import { categoryDescription, productFallbackDescription, shopFallbackDescription, SHOPS_INDEX_DESCRIPTION } from '../src/shared/seoText.js';
+import { categoryDescriptionFor, categoryHeading, categoryPageTitle, oneLineDescription, textParagraphs, productFallbackDescription, shopFallbackDescription, SHOPS_INDEX_DESCRIPTION } from '../src/shared/seoText.js';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const DIST = `${ROOT}dist`;
@@ -123,7 +123,7 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 const CATEGORY_LABELS = {
   vetements: 'Vêtements', chaussures: 'Chaussures', sacs: 'Sacs & Maroquinerie',
   beaute: 'Beauté', parfums: 'Parfums & Senteurs', bijoux: 'Bijoux & Accessoires', lingerie: 'Pyjamas & Lingerie',
-  tissus: 'Tissus',
+  tissus: 'Tissus', autres: 'Autres',
 };
 const SUBCATEGORY_LABELS = {
   femme: 'Femme', homme: 'Homme',
@@ -131,6 +131,7 @@ const SUBCATEGORY_LABELS = {
   maquillage: 'Maquillage', skincare: 'Skincare', 'soins-capillaires': 'Soins capillaires', hygiene: 'Hygiène & soins corporels', 'mains-et-pieds': 'Manucure & Pédicure',
   'parfums-femme': 'Parfums Femme', 'parfums-homme': 'Parfums Homme', 'huiles-brumes': 'Huiles & Brumes', 'encens-parfums-maison': 'Encens & Parfums de maison',
   colliers: 'Colliers', bracelets: 'Bracelets', bagues: 'Bagues', 'boucles-oreilles': "Boucles d'oreilles", montres: 'Montres', lunettes: 'Lunettes', baya: 'Baya', 'ensemble-parure': 'Ensemble / Parure',
+  'accessoires-mode': 'Accessoires de mode',
   pyjamas: 'Pyjamas & nuisettes', lingerie: 'Lingerie & sous-vêtements',
   // Anciennes sous-catégories (regroupées le 21 nov. 2026) : même libellé que leur remplaçante.
   'bijoux-de-taille': 'Baya', 'sous-vetements': 'Lingerie & sous-vêtements', 'vetements-de-nuit': 'Pyjamas & nuisettes',
@@ -150,7 +151,9 @@ function resolveImageUrl(storagePath) {
 console.log('prerender-seo: fetching catalog from Supabase...');
 
 const [shopsRes, productsRes] = await Promise.all([
-  supabase.from('shops').select('*').eq('status', 'active'),
+  // Colonnes publiques seulement : le téléphone, le propriétaire et les champs internes
+  // des boutiques ne sont pas lisibles sans connexion (docs/sql/boutiques-colonnes-privees.sql).
+  supabase.from('shops').select('id, name, slug, description, neighborhood, logo_url, cover_url, status, is_official, created_at, updated_at').eq('status', 'active'),
   supabase.from('products').select('*').eq('status', 'active'),
 ]);
 if (shopsRes.error) { console.error('prerender-seo: shops query failed —', shopsRes.error.message); process.exit(1); }
@@ -344,13 +347,13 @@ const sitemapUrls = [{ loc: `${SITE_URL}/` }];
 for (const p of products) {
   const canonical = `${SITE_URL}${productPath(p)}`;
   const shop = shops.find((s) => s.id === p.shop_id);
-  const categoryLabel = CATEGORY_LABELS[p.category] ?? p.category;
+  const categoryLabel = categoryHeading(p.category, CATEGORY_LABELS[p.category] ?? p.category);
   const subLabel = p.subcategory ? (SUBCATEGORY_LABELS[p.subcategory] ?? p.subcategory) : null;
   const images = imagesForProduct(p.id);
   const price = priceFor(p);
   const stats = statsByProduct.get(p.id);
   const title = `${p.name} — ${price.toLocaleString('fr-FR')} FCFA | Ezial`;
-  const description = (p.description || productFallbackDescription(p.name)).slice(0, 160);
+  const description = oneLineDescription(p.description, productFallbackDescription(p.name));
 
   const breadcrumbItems = [
     { name: 'Accueil', url: `${SITE_URL}/` },
@@ -382,7 +385,7 @@ for (const p of products) {
       ${images.map((url, i) => `<img src="${esc(url)}" alt="${esc(p.name)}"${i === 0 ? ' fetchpriority="high"' : ' loading="lazy"'} />`).join('')}
       <p>${price.toLocaleString('fr-FR')} FCFA</p>
       <p>${inStock ? 'En stock' : 'Rupture de stock'}</p>
-      ${p.description ? `<p>${esc(p.description)}</p>` : ''}
+      ${textParagraphs(p.description).map((par) => `<p>${esc(par).replace(/\n/g, '<br />')}</p>`).join('')}
     </main>`;
 
   writeFile(`${productPath(p)}index.html`, renderPage({
@@ -397,7 +400,7 @@ for (const shop of shops) {
   const canonical = `${SITE_URL}${shopPath(shop)}`;
   const shopProducts = products.filter((p) => p.shop_id === shop.id);
   const title = `${shop.name} — Boutique Ezial`;
-  const description = (shop.description || shopFallbackDescription(shop.name)).slice(0, 160);
+  const description = oneLineDescription(shop.description, shopFallbackDescription(shop.name));
   const logoUrl = shop.logo_url ? resolveImageUrl(shop.logo_url) : undefined;
 
   const breadcrumbItems = [{ name: 'Accueil', url: `${SITE_URL}/` }, { name: shop.name, url: canonical }];
@@ -445,7 +448,9 @@ for (const shop of shops) {
 }
 
 // --- Categories + subcategories ------------------------------------------
-for (const [categoryId, categoryLabel] of Object.entries(CATEGORY_LABELS)) {
+for (const [categoryId, menuLabel] of Object.entries(CATEGORY_LABELS)) {
+  // « Autres » → « Autres articles » (titre, H1, fil d'Ariane) : voir CATEGORY_HEADINGS.
+  const categoryLabel = categoryHeading(categoryId, menuLabel);
   const categoryProducts = products.filter((p) => p.category === categoryId);
   const subIds = [...new Set(categoryProducts.map((p) => p.subcategory).filter(Boolean))].filter((subId) => {
     if (isSafeSegment(subId)) return true;
@@ -457,8 +462,8 @@ for (const [categoryId, categoryLabel] of Object.entries(CATEGORY_LABELS)) {
     const sub = subId ? (SUBCATEGORY_LABELS[subId] ?? subId) : null;
     const canonical = sub ? `${SITE_URL}/categorie/${categoryId}/${subId}/` : `${SITE_URL}/categorie/${categoryId}/`;
     const scoped = subId ? categoryProducts.filter((p) => p.subcategory === subId) : categoryProducts;
-    const title = sub ? `${sub} — ${categoryLabel} au Sénégal | Ezial` : `${categoryLabel} au Sénégal | Ezial`;
-    const description = categoryDescription(categoryLabel, sub);
+    const title = categoryPageTitle(categoryLabel, sub);
+    const description = categoryDescriptionFor(categoryId, menuLabel, sub);
     const breadcrumbItems = [
       { name: 'Accueil', url: `${SITE_URL}/` },
       { name: categoryLabel, url: `${SITE_URL}/categorie/${categoryId}/` },
@@ -468,6 +473,7 @@ for (const [categoryId, categoryLabel] of Object.entries(CATEGORY_LABELS)) {
       ${breadcrumbNav(breadcrumbItems)}
       <main>
         <h1>${esc(sub ? `${sub} — ${categoryLabel}` : categoryLabel)}</h1>
+        <p>${esc(description)}</p>
         <ul>${scoped.map((p) => `<li><a href="${esc(`${SITE_URL}${productPath(p)}`)}">${esc(p.name)} — ${priceFor(p).toLocaleString('fr-FR')} FCFA</a></li>`).join('')}</ul>
       </main>`;
     writeFile(subId ? `/categorie/${categoryId}/${subId}/index.html` : `/categorie/${categoryId}/index.html`, renderPage({

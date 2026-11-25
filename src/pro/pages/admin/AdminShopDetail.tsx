@@ -15,6 +15,9 @@ const suspensionReasons = ['Produits suspects ou contrefaits', 'Informations tro
 // Statut 'paused' : boutique mise en pause par son propre vendeur (masquée
 // du site public), distinct d'une désactivation par Ezial ('suspended').
 const PAUSED_BY_SELLER_LABEL = 'En pause (par le vendeur)';
+// Plus de validation par Ezial : une boutique en brouillon attend seulement
+// la confirmation de l'e-mail de son propriétaire.
+const DRAFT_LABEL = 'E-mail non confirmé';
 
 const shopReportReasonLabels: Record<ShopReportReason, string> = {
   contrefait: 'Produit suspect ou contrefait',
@@ -124,7 +127,7 @@ export default function AdminShopDetail({ shopId }: { shopId: string }) {
             <h1 className="font-display text-lg font-semibold text-ink truncate">{shop.name}</h1>
             {shop.sellerCode && <p className="text-xs text-ink/45 font-mono mt-0.5">{shop.sellerCode}</p>}
           </div>
-          <StatusChip status={shop.status} size="md" label={shop.status === 'paused' ? PAUSED_BY_SELLER_LABEL : undefined} />
+          <StatusChip status={shop.status} size="md" label={shop.status === 'paused' ? PAUSED_BY_SELLER_LABEL : shop.status === 'draft' ? DRAFT_LABEL : undefined} />
         </div>
       </div>
 
@@ -146,10 +149,6 @@ export default function AdminShopDetail({ shopId }: { shopId: string }) {
         </div>
       )}
 
-      {/* L'auto-activation à la confirmation d'email gère le cas normal ;
-          ce bloc générique est le seul filet de sécurité qui reste pour
-          toute boutique non active/suspendue (pending, draft, ou tout
-          autre statut), plus de file d'approbation manuelle séparée. */}
       {shop.status === 'paused' && (
         <div className="card p-4 space-y-2">
           <p className="text-sm text-ink/70">Statut actuel : <span className="font-medium">{PAUSED_BY_SELLER_LABEL}</span>. Le vendeur a lui-même mis sa boutique en pause : elle est masquée sur le site public. Il peut la réactiver depuis son espace vendeur.</p>
@@ -159,9 +158,16 @@ export default function AdminShopDetail({ shopId }: { shopId: string }) {
         </div>
       )}
 
+      {/* Plus de file d'approbation : l'activation est automatique à la
+          confirmation de l'e-mail. Ce bloc reste un filet de sécurité pour
+          toute boutique ni active, ni suspendue, ni en pause. */}
       {!['active', 'suspended', 'paused'].includes(shop.status) && (
         <div className="card border-amber-200 bg-amber-50/30 p-4 space-y-2">
-          <p className="text-sm text-ink/70">Statut actuel : <span className="font-medium">{shop.status}</span>. Cette boutique n'a pas été activée automatiquement (email non confirmé, par exemple).</p>
+          <p className="text-sm text-ink/70">
+            {shop.status === 'draft'
+              ? "Le propriétaire n'a pas encore confirmé son adresse e-mail : la boutique se mettra en ligne toute seule dès la confirmation."
+              : <>Statut actuel : <span className="font-medium">{shop.status}</span>. Cette boutique n'est pas en ligne.</>}
+          </p>
           <button onClick={() => void act('active')} disabled={acting} className="btn-primary flex items-center gap-1.5">
             {acting ? <Loader2 size={15} className="animate-spin" /> : <Check size={15} />} Activer la boutique
           </button>
@@ -206,7 +212,7 @@ export default function AdminShopDetail({ shopId }: { shopId: string }) {
         )}
         {shop.createdAt && (
           <div className="flex items-center justify-between p-4">
-            <span className="text-sm text-ink/55">Soumise le</span>
+            <span className="text-sm text-ink/55">Inscrite le</span>
             <span className="text-sm font-medium text-ink">{formatDate(shop.createdAt)}</span>
           </div>
         )}

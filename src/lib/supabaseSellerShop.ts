@@ -29,13 +29,11 @@ export async function updateShopLocation(shopId: string, latitude: number, longi
   return {};
 }
 
-// Shop onboarding — real Supabase-backed "Configurer ma boutique" data,
-// replacing the mock-only ShopEdit state ProContext used to keep this in
-// (name/description/etc were never actually persisted before this
-// feature). status is intentionally read-only here — see
-// submitShopForReview(); it's the one and only way a seller can move their
-// own shop forward, and it can never reach 'active' from the client side
-// (an admin-only UPDATE + a safety trigger both enforce that server-side).
+// Shop onboarding — real Supabase-backed "Configurer ma boutique" data.
+// status is read-only here: une boutique passe à 'active' toute seule dès que
+// l'e-mail du propriétaire est confirmé (déclencheurs en base, voir
+// docs/sql/lancement-boutiques.sql) ; le client ne peut jamais l'écrire
+// (verrou prevent_seller_status_change côté serveur).
 export type ShopWorkflowStatus = 'draft' | 'pending' | 'active' | 'suspended' | 'rejected' | 'paused';
 
 export interface ShopOnboardingData {
@@ -86,8 +84,8 @@ export interface UpdateShopOnboardingInput {
   pickupEnabled: boolean;
 }
 
-// Never writes `status` — only submitShopForReview() (and the admin
-// approve/refuse/suspend actions) can move it.
+// Never writes `status` — only the server (activation automatique, pause,
+// suspension par un administrateur) can move it.
 export async function updateShopOnboarding(shopId: string, input: UpdateShopOnboardingInput): Promise<{ error?: string }> {
   const { error } = await supabase.from('shops').update({
     name: input.name.trim(),
@@ -104,21 +102,10 @@ export async function updateShopOnboarding(shopId: string, input: UpdateShopOnbo
   return {};
 }
 
-// The only client-side path from 'draft'/'rejected' to 'pending' — a plain
-// RLS UPDATE policy on shops (rather than a full RPC) would let a seller
-// set any status value, so this goes through a security-definer RPC that
-// only ever performs that one specific, safe transition on the caller's
-// own shop. See the migration this feature ships with.
-export async function submitShopForReview(): Promise<{ error?: string }> {
-  const { error } = await supabase.rpc('submit_shop_for_review');
-  return error ? { error: error.message } : {};
-}
-
-// Replaces submitShopForReview() for a normal first-time signup — no more
-// admin approval step. activate_shop_if_ready() (server-side) checks the
-// shop's own required fields itself and only activates when they're
-// genuinely complete; `ready: false` means the seller still has fields to
-// fill in, not an error. See the migration this feature ships with.
+// Filet de sécurité : l'activation se fait normalement en base à la
+// confirmation de l'e-mail. activate_shop_if_ready() réessaie pour une
+// boutique encore en brouillon et ne l'active que si l'e-mail du propriétaire
+// est confirmé (`ready: false` sinon, ce n'est pas une erreur).
 export async function activateShopIfReady(): Promise<{ ready: boolean; alreadyActive?: boolean; error?: string }> {
   const { data, error } = await supabase.rpc('activate_shop_if_ready');
   if (error) return { ready: false, error: error.message };

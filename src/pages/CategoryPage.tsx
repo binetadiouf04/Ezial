@@ -5,6 +5,8 @@ import { variantNameMatchesFilterGroup, type Product } from '@/data/products';
 import { getFilters, type FilterGroup } from '@/data/filters';
 import { canonicalColorName } from '@/data/colors';
 import { fabricSaleModeLabels } from '@/data/categories';
+import { categoryHeading } from '@/shared/seoText';
+import { ALL_SKIN_TYPES } from '@/lib/otherOption';
 import ProductGrid from '@/components/ProductGrid';
 import CategorySidebar from '@/components/CategorySidebar';
 import { FilterPanel, FilterDrawer, type SelectedFilters } from '@/components/FilterPanel';
@@ -81,13 +83,19 @@ export default function CategoryPage({ categoryId, subId }: { categoryId: string
         result = result.filter((p) => selectedShopIds.has(p.shopId));
       } else {
         const gnorm = norm(group);
+        // Libellé du groupe (« Type de peau », « Type de produit »…) : c'est la
+        // clé sous laquelle la caractéristique est enregistrée.
+        const labelNorm = norm(allFilters.find((f) => f.id === group)?.label ?? '');
         result = result.filter((p) => {
           // variantNameMatchesFilterGroup also matches "Couleur / Imprimé"
           // (colours and prints as one dimension) and "Motif / Imprimé".
           const variantMatch = p.variants.some((v) => (norm(v.name) === gnorm || variantNameMatchesFilterGroup(v.name, group)) && v.values.some((val) => values.some((f) => canonicalColorName(f) === canonicalColorName(val))));
           const detailMatch = p.details.some((d) => {
             const dnorm = norm(d.label);
-            return (dnorm === gnorm || dnorm === gnorm.replace(/produit$/, '') || dnorm === gnorm.replace(/decheveu$/, '')) && values.some((val) => d.value.toLowerCase().includes(val.toLowerCase()));
+            if (!(dnorm === gnorm || dnorm === labelNorm || dnorm === gnorm.replace(/produit$/, '') || dnorm === gnorm.replace(/decheveu$/, ''))) return false;
+            // « Tous types de peau » convient à chaque type de peau filtré.
+            if (gnorm === 'peau' && d.value.includes(ALL_SKIN_TYPES)) return true;
+            return values.some((val) => d.value.toLowerCase().includes(val.toLowerCase()));
           });
           const fieldMatch = (gnorm === 'texture' && p.texture && values.includes(p.texture)) ||
             (gnorm === 'matiere' && p.hairMaterial && values.includes(p.hairMaterial)) ||
@@ -106,7 +114,7 @@ export default function CategoryPage({ categoryId, subId }: { categoryId: string
       default: result.sort((a, b) => (b.createdAt ?? '').localeCompare(a.createdAt ?? ''));
     }
     return result;
-  }, [baseProducts, selectedFilters, sort, catalogShops]);
+  }, [baseProducts, selectedFilters, sort, catalogShops, allFilters]);
 
   if (!cat) return <div className="container-pro py-20 text-center text-ink/50">Catégorie introuvable.</div>;
 
@@ -120,7 +128,7 @@ export default function CategoryPage({ categoryId, subId }: { categoryId: string
           {sub && <><ChevronRight size={12} /><span className="text-ink/70">{sub.label}</span></>}
         </nav>
         <div className="mb-6">
-          <h1 className="font-display text-3xl font-semibold text-ink sm:text-4xl">{sub ? sub.label : cat.label}</h1>
+          <h1 className="font-display text-3xl font-semibold text-ink sm:text-4xl">{sub ? sub.label : categoryHeading(cat.id, cat.label)}</h1>
           <p className="mt-2 text-sm text-ink/55">{filtered.length} produit{filtered.length > 1 ? 's' : ''}{!sub && cat.subcategories.length > 0 && ' · découvrez nos sous-catégories'}</p>
         </div>
         {!sub && <div className="mb-6 flex flex-wrap gap-2">{cat.subcategories.map((s) => <button key={s.id} onClick={() => navigate(`/categorie/${cat.id}/${s.id}`)} className="chip">{s.label}</button>)}</div>}

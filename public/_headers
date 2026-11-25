@@ -30,6 +30,13 @@ https://:version.:project.pages.dev/*
 # cache un an : chaque déploiement produit de nouveaux noms de fichiers).
 /sw.js
   Cache-Control: no-cache
+# Page d'accueil (coquille de l'application) : toujours revalidée, pour que la
+# nouvelle version arrive sans réinstaller l'application. Les autres pages HTML
+# reçoivent déjà « max-age=0, must-revalidate » par défaut de Cloudflare Pages.
+/
+  Cache-Control: no-cache
+/index.html
+  Cache-Control: no-cache
 /version.json
   Cache-Control: no-store
 /manifest.webmanifest

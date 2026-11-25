@@ -29,12 +29,13 @@ test('aperçu d\'un lien admin : icône Ezial Admin au lieu de l\'image de rempl
   assert.deepEqual(overrideShareTags(base, 'www.ezial.net', 'https://www.ezial.net'), base);
 });
 
-test('livreur.ezial.net : manifeste, icônes et nom Ezial Livreur, thème rouge rubis, rien d\'autre ne change', () => {
+test('livreur.ezial.net : manifeste, icônes et nom Ezial Livreur, rien d\'autre ne change', () => {
   const id = pwaIdentityForHostname('livreur.ezial.net');
   assert.equal(id.manifest, '/manifest-livreur.webmanifest');
   assert.equal(id.appName, 'Ezial Livreur');
   assert.equal(id.appleTouchIcon, '/icons/livreur/apple-touch-icon.png');
-  assert.equal(id.themeColor, '#8C1024');
+  // Barre d'état blanche comme l'en-tête (index.html) : plus de bande rouge en haut de l'iPhone.
+  assert.equal(id.themeColor, undefined);
   assert.deepEqual(id.favicons, {}); // favicon inchangé
   assert.equal(pwaIdentityForHostname('LIVREUR.ezial.net')?.appName, 'Ezial Livreur');
   assert.equal(pwaIdentityForHostname('livreurs.ezial.net'), null);
@@ -66,4 +67,16 @@ test('fichiers de l\'application Livreur : manifeste valide, icônes présentes 
   const admin = JSON.parse(readFileSync(new URL('manifest-admin.webmanifest', root), 'utf8'));
   assert.ok(market.icons.every((i) => !i.src.includes('livreur')));
   assert.ok(admin.icons.every((i) => i.src.startsWith('/icons/admin/')));
+});
+
+test('barre d\'état (theme-color) blanche comme l\'en-tête : plus de bande rouge en haut de l\'iPhone', async () => {
+  const { readFileSync } = await import('node:fs');
+  const html = readFileSync(new URL('../../index.html', import.meta.url), 'utf8');
+  const metas = [...html.matchAll(/<meta name="theme-color" content="([^"]+)"/g)].map((m) => m[1]);
+  assert.deepEqual(metas, ['#FFFFFF']);
+  assert.match(html, /viewport-fit=cover/);
+  assert.match(html, /name="apple-mobile-web-app-status-bar-style" content="default"/);
+  for (const host of ['ezial.net', 'admin.ezial.net', 'livreur.ezial.net']) {
+    assert.equal(pwaIdentityForHostname(host)?.themeColor, undefined, host);
+  }
 });

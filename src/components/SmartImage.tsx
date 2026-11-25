@@ -7,6 +7,8 @@ export default function SmartImage({
   loading = 'lazy',
   fetchPriority,
   fallbackSrc = `${import.meta.env.BASE_URL}ezial-fallback.webp`,
+  width,
+  height,
 }: {
   src: string;
   alt: string;
@@ -18,6 +20,12 @@ export default function SmartImage({
    * the page's largest visible image instead of prioritizing it. */
   fetchPriority?: 'high' | 'low' | 'auto';
   fallbackSrc?: string;
+  /** Dimensions réelles du fichier (ex. 960×1200 pour une photo produit, 240×300
+   * pour sa miniature) : le navigateur connaît la proportion avant le
+   * téléchargement, la mise en page ne bouge pas quand l'image arrive. Le
+   * rendu à l'écran reste fixé par className. */
+  width?: number;
+  height?: number;
 }) {
   const [errored, setErrored] = useState(false);
   const [loaded, setLoaded] = useState(false);
@@ -39,6 +47,8 @@ export default function SmartImage({
     <img
       src={showFallback ? fallbackSrc : src}
       alt={alt}
+      width={width}
+      height={height}
       loading={loading}
       decoding="async"
       // React 18.3 doesn't special-case fetchPriority yet (unlike React 19),

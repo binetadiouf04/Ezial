@@ -16,11 +16,15 @@ import CheckoutSteps from '@/components/CheckoutSteps';
 import GoogleLocationPickerMap from '@/components/GoogleLocationPickerMap';
 import PhoneField from '@/components/PhoneField';
 import CustomerAuthPanel from '@/components/CustomerAuthPanel';
-import { Check, Truck, Store, Smartphone, Clock, Loader2, AlertCircle, AlertTriangle, MapPin, Navigation, Search, ArrowLeft, Gift, UserCheck, ChevronDown, Wallet, FileText, Lock } from 'lucide-react';
+import { Check, Truck, Store, Smartphone, Clock, Loader2, AlertCircle, AlertTriangle, MapPin, Navigation, Search, ArrowLeft, Gift, UserCheck, ChevronDown, Wallet, FileText, Lock, Zap } from 'lucide-react';
 import SmartImage from '@/components/SmartImage';
 import { scrollToTopNow } from '@/lib/scrollTop';
 import { placeTitle, type RecentDeliveryPlace } from '@/lib/recentDeliveryPlaces';
 import { fetchRecentDeliveryPlaces } from '@/lib/supabaseRecentDeliveryPlaces';
+import { fetchUrgentDeliveryOptions } from '@/lib/supabaseUrgentDelivery';
+import { firstUrgentChoice, isUrgentChoiceOffered, urgentFeeOfRow, type UrgentDeliveryOptions } from '@/lib/urgentDelivery';
+import { formatDeliveryDay } from '@/lib/deliveryDay';
+import { lineStockIssue } from '@/lib/cartStock';
 
 const InfoSheet = lazy(() => import('@/components/info/InfoSheet'));
 
@@ -128,12 +132,20 @@ function PromotionPreviewSync({ previewKey, onResult }: { previewKey: string; on
 
 export default function CheckoutPage() {
   const { cart, cartSubtotal, clearCart, navigate, addOrder, catalogProducts, customerUser, authLoading } = useApp();
+  // Article épuisé ou quantité au-delà du stock : paiement bloqué (create_order le refuse aussi).
+  const hasStockIssue = cart.some((item) => lineStockIssue(catalogProducts.find((p) => p.id === item.productId), item) !== null);
   const [step, setStep] = useState(0);
   // Chaque étape (Coordonnées → Livraison → Paiement) s'ouvre en haut de page : sans cela, on restait
   // en bas (là où se trouve le bouton « Continuer »), sur le pied de page, surtout sur iPhone.
   useEffect(() => { scrollToTopNow(); }, [step]);
   const [form, setForm] = useState<CheckoutForm>(() => ({ firstName: '', lastName: '', phone: '', email: '', quartier: 'Plateau', landmark: '', instructions: '', ...loadDraftForm() }));
   const [preference, setPreference] = useState<DeliveryPreference>({ type: 'none' });
+  // Livraison urgente : réutilise la préférence ci-dessus (jour + créneau) et
+  // n'ajoute qu'un souhait. Options lues sur le serveur (créneaux encore
+  // réalisables, supplément) ; null = option masquée (désactivée, aucun
+  // créneau, ou migration pas encore exécutée).
+  const [urgentOptions, setUrgentOptions] = useState<UrgentDeliveryOptions | null>(null);
+  const [urgent, setUrgent] = useState(false);
   const [payment, setPayment] = useState('wave');
   const [shopFulfillments, setShopFulfillments] = useState<Record<string, 'delivery' | 'pickup'>>({});
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -275,6 +287,26 @@ export default function CheckoutPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [earlyDeliveryShopIdsKey, location?.lat, location?.lng]);
 
+  // Relu à l'ouverture des étapes Livraison et Paiement : un créneau dont
+  // l'heure limite vient de passer disparaît avant que le client ne paie.
+  useEffect(() => {
+    if (step === 0) return;
+    let cancelled = false;
+    void fetchUrgentDeliveryOptions().then((options) => {
+      if (!cancelled) setUrgentOptions(options);
+    });
+    return () => { cancelled = true; };
+  }, [step]);
+
+  // Le créneau urgent choisi n'est plus proposé : on reprend le premier
+  // créneau encore réalisable, ou on revient à « Dès que possible ».
+  useEffect(() => {
+    if (!urgent || isUrgentChoiceOffered(urgentOptions, preference.date, preference.window)) return;
+    const first = firstUrgentChoice(urgentOptions);
+    if (first) setPreference({ type: 'preferred', ...first });
+    else { setUrgent(false); setPreference({ type: 'none' }); }
+  }, [urgent, urgentOptions, preference.date, preference.window]);
+
   const hasMockItem = cart.some((item) => !isRealCatalogId(item.productId));
 
   if (cart.length === 0) {
@@ -349,8 +381,22 @@ export default function CheckoutPage() {
   const promoDiscount = appliedPromo?.productDiscount ?? 0;
   // La livraison offerte n'est jamais déduite d'une estimation « à partir de » : seulement
   // quand les frais sont connus (le serveur recalcule de toute façon à la commande).
+  // Elle est plafonnée aux frais de livraison : le supplément urgent n'est jamais offert.
   const deliveryDiscount = hasDeliveryShops && deliveryFeeKnown ? Math.min(appliedPromo?.deliveryDiscount ?? 0, estimatedDeliveryFee) : 0;
-  const estimatedTotal = Math.max(0, cartSubtotal + estimatedDeliveryFee + estimatedGiftWrapFee - promoDiscount - deliveryDiscount);
+  // Urgence seulement avec au moins une boutique livrée (jamais pour un retrait seul).
+  const urgentActive = urgent && hasDeliveryShops && urgentOptions !== null;
+  const estimatedUrgentFee = urgentActive && urgentOptions ? urgentOptions.fee : 0;
+  const estimatedTotal = Math.max(0, cartSubtotal + estimatedDeliveryFee + estimatedGiftWrapFee + estimatedUrgentFee - promoDiscount - deliveryDiscount);
+  const todayDakar = new Date().toISOString().slice(0, 10); // Dakar = UTC toute l'année
+  const urgentDayLabel = (date: string) => (date === todayDakar ? `Aujourd'hui (${formatDeliveryDay(date)})` : formatDeliveryDay(date));
+  const urgentDay = urgentOptions?.days.find((d) => d.date === preference.date) ?? null;
+
+  const chooseUrgent = () => {
+    const first = firstUrgentChoice(urgentOptions);
+    if (!first) return;
+    setUrgent(true);
+    setPreference({ type: 'preferred', ...first });
+  };
 
   // Données envoyées à l'aperçu : jamais de prix (le serveur les relit).
   const previewInput = (code: string | null) => ({
@@ -410,6 +456,9 @@ export default function CheckoutPage() {
     if (isGift) {
       if (!giftRecipientName.trim()) e.giftRecipientName = 'Ce champ est obligatoire.';
       if (!giftRecipientPhone.trim()) e.giftRecipientPhone = 'Ce champ est obligatoire.';
+    }
+    if (urgentActive && !isUrgentChoiceOffered(urgentOptions, preference.date, preference.window)) {
+      e.urgent = 'Ce créneau urgent n’est plus disponible. Choisissez-en un autre.';
     }
     setErrors(e);
     return Object.keys(e).length === 0;
@@ -492,6 +541,7 @@ export default function CheckoutPage() {
       discount: result.order.discount_amount ?? 0,
       delivery: result.order.delivery_fee,
       deliveryDiscount: (result.order as { delivery_discount?: number | null }).delivery_discount ?? 0,
+      urgentFee: urgentFeeOfRow(result.order),
       total: result.order.total_amount,
       shopFulfillments: fulfillments,
       preference: hasDeliveryShops ? preference : undefined,
@@ -568,6 +618,8 @@ export default function CheckoutPage() {
         giftMessage: isGift ? (giftMessage.trim() || undefined) : undefined,
         giftWrap: isGift ? giftWrap : undefined,
         promoCode: promoCode ?? undefined,
+        // Seulement le souhait : le serveur fixe le supplément et revérifie le créneau.
+        ...(urgentActive ? { urgentDelivery: true } : {}),
         shopFulfillments: shopFulfillmentsPayload,
         items: cart.map((item) => ({
           productId: item.productId,
@@ -639,6 +691,7 @@ export default function CheckoutPage() {
     <div className="space-y-2 text-sm">
       <div className="flex justify-between"><span className="text-ink/60">Produits</span><span className="font-medium text-ink">{formatFCFA(cartSubtotal)}</span></div>
       <div className="flex justify-between gap-3"><span className="text-ink/60">{hasDeliveryShops && deliveryFeeKnown ? 'Livraison Ezial (estimation)' : 'Livraison Ezial'}</span><span className="text-right font-medium text-ink">{!hasDeliveryShops ? 'Gratuit' : deliveryFeeKnown ? formatFCFA(effectiveDeliveryFeeEstimate) : `À partir de ${formatFCFA(DELIVERY_FEE_FLOOR)}`}</span></div>
+      {urgentActive && <div className="flex justify-between"><span className="text-ink/60">Livraison urgente</span><span className="font-medium text-ink">{formatFCFA(estimatedUrgentFee)}</span></div>}
       {isGift && giftWrap && <div className="flex justify-between"><span className="text-ink/60">Emballage cadeau</span><span className="font-medium text-ink">{formatFCFA(GIFT_WRAP_FEE)}</span></div>}
       {deliveryDiscount > 0 && <div className="flex justify-between gap-3 text-green-700"><span>Livraison offerte{appliedPromo?.code ? ` (code ${appliedPromo.code})` : ''}</span><span className="font-medium">-{formatFCFA(deliveryDiscount)}</span></div>}
       {promoDiscount > 0 && <div className="flex justify-between gap-3 text-green-700"><span>{promoLabel}</span><span className="font-medium">-{formatFCFA(promoDiscount)}</span></div>}
@@ -935,18 +988,61 @@ export default function CheckoutPage() {
                 <div className="space-y-3 border-t border-ink/10 pt-5">
                   <h3 className="flex items-center gap-2 text-[15px] font-semibold text-ink"><Clock size={17} className="text-burgundy" aria-hidden="true" /> Quand souhaitez-vous être livré ?</h3>
                   <div className="grid gap-2 sm:grid-cols-2">
-                    <button onClick={() => setPreference({ type: 'none' })} className={`opt-row items-center ${preference.type === 'none' ? 'opt-row-active' : ''}`}>
+                    <button onClick={() => { setUrgent(false); setPreference({ type: 'none' }); }} className={`opt-row items-center ${preference.type === 'none' ? 'opt-row-active' : ''}`}>
                       <Clock size={16} className={preference.type === 'none' ? 'text-burgundy' : 'text-ink/40'} />
                       <span className="text-sm font-medium text-ink">Dès que possible</span>
                       <Radio active={preference.type === 'none'} />
                     </button>
-                    <button onClick={() => setPreference({ type: 'preferred', date: tomorrowISO(), window: deliveryWindows[0] })} className={`opt-row items-center ${preference.type === 'preferred' ? 'opt-row-active' : ''}`}>
-                      <Clock size={16} className={preference.type === 'preferred' ? 'text-burgundy' : 'text-ink/40'} />
+                    <button onClick={() => { setUrgent(false); setPreference({ type: 'preferred', date: tomorrowISO(), window: deliveryWindows[0] }); }} className={`opt-row items-center ${preference.type === 'preferred' && !urgentActive ? 'opt-row-active' : ''}`}>
+                      <Clock size={16} className={preference.type === 'preferred' && !urgentActive ? 'text-burgundy' : 'text-ink/40'} />
                       <span className="text-sm font-medium text-ink">Choisir un jour et un créneau</span>
-                      <Radio active={preference.type === 'preferred'} />
+                      <Radio active={preference.type === 'preferred' && !urgentActive} />
                     </button>
+                    {urgentOptions && (
+                      <button onClick={chooseUrgent} className={`opt-row items-center sm:col-span-2 ${urgentActive ? 'opt-row-active' : ''}`}>
+                        <Zap size={16} className={urgentActive ? 'text-burgundy' : 'text-ink/40'} />
+                        <span className="text-left">
+                          <span className="block text-sm font-medium text-ink">Livraison urgente <span className="font-normal text-ink/55">(+{formatFCFA(urgentOptions.fee)})</span></span>
+                          <span className="block text-xs text-ink/55">Traitée en priorité, dans le créneau choisi</span>
+                        </span>
+                        <Radio active={urgentActive} />
+                      </button>
+                    )}
                   </div>
-                  {preference.type === 'preferred' && (
+                  {urgentActive && urgentOptions && (
+                    <div className="fade-in space-y-3">
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        <div>
+                          <label className="co-label">Jour</label>
+                          <div className="relative">
+                            <select
+                              className="co-input appearance-none pr-10"
+                              value={preference.date}
+                              onChange={(e) => {
+                                const day = urgentOptions.days.find((d) => d.date === e.target.value);
+                                if (day) setPreference({ type: 'preferred', date: day.date, window: day.slots[0].label });
+                              }}
+                            >
+                              {urgentOptions.days.map((d) => <option key={d.date} value={d.date}>{urgentDayLabel(d.date)}</option>)}
+                            </select>
+                            <ChevronDown size={16} className="pointer-events-none absolute right-3.5 top-1/2 -translate-y-1/2 text-ink/45" aria-hidden="true" />
+                          </div>
+                        </div>
+                        <div>
+                          <label className="co-label">Créneau</label>
+                          <div className="relative">
+                            <select className="co-input appearance-none pr-10" value={preference.window} onChange={(e) => setPreference({ ...preference, window: e.target.value })}>
+                              {(urgentDay?.slots ?? []).map((s) => <option key={s.label} value={s.label}>{s.label}</option>)}
+                            </select>
+                            <ChevronDown size={16} className="pointer-events-none absolute right-3.5 top-1/2 -translate-y-1/2 text-ink/45" aria-hidden="true" />
+                          </div>
+                        </div>
+                      </div>
+                      <p className="text-xs text-ink/55">Seuls les créneaux encore réalisables sont proposés. Supplément fixe de {formatFCFA(urgentOptions.fee)} par commande, ajouté au total.</p>
+                      {errors.urgent && <p className="text-xs text-burgundy">{errors.urgent}</p>}
+                    </div>
+                  )}
+                  {preference.type === 'preferred' && !urgentActive && (
                     <div className="fade-in space-y-3">
                       <div className="grid gap-3 sm:grid-cols-2">
                         <div>
@@ -1050,9 +1146,15 @@ export default function CheckoutPage() {
                   En cliquant sur « Payer », vous acceptez les{' '}
                   <button type="button" onClick={() => setInfoSheet('conditions-generales')} className="font-medium text-burgundy underline underline-offset-2">conditions générales de vente</button>.
                 </p>
+                {hasStockIssue && (
+                  <p role="alert" className="mb-2.5 flex items-start justify-center gap-1.5 text-center text-xs font-medium text-red-700">
+                    <AlertTriangle size={14} className="mt-px flex-shrink-0" aria-hidden="true" />
+                    Un article de votre panier est épuisé ou n’est plus disponible en quantité suffisante. Modifiez votre panier pour commander.
+                  </p>
+                )}
                 <div className="grid grid-cols-[auto_1fr] gap-3">
                   <button onClick={() => setStep(1)} className="btn-shop-line" disabled={processing}>Retour</button>
-                  <button onClick={placeOrder} className="btn-shop" disabled={processing}>
+                  <button onClick={placeOrder} className="btn-shop" disabled={processing || hasStockIssue}>
                     {processing ? <><Loader2 size={17} className="animate-spin" /> Traitement...</> : <><Lock size={16} aria-hidden="true" /> {`Payer ${formatFCFA(estimatedTotal)} ${hasDeliveryShops && !deliveryFeeKnown ? '(à partir de)' : '(estimé)'}`}</>}
                   </button>
                 </div>

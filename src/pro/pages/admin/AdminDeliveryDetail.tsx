@@ -4,6 +4,8 @@ import { fetchAdminDeliveries, fetchDeliveryProofUrl } from '@/lib/supabaseAdmin
 import { PHASE_LABEL, type AdminDelivery } from '@/lib/adminDeliveriesCore';
 import { formatDateTime } from '../../data';
 import { StatusChip } from '../../components/StatusChip';
+import UrgentBadge from '@/components/UrgentBadge';
+import { formatDeliveryWish } from '@/lib/deliveryDay';
 import { ArrowLeft, MapPin, User, Phone, CheckCircle2, Circle, Package, Loader2, AlertCircle, ExternalLink, Camera } from 'lucide-react';
 
 const PHASE_CHIP: Record<AdminDelivery['phase'], string> = {
@@ -72,7 +74,7 @@ export default function AdminDeliveryDetail({ missionId }: { missionId: string }
       {back}
 
       <div className="flex items-center justify-between gap-3">
-        <h1 className="font-display text-xl font-semibold text-ink">{delivery.orderNumber || 'Commande'}</h1>
+        <h1 className="flex flex-wrap items-center gap-2 font-display text-xl font-semibold text-ink">{delivery.orderNumber || 'Commande'}{delivery.urgent && <UrgentBadge />}</h1>
         <StatusChip status={PHASE_CHIP[delivery.phase]} size="md" label={PHASE_LABEL[delivery.phase]} />
       </div>
 
@@ -125,7 +127,11 @@ export default function AdminDeliveryDetail({ missionId }: { missionId: string }
         <div className="mt-3 space-y-1.5 border-t border-line pt-3">
           {delivery.customerName && <p className="flex items-center gap-1.5 text-sm text-ink"><User size={14} className="text-ink/40" /> {delivery.customerName}</p>}
           {delivery.customerPhone && <p className="flex items-center gap-1.5 text-sm text-ink"><Phone size={14} className="text-ink/40" /> {delivery.customerPhone}</p>}
-          {delivery.slot && <p className="text-xs text-ink/45">Créneau : {delivery.slot}</p>}
+          {(delivery.slot || delivery.slotDate) && (
+            <p className={`text-xs ${delivery.urgent ? 'font-medium text-burgundy-ruby' : 'text-ink/45'}`}>
+              {delivery.urgent ? 'Livraison urgente' : 'Créneau'} : {formatDeliveryWish(delivery.slotDate, delivery.slot)}
+            </p>
+          )}
         </div>
       </div>
 

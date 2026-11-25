@@ -151,7 +151,7 @@ export async function createInvoicePdf(invoice: Invoice): Promise<{ blob: Blob; 
   });
 
   // ── Totaux : le total en dernier ──────────────────────────────────────
-  if (y + 40 > BOTTOM) newPage();
+  if (y + (invoice.urgentFee > 0 ? 50 : 40) > BOTTOM) newPage();
   hair(y - 1);
   y += 6;
   const LBL = 128;
@@ -164,13 +164,15 @@ export async function createInvoicePdf(invoice: Invoice): Promise<{ blob: Blob; 
   if (invoice.discount > 0) row('Remise', `- ${formatInvoiceMoney(invoice.discount)}`);
   row('Livraison', invoice.delivery > 0 ? formatInvoiceMoney(invoice.delivery) : 'Gratuite');
   if (invoice.deliveryDiscount > 0) row('Livraison offerte', `- ${formatInvoiceMoney(invoice.deliveryDiscount)}`);
+  if (invoice.urgentFee > 0) row('Livraison urgente', formatInvoiceMoney(invoice.urgentFee));
   y += 1;
   hair(y - 2, LBL, RIGHT, INK);
   y += 5;
   text('Total', LBL, y, { size: 11, bold: true });
   text(formatInvoiceMoney(invoice.total), RIGHT, y, { size: 12, bold: true, color: BURGUNDY, align: 'right' });
   y += 6;
-  if (invoice.vatNote) text(invoice.vatNote, RIGHT, y, { size: 7.5, color: GREY, align: 'right' });
+  if (invoice.vatNote) { text(invoice.vatNote, RIGHT, y, { size: 7.5, color: GREY, align: 'right' }); y += 4.5; }
+  if (invoice.urgentWhen) text(`Livraison urgente prévue : ${invoice.urgentWhen}`, RIGHT, y, { size: 7.5, color: GREY, align: 'right' });
 
   // ── Pied de page : identité légale, sur chaque page ───────────────────
   const pages = doc.getNumberOfPages();

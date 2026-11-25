@@ -75,3 +75,22 @@ test('livraison offerte : montant initial gardé, réduction à part, total coh�
   assert.equal(inv.deliveryDiscount, 1500);
   assert.equal(inv.subtotal - inv.discount + inv.delivery - inv.deliveryDiscount, inv.total);
 });
+
+test('livraison offerte + urgente : deux lignes distinctes, le supplément urgent n\'est pas offert', () => {
+  const both = { ...order, delivery: 1500, deliveryDiscount: 1500, urgentFee: 500, total: 25500, preference: { type: 'preferred', date: '2026-11-28', window: '18h–20h' } };
+  const inv = buildInvoice(both, helpers, company);
+  assert.equal(inv.deliveryDiscount, 1500);
+  assert.equal(inv.urgentFee, 500);
+  assert.equal(inv.subtotal - inv.discount + inv.delivery - inv.deliveryDiscount + inv.urgentFee, inv.total);
+});
+
+test('livraison urgente : supplément et créneau sur la facture, total inchangé (déjà compris)', () => {
+  const urgent = { ...order, urgentFee: 500, total: 27000, preference: { type: 'preferred', date: '2026-11-28', window: '18h–20h' } };
+  const inv = buildInvoice(urgent, helpers, company);
+  assert.equal(inv.urgentFee, 500);
+  assert.equal(inv.urgentWhen, 'samedi 28 novembre · 18h–20h');
+  assert.equal(inv.subtotal - inv.discount + inv.delivery + inv.urgentFee, inv.total);
+  const normal = buildInvoice(order, helpers, company);
+  assert.equal(normal.urgentFee, 0);
+  assert.equal(normal.urgentWhen, '');
+});

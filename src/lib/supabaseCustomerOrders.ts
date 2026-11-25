@@ -1,6 +1,7 @@
 import { supabase } from './supabaseClient';
 import { normalizeStoredWaist } from '@/lib/waistMeasure';
 import { splitDeliveryNotes } from '@/lib/recentDeliveryPlaces';
+import { urgentFeeOfRow } from '@/lib/urgentDelivery';
 import type { Order, ShopFulfillment, DeliveryStepStatus, ShopPrepStatus, PickupStepStatus } from '@/store/AppContext';
 
 // Real order history for "Mes commandes" — orders.customer_id = auth.uid()
@@ -142,6 +143,7 @@ export async function fetchCustomerOrders(customerId: string): Promise<Order[]> 
       discount: o.discount_amount ?? 0,
       delivery: o.delivery_fee,
       deliveryDiscount: o.delivery_discount ?? 0,
+      urgentFee: urgentFeeOfRow(o),
       total: o.total_amount,
       shopFulfillments: fulfillments,
       preference: o.preferred_delivery_date || o.preferred_delivery_slot

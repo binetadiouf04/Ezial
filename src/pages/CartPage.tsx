@@ -9,12 +9,16 @@ import { getShop } from '@/data/shops';
 import { Plus, Minus, Trash2, ShoppingBag, ChevronRight, ArrowLeftRight, Bookmark, AlertTriangle } from 'lucide-react';
 import PriceDisplay from '@/components/PriceDisplay';
 import SmartImage from '@/components/SmartImage';
+import { availableStock, lineStockIssue, lineStockMessage } from '@/lib/cartStock';
 
 export default function CartPage() {
   const { cart, removeFromCart, updateQuantity, updateWaist, cartSubtotal, navigate, saveForLater, savedItems, moveToCart, removeFromSaved, catalogProducts } = useApp();
   const hasMockItem = cart.some((item) => !isRealCatalogId(item.productId));
   // Baya sans mesure valide : on ne peut pas commander (le serveur revérifie aussi).
   const missingWaist = cart.some((item) => lineNeedsWaist(item, catalogProducts.find((p) => p.id === item.productId)));
+  // Article devenu épuisé, ou quantité au-delà du stock : signalé sur sa ligne
+  // et commande bloquée (create_order() le refuserait de toute façon).
+  const hasStockIssue = cart.some((item) => lineStockIssue(catalogProducts.find((p) => p.id === item.productId), item) !== null);
 
   if (cart.length === 0 && savedItems.length === 0) {
     return (
@@ -61,6 +65,8 @@ export default function CartPage() {
                       const { oldPrice: unitOldPrice } = getVariantPrice(product, item.variants);
                       const lineOldTotal = unitOldPrice ? unitOldPrice * item.quantity : undefined;
                       const rules = product.saleMode ? fabricQuantityRules[product.saleMode] : null;
+                      const stockIssue = lineStockIssue(product, item);
+                      const lineMax = rules ? null : availableStock(product, item.variants, item.variantId);
                       return (
                         <div key={index} className="flex gap-4">
                           <SmartImage src={product.thumbnailUrl || product.images[0]} alt="" className="h-24 w-20 flex-shrink-0 rounded-lg object-cover" />
@@ -73,6 +79,11 @@ export default function CartPage() {
                             )}
                             {Object.entries(item.variants).map(([k, v]) => <p key={k} className="text-xs text-ink/45 mt-0.5">{k}: {v}</p>)}
                             {isBayaProduct(product) && <WaistEditor value={item.waistCm} onSave={(cm) => updateWaist(index, cm)} />}
+                            {stockIssue && (
+                              <p role="alert" className="mt-1 flex items-center gap-1 text-xs font-medium text-burgundy">
+                                <AlertTriangle size={12} /> {lineStockMessage(stockIssue)}
+                              </p>
+                            )}
                             <div className="mt-3 flex items-center justify-between">
                               <div className="flex items-center border border-line rounded-full">
                                 <button
@@ -85,7 +96,7 @@ export default function CartPage() {
                                 </span>
                                 <button
                                   onClick={() => updateQuantity(index, +(item.quantity + (rules?.step ?? 1)).toFixed(2), rules?.min ?? 1)}
-                                  disabled={rules ? item.quantity >= rules.max : false}
+                                  disabled={rules ? item.quantity >= rules.max : (lineMax !== null && item.quantity >= lineMax)}
                                   className="flex h-8 w-8 items-center justify-center text-ink/60 hover:text-ink disabled:opacity-30"
                                 ><Plus size={14} /></button>
                               </div>
@@ -128,7 +139,13 @@ export default function CartPage() {
                   Indiquez le tour de taille de votre baya pour passer la commande.
                 </p>
               )}
-              <button onClick={() => navigate('/checkout')} disabled={hasMockItem || missingWaist} className="btn-primary w-full disabled:opacity-50 disabled:cursor-not-allowed">Passer la commande <ChevronRight size={16} /></button>
+              {hasStockIssue && (
+                <p role="alert" className="flex items-start gap-1.5 rounded-lg bg-burgundy/5 p-2.5 text-xs text-burgundy">
+                  <AlertTriangle size={14} className="mt-0.5 flex-shrink-0" />
+                  Un article de votre panier est épuisé ou n'est plus disponible dans cette quantité : retirez-le ou réduisez la quantité pour commander.
+                </p>
+              )}
+              <button onClick={() => navigate('/checkout')} disabled={hasMockItem || missingWaist || hasStockIssue} className="btn-primary w-full disabled:opacity-50 disabled:cursor-not-allowed">Passer la commande <ChevronRight size={16} /></button>
               <button onClick={() => navigate('/')} className="btn-ghost w-full">Continuer mes achats</button>
             </div>
           </div>

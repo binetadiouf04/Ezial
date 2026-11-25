@@ -1,5 +1,6 @@
 import { fabricTypes, fabricSaleModeLabels, type CategoryId } from './categories';
 import { COMMON_COLOR_NAMES, JEWELRY_COLOR_NAMES } from './colors';
+import { OTHER_OPTION, ALL_SKIN_TYPES } from '@/lib/otherOption';
 
 export interface FilterGroup { id: string; label: string; options: string[]; collapsible?: boolean }
 
@@ -25,7 +26,7 @@ const parfumsFemmeNotes = ['Floral', 'Fruité', 'Vanillé', 'Gourmand', 'Musqué
 const parfumsHommeNotes = ['Boisé', 'Aromatique', 'Épicé', 'Ambré', 'Musqué', 'Cuir', 'Frais', 'Agrumes', 'Aquatique', 'Fougère', 'Oriental'];
 const allFragranceNotes = [...new Set([...parfumsFemmeNotes, ...parfumsHommeNotes])];
 
-const encensMaisonTypes = ['Encens', 'Diffuseur', 'Bougie', 'Huile à brûler', 'Parfum d\'ambiance'];
+const encensMaisonTypes = ['Encens', 'Diffuseur', 'Bougie', 'Huile à brûler', 'Parfum d\'ambiance', OTHER_OPTION];
 
 // Pas d'« Or » : la vente de bijoux en or véritable n'est pas autorisée sur Ezial
 // (voir src/lib/goldJewelry.ts). « Plaqué or », « Fantaisie » et « Acier
@@ -34,8 +35,11 @@ const encensMaisonTypes = ['Encens', 'Diffuseur', 'Bougie', 'Huile à brûler', 
 const jewelryMaterials = ['Argent', 'Plaqué or', 'Acier inoxydable', 'Perles', 'Fantaisie'];
 const jewelryColors: string[] = JEWELRY_COLOR_NAMES;
 
-const shoeTypesFemme = ['Baskets', 'Sandales', 'Talons', 'Mules', 'Claquettes', 'Ballerines', 'Mocassins', 'Chaussures plateformes', 'Bottes & bottines'];
-const shoeTypesHomme = ['Baskets', 'Sandales', 'Claquettes', 'Mocassins', 'Chaussures habillées', 'Bottes & bottines'];
+// « Autre » (OTHER_OPTION) termine chaque liste de types : le vendeur peut
+// préciser librement (champ « Préciser », enregistré « Autre (…) », voir
+// src/lib/otherOption.ts) quand aucun type proposé ne convient.
+const shoeTypesFemme = ['Baskets', 'Sandales', 'Talons', 'Mules', 'Claquettes', 'Ballerines', 'Mocassins', 'Chaussures plateformes', 'Bottes & bottines', OTHER_OPTION];
+const shoeTypesHomme = ['Baskets', 'Sandales', 'Claquettes', 'Mocassins', 'Chaussures habillées', 'Bottes & bottines', OTHER_OPTION];
 const shoeSizes = ['36', '37', '38', '39', '40', '41', '42', '43', '44', '45'];
 
 const clothingStyles = ['Mode africaine', 'Mode moderne', 'Mode modeste'];
@@ -43,18 +47,18 @@ const clothingTypesFemme = [
   'Robes', 'Tops, blouses & chemises', 'T-shirts', 'Ensembles', 'Jupes', 'Pantalons', 'Jeans', 'Shorts',
   'Pantalons larges', 'Jogging & sweatpants', 'Tenues de sport', 'Combinaisons & combishorts', 'Abayas',
   'Caftans & tenues traditionnelles', 'Mode modeste', 'Vestes & blazers', 'Gilets', 'Pulls & sweats',
-  'Grande taille', 'Maillots & tenues de bain',
+  'Grande taille', 'Maillots & tenues de bain', OTHER_OPTION,
 ];
 const clothingTypesHomme = [
   'T-shirts', 'Polos', 'Chemises', 'Ensembles', 'Pantalons', 'Pantalons larges', 'Jeans', 'Shorts',
   'Jogging & sweatpants', 'Tenues de sport', 'Sweats & hoodies', 'Vestes & blazers', 'Boubous & tenues traditionnelles',
-  'Grande taille',
+  'Grande taille', OTHER_OPTION,
 ];
 
 // Pyjamas & Lingerie : deux sous-catégories seulement, sans doublon entre elles.
 // Un « Type » ne répète jamais la sous-catégorie : il précise la pièce.
-const nightwearTypes = ['Pyjama', 'Nuisette', 'Chemise de nuit', 'Peignoir'];
-const lingerieTypes = ['Soutien-gorge', 'Culotte', 'Ensemble', 'Body', 'Caleçon / boxer'];
+const nightwearTypes = ['Pyjama', 'Nuisette', 'Chemise de nuit', 'Peignoir', OTHER_OPTION];
+const lingerieTypes = ['Soutien-gorge', 'Culotte', 'Ensemble', 'Body', 'Caleçon / boxer', OTHER_OPTION];
 
 // Bagues : tailles américaines (8, 8.5, 10…), celles utilisées par Ezial et ses
 // vendeurs, de 5 à 13 par demi-taille, plus « Taille standard » pour les bagues
@@ -74,7 +78,20 @@ const lunettesFilters: FilterGroup[] = [
   globalPriceFilter,
 ];
 
-const makeupProductTypes = ['Fond de teint', 'Anticernes', 'Poudre', 'Blush', 'Bronzer', 'Highlighter', 'Mascara', 'Eyeliner', 'Palette', 'Fard à paupières', 'Rouge à lèvres', 'Gloss', 'Crayon à lèvres', 'Crayon à sourcils', 'Faux cils'];
+const makeupProductTypes = ['Fond de teint', 'Anticernes', 'Poudre', 'Blush', 'Bronzer', 'Highlighter', 'Mascara', 'Eyeliner', 'Palette', 'Fard à paupières', 'Rouge à lèvres', 'Gloss', 'Crayon à lèvres', 'Crayon à sourcils', 'Faux cils', OTHER_OPTION];
+
+// Bijoux & Accessoires > Accessoires de mode : le type précis est une
+// caractéristique descriptive (choix unique), jamais une variante de stock.
+// Identifiant = libellé sans accents ni espaces ni apostrophe (lien filtre
+// client ↔ descriptive_attributes, comme pour les montres).
+export const FASHION_ACCESSORY_GROUP_ID = 'typedaccessoire';
+export const fashionAccessoryTypes = ['Bonnet', 'Bandeau', 'Voile / Hijab', 'Foulard', 'Turban', 'Ceinture', 'Accessoires pour cheveux', OTHER_OPTION];
+const accessoiresModeFilters: FilterGroup[] = [
+  { id: FASHION_ACCESSORY_GROUP_ID, label: 'Type d\'accessoire', options: fashionAccessoryTypes },
+  { id: 'couleur', label: 'Couleur', options: COMMON_COLOR_NAMES, collapsible: true },
+  { id: 'motif', label: 'Motif / Imprimé', options: commonPrints, collapsible: true },
+  globalPriceFilter,
+];
 
 const makeupFilters: FilterGroup[] = [
   { id: 'typeproduit', label: 'Type de produit', options: makeupProductTypes },
@@ -82,15 +99,16 @@ const makeupFilters: FilterGroup[] = [
 ];
 
 const skincareFilters: FilterGroup[] = [
-  { id: 'peau', label: 'Type de peau', options: ['Sèche', 'Mixte', 'Grasse', 'Sensible', 'Normale'] },
+  // Choix multiple ; « Tous types de peau » exclut les autres (toggleSkinType).
+  { id: 'peau', label: 'Type de peau', options: [ALL_SKIN_TYPES, 'Sèche', 'Mixte', 'Grasse', 'Sensible', 'Normale'] },
   { id: 'besoin', label: 'Besoin', options: ['Hydratation', 'Imperfections', 'Taches / hyperpigmentation', 'Éclat', 'Anti-âge', 'Texture / pores', 'Apaisement'] },
-  { id: 'typeproduit', label: 'Type de produit', options: ['Nettoyant', 'Sérum', 'Crème', 'Toner', 'Masque', 'Exfoliant', 'SPF'] },
+  { id: 'typeproduit', label: 'Type de produit', options: ['Nettoyant', 'Sérum', 'Crème', 'Toner', 'Masque', 'Exfoliant', 'SPF', 'Gamme / Coffret de soins', OTHER_OPTION] },
   globalPriceFilter,
 ];
 
 const haircareFilters: FilterGroup[] = [
   { id: 'besoin', label: 'Besoin', options: ['Hydratation', 'Nutrition', 'Pousse', 'Anti-chute', 'Anti-casse', 'Définition des boucles', 'Réparation', 'Pellicules / cuir chevelu'] },
-  { id: 'typeproduit', label: 'Type de produit', options: ['Shampooing', 'Après-shampooing', 'Masque', 'Huile', 'Sérum', 'Leave-in', 'Crème coiffante'] },
+  { id: 'typeproduit', label: 'Type de produit', options: ['Shampooing', 'Après-shampooing', 'Masque', 'Huile', 'Sérum', 'Leave-in', 'Crème coiffante', OTHER_OPTION] },
   globalPriceFilter,
 ];
 
@@ -102,7 +120,7 @@ const hygieneFilters: FilterGroup[] = [
 // Manucure & Pédicure: Longueur/Forme/Type de style only ever apply to Faux
 // ongles — SellerProductForm adds them conditionally on top of this base
 // list, the same way it already does for Encens & Parfums de maison.
-const manucurePedicureTypes = ['Faux ongles', 'Soins', 'Henné', 'Vernis'];
+const manucurePedicureTypes = ['Faux ongles', 'Soins', 'Henné', 'Vernis', OTHER_OPTION];
 
 const manucurePedicureFilters: FilterGroup[] = [
   { id: 'typeproduit', label: 'Type de produit', options: manucurePedicureTypes },
@@ -197,6 +215,7 @@ export const subcategoryFilters: Record<string, FilterGroup[]> = {
   'parfums/encens-parfums-maison': encensMaisonFilters,
   'bijoux/montres': montresFilters,
   'bijoux/lunettes': lunettesFilters,
+  'bijoux/accessoires-mode': accessoiresModeFilters,
   'bijoux/bagues': [
     { id: 'matiere', label: 'Matière', options: jewelryMaterials },
     { id: 'taille', label: 'Taille', options: ringSizes },
@@ -265,7 +284,7 @@ export const filterConfig: Record<CategoryId, FilterGroup[]> = {
     globalPriceFilter,
   ],
   lingerie: [
-    { id: 'type', label: 'Type', options: [...nightwearTypes, ...lingerieTypes] },
+    { id: 'type', label: 'Type', options: [...new Set([...nightwearTypes, ...lingerieTypes])] },
     { id: 'taille', label: 'Taille', options: clothingSizes },
     { id: 'couleur', label: 'Couleur', options: commonColors, collapsible: true },
     { id: 'motif', label: 'Motif / Imprimé', options: commonPrints, collapsible: true },
@@ -274,6 +293,13 @@ export const filterConfig: Record<CategoryId, FilterGroup[]> = {
   tissus: [
     { id: 'typetissu', label: 'Type de tissu', options: [...fabricTypes] },
     { id: 'modevente', label: 'Mode de vente', options: Object.values(fabricSaleModeLabels) },
+    { id: 'couleur', label: 'Couleur', options: commonColors, collapsible: true },
+    { id: 'motif', label: 'Motif / Imprimé', options: commonPrints, collapsible: true },
+    globalPriceFilter,
+  ],
+  // Autres : catégorie libre, sans type imposé. Couleur et motif restent des
+  // variantes facultatives (stock par couleur), comme ailleurs.
+  autres: [
     { id: 'couleur', label: 'Couleur', options: commonColors, collapsible: true },
     { id: 'motif', label: 'Motif / Imprimé', options: commonPrints, collapsible: true },
     globalPriceFilter,

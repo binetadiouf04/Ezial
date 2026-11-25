@@ -24,6 +24,7 @@ import discover20 from '@/assets/discover/20.webp';
 import discover21 from '@/assets/discover/21.webp';
 import discover23 from '@/assets/discover/23.webp';
 import discover24 from '@/assets/discover/24.webp';
+import discoverMontre from '@/assets/discover/montre-casio.webp';
 
 export type CategoryId =
   | 'vetements'
@@ -33,7 +34,8 @@ export type CategoryId =
   | 'parfums'
   | 'bijoux'
   | 'lingerie'
-  | 'tissus';
+  | 'tissus'
+  | 'autres';
 
 // Full fabric-type list for the Tissus category — a dedicated filter
 // dimension (data/filters.ts), not a subcategory: a Tissus product has no
@@ -138,6 +140,9 @@ export const categories: Category[] = [
     { id: 'boucles-oreilles', label: 'Boucles d\'oreilles' }, { id: 'montres', label: 'Montres' },
     { id: 'lunettes', label: 'Lunettes' }, { id: 'baya', label: 'Baya' },
     { id: 'ensemble-parure', label: 'Ensemble / Parure' },
+    // Accessoires portés qui ne sont pas des bijoux (bonnet, voile, foulard…) :
+    // le type précis est une caractéristique (« Type d'accessoire », filters.ts).
+    { id: 'accessoires-mode', label: 'Accessoires de mode' },
   ]},
   { id: 'lingerie', label: 'Pyjamas & Lingerie', subcategories: [
     { id: 'pyjamas', label: 'Pyjamas & nuisettes' }, { id: 'lingerie', label: 'Lingerie & sous-vêtements' },
@@ -145,6 +150,10 @@ export const categories: Category[] = [
   // No subcategories — a Tissus product is differentiated by fabric_type
   // (see fabricTypes above), a dedicated filter, not a subcategory.
   { id: 'tissus', label: 'Tissus', subcategories: [] },
+  // « Autres » : tout produit qui n'entre dans aucune catégorie ci-dessus.
+  // Pas de sous-catégorie ; le vendeur nomme et décrit librement le produit.
+  // Titre et description de page : CATEGORY_HEADINGS (src/shared/seoText.js).
+  { id: 'autres', label: 'Autres', subcategories: [] },
 ];
 
 /**
@@ -230,10 +239,9 @@ export const homeCircleTiles: HomeCircleTile[] = [
   { id: 'encens', label: 'Encens', image: discover20, route: '/categorie/parfums/encens-parfums-maison' },
   { id: 'huiles-brumes', label: 'Huiles & brumes', image: '', route: '/categorie/parfums/huiles-brumes' },
   { id: 'bijoux', label: 'Bijoux', image: discover21, route: '/categorie/bijoux' },
-  // Montres (21 nov. 2026, à la place de « Or », la vente d'or véritable étant retirée) :
-  // photo réelle du catalogue choisie par la propriétaire (montre Rolex dorée d'Ezial
-  // Boutique, miniature du stockage).
-  { id: 'montres', label: 'Montres', image: 'https://lkqezdrdbogtborgjvlw.supabase.co/storage/v1/object/public/product-images/616a8f9f-f96f-401b-8e46-001ccd500479/843c3ab3-29e0-4b21-9325-e354e11f62b9/0-thumb-dx44tt-photo-1795035766861-thumb.jpg', route: '/categorie/bijoux/montres' },
+  // Montres : photo fournie par la propriétaire (24 nov. 2026), montre Casio, recadrée en
+  // 400×400 WebP et embarquée localement comme les autres vignettes « À découvrir ».
+  { id: 'montres', label: 'Montres', image: discoverMontre, route: '/categorie/bijoux/montres' },
   { id: 'pyjamas', label: 'Pyjamas', image: discover23, route: '/categorie/lingerie/pyjamas' },
   { id: 'sous-vetements', label: 'Lingerie', image: discover24, route: '/categorie/lingerie/lingerie' },
 ];
