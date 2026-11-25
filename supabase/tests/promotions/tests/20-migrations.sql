@@ -14,7 +14,7 @@ begin
     'Migration 1 : EZI10 repris en campagne SUSPENDUE, 10 %, dates reprises');
   perform tests.check((select count(*) from public.promo_codes where code = 'EZI10' and not is_active) = 1, 'Migration 1 : promo_codes intacte');
   perform tests.check((select count(*) from public.orders where promo_discount <> 0 or delivery_discount <> 0 or promotion_id is not null) = 0
-    and (select count(*) from public.order_shops where promo_compensation <> 0 or promo_seller_share <> 0) = 0, 'Migration 1 : commandes existantes inchangées (0 / vide)');
+    and (select count(*) from public.order_shops where promo_allocation <> 0 or promo_seller_share <> 0) = 0, 'Migration 1 : commandes existantes inchangées (0 / vide)');
 
   -- create_order : seules les lignes du bloc « code promo » changent (comparaison ligne à ligne avec la production)
   select array_agg(l) into v_removed from (
@@ -31,7 +31,7 @@ begin
   select count(*) into n from (
     select l from regexp_split_to_table((select def from tests.base_defs where sig = 'ezial_private.trg_orders_on_paid()'), E'\n') l
     except select l from regexp_split_to_table(pg_get_functiondef('ezial_private.trg_orders_on_paid()'::regprocedure), E'\n') l) x;
-  perform tests.check(n = 2 and position('round(s.subtotal - s.promo_compensation - s.commission_amount)::integer' in pg_get_functiondef('ezial_private.trg_orders_on_paid()'::regprocedure)) > 0,
+  perform tests.check(n = 2 and position('round(s.subtotal - s.promo_seller_share - s.commission_amount)::integer' in pg_get_functiondef('ezial_private.trg_orders_on_paid()'::regprocedure)) > 0,
     'trg_orders_on_paid : seules les 2 lignes de montant de la vente changent');
   -- Les droits d'exécution des fonctions remplacées sont conservés
   select count(*) into n from tests.base_defs b join pg_proc p on p.oid::regprocedure::text = b.sig where b.acl <> coalesce(p.proacl::text, '');

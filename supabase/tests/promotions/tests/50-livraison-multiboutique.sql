@@ -10,8 +10,8 @@ begin
   oid := (o->>'id')::uuid;
   perform tests.check((o->>'delivery_fee')::int = 1500 and (o->>'delivery_discount')::int = 1500 and (o->>'promo_discount')::int = 0
     and (o->>'total_amount')::int = 10000 and tests.total_ok(oid), 'Livraison offerte : 1 500 offerts, delivery_fee garde le montant initial, total 10 000');
-  perform tests.check((select count(*) from public.promotion_compensations where order_id = oid) = 0 and tests.sale(oid, '1') = '{"gross": 10000, "commission": 1000, "net": 9000}',
-    'Livraison offerte : aucune compensation, vente vendeur intacte (coût 100 % Ezial)');
+  perform tests.check((select coalesce(sum(promo_allocation), 0) from public.order_shops where order_id = oid) = 0 and tests.sale(oid, '1') = '{"gross": 10000, "commission": 1000, "net": 9000}',
+    'Livraison offerte : aucune part rattachée aux boutiques, vente vendeur intacte (coût 100 % Ezial)');
   perform tests.check((select ezial_cost from public.promotion_redemptions where order_id = oid) = 1500, 'Livraison offerte : coût Ezial = 1 500');
 
   -- Prorata sur panier mélangé (cible : Boutique Un)
@@ -44,15 +44,15 @@ begin
   perform tests.check((o->>'promo_discount')::int = 4500 and tests.comp(oid, '1') = 1000 and tests.comp(oid, '2') = 2000 and tests.comp(oid, '3') = 1500,
     'Multiboutique : 4 500 répartis 1 000 / 2 000 / 1 500');
   perform tests.check(s->'shops' = ref->'shops' and s->'items' = ref->'items', 'Multiboutique : sous-totaux, taux et commissions IDENTIQUES à la même commande sans promotion');
-  perform tests.check(tests.sale(oid, '1') = '{"gross": 9000, "commission": 1000, "net": 8000}' and tests.sale(oid, '2') = '{"gross": 18000, "commission": 1600, "net": 16400}'
-    and tests.sale(oid, '3') = '{"gross": 13500, "commission": 0, "net": 13500}', 'Multiboutique : ventes diminuées de la part promotion, commissions 10 % / 8 % / 0 % inchangées');
-  perform tests.check((select sum(promo_compensation) from public.order_shops where order_id = oid) = 4500, 'Multiboutique : somme des parts = réduction exacte');
+  perform tests.check(tests.sale(oid, '1') = '{"gross": 10000, "commission": 1000, "net": 9000}' and tests.sale(oid, '2') = '{"gross": 20000, "commission": 1600, "net": 18400}'
+    and tests.sale(oid, '3') = '{"gross": 15000, "commission": 0, "net": 15000}', 'Multiboutique : ventes INTACTES (prix habituel − commission 10 % / 8 % / 0 %), réduction payée par Ezial');
+  perform tests.check((select sum(promo_allocation) from public.order_shops where order_id = oid) = 4500, 'Multiboutique : somme des parts rattachées = réduction exacte');
   -- Plus forts restes : 1 000 sur 10 000 / 20 000 / 3 333
   perform tests.new_promo('RESTES', 'fixed', 1000);
   o := tests.buy_code(c1, jsonb_build_array(tests.it('1'), tests.it('2'), tests.it('5')), 'RESTES');
   oid := (o->>'id')::uuid;
   perform tests.check(tests.comp(oid, '1') = 300 and tests.comp(oid, '2') = 600 and tests.comp(oid, '3') = 100
-    and (select sum(amount) from public.promotion_compensations where order_id = oid) = 1000, 'Répartition : 300,0 / 600,0 / 99,99 -> 300 / 600 / 100 (somme exacte 1 000)');
+    and (select sum(promo_allocation) from public.order_shops where order_id = oid) = 1000, 'Répartition : 300,0 / 600,0 / 99,99 -> 300 / 600 / 100 (somme exacte 1 000)');
   -- Jamais plus que la part éligible de la boutique
   perform tests.new_promo('TOUT', 'fixed', 50000);
   o := tests.buy_code(c1, jsonb_build_array(tests.it('1'), tests.it('5')), 'TOUT');

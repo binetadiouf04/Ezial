@@ -135,7 +135,7 @@ end $$;
 
 -- ───── Aides propres aux campagnes (résolues à l'exécution : utilisables une fois la migration 1 appliquée) ─────
 set check_function_bodies = off;
--- Remise à zéro : commandes, utilisations, compensations, campagnes de test (EZI10 repris est conservé, suspendu)
+-- Remise à zéro : commandes, utilisations, campagnes de test (EZI10 repris est conservé, suspendu)
 create function tests.reset_promo() returns void language plpgsql as $$
 begin
   perform tests.reset();
@@ -174,8 +174,9 @@ create function tests.total_ok(p_order uuid) returns boolean language sql as $$
      and o.discount_amount - o.promo_discount = (select coalesce(sum(oi.discount_amount), 0) from public.order_items oi where oi.order_id = o.id)
     from public.orders o where o.id = p_order $$;
 -- Compensation reversée par Ezial (A − V) à une boutique pour une commande
+-- Coût Ezial rattaché à une boutique pour une commande (A − V, journal order_shops) ; null si la campagne ne la touche pas
 create function tests.comp(p_order uuid, p_shop text) returns integer language sql as
-$$ select amount from public.promotion_compensations where order_id = p_order and shop_id = tests.uid('b' || p_shop) $$;
+$$ select nullif(promo_allocation - promo_seller_share, 0) from public.order_shops where order_id = p_order and shop_id = tests.uid('b' || p_shop) $$;
 create function tests.sale(p_order uuid, p_shop text) returns jsonb language sql as
 $$ select jsonb_build_object('gross', gross_amount, 'commission', commission_amount, 'net', net_amount) from public.seller_transactions
     where order_id = p_order and shop_id = tests.uid('b' || p_shop) and type = 'sale' $$;

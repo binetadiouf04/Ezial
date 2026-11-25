@@ -23,8 +23,8 @@ begin
   perform tests.check((select jsonb_agg(jsonb_build_object('c', commission_amount, 's', subtotal) order by shop_id) from public.order_shops where order_id = oid)
     = (select jsonb_agg(jsonb_build_object('c', (x->>'commission')::numeric, 's', (x->>'subtotal')::numeric) order by x->>'shop') from jsonb_array_elements((select v->'urgente_2_boutiques'->'shops' from tests.reference)) x),
     'Urgence + 10 % : sous-totaux et commissions des boutiques identiques à la commande urgente sans campagne');
-  perform tests.check((select coalesce(sum(promo_compensation), 0) from public.order_shops where order_id = oid) = 3000,
-    'Urgence + 10 % : les boutiques ne portent que la réduction produits (3 000), jamais le supplément urgent');
+  perform tests.check((select coalesce(sum(promo_allocation), 0) from public.order_shops where order_id = oid) = 3000,
+    'Urgence + 10 % : seule la réduction produits (3 000) est rattachée aux boutiques, jamais le supplément urgent');
   perform tests.check((select ezial_cost from public.promotion_redemptions where order_id = oid) = 3000
     and (tests.promo('URG10')->>'budget_used')::int = 3000, 'Urgence + 10 % : coût Ezial et budget = 3 000 (le supplément n''y entre pas)');
   -- Même panier, même code, sans urgence : exactement 500 de moins, même réduction
@@ -62,6 +62,6 @@ begin
   perform tests.check(t.amount = 10000 - 1000 + 1500 + 500 and t.amount = (o->>'total_amount')::int,
     'Orange Money + 10 % + urgence : montant demandé 11 000 (= total de la commande)');
   perform public.payments_record_verification(t.id, 'confirmed', t.amount, 'MPURG');
-  perform tests.check(tests.sale((o->>'id')::uuid, '1') = '{"gross": 9000, "commission": 1000, "net": 8000}',
-    'Orange Money + urgence : vente au paiement diminuée de la seule réduction, commission inchangée');
+  perform tests.check(tests.sale((o->>'id')::uuid, '1') = '{"gross": 10000, "commission": 1000, "net": 9000}',
+    'Orange Money + urgence : vente créée au paiement INTACTE (réduction payée par Ezial), commission inchangée');
 end $$;

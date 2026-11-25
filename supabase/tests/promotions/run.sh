@@ -52,7 +52,7 @@ echo "== Migration 2 refusée si create_order a changé depuis la lecture de pro
 P -c "do \$\$ begin execute replace(replace((select def from tests.base_defs where sig = 'create_order(jsonb)'), chr(13), ''), 'promo_code = v_promo_code,', 'promo_code = upper(v_promo_code),'); end \$\$" >/dev/null
 P -f $SQL/promotions-1-structure.sql >/dev/null
 out=$(P -f $SQL/promotions-2-commande.sql || true)
-if grep -q "rien n'a été modifié" <<<"$out" && [ "$(P -tA -c "select to_regprocedure('public.promotions_preview(jsonb)') is null and position('upper(v_promo_code)' in pg_get_functiondef('public.create_order(jsonb)'::regprocedure)) > 0 and position('promo_compensation' in pg_get_functiondef('ezial_private.trg_orders_on_paid()'::regprocedure)) = 0")" = "t" ]; then
+if grep -q "rien n'a été modifié" <<<"$out" && [ "$(P -tA -c "select to_regprocedure('public.promotions_preview(jsonb)') is null and position('upper(v_promo_code)' in pg_get_functiondef('public.create_order(jsonb)'::regprocedure)) > 0 and position('promo_seller_share' in pg_get_functiondef('ezial_private.trg_orders_on_paid()'::regprocedure)) = 0")" = "t" ]; then
   echo "OK    : repère introuvable -> migration 2 arrêtée, aucune fonction modifiée"; else echo "ÉCHEC : migration 2 non arrêtée sur une create_order différente"; fi
 P -c "do \$\$ begin execute (select def from tests.base_defs where sig = 'create_order(jsonb)'); end \$\$" >/dev/null
 

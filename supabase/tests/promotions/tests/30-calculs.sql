@@ -15,9 +15,9 @@ begin
     and (o->>'discount_amount')::int = 1000, 'Pourcentage : 10 % de 10 000 = 1 000 ; total 10 500 ; code saisi en minuscules accepté');
   perform tests.check(tests.total_ok(oid), 'Pourcentage : total = formule du contrat');
   perform tests.check((select commission_amount from public.order_shops where order_id = oid) = 1000
-    and (select promo_compensation from public.order_shops where order_id = oid) = 1000, 'Pourcentage : commission 1 000 INCHANGÉE (10 % de 10 000), part promotion 1 000');
-  perform tests.check(tests.sale(oid, '1') = '{"gross": 9000, "commission": 1000, "net": 8000}', 'Pourcentage : vente vendeur 9 000 brut / 1 000 commission / 8 000 net');
-  perform tests.check(tests.comp(oid, '1') = 1000 and (select status from public.promotion_compensations where order_id = oid) = 'due', 'Pourcentage : compensation 1 000 « à reverser »');
+    and (select promo_allocation from public.order_shops where order_id = oid) = 1000, 'Pourcentage : commission 1 000 INCHANGÉE (10 % de 10 000), part de réduction rattachée 1 000 (journal)');
+  perform tests.check(tests.sale(oid, '1') = '{"gross": 10000, "commission": 1000, "net": 9000}', 'Pourcentage : vente vendeur INTACTE 10 000 brut / 1 000 commission / 9 000 net (réduction payée par Ezial)');
+  perform tests.check(tests.comp(oid, '1') = 1000 and (select promo_seller_share from public.order_shops where order_id = oid) = 0, 'Pourcentage : coût Ezial 1 000 pour la boutique, aucune part vendeur');
   perform tests.check((select row(status, eligible_amount, product_discount, delivery_discount, ezial_cost, customer_id)::text from public.promotion_redemptions where order_id = oid)
     = row('counted', 10000, 1000, 0, 1000, c1)::text, 'Pourcentage : utilisation comptée (éligible 10 000, coût Ezial 1 000)');
   perform tests.check((tests.promo('P10')->>'uses_count')::int = 1 and (tests.promo('P10')->>'budget_used')::int = 1000, 'Pourcentage : uses_count 1, budget_used 1 000');

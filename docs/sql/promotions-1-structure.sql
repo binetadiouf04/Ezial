@@ -4,22 +4,25 @@
 --
 -- QUOI
 --   * tables promotions, promotion_targets, promotion_seller_shares (part facultative financée par une boutique
---     qui l'a acceptée), promotion_redemptions, promotion_compensations (contraintes, index, règles d'accès RLS) ;
---   * colonnes orders.promotion_id / promo_discount / delivery_discount et order_shops.promo_compensation /
+--     qui l'a acceptée), promotion_redemptions (contraintes, index, règles d'accès RLS) ;
+--   * colonnes orders.promotion_id / promo_discount / delivery_discount et order_shops.promo_allocation /
 --     promo_seller_share (0 par défaut : les commandes existantes ne changent pas) ;
 --   * pas de zone : la livraison couvre toute la région de Dakar, sans condition de quartier ;
 --   * reprise de l'ancien code EZI10 (public.promo_codes) en campagne « suspendue » : 10 %, mêmes dates.
 --     public.promo_codes n'est ni modifiée ni supprimée.
--- POURQUOI
---   Ezial finance les promotions : la commande garde la trace de la réduction, la boutique garde sa commission
---   habituelle ; la part de la réduction rattachée à chaque boutique sort de son solde automatique et lui est
---   reversée à la main (compensation), moins la part qu'elle a acceptée de financer (part vendeur, facultative).
+-- POURQUOI (décisions de la propriétaire du 25 nov. 2026)
+--   Ezial finance les promotions : la commande garde la trace de la réduction ; le vendeur est payé
+--   AUTOMATIQUEMENT comme sans promotion (ses articles au prix habituel − sa commission habituelle, inchangée).
+--   Aucune compensation manuelle. Seule exception : la part qu'une boutique a acceptée de financer (part vendeur,
+--   facultative) est déduite automatiquement de sa vente, sans jamais rendre son solde négatif.
+--   order_shops.promo_allocation = part de la réduction produits rattachée à la boutique (A, journal : coût
+--   Ezial de la boutique = A − V) ; order_shops.promo_seller_share = part déduite de sa vente (V).
 -- RÈGLES D'ACCÈS
 --   * campagnes, cibles, parts vendeurs : LECTURE pour les administrateurs uniquement ; écriture seulement par
 --     les fonctions admin_promotion_save / admin_promotion_set_status (migration 3) ;
---   * utilisations et compensations : LECTURE seule pour les administrateurs (elles ne s'écrivent que
---     par les fonctions serveur : commande, annulation, paiement manuel) ; un vendeur lit les
---     compensations de SES boutiques ; aucun client ne lit ni n'écrit rien d'autre.
+--   * utilisations : LECTURE seule pour les administrateurs (écrites seulement par les fonctions serveur :
+--     commande, annulation) ; un vendeur voit la part déduite dans SES lignes order_shops (règles existantes) ;
+--     aucun client ne lit ni n'écrit rien d'autre.
 -- PRÉREQUIS : aucun (Orange Money 1 à 6 déjà en production). N'active AUCUNE promotion et ne change
 --   rien aux commandes tant que la migration 2 n'est pas exécutée.
 -- RELANÇABLE : oui (une seule transaction ; rien n'est dupliqué si on l'exécute deux fois).
@@ -96,7 +99,7 @@ create table if not exists public.promotion_seller_shares (
   primary key (promotion_id, shop_id)
 );
 
--- 3. Utilisations (une par commande) et compensations (une par boutique concernée, part Ezial > 0)
+-- 3. Utilisations (une par commande)
 create table if not exists public.promotion_redemptions (
   id uuid primary key default gen_random_uuid(),
   promotion_id uuid not null references public.promotions(id),
@@ -115,40 +118,16 @@ create table if not exists public.promotion_redemptions (
 create index if not exists promotion_redemptions_promotion_idx on public.promotion_redemptions (promotion_id, status);
 create index if not exists promotion_redemptions_customer_idx on public.promotion_redemptions (customer_id, promotion_id) where status = 'counted';
 
-create table if not exists public.promotion_compensations (
-  id uuid primary key default gen_random_uuid(),
-  redemption_id uuid not null references public.promotion_redemptions(id),
-  order_id uuid not null references public.orders(id),
-  order_shop_id uuid not null references public.order_shops(id),
-  shop_id uuid not null references public.shops(id),
-  amount integer not null check (amount > 0),
-  seller_share integer not null default 0 check (seller_share >= 0),
-  gross_allocation integer not null default 0 check (gross_allocation >= 0),
-  status text not null default 'due' check (status in ('due', 'paid', 'cancelled')),
-  paid_at timestamptz null,
-  paid_method text null check (paid_method is null or paid_method in ('wave', 'orange_money', 'especes', 'virement', 'autre')),
-  paid_reference text null,
-  paid_by uuid null,
-  note text null,
-  created_at timestamptz not null default now(),
-  constraint promotion_compensations_one_per_shop unique (redemption_id, order_shop_id),
-  constraint promotion_compensations_split_check check (gross_allocation = amount + seller_share),
-  constraint promotion_compensations_paid_check check (status <> 'paid' or (paid_at is not null and paid_method is not null))
-);
-create index if not exists promotion_compensations_shop_idx on public.promotion_compensations (shop_id, status);
-create index if not exists promotion_compensations_status_idx on public.promotion_compensations (status, created_at);
-create index if not exists promotion_compensations_order_shop_idx on public.promotion_compensations (order_shop_id);
-
 -- 4. Commandes : trace de la campagne appliquée (0 / null pour toutes les commandes existantes)
 alter table public.orders add column if not exists promotion_id uuid null references public.promotions(id);
 alter table public.orders add column if not exists promo_discount integer not null default 0;
 alter table public.orders add column if not exists delivery_discount integer not null default 0;
-alter table public.order_shops add column if not exists promo_compensation integer not null default 0;   -- A_s : part de la réduction retirée du solde automatique
-alter table public.order_shops add column if not exists promo_seller_share integer not null default 0;   -- V_s : partie financée par la boutique (incluse dans A_s)
+alter table public.order_shops add column if not exists promo_allocation integer not null default 0;    -- A_s : part de la réduction produits rattachée à la boutique (journal, payée par Ezial sauf V_s)
+alter table public.order_shops add column if not exists promo_seller_share integer not null default 0;  -- V_s : part acceptée par la boutique, déduite automatiquement de sa vente
 alter table public.orders drop constraint if exists orders_promo_discounts_check;
 alter table public.orders add constraint orders_promo_discounts_check check (promo_discount >= 0 and delivery_discount >= 0 and delivery_discount <= delivery_fee);
-alter table public.order_shops drop constraint if exists order_shops_promo_compensation_check;
-alter table public.order_shops add constraint order_shops_promo_compensation_check check (promo_compensation >= 0 and promo_seller_share >= 0 and promo_seller_share <= promo_compensation);
+alter table public.order_shops drop constraint if exists order_shops_promo_allocation_check;
+alter table public.order_shops add constraint order_shops_promo_allocation_check check (promo_allocation >= 0 and promo_seller_share >= 0 and promo_seller_share <= promo_allocation);
 create index if not exists orders_promotion_idx on public.orders (promotion_id) where promotion_id is not null;
 
 -- 5. Règles d'accès
@@ -156,16 +135,15 @@ alter table public.promotions enable row level security;
 alter table public.promotion_targets enable row level security;
 alter table public.promotion_seller_shares enable row level security;
 alter table public.promotion_redemptions enable row level security;
-alter table public.promotion_compensations enable row level security;
 
 revoke all on public.promotions, public.promotion_targets, public.promotion_seller_shares,
-  public.promotion_redemptions, public.promotion_compensations from anon, authenticated;
+  public.promotion_redemptions from anon, authenticated;
 -- LECTURE seule, même pour les administrateurs : toute écriture passe par les fonctions serveur
--- (admin_promotion_save / admin_promotion_set_status : contrôles, double authentification, journal).
+-- (admin_promotion_save / admin_promotion_set_status : contrôles, journal).
 grant select on public.promotions, public.promotion_targets, public.promotion_seller_shares,
-  public.promotion_redemptions, public.promotion_compensations to authenticated;
+  public.promotion_redemptions to authenticated;
 grant all on public.promotions, public.promotion_targets, public.promotion_seller_shares,
-  public.promotion_redemptions, public.promotion_compensations to service_role;
+  public.promotion_redemptions to service_role;
 
 drop policy if exists promotions_admin_all on public.promotions;
 drop policy if exists promotions_admin_select on public.promotions;
@@ -182,12 +160,6 @@ create policy promotion_seller_shares_admin_select on public.promotion_seller_sh
 drop policy if exists promotion_redemptions_admin_select on public.promotion_redemptions;
 create policy promotion_redemptions_admin_select on public.promotion_redemptions for select to authenticated
   using (exists (select 1 from public.admins a where a.user_id = (select auth.uid())));
-drop policy if exists promotion_compensations_admin_select on public.promotion_compensations;
-create policy promotion_compensations_admin_select on public.promotion_compensations for select to authenticated
-  using (exists (select 1 from public.admins a where a.user_id = (select auth.uid())));
-drop policy if exists promotion_compensations_seller_select on public.promotion_compensations;
-create policy promotion_compensations_seller_select on public.promotion_compensations for select to authenticated
-  using (shop_id in (select s.id from public.shops s where s.owner_id = (select auth.uid())));
 
 -- 6. Reprise de l'ancien code EZI10 : campagne SUSPENDUE (rien n'est appliqué tant que l'administratrice ne la réactive pas)
 insert into public.promotions (name, code, kind, value, min_amount, starts_at, ends_at, status, audience, max_uses_per_customer)
@@ -200,6 +172,6 @@ on conflict (code) do nothing;
 commit;
 
 -- Vérification : toutes les lignes « ok » attendues.
-select 'tables créées' as element, case when to_regclass('public.promotions') is not null and to_regclass('public.promotion_compensations') is not null then 'ok' else 'À VÉRIFIER' end as etat
+select 'tables créées' as element, case when to_regclass('public.promotions') is not null and to_regclass('public.promotion_redemptions') is not null then 'ok' else 'À VÉRIFIER' end as etat
 union all select 'EZI10 repris, suspendu', case when exists (select 1 from public.promotions where code = 'EZI10' and status = 'paused') then 'ok' else 'À VÉRIFIER (EZI10 absent de promo_codes ?)' end
-union all select 'colonnes de commande', case when (select count(*) from information_schema.columns where table_schema = 'public' and ((table_name = 'orders' and column_name in ('promotion_id', 'promo_discount', 'delivery_discount')) or (table_name = 'order_shops' and column_name in ('promo_compensation', 'promo_seller_share')))) = 5 then 'ok' else 'À VÉRIFIER' end;
+union all select 'colonnes de commande', case when (select count(*) from information_schema.columns where table_schema = 'public' and ((table_name = 'orders' and column_name in ('promotion_id', 'promo_discount', 'delivery_discount')) or (table_name = 'order_shops' and column_name in ('promo_allocation', 'promo_seller_share')))) = 5 then 'ok' else 'À VÉRIFIER' end;

@@ -65,7 +65,7 @@ begin
   v := tests.new_promo('CPROD', 'percent', 10); perform tests.target(v, 'product', tests.uid('e2')::text);
   o := tests.buy_code(c1, jsonb_build_array(tests.it('1'), tests.it('2')), 'CPROD');
   perform tests.check((o->>'promo_discount')::int = 2000 and tests.comp((o->>'id')::uuid, '2') = 2000 and tests.comp((o->>'id')::uuid, '1') is null,
-    'Cible produit : seul le Sac (20 000) compte -> 2 000, compensation pour Boutique Deux seulement');
+    'Cible produit : seul le Sac (20 000) compte -> 2 000, rattachés à Boutique Deux seulement');
   v := tests.new_promo('CSHOP', 'percent', 10); perform tests.target(v, 'shop', tests.uid('b1')::text);
   o := tests.buy_code(c1, jsonb_build_array(tests.it('1'), tests.it('2')), 'CSHOP');
   perform tests.check((o->>'promo_discount')::int = 1000, 'Cible boutique : seule Boutique Un (10 000) compte -> 1 000');

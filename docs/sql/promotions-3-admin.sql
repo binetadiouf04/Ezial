@@ -1,17 +1,13 @@
 -- ============================================================================
--- Ezial — Campagnes promotionnelles, phase 1 — MIGRATION 3 / 3 : ADMINISTRATION ET VENDEURS
+-- Ezial — Campagnes promotionnelles, phase 1 — MIGRATION 3 / 3 : ADMINISTRATION
 -- Contrat : docs/promotions/contrat-phase1.md
 --
--- QUOI (fonctions appelées par Ezial Admin et par l'espace vendeur) :
---   admin_promotions_list(), admin_promotion_save(p), admin_promotion_set_status(p_id, p_status),
---   admin_promotion_compensations(p_status), admin_mark_compensations_paid(p_ids, p_method, p_reference, p_note),
---   seller_promotion_compensations(p_shop_id). Pas de quartiers (livraison : toute la région de Dakar).
--- CONTRÔLE ADMIN : identique aux fonctions admin existantes (ligne dans public.admins, avec (select auth.uid()))
---   + double authentification vérifiée PAR LE SERVEUR : si le compte a un facteur vérifié, la session doit être
---   validée par le code (aal2), sinon refus « mfa_required » (code 42501, déjà reconnu par Ezial Admin).
---   Même règle que public.ezial_admin_mfa_ok() de docs/sql/securite-mfa-admin.sql ; constat du 25 nov. 2026 :
---   cette migration-là n'est PAS en production, et les fonctions admin_* existantes ne vérifient que public.admins.
---   Les fonctions des campagnes (argent versé aux boutiques) exigent donc la double authentification en plus.
+-- QUOI (fonctions appelées par Ezial Admin) :
+--   admin_promotions_list(), admin_promotion_save(p), admin_promotion_set_status(p_id, p_status).
+--   Pas de quartiers (livraison : toute la région de Dakar). Pas de compensation manuelle (décision de la
+--   propriétaire du 25 nov. 2026) : le vendeur est payé automatiquement comme sans promotion, moins la seule
+--   part qu'il a acceptée ; il n'y a donc rien « à reverser » ni de fonction de paiement manuel.
+-- CONTRÔLE ADMIN : identique aux fonctions admin existantes (ligne dans public.admins, avec (select auth.uid())).
 -- Statistiques : commandes NON annulées seulement.
 -- PRÉREQUIS : promotions-1-structure.sql (et promotions-2-commande.sql pour que des commandes utilisent les campagnes).
 -- RELANÇABLE : oui. RETOUR ARRIÈRE : docs/sql/promotions-3-retour-arriere.sql
@@ -30,11 +26,6 @@ language plpgsql stable security definer set search_path = '' as $$
 begin
   if not exists (select 1 from public.admins a where a.user_id = (select auth.uid())) then
     raise exception 'Accès réservé aux administrateurs.' using errcode = '42501';
-  end if;
-  if coalesce((select auth.jwt()) ->> 'aal', 'aal1') <> 'aal2'
-     and exists (select 1 from auth.mfa_factors f where f.user_id = (select auth.uid()) and f.status = 'verified') then
-    raise exception 'mfa_required' using errcode = '42501',
-      detail = 'La double authentification doit être validée pour ce compte administrateur.';
   end if;
 end $$;
 revoke all on function ezial_private.promotions_assert_admin() from public, anon, authenticated;
@@ -207,89 +198,13 @@ begin
   perform ezial_private.audit('admin', 'promotion_status_' || p_status, 'promotion', p_id, jsonb_build_object('from', v.status));
 end $$;
 
--- Compensations à reverser (ou payées / annulées)
-create or replace function public.admin_promotion_compensations(p_status text default null) returns jsonb
-language plpgsql stable security definer set search_path = '' as $$
-declare v jsonb;
-begin
-  perform ezial_private.promotions_assert_admin();
-  if p_status is not null and p_status not in ('due', 'paid', 'cancelled') then raise exception 'Statut invalide.' using errcode = 'P0001'; end if;
-  select coalesce(jsonb_agg(jsonb_build_object(
-           'id', c.id, 'order_id', c.order_id, 'order_number', o.order_number, 'shop_id', c.shop_id, 'shop_name', sh.name,
-           'amount', c.amount, 'status', c.status, 'paid_at', c.paid_at, 'paid_method', c.paid_method, 'paid_reference', c.paid_reference,
-           'note', c.note, 'created_at', c.created_at, 'promotion_id', r.promotion_id, 'promotion_name', pr.name,
-           'seller_share', c.seller_share, 'gross_allocation', c.gross_allocation,
-           'payout_orange_money', (select m.phone from public.seller_payout_methods m where m.shop_id = c.shop_id and m.provider = 'orange_money'
-                                    and m.status = 'approved' order by m.reviewed_at desc nulls last, m.submitted_at desc limit 1),
-           'payout_wave', (select m.phone from public.seller_payout_methods m where m.shop_id = c.shop_id and m.provider = 'wave'
-                            and m.status = 'approved' order by m.reviewed_at desc nulls last, m.submitted_at desc limit 1),
-           'order_status', o.status, 'order_shop_status', os.status,
-           'awaiting_payment', coalesce(o.payment_required and o.paid_processed_at is null, false))
-         order by c.created_at desc, c.id), '[]'::jsonb)
-    into v
-    from public.promotion_compensations c
-    join public.promotion_redemptions r on r.id = c.redemption_id
-    join public.promotions pr on pr.id = r.promotion_id
-    join public.orders o on o.id = c.order_id
-    join public.order_shops os on os.id = c.order_shop_id
-    left join public.shops sh on sh.id = c.shop_id
-   where p_status is null or c.status = p_status;
-  return v;
-end $$;
-
--- Paiement manuel d'une ou plusieurs compensations (toutes « à reverser », sinon rien n'est enregistré)
-create or replace function public.admin_mark_compensations_paid(p_ids uuid[], p_method text, p_reference text, p_note text) returns integer
-language plpgsql security definer set search_path = '' as $$
-declare v_ids uuid[]; v_count integer; v_id uuid;
-begin
-  perform ezial_private.promotions_assert_admin();
-  if p_method is null or p_method not in ('wave', 'orange_money', 'especes', 'virement', 'autre') then
-    raise exception 'Moyen de paiement invalide.' using errcode = 'P0001';
-  end if;
-  select array_agg(distinct x) into v_ids from unnest(coalesce(p_ids, '{}'::uuid[])) x where x is not null;
-  if v_ids is null then raise exception 'Choisissez au moins une compensation.' using errcode = 'P0001'; end if;
-  perform 1 from public.promotion_compensations where id = any(v_ids) order by id for update;
-  if (select count(*) from public.promotion_compensations where id = any(v_ids) and status = 'due') <> cardinality(v_ids) then
-    raise exception 'Certaines compensations ne sont plus à reverser (déjà payées, annulées ou introuvables). Actualisez la liste.' using errcode = 'P0001';
-  end if;
-  update public.promotion_compensations
-     set status = 'paid', paid_at = now(), paid_method = p_method, paid_reference = nullif(btrim(coalesce(p_reference, '')), ''),
-         paid_by = (select auth.uid()), note = coalesce(nullif(btrim(coalesce(p_note, '')), ''), note)
-   where id = any(v_ids) and status = 'due';
-  get diagnostics v_count = row_count;
-  foreach v_id in array v_ids loop
-    perform ezial_private.audit('admin', 'promotion_compensation_paid', 'promotion_compensation', v_id,
-      jsonb_build_object('method', p_method, 'reference', left(coalesce(p_reference, ''), 200)));
-  end loop;
-  return v_count;
-end $$;
-
--- Vendeur : compensations de SA boutique
-create or replace function public.seller_promotion_compensations(p_shop_id uuid) returns jsonb
-language plpgsql stable security definer set search_path = '' as $$
-declare v jsonb;
-begin
-  if (select auth.uid()) is null or not exists (select 1 from public.shops s where s.id = p_shop_id and s.owner_id = (select auth.uid())) then
-    raise exception 'Accès refusé.' using errcode = '42501';
-  end if;
-  select coalesce(jsonb_agg(jsonb_build_object('id', c.id, 'order_number', o.order_number, 'amount', c.amount, 'status', c.status,
-           'paid_at', c.paid_at, 'paid_method', c.paid_method, 'created_at', c.created_at) order by c.created_at desc, c.id), '[]'::jsonb)
-    into v
-    from public.promotion_compensations c join public.orders o on o.id = c.order_id
-   where c.shop_id = p_shop_id;
-  return v;
-end $$;
-
-revoke all on function public.admin_promotions_list(), public.admin_promotion_save(jsonb), public.admin_promotion_set_status(uuid, text),
-  public.admin_promotion_compensations(text), public.admin_mark_compensations_paid(uuid[], text, text, text),
-  public.seller_promotion_compensations(uuid) from public, anon;
-grant execute on function public.admin_promotions_list(), public.admin_promotion_save(jsonb), public.admin_promotion_set_status(uuid, text),
-  public.admin_promotion_compensations(text), public.admin_mark_compensations_paid(uuid[], text, text, text),
-  public.seller_promotion_compensations(uuid) to authenticated, service_role;
+revoke all on function public.admin_promotions_list(), public.admin_promotion_save(jsonb), public.admin_promotion_set_status(uuid, text)
+  from public, anon;
+grant execute on function public.admin_promotions_list(), public.admin_promotion_save(jsonb), public.admin_promotion_set_status(uuid, text)
+  to authenticated, service_role;
 
 commit;
 
--- Vérification : 6 attendu.
+-- Vérification : 3 attendu.
 select count(*) as fonctions_creees from pg_proc where pronamespace = 'public'::regnamespace and proname in
-  ('admin_promotions_list', 'admin_promotion_save', 'admin_promotion_set_status', 'admin_promotion_compensations',
-   'admin_mark_compensations_paid', 'seller_promotion_compensations');
+  ('admin_promotions_list', 'admin_promotion_save', 'admin_promotion_set_status');
