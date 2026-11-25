@@ -237,7 +237,6 @@ export const homeCircleTiles: HomeCircleTile[] = [
   { id: 'parfums-femme', label: 'Parfums Femme', image: discover18, route: '/categorie/parfums/parfums-femme' },
   { id: 'parfums-homme', label: 'Parfums Homme', image: discover19, route: '/categorie/parfums/parfums-homme' },
   { id: 'encens', label: 'Encens', image: discover20, route: '/categorie/parfums/encens-parfums-maison' },
-  { id: 'huiles-brumes', label: 'Huiles & brumes', image: '', route: '/categorie/parfums/huiles-brumes' },
   { id: 'bijoux', label: 'Bijoux', image: discover21, route: '/categorie/bijoux' },
   // Montres : photo fournie par la propriétaire (24 nov. 2026), montre Casio, recadrée en
   // 400×400 WebP et embarquée localement comme les autres vignettes « À découvrir ».
