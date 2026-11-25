@@ -31,7 +31,7 @@ export function computeDeliveryStepStatus(order: Order, missionStatus: string | 
   if (missionStatus === 'out_for_delivery') return 'delivering';
   if (missionStatus === 'picking_up' || missionStatus === 'accepted') return 'picked_up';
 
-  const deliveryShops = order.shopFulfillments.filter((f) => f.type === 'delivery');
+  const deliveryShops = order.shopFulfillments.filter((f) => f.type === 'delivery' && !f.cancelled);
   if (deliveryShops.length === 0) return order.status;
   if (deliveryShops.every((f) => f.status === 'ready' || f.status === 'collected')) return 'ready';
   if (deliveryShops.some((f) => f.status === 'preparing')) return 'preparing';

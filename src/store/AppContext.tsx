@@ -80,6 +80,21 @@ export interface ShopFulfillment {
   pickupCode?: string;
   status: ShopPrepStatus;
   pickupStatus?: PickupStepStatus;
+  // Part annulée par la boutique (order_shops.status = 'cancelled') : exclue du suivi, expliquée par `cancellations`.
+  cancelled?: boolean;
+}
+
+// Annulation d'une part par la boutique (public.order_shop_cancellations, lecture réservée au client concerné).
+export interface ShopCancellation {
+  orderShopId: string;
+  shopId: string;
+  reason: 'out_of_stock' | 'item_unavailable' | 'other';
+  note: string | null;
+  cancelledAt: string;
+  /** Le client avait déjà payé cette part : remboursement par Ezial. */
+  wasPaid: boolean;
+  partAmount: number;
+  refundStatus: 'none' | 'to_refund' | 'refunded';
 }
 
 export interface Order {
@@ -121,6 +136,8 @@ export interface Order {
   paymentGraceUntil?: string | null;
   // orders.status brut (« cancelled » n'existe pas dans DeliveryStepStatus).
   orderStatus?: string;
+  // Parts annulées par leur boutique (absent tant que la migration vendeur-annulation n'est pas en production).
+  cancellations?: ShopCancellation[];
 }
 
 interface AppState {

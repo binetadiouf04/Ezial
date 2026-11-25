@@ -2,6 +2,7 @@ import { supabase } from './supabaseClient';
 import { normalizeStoredWaist } from '@/lib/waistMeasure';
 import { resolveImageUrl } from './supabaseCatalog';
 import { isUrgentRow } from './urgentDelivery';
+import { canSellerCancel, cancelReasonLabels, isMissingCancelFunction, type CancelReason } from './sellerCancelCore';
 
 // Real Supabase-backed seller order list/detail — orders/order_shops/
 // order_items are read directly (never through create_order(), which is
@@ -284,4 +285,70 @@ export function sellerActionLabel(fulfillmentType: 'delivery' | 'pickup', status
 export async function advanceOrderShopStatus(orderShopId: string, nextStatus: SellerOrderStatus): Promise<{ error?: string }> {
   const { error } = await supabase.from('order_shops').update({ status: nextStatus }).eq('id', orderShopId);
   return error ? { error: error.message } : {};
+}
+
+// ---------------------------------------------------------------------------
+// Annulation par la boutique (« Je ne peux pas honorer cette commande »).
+// Tout se passe dans la fonction SQL seller_cancel_order_shop (docs/sql/vendeur-annulation.sql) :
+// propriétaire, colis non récupéré, vente non versée, stock, livraison, client, remboursement.
+// Tant que la migration n'est pas exécutée, la fonction n'existe pas (PGRST202) : le bouton reste masqué.
+// ---------------------------------------------------------------------------
+
+export { canSellerCancel, cancelReasonLabels, type CancelReason };
+const isMissingFunction = isMissingCancelFunction;
+
+let cancelAvailable: boolean | null = null;
+
+/**
+ * La fonction d'annulation existe-t-elle en base ? Appel de contrôle sans motif : la fonction répond par une erreur
+ * métier (« Choisissez un motif… ») si elle est installée, PGRST202 sinon. Résultat gardé pour la session.
+ */
+export async function isSellerCancelAvailable(): Promise<boolean> {
+  if (cancelAvailable !== null) return cancelAvailable;
+  const { error } = await supabase.rpc('seller_cancel_order_shop', { p_order_shop_id: '00000000-0000-0000-0000-000000000000', p_reason: null, p_note: null });
+  if (isMissingFunction(error)) { cancelAvailable = false; return false; }
+  cancelAvailable = true;
+  return true;
+}
+
+export interface CancelOrderShopResult {
+  ok: boolean;
+  error?: string;
+  /** La fonction n'est pas installée en base : le bouton doit disparaître. */
+  unavailable?: boolean;
+  already?: boolean;
+  refundRequired?: boolean;
+  refundAmount?: number;
+  orderCancelled?: boolean;
+}
+
+export async function cancelOrderShop(orderShopId: string, reason: CancelReason, note: string): Promise<CancelOrderShopResult> {
+  const { data, error } = await supabase.rpc('seller_cancel_order_shop', {
+    p_order_shop_id: orderShopId,
+    p_reason: reason,
+    p_note: note.trim() ? note.trim().slice(0, 200) : null,
+  });
+  if (isMissingFunction(error)) { cancelAvailable = false; return { ok: false, unavailable: true, error: 'Cette fonction n’est pas encore disponible.' }; }
+  if (error) return { ok: false, error: error.message || 'Impossible d’annuler la commande. Réessayez.' };
+  const r = (data ?? {}) as { already?: boolean; refund_required?: boolean; refund_amount?: number; order_cancelled?: boolean };
+  return { ok: true, already: !!r.already, refundRequired: !!r.refund_required, refundAmount: r.refund_amount ?? 0, orderCancelled: !!r.order_cancelled };
+}
+
+export interface SellerCancellation {
+  reason: CancelReason;
+  note: string | null;
+  cancelledAt: string;
+  refundStatus: 'none' | 'to_refund' | 'refunded';
+}
+
+/** Motif de l'annulation d'une part (lecture RLS : la boutique concernée seulement). Table absente -> null. */
+export async function fetchSellerCancellation(orderShopId: string): Promise<SellerCancellation | null> {
+  const { data, error } = await supabase
+    .from('order_shop_cancellations')
+    .select('reason, note, cancelled_at, refund_status')
+    .eq('order_shop_id', orderShopId)
+    .maybeSingle();
+  if (error || !data) return null;
+  const r = data as { reason: CancelReason; note: string | null; cancelled_at: string; refund_status: SellerCancellation['refundStatus'] };
+  return { reason: r.reason, note: r.note, cancelledAt: r.cancelled_at, refundStatus: r.refund_status };
 }

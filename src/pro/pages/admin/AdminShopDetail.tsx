@@ -7,6 +7,7 @@ import FlagModal from '../../components/FlagModal';
 import AdminPremiumGrantsSection from '../../components/AdminPremiumGrantsSection';
 import { createModerationFlag, fetchModerationFlags, resolveModerationFlag, latestUnresolvedFlag, type ModerationFlagRow } from '@/lib/supabaseModeration';
 import { fetchShopReports, type AdminShopReport, type ShopReportReason } from '@/lib/supabaseShopReports';
+import { fetchShopCancellationStats, type ShopCancellationStats } from '@/lib/supabaseAdminRefunds';
 import { ArrowLeft, Phone, MapPin, Loader2, Flag, Check, User, Ban, AlertOctagon } from 'lucide-react';
 import SmartImage from '@/components/SmartImage';
 
@@ -47,6 +48,7 @@ export default function AdminShopDetail({ shopId }: { shopId: string }) {
   const [loadError, setLoadError] = useState('');
   const [flags, setFlags] = useState<ModerationFlagRow[]>([]);
   const [reports, setReports] = useState<AdminShopReport[]>([]);
+  const [cancelStats, setCancelStats] = useState<ShopCancellationStats | null>(null);
   const [showFlagModal, setShowFlagModal] = useState(false);
   const [showSuspendModal, setShowSuspendModal] = useState(false);
   const [acting, setActing] = useState(false);
@@ -56,8 +58,9 @@ export default function AdminShopDetail({ shopId }: { shopId: string }) {
     setLoading(true);
     setLoadError('');
     try {
-      const [detail, flagRows, reportRows] = await Promise.all([fetchAdminShopDetail(shopId), fetchModerationFlags('shop', shopId), fetchShopReports(shopId)]);
+      const [detail, flagRows, reportRows, stats] = await Promise.all([fetchAdminShopDetail(shopId), fetchModerationFlags('shop', shopId), fetchShopReports(shopId), fetchShopCancellationStats()]);
       setShop(detail);
+      setCancelStats(stats ? (stats.get(shopId) ?? { last30Days: 0, total: 0, lastCancelledAt: null }) : null);
       setFlags(flagRows);
       setReports(reportRows);
       if (!detail) setLoadError('Boutique introuvable.');
@@ -132,6 +135,15 @@ export default function AdminShopDetail({ shopId }: { shopId: string }) {
       </div>
 
       {actionError && <p className="text-sm text-burgundy">{actionError}</p>}
+
+      {/* Annulations de commandes par la boutique : information seulement, aucune pénalité automatique. */}
+      {cancelStats && (
+        <div className="card p-4">
+          <h2 className="text-sm font-semibold text-ink">Annulations par la boutique</h2>
+          <p className="mt-1 text-sm text-ink/70">{cancelStats.last30Days} sur les 30 derniers jours · {cancelStats.total} au total</p>
+          {cancelStats.lastCancelledAt && <p className="mt-0.5 text-xs text-ink/45">Dernière : {formatDate(cancelStats.lastCancelledAt)}</p>}
+        </div>
+      )}
 
       {shop.status === 'active' && (
         <button onClick={() => setShowSuspendModal(true)} disabled={acting} className="btn-outline w-full flex items-center justify-center gap-1.5">

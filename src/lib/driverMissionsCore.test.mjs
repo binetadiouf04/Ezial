@@ -2,7 +2,7 @@
 // n'apparaît jamais tant que la mission n'est pas attribuée.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { buildDriverMission, buildAvailableMissionFromRpc, ANONYMOUS_CUSTOMER_NAME } from './driverMissionsCore.ts';
+import { buildDriverMission, buildAvailableMissionFromRpc, isMissionCancelled, ANONYMOUS_CUSTOMER_NAME } from './driverMissionsCore.ts';
 
 const destination = {
   order_number: 'EZ-1',
@@ -78,4 +78,9 @@ test('arrêts triés dans l’ordre de collecte, liste vide tolérée', () => {
   const vide = buildAvailableMissionFromRpc({ mission_id: 'm3', order_id: 'o3', created_at: 'x', is_urgent: false, ...destination, stops: null });
   assert.deepEqual(vide.collections, []);
   assert.equal(vide.step, 'to_collection');
+});
+
+test('mission annulée (boutique qui ne peut pas honorer sa commande) : repérée pour disparaître de la liste du livreur', () => {
+  assert.equal(isMissionCancelled({ status: 'cancelled' }), true);
+  for (const status of ['available', 'accepted', 'picking_up', 'out_for_delivery', 'delivered']) assert.equal(isMissionCancelled({ status }), false);
 });

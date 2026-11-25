@@ -2,7 +2,7 @@ import { supabase } from './supabaseClient';
 import { normalizeStoredWaist } from '@/lib/waistMeasure';
 import { splitDeliveryNotes } from '@/lib/recentDeliveryPlaces';
 import { urgentFeeOfRow } from '@/lib/urgentDelivery';
-import type { Order, ShopFulfillment, DeliveryStepStatus, ShopPrepStatus, PickupStepStatus } from '@/store/AppContext';
+import type { Order, ShopFulfillment, ShopCancellation, DeliveryStepStatus, ShopPrepStatus, PickupStepStatus } from '@/store/AppContext';
 
 // Real order history for "Mes commandes" — orders.customer_id = auth.uid()
 // (see the RLS migration this feature ships with). Mapped into the exact
@@ -74,6 +74,28 @@ function toPickupStepStatus(realStatus: string): PickupStepStatus {
   return 'preparing';
 }
 
+interface CancellationRow {
+  order_shop_id: string;
+  order_id: string;
+  shop_id: string;
+  reason: ShopCancellation['reason'];
+  note: string | null;
+  cancelled_at: string;
+  order_was_paid: boolean;
+  part_amount: number;
+  refund_status: ShopCancellation['refundStatus'];
+}
+
+// Parts annulées par leur boutique. Table absente (migration pas encore exécutée) ou erreur : liste vide, rien ne casse.
+async function fetchCancellations(orderIds: string[]): Promise<CancellationRow[]> {
+  const { data, error } = await supabase
+    .from('order_shop_cancellations')
+    .select('order_shop_id, order_id, shop_id, reason, note, cancelled_at, order_was_paid, part_amount, refund_status')
+    .in('order_id', orderIds);
+  if (error || !data) return [];
+  return data as CancellationRow[];
+}
+
 export async function fetchCustomerOrders(customerId: string): Promise<Order[]> {
   const { data: orderRows, error } = await supabase
     .from('orders')
@@ -85,7 +107,10 @@ export async function fetchCustomerOrders(customerId: string): Promise<Order[]> 
   const orders = orderRows as OrderRow[];
   const orderIds = orders.map((o) => o.id);
 
-  const { data: shopRows } = await supabase.from('order_shops').select('*').in('order_id', orderIds);
+  const [{ data: shopRows }, cancellationRows] = await Promise.all([
+    supabase.from('order_shops').select('*').in('order_id', orderIds),
+    fetchCancellations(orderIds),
+  ]);
   const orderShops = (shopRows ?? []) as OrderShopRow[];
   const orderShopIds = orderShops.map((s) => s.id);
 
@@ -104,6 +129,7 @@ export async function fetchCustomerOrders(customerId: string): Promise<Order[]> 
       pickupCode: s.pickup_code ?? undefined,
       status: toShopPrepStatus(s.status),
       pickupStatus: s.fulfillment_type === 'pickup' ? toPickupStepStatus(s.status) : undefined,
+      cancelled: s.status === 'cancelled' ? true : undefined,
     }));
     const orderShopIdsForOrder = new Set(shopsForOrder.map((s) => s.id));
     const orderItems = items.filter((it) => orderShopIdsForOrder.has(it.order_shop_id));
@@ -156,6 +182,10 @@ export async function fetchCustomerOrders(customerId: string): Promise<Order[]> 
       paymentDeadline: o.payment_deadline ?? null,
       paymentGraceUntil: o.payment_grace_until ?? null,
       orderStatus: o.status,
+      cancellations: cancellationRows.filter((c) => c.order_id === o.id).map((c): ShopCancellation => ({
+        orderShopId: c.order_shop_id, shopId: c.shop_id, reason: c.reason, note: c.note, cancelledAt: c.cancelled_at,
+        wasPaid: c.order_was_paid, partAmount: c.part_amount, refundStatus: c.refund_status,
+      })),
     };
   });
 }

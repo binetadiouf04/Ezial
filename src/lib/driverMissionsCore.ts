@@ -90,6 +90,11 @@ export function isMissionAssigned(row: Pick<DriverMissionRow, 'driver_id'>): boo
   return Boolean(row.driver_id);
 }
 
+/** Mission annulée (par exemple quand la dernière boutique n'honore pas sa commande) : jamais affichée au livreur. */
+export function isMissionCancelled(row: Pick<DriverMissionRow, 'status'>): boolean {
+  return row.status === MISSION_STATUS.cancelled;
+}
+
 export interface BuildMissionInput {
   row: DriverMissionRow;
   destination?: MissionDestination;

@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { getStaffSpace, publicSiteOrigin } from '@/lib/staffSpace';
 import { usePro } from '../ProContext';
 import { navigateTo } from '@/store/AppContext';
-import { LayoutDashboard, ShoppingBag, Package, Store, Wallet, LogOut, ArrowLeft, Layers, Truck, AlertTriangle, Star, Megaphone, MessageCircle, Menu, X, Landmark, ShieldCheck } from 'lucide-react';
+import { LayoutDashboard, ShoppingBag, Package, Store, Wallet, LogOut, ArrowLeft, Layers, Truck, AlertTriangle, Star, Megaphone, MessageCircle, Menu, X, Landmark, ShieldCheck, Undo2 } from 'lucide-react';
 import AdminDashboard from '../pages/admin/AdminDashboard';
 import AdminContent from '../pages/admin/AdminContent';
 import AdminOrders from '../pages/admin/AdminOrders';
@@ -22,6 +22,7 @@ import AdminDriverDetail from '../pages/admin/AdminDriverDetail';
 import AdminFinances from '../pages/admin/AdminFinances';
 import AdminShopFinanceDetail from '../pages/admin/AdminShopFinanceDetail';
 import AdminPayments from '../pages/admin/AdminPayments';
+import AdminRefunds from '../pages/admin/AdminRefunds';
 import AdminBlog from '../pages/admin/AdminBlog';
 import AdminBlogForm from '../pages/admin/AdminBlogForm';
 import AdminBlogPreview from '../pages/admin/AdminBlogPreview';
@@ -42,6 +43,7 @@ const navItems = [
   { route: '/admin/contenu', label: 'Contenu', icon: Layers },
   { route: '/admin/finances', label: 'Finances', icon: Wallet },
   { route: '/admin/paiements', label: 'Paiements', icon: Landmark },
+  { route: '/admin/remboursements', label: 'Remboursements', icon: Undo2 },
   { route: '/admin/securite', label: 'Sécurité', icon: ShieldCheck },
 ];
 
@@ -90,6 +92,7 @@ export default function AdminLayout() {
     if (clean === '/admin/finances') return <AdminFinances />;
     if (financeDetailMatch) return <AdminShopFinanceDetail shopId={financeDetailMatch[1]} />;
     if (clean === '/admin/paiements') return <AdminPayments />;
+    if (clean === '/admin/remboursements') return <AdminRefunds />;
     if (clean === '/admin/securite') return <AdminSecurity />;
     return null;
   };
