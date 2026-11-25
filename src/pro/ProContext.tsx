@@ -124,7 +124,7 @@ interface ProState extends AuthState {
   login: (role: Role, identifier: string, name: string, shopInfo?: SellerShopInfo) => void;
   logout: () => void;
   missions: Mission[];
-  acceptMission: (id: string) => void;
+  acceptMission: (id: string) => Promise<{ error?: string }>;
   advanceMission: (id: string) => void;
   advanceSubOrder: (orderId: string, shopId: string, fulfillment: 'delivery' | 'pickup') => void;
   getSubOrderStatus: (orderId: string, shopId: string, original: string) => string;
@@ -214,8 +214,8 @@ interface ProState extends AuthState {
   activeMissions: Mission[];
   completedMissions: Mission[];
   driverTransactions: DriverTransaction[];
-  collectParcel: (missionId: string, shopId: string) => void;
-  startDelivery: (missionId: string) => void;
+  collectParcel: (missionId: string, shopId: string) => Promise<{ error?: string }>;
+  startDelivery: (missionId: string) => Promise<{ error?: string }>;
   completeDelivery: (missionId: string, code: string, proofPhotoFile: File) => Promise<{ error?: string }>;
   reportIncident: (missionId: string, incident: Incident) => void;
   // Admin state
@@ -568,15 +568,15 @@ export function ProProvider({ children }: { children: ReactNode }) {
 
   const clearDriverActionError = useCallback(() => setDriverActionError(null), []);
 
-  const acceptMission = useCallback((id: string) => {
+  const acceptMission = useCallback(async (id: string): Promise<{ error?: string }> => {
     setDriverActionError(null);
-    void acceptDeliveryMission(id).then(({ error }) => {
-      if (error) {
-        setDriverActionError(error);
-        return;
-      }
-      void loadDriverMissions();
-    });
+    const { error } = await acceptDeliveryMission(id);
+    if (error) {
+      setDriverActionError(error);
+      return { error };
+    }
+    await loadDriverMissions();
+    return {};
   }, [loadDriverMissions]);
 
   const advanceMission = useCallback((id: string) => {
@@ -723,32 +723,46 @@ export function ProProvider({ children }: { children: ReactNode }) {
   // refetches so local state always reflects what was actually persisted
   // (never an optimistic guess that could drift from the real row). ===
 
-  const collectParcel = useCallback((missionId: string, shopId: string) => {
+  // Parcours simplifié (demande de la propriétaire, 25 nov. 2026) : plus de
+  // bouton « Commencer la livraison ». Dès que le dernier colis est
+  // récupéré, la mission passe en « out_for_delivery » (transition déjà
+  // autorisée par le serveur, qui l'exige avant driver_complete_delivery).
+  // Le client n'est donc prévenu « Livreur en route » qu'une fois tous les
+  // colis en main, comme avant.
+  const collectParcel = useCallback(async (missionId: string, shopId: string): Promise<{ error?: string }> => {
     setDriverActionError(null);
     const mission = driverVisibleMissions.find((m) => m.id === missionId);
     const stopId = mission?.collections.find((c) => c.shopId === shopId)?.stopId;
-    if (!stopId) {
-      setDriverActionError('Point de collecte introuvable.');
-      return;
+    if (!mission || !stopId) {
+      const error = 'Point de collecte introuvable.';
+      setDriverActionError(error);
+      return { error };
     }
-    void markStopCollected(stopId).then(({ error }) => {
-      if (error) {
-        setDriverActionError(error);
-        return;
-      }
-      void loadDriverMissions();
-    });
+    const { error } = await markStopCollected(stopId);
+    if (error) {
+      setDriverActionError(error);
+      return { error };
+    }
+    const isLastStop = mission.collections.every((c) => c.collected || c.shopId === shopId);
+    if (isLastStop && mission.step !== 'to_customer' && mission.step !== 'delivered') {
+      const started = await startMissionDelivery(missionId);
+      if (started.error) setDriverActionError(started.error);
+    }
+    await loadDriverMissions();
+    return {};
   }, [driverVisibleMissions, loadDriverMissions]);
 
-  const startDelivery = useCallback((missionId: string) => {
+  // Rattrapage seulement (mission restée « colis récupérés » après une
+  // coupure réseau) : appelé automatiquement, jamais par un bouton dédié.
+  const startDelivery = useCallback(async (missionId: string): Promise<{ error?: string }> => {
     setDriverActionError(null);
-    void startMissionDelivery(missionId).then(({ error }) => {
-      if (error) {
-        setDriverActionError(error);
-        return;
-      }
-      void loadDriverMissions();
-    });
+    const { error } = await startMissionDelivery(missionId);
+    if (error) {
+      setDriverActionError(error);
+      return { error };
+    }
+    await loadDriverMissions();
+    return {};
   }, [loadDriverMissions]);
 
   const completeDelivery = useCallback(async (missionId: string, code: string, proofPhotoFile: File): Promise<{ error?: string }> => {
