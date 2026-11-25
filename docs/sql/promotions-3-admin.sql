@@ -6,8 +6,12 @@
 --   admin_promotions_list(), admin_promotion_save(p), admin_promotion_set_status(p_id, p_status),
 --   admin_promotion_compensations(p_status), admin_mark_compensations_paid(p_ids, p_method, p_reference, p_note),
 --   seller_promotion_compensations(p_shop_id). Pas de quartiers (livraison : toute la région de Dakar).
--- CONTRÔLE ADMIN : identique aux fonctions admin existantes (ligne dans public.admins) + double
---   authentification : si le compte a un facteur vérifié, la session doit être validée par le code (aal2).
+-- CONTRÔLE ADMIN : identique aux fonctions admin existantes (ligne dans public.admins, avec (select auth.uid()))
+--   + double authentification vérifiée PAR LE SERVEUR : si le compte a un facteur vérifié, la session doit être
+--   validée par le code (aal2), sinon refus « mfa_required » (code 42501, déjà reconnu par Ezial Admin).
+--   Même règle que public.ezial_admin_mfa_ok() de docs/sql/securite-mfa-admin.sql ; constat du 25 nov. 2026 :
+--   cette migration-là n'est PAS en production, et les fonctions admin_* existantes ne vérifient que public.admins.
+--   Les fonctions des campagnes (argent versé aux boutiques) exigent donc la double authentification en plus.
 -- Statistiques : commandes NON annulées seulement.
 -- PRÉREQUIS : promotions-1-structure.sql (et promotions-2-commande.sql pour que des commandes utilisent les campagnes).
 -- RELANÇABLE : oui. RETOUR ARRIÈRE : docs/sql/promotions-3-retour-arriere.sql

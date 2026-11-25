@@ -13,7 +13,15 @@
 begin;
 
 do $$
+declare v_used boolean := false; v_paid boolean := false;   -- requêtes dynamiques : relançable une fois les tables supprimées
 begin
+  if to_regclass('public.promotion_redemptions') is not null then
+    execute 'select exists (select 1 from public.promotion_redemptions r join public.orders o on o.id = r.order_id
+              where r.status = ''counted'' and o.status <> ''cancelled'')' into v_used;
+  end if;
+  if to_regclass('public.promotion_compensations') is not null then
+    execute 'select exists (select 1 from public.promotion_compensations where status = ''paid'')' into v_paid;
+  end if;
   if position('promotion_apply_to_order' in pg_get_functiondef('public.create_order(jsonb)'::regprocedure)) > 0
      or to_regprocedure('public.promotions_preview(jsonb)') is not null then
     raise exception 'Exécutez d''abord docs/sql/promotions-2-retour-arriere.sql : retour arrière refusé (rien n''a été modifié).';
@@ -21,12 +29,10 @@ begin
   if to_regprocedure('public.admin_promotions_list()') is not null then
     raise exception 'Exécutez d''abord docs/sql/promotions-3-retour-arriere.sql : retour arrière refusé (rien n''a été modifié).';
   end if;
-  if to_regclass('public.promotion_redemptions') is not null and exists (
-       select 1 from public.promotion_redemptions r join public.orders o on o.id = r.order_id
-        where r.status = 'counted' and o.status <> 'cancelled') then
+  if v_used then
     raise exception 'Des commandes non annulées utilisent encore une campagne : retour arrière refusé (rien n''a été modifié).';
   end if;
-  if to_regclass('public.promotion_compensations') is not null and exists (select 1 from public.promotion_compensations where status = 'paid') then
+  if v_paid then
     raise exception 'Des compensations ont déjà été payées aux boutiques : retour arrière refusé pour conserver leur trace (rien n''a été modifié).';
   end if;
 end $$;

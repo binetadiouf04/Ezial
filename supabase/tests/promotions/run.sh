@@ -38,6 +38,11 @@ P -c "create table tests.base_defs as select p.oid::regprocedure::text sig, pg_g
   -c "create table tests.base_triggers as select tgname::text, tgrelid::regclass::text rel, pg_get_triggerdef(oid) def from pg_trigger where not tgisinternal" \
   -c "create table tests.base_columns as select table_name::text, column_name::text, data_type::text, coalesce(column_default, '') dflt from information_schema.columns where table_schema = 'public'" \
   -c "create table tests.base_tables as select tablename::text from pg_tables where schemaname in ('public', 'ezial_private')" >/dev/null
+# Comme en production (Supabase) : tout objet créé par postgres dans « public » est d'abord accessible à anon /
+# authenticated (privilèges par défaut, relus en production le 25 nov. 2026) ; les migrations doivent donc
+# RETIRER elles-mêmes ces droits. Appliqué après la photographie de l'état de départ.
+P -c "alter default privileges for role postgres in schema public grant execute on functions to anon, authenticated, service_role" \
+  -c "alter default privileges for role postgres in schema public grant all on tables to anon, authenticated, service_role" >/dev/null
 echo "== État de production (avant migrations)"
 T tests/10-etat-production.sql
 P -c "create table tests.reference as select tests.reference_scenario() v" >/dev/null
@@ -75,6 +80,9 @@ out=$(P -f $SQL/promotions-1-retour-arriere.sql || true)
 if grep -q "promotions-2-retour-arriere" <<<"$out"; then echo "OK    : retour arrière 1 refusé tant que le 2 n'est pas exécuté"; else echo "ÉCHEC : retour arrière 1 accepté avant le 2"; fi
 P -f $SQL/promotions-2-retour-arriere.sql >/dev/null
 P -f $SQL/promotions-1-retour-arriere.sql >/dev/null
+# Retours arrière rejoués une seconde fois : sans erreur, sans effet
+for r in promotions-3-retour-arriere promotions-2-retour-arriere promotions-1-retour-arriere; do P -f $SQL/$r.sql >/dev/null; done
+echo "OK    : retours arrière 3, 2, 1 rejoués une seconde fois sans erreur"
 T tests/90-retour-arriere.sql
 
 echo "== Réapplication après retour arrière (1, 2, 3)"

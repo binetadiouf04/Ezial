@@ -30,10 +30,16 @@ cat > "$OUT" <<'HEAD'
 begin;
 
 do $$
+declare v_used boolean := false; v_paid boolean := false;   -- requêtes dynamiques : relançable une fois les tables supprimées
 begin
-  if to_regclass('public.promotion_redemptions') is not null and exists (
-       select 1 from public.promotion_redemptions r join public.orders o on o.id = r.order_id
-        where r.status = 'counted' and o.status <> 'cancelled') then
+  if to_regclass('public.promotion_redemptions') is not null then
+    execute 'select exists (select 1 from public.promotion_redemptions r join public.orders o on o.id = r.order_id
+              where r.status = ''counted'' and o.status <> ''cancelled'')' into v_used;
+  end if;
+  if to_regclass('public.promotion_compensations') is not null then
+    execute 'select exists (select 1 from public.promotion_compensations where status = ''paid'')' into v_paid;
+  end if;
+  if v_used then
     raise exception 'Des commandes non annulées utilisent encore une campagne : retour arrière refusé (rien n''a été modifié).';
   end if;
 end $$;
