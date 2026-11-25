@@ -1,5 +1,7 @@
-import { Store } from 'lucide-react';
+import { Store, Ban } from 'lucide-react';
 import { getShop } from '@/data/shops';
+import { customerCancellationLines } from '@/lib/sellerCancelCore';
+import type { ShopCancellation } from '@/store/AppContext';
 
 // Éléments communs aux pages qui suivent une commande (confirmation, détail, suivi) :
 // même code, mêmes mots partout (l'adresse de livraison est sur la facture).
@@ -24,5 +26,19 @@ export function PickupPlace({ shopId }: { shopId: string }) {
       <Store size={14} className="mt-0.5 flex-shrink-0 text-ink/40" />
       <span>{shop.name}{shop.address ? ` · ${shop.address}` : ''}</span>
     </p>
+  );
+}
+
+/** Part de commande annulée par sa boutique : motif, et ce qui se passe pour le paiement. */
+export function ShopCancellationCard({ cancellation, className = '' }: { cancellation: ShopCancellation; className?: string }) {
+  const shopName = getShop(cancellation.shopId)?.name ?? 'La boutique';
+  const lines = customerCancellationLines({ ...cancellation, shopName });
+  return (
+    <section className={`card border-red-100 bg-red-50/50 p-5 ${className}`} aria-label={`Annulée par ${shopName}`}>
+      <h2 className="flex items-center gap-2 font-display text-lg font-semibold text-red-800"><Ban size={17} /> Annulée par la boutique</h2>
+      {lines.map((line, i) => (
+        <p key={i} className={`mt-2 text-sm ${i === lines.length - 1 ? 'font-medium text-ink' : line.startsWith('«') ? 'italic text-ink/60' : 'text-ink/75'}`}>{line}</p>
+      ))}
+    </section>
   );
 }

@@ -51,7 +51,7 @@ export default function SellerOrders() {
     if (filter === 'confirmed' && o.status !== 'confirmed') return false;
     if (filter === 'preparing' && o.status !== 'preparing') return false;
     if (filter === 'ready' && o.status !== 'ready' && o.status !== 'ready_for_pickup') return false;
-    if (filter === 'done' && !['picked_up', 'delivering', 'delivered', 'collected'].includes(o.status)) return false;
+    if (filter === 'done' && !['picked_up', 'delivering', 'delivered', 'collected', 'cancelled'].includes(o.status)) return false;
     if (search && !o.orderNumber.toLowerCase().includes(search.toLowerCase())) return false;
     return true;
   });

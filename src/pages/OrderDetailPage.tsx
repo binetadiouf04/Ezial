@@ -9,7 +9,7 @@ import ClaimModal from '@/components/ClaimModal';
 import InvoiceCard from '@/components/InvoiceCard';
 import OnlinePayment from '@/components/OnlinePayment';
 import PaymentStatusBadge from '@/components/PaymentStatusBadge';
-import { DeliveryCodeCard, PickupPlace } from '@/components/OrderParts';
+import { DeliveryCodeCard, PickupPlace, ShopCancellationCard } from '@/components/OrderParts';
 import RateOrderItems from '@/components/RateOrderItems';
 import PaymentReturnStatus from '@/components/PaymentReturnStatus';
 import { parseReturnParams, readLaunch } from '@/lib/paymentReturn';
@@ -70,8 +70,8 @@ export default function OrderDetailPage({ orderId }: { orderId: string }) {
     );
   }
 
-  const hasDelivery = order.shopFulfillments.some((f) => f.type === 'delivery');
-  const pickupFulfillments = order.shopFulfillments.filter((f) => f.type === 'pickup');
+  const hasDelivery = order.shopFulfillments.some((f) => f.type === 'delivery' && !f.cancelled);
+  const pickupFulfillments = order.shopFulfillments.filter((f) => f.type === 'pickup' && !f.cancelled);
   const effectiveStatus = computeDeliveryStepStatus(order, missionStatus);
   const confirmed = !awaitingOnlinePayment && !cancelled;
   // Reçue (livrée, ou retirée en boutique) : le client peut noter ses articles.
@@ -96,11 +96,13 @@ export default function OrderDetailPage({ orderId }: { orderId: string }) {
 
       {order.paymentRequired && <OnlinePayment order={order} autoStart autoOpen={typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('payer') === '1'} />}
 
-      {cancelled && !order.paymentRequired && (
+      {cancelled && !order.paymentRequired && !(order.cancellations ?? []).length && (
         <p className="card mb-4 p-4 text-sm text-ink/70">Cette commande a été annulée. Elle ne sera pas livrée.</p>
       )}
 
       <div className="space-y-4">
+          {(order.cancellations ?? []).map((c) => <ShopCancellationCard key={c.orderShopId} cancellation={c} />)}
+
           {received && customerUser && <RateOrderItems order={order} customerId={customerUser.id} />}
 
           {confirmed && hasDelivery && deliveryCode && effectiveStatus !== 'delivered' && <DeliveryCodeCard code={deliveryCode} />}

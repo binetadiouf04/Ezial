@@ -9,7 +9,7 @@ import { pickupStepLabels, computeDeliveryStepStatus } from '@/data/orderStatusL
 import { paymentLabels } from '@/data/payments';
 import { Phone, MapPin, Package, Store, Check, Clock, KeySquare, Truck, Smartphone } from 'lucide-react';
 import SmartImage from '@/components/SmartImage';
-import { DeliveryCodeCard } from '@/components/OrderParts';
+import { DeliveryCodeCard, ShopCancellationCard } from '@/components/OrderParts';
 import { formatDeliveryWish } from '@/lib/deliveryDay';
 import UrgentBadge from '@/components/UrgentBadge';
 import PaymentStatusBadge from '@/components/PaymentStatusBadge';
@@ -39,8 +39,8 @@ export default function OrderTrackingPage({ orderId }: { orderId: string }) {
     return <div className="container-pro py-20 text-center"><Package size={42} className="mx-auto text-ink/20" /><p className="mt-4 text-sm text-ink/60">Commande introuvable.</p><button onClick={() => navigate('/profil')} className="btn-outline mt-6">Mes commandes</button></div>;
   }
 
-  const hasDelivery = order.shopFulfillments.some((f) => f.type === 'delivery');
-  const pickupFulfillments = order.shopFulfillments.filter((f) => f.type === 'pickup');
+  const hasDelivery = order.shopFulfillments.some((f) => f.type === 'delivery' && !f.cancelled);
+  const pickupFulfillments = order.shopFulfillments.filter((f) => f.type === 'pickup' && !f.cancelled);
   const effectiveStatus = computeDeliveryStepStatus(order, missionStatus);
 
   return (
@@ -52,6 +52,8 @@ export default function OrderTrackingPage({ orderId }: { orderId: string }) {
 
       <div className="grid gap-6 lg:grid-cols-[1fr_300px]">
         <div className="space-y-5">
+          {(order.cancellations ?? []).map((c) => <ShopCancellationCard key={c.orderShopId} cancellation={c} />)}
+
           {/* Overall delivery timeline (if any delivery) */}
           {hasDelivery && deliveryCode && <DeliveryCodeCard code={deliveryCode} />}
 
@@ -96,7 +98,7 @@ export default function OrderTrackingPage({ orderId }: { orderId: string }) {
           <div className="card p-5">
             <h2 className="text-sm font-semibold text-ink mb-4">Préparation par boutique</h2>
             <div className="space-y-4">
-              {order.shopFulfillments.map((sf) => {
+              {order.shopFulfillments.filter((sf) => !sf.cancelled).map((sf) => {
                 const shop = getShop(sf.shopId);
                 const shopItems = order.items.filter((i) => i.shopId === sf.shopId);
                 const isPickup = sf.type === 'pickup';

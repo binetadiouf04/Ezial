@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { usePro } from '../../ProContext';
 import { fetchAdminShops, updateShopStatus, type AdminShopSummary } from '@/lib/supabaseAdminData';
+import { fetchShopCancellationStats, type ShopCancellationStats } from '@/lib/supabaseAdminRefunds';
 import { StatusChip } from '../../components/StatusChip';
 import FlagModal from '../../components/FlagModal';
 import { Search, Loader2, AlertCircle, Check, Ban, Crown, Gift } from 'lucide-react';
@@ -69,12 +70,16 @@ export default function AdminShops() {
   const [acting, setActing] = useState<string | null>(null);
   const [actionError, setActionError] = useState('');
   const [suspendTarget, setSuspendTarget] = useState<string | null>(null);
+  // Annulations par la boutique (information seulement, sans pénalité) ; null tant que la migration n'est pas en production.
+  const [cancelStats, setCancelStats] = useState<Map<string, ShopCancellationStats> | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
     setLoadError('');
     try {
-      setShops(await fetchAdminShops());
+      const [list, stats] = await Promise.all([fetchAdminShops(), fetchShopCancellationStats()]);
+      setShops(list);
+      setCancelStats(stats);
     } catch {
       setLoadError('Impossible de charger les boutiques. Réessayez.');
     } finally {
@@ -151,6 +156,9 @@ export default function AdminShops() {
                       {shop.sellerCode && <p className="text-xs text-ink/45 font-mono mt-0.5">{shop.sellerCode}</p>}
                       <SubscriptionLine sub={shop.subscription} />
                       <p className="text-xs text-ink/45 mt-1.5">{shop.activeProductCount} produit{shop.activeProductCount > 1 ? 's' : ''} actif{shop.activeProductCount > 1 ? 's' : ''}</p>
+                      {(cancelStats?.get(shop.id)?.total ?? 0) > 0 && (
+                        <p className="mt-1 text-xs text-amber-700">Annulations par la boutique : {cancelStats?.get(shop.id)?.last30Days} sur 30 jours · {cancelStats?.get(shop.id)?.total} au total</p>
+                      )}
                       {shop.status === 'suspended' && shop.suspensionReason && <p className="text-xs text-burgundy mt-1">Motif : {shop.suspensionReason}</p>}
                     </div>
                   </button>

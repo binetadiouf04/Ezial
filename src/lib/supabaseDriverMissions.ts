@@ -9,6 +9,7 @@ import {
   buildDriverMission,
   buildAvailableMissionFromRpc,
   isMissionAssigned,
+  isMissionCancelled,
   type AvailableMissionRpcRow,
   type DriverMissionRow,
   type MissionCustomer,
@@ -156,7 +157,8 @@ export async function fetchDriverMissions(): Promise<Mission[]> {
   ]);
   if (missionsError) return [];
 
-  const rows = (missionRows ?? []) as DeliveryMissionRow[];
+  // Une mission annulée (boutique qui ne peut pas honorer sa commande) disparaît : le livreur est prévenu par notification.
+  const rows = ((missionRows ?? []) as DeliveryMissionRow[]).filter((r) => !isMissionCancelled(r));
   const assignedRows = rows.filter(isMissionAssigned);
 
   let missions: Mission[];

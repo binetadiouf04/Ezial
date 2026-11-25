@@ -3,13 +3,15 @@ import { formatWaistCm } from '@/lib/waistMeasure';
 import { usePro } from '../../ProContext';
 import {
   fetchSellerOrderDetail, advanceOrderShopStatus, nextSellerStatus, sellerActionLabel,
-  type SellerOrderDetail as SellerOrderDetailData,
+  canSellerCancel, isSellerCancelAvailable, fetchSellerCancellation, cancelReasonLabels,
+  type SellerOrderDetail as SellerOrderDetailData, type SellerCancellation,
 } from '@/lib/supabaseSellerOrders';
+import SellerCancelDialog from '../../components/SellerCancelDialog';
 import { formatFCFA } from '@/data/products';
 import { fabricSaleModeUnit, formatFabricQuantity } from '@/data/categories';
 import { StatusChip } from '../../components/StatusChip';
 import UrgentBadge from '@/components/UrgentBadge';
-import { ArrowLeft, Truck, Store, Phone, Check, Package, Loader2, AlertCircle, Clock, MessageSquare, Gift } from 'lucide-react';
+import { ArrowLeft, Truck, Store, Phone, Check, Package, Loader2, AlertCircle, Clock, MessageSquare, Gift, Ban } from 'lucide-react';
 import SmartImage from '@/components/SmartImage';
 
 function formatDateTime(iso: string): string {
@@ -33,6 +35,16 @@ export default function SellerOrderDetail({ orderId }: { orderId: string }) {
   const [loadError, setLoadError] = useState('');
   const [advancing, setAdvancing] = useState(false);
   const [actionError, setActionError] = useState('');
+  // Annulation par la boutique : bouton visible seulement si la fonction existe en base (migration exécutée).
+  const [cancelAvailable, setCancelAvailable] = useState(false);
+  const [cancelOpen, setCancelOpen] = useState(false);
+  const [cancellation, setCancellation] = useState<SellerCancellation | null>(null);
+
+  useEffect(() => {
+    let alive = true;
+    void isSellerCancelAvailable().then((ok) => { if (alive) setCancelAvailable(ok); });
+    return () => { alive = false; };
+  }, []);
 
   const load = useCallback(async () => {
     if (!sellerSupabaseShopId) { setLoading(false); return; }
@@ -42,6 +54,7 @@ export default function SellerOrderDetail({ orderId }: { orderId: string }) {
       const detail = await fetchSellerOrderDetail(sellerSupabaseShopId, orderId);
       setOrder(detail);
       if (!detail) setLoadError('Commande introuvable.');
+      setCancellation(detail && detail.status === 'cancelled' ? await fetchSellerCancellation(orderId) : null);
     } catch {
       setLoadError('Impossible de charger la commande. Réessayez.');
     } finally {
@@ -90,6 +103,7 @@ export default function SellerOrderDetail({ orderId }: { orderId: string }) {
   const isDelivery = order.fulfillmentType === 'delivery';
   const action = sellerActionLabel(order.fulfillmentType, order.status);
   const preferredDate = formatPreferredDate(order.preferredDate);
+  const showCancel = cancelAvailable && canSellerCancel(order.status);
 
   return (
     <div className="space-y-5">
@@ -210,6 +224,16 @@ export default function SellerOrderDetail({ orderId }: { orderId: string }) {
             <p className="text-sm font-medium text-green-700">Commande prête, en attente du client</p>
           </div>
         )}
+        {order.status === 'cancelled' && (
+          <div className="mb-1 flex items-start gap-2 rounded-lg bg-red-50 p-3">
+            <Ban size={16} className="mt-0.5 flex-shrink-0 text-red-600" />
+            <div className="text-sm text-red-700">
+              <p className="font-medium">Commande annulée{cancellation ? ` : ${cancelReasonLabels[cancellation.reason].toLowerCase()}` : ''}</p>
+              {cancellation?.note && <p className="mt-0.5 text-xs">{cancellation.note}</p>}
+              <p className="mt-0.5 text-xs">Aucune vente ne vous est versée pour cette commande.</p>
+            </div>
+          </div>
+        )}
         {['picked_up', 'delivering', 'delivered', 'collected'].includes(order.status) && (
           <div className="flex items-center gap-2 rounded-lg bg-ink/5 p-3 mb-3">
             <Check size={16} className="text-ink/40" />
@@ -226,7 +250,23 @@ export default function SellerOrderDetail({ orderId }: { orderId: string }) {
             {advancing ? <><Loader2 size={16} className="animate-spin" /> Mise à jour...</> : action}
           </button>
         )}
+
+        {showCancel && (
+          <button onClick={() => setCancelOpen(true)} className={`btn-outline w-full min-h-[44px] text-red-700 ${action ? 'mt-3' : ''}`}>
+            <Ban size={16} /> Je ne peux pas honorer cette commande
+          </button>
+        )}
       </div>
+
+      {cancelOpen && (
+        <SellerCancelDialog
+          orderShopId={order.orderShopId}
+          orderNumber={order.orderNumber}
+          onClose={() => setCancelOpen(false)}
+          onUnavailable={() => { setCancelOpen(false); setCancelAvailable(false); }}
+          onDone={() => { setCancelOpen(false); void load(); }}
+        />
+      )}
     </div>
   );
 }
