@@ -1,8 +1,10 @@
--- Définitions EXACTES de la PRODUCTION (lues en lecture seule le 21 nov. 2026, projet lkqezdrdbogtborgjvlw),
+-- Définitions EXACTES de la PRODUCTION (lues en lecture seule le 21 nov. 2026, projet lkqezdrdbogtborgjvlw ;
+-- create_order relue de nouveau le 25 nov. 2026 : version AVEC la livraison urgente, migration
+-- docs/sql/lancement-livraison-urgente.sql exécutée en production, empreinte 10178f6554882cf5390eb6f0a7a13381),
 -- fins de ligne ramenées à LF (la production stocke des CRLF : seule différence, contrôlée par empreinte md5
 -- calculée sans les « \r » dans tests/10-etat-production.sql).
--- Chargées APRÈS le banc orange-money (schéma simplifié + migrations Orange Money 1 à 6 = état de production),
--- elles remplacent les copies du banc par le texte réel de production.
+-- Chargées APRÈS le banc orange-money (schéma simplifié + migrations Orange Money 1 à 6) et la migration
+-- lancement-livraison-urgente.sql (= état de production), elles remplacent les copies du banc par le texte réel.
 -- Les trois blocs « @@ restaure » sont recopiés tels quels dans docs/sql/promotions-2-retour-arriere.sql
 -- par build-rollback.sh.
 
@@ -61,6 +63,7 @@ v_gift_wrap_fee numeric := 0;
 v_promo_code text;
 v_promo_result jsonb;
 v_promo_discount numeric := 0;
+v_urgent_fee integer := 0; -- livraison urgente
 
 v_shops_out jsonb := '[]'::jsonb;
 v_items_out jsonb := '[]'::jsonb;
@@ -578,13 +581,17 @@ if v_promo_code is not null then
   end if;
 end if;
 
+v_urgent_fee := ezial_private.order_urgent_fee(payload, v_needs_delivery); -- livraison urgente
+
 update public.orders
 set
 products_subtotal = v_products_subtotal,
 discount_amount = v_discount_total + v_promo_discount,
 delivery_fee = v_delivery_fee,
 promo_code = v_promo_code,
-total_amount = (v_products_subtotal - v_discount_total - v_promo_discount) + v_delivery_fee + v_gift_wrap_fee,
+is_urgent = (v_urgent_fee > 0),
+urgent_fee = v_urgent_fee,
+total_amount = (v_products_subtotal - v_discount_total - v_promo_discount) + v_delivery_fee + v_gift_wrap_fee + v_urgent_fee,
 updated_at = now()
 where id = v_order.id
 returning *

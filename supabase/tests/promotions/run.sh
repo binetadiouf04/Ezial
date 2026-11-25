@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
 # Banc de test LOCAL « Campagnes promotionnelles, phase 1 » : PostgreSQL 16 jetable, aucune connexion à la production.
-# État de départ = production du 21 nov. 2026 :
-#   banc orange-money (schéma simplifié + migrations Orange Money 1 à 6) + 00-complement.sql (tables manquantes,
-#   données fictives) + 10-production.sql (texte EXACT de production de create_order, trg_orders_on_paid,
-#   validate_promo_code et des fonctions d'annulation / de vente, contrôlé par empreinte md5).
+# État de départ = production du 25 nov. 2026 :
+#   banc orange-money (schéma simplifié + migrations Orange Money 1 à 6 ; Wave n'est PAS en production)
+#   + lancement-livraison-urgente.sql (exécutée en production le 24-25 nov. ; lue dans docs/sql, sinon sur origin/main)
+#   + 00-complement.sql (tables manquantes, données fictives) + 10-production.sql (texte EXACT de production de
+#   create_order — avec la livraison urgente —, trg_orders_on_paid, validate_promo_code et des fonctions
+#   d'annulation / de vente, contrôlé par empreinte md5).
 # Déroulé : état de production -> scénario de référence SANS promotion -> migrations 1, 2, 3 appliquées DEUX fois
 #   -> tests 2x/3x/4x/5x -> commandes simultanées (80) -> non-régression -> retours arrière (refus puis 3, 2, 1)
 #   -> comparaison exacte avec l'état de départ et nouvelle non-régression (90).
@@ -14,12 +16,17 @@ export PGHOST="${PGHOST:-/tmp}" PGPORT="${PGPORT:-54555}" PGUSER="${PGUSER:-post
 export DB=ezial_promo_test
 SQL=../../../docs/sql
 OM=../orange-money
+URGENT=$SQL/lancement-livraison-urgente.sql
+if [ ! -f "$URGENT" ]; then   # branche pas encore à jour de main : copie lue sur origin/main (lecture seule)
+  URGENT=$(mktemp --suffix=.sql)
+  git show origin/main:docs/sql/lancement-livraison-urgente.sql > "$URGENT"
+fi
 psql -qX -v ON_ERROR_STOP=1 -d postgres -c "drop database if exists $DB" -c "create database $DB" >/dev/null 2>&1
 P() { PGOPTIONS="-c client_min_messages=notice" psql -qX -v ON_ERROR_STOP=1 -d $DB "$@" 2>&1 | { grep -v "NOTICE:  truncate cascades\|skipping" || true; } ; }
 T() { echo "-- $1"; P -f "$1" 2>&1 | grep -E "OK|ÉCHEC|ERROR" || true; }
 for f in $OM/00-scaffold.sql $OM/10-baseline.sql $OM/11-baseline-remplacees.sql $OM/12-baseline-autres.sql $OM/20-fixtures.sql $OM/14-vault-simule.sql \
          $SQL/orange-money-1-structure.sql $SQL/orange-money-2-commandes.sql $SQL/orange-money-3-stock.sql $SQL/orange-money-4-verification.sql \
-         $SQL/orange-money-5-testeurs.sql $SQL/orange-money-6-cles-coffre.sql 00-complement.sql 10-production.sql; do
+         $SQL/orange-money-5-testeurs.sql $SQL/orange-money-6-cles-coffre.sql "$URGENT" 00-complement.sql 10-production.sql 05-complement-urgent.sql; do
   P -f "$f" >/dev/null
 done
 # Photographie de l'état de production (référence des retours arrière)

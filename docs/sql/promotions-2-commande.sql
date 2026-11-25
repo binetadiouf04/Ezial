@@ -7,8 +7,10 @@
 --      utilisé par l'aperçu du panier (promotions_preview), par create_order et par validate_promo_code ;
 --   2. public.promotions_preview(payload) (clients connectés) et public.public_active_promotions() (tous) ;
 --   3. create_order : UN SEUL bloc remplacé (l'ancien code promo -> campagne), par remplacement de texte
---      vérifié : si le repère n'est pas trouvé exactement une fois, la migration s'arrête SANS RIEN MODIFIER.
---      Prix, stock, commissions, livraison, Baya, cadeaux : inchangés (texte identique) ;
+--      vérifié sur la définition de PRODUCTION relue le 25 nov. 2026 (avec la livraison urgente,
+--      empreinte md5 sans « \r » = 10178f6554882cf5390eb6f0a7a13381) : si le repère n'est pas trouvé
+--      exactement une fois, la migration s'arrête SANS RIEN MODIFIER. Prix, stock, commissions, livraison,
+--      livraison urgente (+500 : appel order_urgent_fee, is_urgent, urgent_fee), Baya, cadeaux : inchangés ;
 --   4. ezial_private.trg_orders_on_paid (commandes « à payer » Orange Money) : la vente créée au paiement
 --      retire la part promotion de la boutique (promo_compensation) ; commission inchangée ;
 --   5. annulation (commande annulée, y compris impayée annulée automatiquement) : utilisation, budget et
@@ -19,8 +21,10 @@
 --   payé avant la campagne, comme aujourd'hui) ; sa part de la réduction (A) est retirée de sa vente automatique ;
 --   Ezial lui reverse à la main A − V (promotion_compensations), V étant la part que la boutique a acceptée de
 --   financer (promotion_seller_shares, facultative, réductions produits seulement). Pas de condition de quartier.
---   total = (sous-total − promos produits − promo_discount) + livraison − delivery_discount + emballage cadeau.
--- PRÉREQUIS : promotions-1-structure.sql exécutée.
+--   total = (sous-total − promos produits − promo_discount) + livraison − delivery_discount + emballage cadeau
+--           + supplément livraison urgente (jamais réduit par une campagne).
+-- PRÉREQUIS : promotions-1-structure.sql exécutée ; lancement-livraison-urgente.sql déjà en production
+--   (sinon le repère de create_order n'est pas trouvé et la migration s'arrête sans rien modifier).
 -- AUCUN EFFET tant qu'aucune campagne n'est « active » : sans campagne, une commande est strictement identique
 --   à aujourd'hui (seul changement visible : un code saisi est cherché dans les campagnes, donc EZI10, suspendu,
 --   répond « Ce code est suspendu. »).
@@ -415,13 +419,17 @@ if v_promo_code is not null then
   end if;
 end if;
 
+v_urgent_fee := ezial_private.order_urgent_fee(payload, v_needs_delivery); -- livraison urgente
+
 update public.orders
 set
 products_subtotal = v_products_subtotal,
 discount_amount = v_discount_total + v_promo_discount,
 delivery_fee = v_delivery_fee,
 promo_code = v_promo_code,
-total_amount = (v_products_subtotal - v_discount_total - v_promo_discount) + v_delivery_fee + v_gift_wrap_fee,
+is_urgent = (v_urgent_fee > 0),
+urgent_fee = v_urgent_fee,
+total_amount = (v_products_subtotal - v_discount_total - v_promo_discount) + v_delivery_fee + v_gift_wrap_fee + v_urgent_fee,
 updated_at = now()
 where id = v_order.id
 returning *
@@ -433,16 +441,20 @@ v_promo_result := ezial_private.promotion_apply_to_order(v_order.id, v_promo_cod
 v_promo_discount := (v_promo_result->>'product_discount')::numeric;
 v_promo_code := v_promo_result->>'code';
 
+v_urgent_fee := ezial_private.order_urgent_fee(payload, v_needs_delivery); -- livraison urgente
+
 update public.orders
 set
 products_subtotal = v_products_subtotal,
 discount_amount = v_discount_total + v_promo_discount,
 delivery_fee = v_delivery_fee,
 promo_code = v_promo_code,
+is_urgent = (v_urgent_fee > 0),
+urgent_fee = v_urgent_fee,
 promotion_id = nullif(v_promo_result->>'promotion_id', '')::uuid,
 promo_discount = v_promo_discount,
 delivery_discount = (v_promo_result->>'delivery_discount')::numeric,
-total_amount = (v_products_subtotal - v_discount_total - v_promo_discount) + v_delivery_fee - (v_promo_result->>'delivery_discount')::numeric + v_gift_wrap_fee,
+total_amount = (v_products_subtotal - v_discount_total - v_promo_discount) + v_delivery_fee - (v_promo_result->>'delivery_discount')::numeric + v_gift_wrap_fee + v_urgent_fee,
 updated_at = now()
 where id = v_order.id
 returning *
