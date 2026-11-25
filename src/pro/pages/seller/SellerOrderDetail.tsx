@@ -135,6 +135,12 @@ export default function SellerOrderDetail({ orderId }: { orderId: string }) {
           <span className="font-medium text-ink">Sous-total boutique</span>
           <span className="font-semibold text-ink">{formatFCFA(order.shopSubtotal)}</span>
         </div>
+        {order.promoSellerShare > 0 && (
+          <div className="mt-1.5 flex justify-between text-sm">
+            <span className="text-ink/60">Participation à la campagne</span>
+            <span className="font-medium text-burgundy">−{formatFCFA(order.promoSellerShare)}</span>
+          </div>
+        )}
       </div>
 
       {order.isUrgent && (

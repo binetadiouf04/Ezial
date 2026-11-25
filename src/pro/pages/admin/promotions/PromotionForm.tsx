@@ -317,7 +317,7 @@ export default function PromotionForm({
 
       <p className="flex items-start gap-2 rounded-lg bg-cream/70 p-3 text-xs text-ink/60">
         <Info size={14} className="mt-0.5 flex-shrink-0 text-burgundy" />
-        Ezial finance la réduction (moins la part vendeur éventuelle) ; le montant dû aux vendeurs est inscrit à reverser.
+        Le vendeur reçoit automatiquement le prix normal moins sa commission habituelle ; Ezial prend en charge la réduction, sauf la part que le vendeur a acceptée.
       </p>
 
       <Section title="Campagne">
@@ -494,8 +494,8 @@ export default function PromotionForm({
 
       {f.kind !== 'free_delivery' && (
         <Section title="Participation des vendeurs (facultatif)">
-          <p className="text-[11px] text-ink/55">Le vendeur finance sa part (déduite de sa vente) ; Ezial reverse le reste. Commission inchangée.</p>
-          <p className="text-[11px] text-ink/45">Exemple : réduction 2 500 FCFA, part vendeur 1 000 FCFA → Ezial reverse 1 500 FCFA.</p>
+          <p className="text-[11px] text-ink/55">Le vendeur reçoit automatiquement le prix normal moins sa commission habituelle ; Ezial prend en charge la réduction, sauf la part que le vendeur a acceptée. Cette part est déduite automatiquement de sa vente (jamais au-delà de ce qu’il touche, jamais sur la livraison offerte). Commission inchangée.</p>
+          <p className="text-[11px] text-ink/45">Exemple : réduction 2 500 FCFA, part vendeur 1 000 FCFA → 1 000 FCFA déduits de la vente du vendeur, 1 500 FCFA pris en charge par Ezial.</p>
           {f.shares.map((x) => {
             const err = errors[`share:${x.shopId}`];
             return (

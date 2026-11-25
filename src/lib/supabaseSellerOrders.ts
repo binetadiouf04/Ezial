@@ -178,6 +178,8 @@ export interface SellerOrderDetail {
   giftWrapFee: number;
   /** Livraison urgente (jour et créneau : preferredDate / preferredSlot). Le supplément revient à Ezial, pas à la boutique. */
   isUrgent: boolean;
+  /** Part d'une campagne Ezial que la boutique a acceptée de financer (order_shops.promo_seller_share), déduite automatiquement de sa vente ; 0 sinon (colonne absente avant la migration). */
+  promoSellerShare: number;
   items: SellerOrderItem[];
 }
 
@@ -247,6 +249,7 @@ export async function fetchSellerOrderDetail(shopId: string, orderShopId: string
     giftWrap: Boolean(order.gift_wrap),
     giftWrapFee: (order.gift_wrap_fee as number) ?? 0,
     isUrgent: isUrgentRow(order) && (row.fulfillment_type ?? 'delivery') === 'delivery',
+    promoSellerShare: typeof row.promo_seller_share === 'number' && row.promo_seller_share > 0 ? Math.round(row.promo_seller_share) : 0,
     items: items.map((it) => ({
       id: it.id,
       productId: it.product_id,

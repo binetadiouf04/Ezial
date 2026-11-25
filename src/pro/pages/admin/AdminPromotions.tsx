@@ -8,12 +8,11 @@ import {
 } from '@/lib/supabaseAdminPromotions';
 import ConfirmDialog from '../../components/blog/ConfirmDialog';
 import PromotionForm from './promotions/PromotionForm';
-import CompensationsPanel from './promotions/CompensationsPanel';
 
 // Campagnes promotionnelles — phase 1 (contrat : docs/promotions/contrat-phase1.md).
-// Ezial finance toujours la réduction ; la commission du vendeur ne change pas.
+// Ezial finance la réduction : le vendeur reçoit automatiquement le prix normal moins sa commission
+// habituelle, sauf la part qu'il a acceptée (déduite automatiquement). Aucun versement manuel.
 
-type View = 'campaigns' | 'compensations';
 type Pending = { promo: AdminPromotion; status: Exclude<PromotionStatus, 'draft'> } | null;
 
 type DisplayStatus = 'draft' | 'scheduled' | 'running' | 'expired' | 'exhausted' | 'paused' | 'ended';
@@ -82,7 +81,6 @@ function Stat({ label, value, strong, negative }: { label: string; value: string
 }
 
 export default function AdminPromotions() {
-  const [view, setView] = useState<View>('campaigns');
   const [promotions, setPromotions] = useState<AdminPromotion[]>([]);
   const [missing, setMissing] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -148,17 +146,11 @@ export default function AdminPromotions() {
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex rounded-full border border-line p-1 w-fit" role="tablist">
-          <button role="tab" aria-selected={view === 'campaigns'} onClick={() => setView('campaigns')} className={`rounded-full px-4 py-1.5 text-sm font-medium transition-colors ${view === 'campaigns' ? 'bg-ink text-white' : 'text-ink/60'}`}>Campagnes</button>
-          <button role="tab" aria-selected={view === 'compensations'} onClick={() => setView('compensations')} className={`rounded-full px-4 py-1.5 text-sm font-medium transition-colors ${view === 'compensations' ? 'bg-ink text-white' : 'text-ink/60'}`}>À reverser aux vendeurs</button>
-        </div>
-        {view === 'campaigns' && (
-          <button onClick={() => { setNotice(''); setActionError(''); setEditing('new'); }} className="btn-primary px-5 py-2.5"><Plus size={15} /> Créer une campagne</button>
-        )}
+        <p className="text-xs text-ink/50">Le vendeur reçoit automatiquement le prix normal moins sa commission habituelle ; Ezial prend en charge la réduction, sauf la part que le vendeur a acceptée.</p>
+        <button onClick={() => { setNotice(''); setActionError(''); setEditing('new'); }} className="btn-primary px-5 py-2.5"><Plus size={15} /> Créer une campagne</button>
       </div>
 
-      {view === 'compensations' ? <CompensationsPanel /> : (
-        <>
+      <>
           {notice && <p className="flex items-center gap-1.5 rounded-lg bg-green-50 p-3 text-sm text-green-700"><Check size={15} className="flex-shrink-0" /> {notice}</p>}
           {(loadError || actionError) && <p className="flex items-start gap-1.5 rounded-lg bg-burgundy/5 p-3 text-sm text-burgundy" role="alert"><AlertCircle size={15} className="mt-0.5 flex-shrink-0" /> {actionError || loadError}</p>}
 
@@ -167,7 +159,7 @@ export default function AdminPromotions() {
           ) : promotions.length === 0 ? (
             <div className="card p-8 text-center">
               <p className="text-sm text-ink/45">Aucune campagne pour le moment.</p>
-              <p className="mt-1 text-xs text-ink/40">Ezial finance la réduction ; la part des vendeurs est inscrite à reverser.</p>
+              <p className="mt-1 text-xs text-ink/40">Ezial finance la réduction ; les vendeurs sont payés automatiquement, sans versement manuel.</p>
             </div>
           ) : (
             <div className="space-y-3">
@@ -227,8 +219,7 @@ export default function AdminPromotions() {
               })}
             </div>
           )}
-        </>
-      )}
+      </>
 
       {pending && (
         <ConfirmDialog

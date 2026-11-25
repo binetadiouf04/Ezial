@@ -4,8 +4,10 @@ import { isModuleMissing, isRpcMissing } from './supabaseFeatureDetect';
 
 // Campagnes promotionnelles — phase 1, côté administration (Ezial Admin).
 // Contrat : docs/promotions/contrat-phase1.md. Tout passe par les fonctions
-// serveur admin_* (table admins + double authentification) ; l'interface ne
-// calcule aucune réduction et ne fait que relire ce que le serveur renvoie.
+// serveur admin_* (contrôle de la table admins, comme les autres fonctions
+// admin) ; l'interface ne calcule aucune réduction et ne fait que relire ce
+// que le serveur renvoie. Pas de compensation manuelle : le vendeur est payé
+// automatiquement (prix normal − commission habituelle − part acceptée).
 //
 // Formes JSON supposées (le contrat ne fixe que les noms et les paramètres) :
 // - admin_promotions_list() : tableau (ou { promotions: [...] }) d'objets aux
@@ -21,10 +23,6 @@ import { isModuleMissing, isRpcMissing } from './supabaseFeatureDetect';
 //   offerte »). `id` absent = création (statut brouillon côté serveur). Pour
 //   « livraison offerte », value = 0 (seul delivery_cap compte).
 //   Les campagnes valent pour toute la région de Dakar (pas de quartiers).
-// - admin_promotion_compensations(p_status) : tableau (ou { compensations })
-//   d'objets { id, order_id, order_number, shop_id, shop_name, amount, status,
-//   paid_at, paid_method, paid_reference, note, created_at, promotion_name,
-//   seller_share, gross_allocation, payout_orange_money, payout_wave }.
 
 export const PROMOTIONS_MISSING_MESSAGE = 'Les campagnes seront disponibles après la mise à jour de la base.';
 
@@ -32,21 +30,11 @@ export type PromotionKind = 'fixed' | 'percent' | 'free_delivery';
 export type PromotionStatus = 'draft' | 'active' | 'paused' | 'ended';
 export type PromotionAudience = 'all' | 'new_customers';
 export type PromotionTargetType = 'product' | 'shop' | 'category' | 'subcategory';
-export type CompensationStatus = 'due' | 'paid' | 'cancelled';
-export type CompensationMethod = 'wave' | 'orange_money' | 'especes' | 'virement' | 'autre';
 
 export const KIND_LABELS: Record<PromotionKind, string> = {
   fixed: 'Réduction fixe',
   percent: 'Pourcentage',
   free_delivery: 'Livraison offerte',
-};
-
-export const COMPENSATION_METHOD_LABELS: Record<CompensationMethod, string> = {
-  wave: 'Wave',
-  orange_money: 'Orange Money',
-  especes: 'Espèces',
-  virement: 'Virement',
-  autre: 'Autre',
 };
 
 export interface PromotionTarget { type: PromotionTargetType; ref: string }
@@ -112,28 +100,6 @@ export interface PromotionInput {
 export interface AdminShopOption { id: string; name: string; isOfficial: boolean }
 export interface ProductOption { id: string; name: string; shopId: string }
 
-export interface PromotionCompensation {
-  id: string;
-  orderId: string | null;
-  orderNumber: string | null;
-  shopId: string | null;
-  shopName: string;
-  amount: number;
-  status: CompensationStatus;
-  paidAt: string | null;
-  paidMethod: CompensationMethod | null;
-  paidReference: string | null;
-  note: string | null;
-  createdAt: string | null;
-  promotionName: string | null;
-  /** Part financée par le vendeur (déduite de sa vente), si la campagne en prévoit une. */
-  sellerShare: number | null;
-  /** Réduction totale rattachée à cette boutique pour la commande. */
-  grossAllocation: number | null;
-  payoutOrangeMoney: string | null;
-  payoutWave: string | null;
-}
-
 type Raw = Record<string, unknown>;
 type SupabaseLikeError = { code?: string; message?: string } | null;
 
@@ -166,9 +132,7 @@ function friendlyError(error: SupabaseLikeError, fallback: string): string {
   if (!error) return fallback;
   if (isRpcMissing(error) || isModuleMissing(error)) return PROMOTIONS_MISSING_MESSAGE;
   if (error.code === '23505') return 'Ce code existe déjà.';
-  if (error.code === '42501' || error.code === 'PT403' || /mfa_required/i.test(error.message ?? '')) {
-    return 'Accès refusé : reconnectez-vous avec la double authentification.';
-  }
+  if (error.code === '42501') return 'Accès réservé aux administrateurs.';
   // Exceptions levées par les fonctions (RAISE … : P0001, 22023, 23514) : messages français du serveur.
   if (error.message && (error.code === 'P0001' || error.code === '22023' || error.code === '23514')) return error.message;
   return fallback;
@@ -268,47 +232,6 @@ export async function saveAdminPromotion(input: PromotionInput): Promise<{ id?: 
 export async function setAdminPromotionStatus(id: string, status: Exclude<PromotionStatus, 'draft'>): Promise<{ error?: string }> {
   const { error } = await supabase.rpc('admin_promotion_set_status', { p_id: id, p_status: status });
   return error ? { error: friendlyError(error, 'Changement de statut impossible. Réessayez.') } : {};
-}
-
-function mapCompensation(row: Raw): PromotionCompensation {
-  return {
-    id: String(row.id),
-    orderId: strOrNull(pick(row, 'order_id')),
-    orderNumber: strOrNull(pick(row, 'order_number')),
-    shopId: strOrNull(pick(row, 'shop_id')),
-    shopName: strOrNull(pick(row, 'shop_name')) ?? 'Boutique',
-    amount: num(row.amount),
-    status: (row.status as CompensationStatus) ?? 'due',
-    paidAt: strOrNull(pick(row, 'paid_at')),
-    paidMethod: (strOrNull(pick(row, 'paid_method')) as CompensationMethod | null),
-    paidReference: strOrNull(pick(row, 'paid_reference')),
-    note: strOrNull(row.note),
-    createdAt: strOrNull(pick(row, 'created_at')),
-    promotionName: strOrNull(pick(row, 'promotion_name')),
-    sellerShare: numOrNull(pick(row, 'seller_share')),
-    grossAllocation: numOrNull(pick(row, 'gross_allocation')),
-    payoutOrangeMoney: strOrNull(pick(row, 'payout_orange_money')),
-    payoutWave: strOrNull(pick(row, 'payout_wave')),
-  };
-}
-
-export async function fetchAdminCompensations(status: CompensationStatus | null): Promise<ListResult<PromotionCompensation>> {
-  const { data, error } = await supabase.rpc('admin_promotion_compensations', { p_status: status });
-  if (error) {
-    if (isRpcMissing(error) || isModuleMissing(error)) return { missing: true };
-    return { missing: false, items: [], error: friendlyError(error, 'Impossible de charger les montants à reverser. Réessayez.') };
-  }
-  return { missing: false, items: asArray(data, 'compensations').map(mapCompensation) };
-}
-
-export async function markCompensationsPaid(ids: string[], method: CompensationMethod, reference: string, note: string): Promise<{ error?: string }> {
-  const { error } = await supabase.rpc('admin_mark_compensations_paid', {
-    p_ids: ids,
-    p_method: method,
-    p_reference: reference.trim() || null,
-    p_note: note.trim() || null,
-  });
-  return error ? { error: friendlyError(error, 'Impossible d’enregistrer le paiement. Réessayez.') } : {};
 }
 
 /** Boutiques actives (hors boutiques supprimées), pour les cibles d'une campagne. */
