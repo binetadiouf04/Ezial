@@ -58,10 +58,17 @@ T tests/20-migration.sql
 echo "== Migration Wave + retrait du test : appliquée deux fois (idempotence)"
 P -f $SQL/abonnement-wave.sql >/dev/null
 P -f $SQL/abonnement-wave.sql >/dev/null
+echo "== Fermeture des commandes jusqu'au lancement : appliquée deux fois, puis ouverte pour les autres tests"
+P -f $SQL/commandes-ouverture.sql >/dev/null
+P -f $SQL/commandes-ouverture.sql >/dev/null
+P -c "update public.payment_settings set ordering_opens_at = now() - interval '1 day'" >/dev/null
 echo "== Tests fonctionnels"
 for t in tests/3*.sql; do T "$t"; done
 echo "-- tests/80-concurrence.sh"; ./tests/80-concurrence.sh || true
 
+P -f $SQL/commandes-ouverture-retour.sql >/dev/null
+P -f $SQL/commandes-ouverture-retour.sql >/dev/null
+echo "OK    : retour arrière des commandes fermées rejoué deux fois sans erreur"
 echo "== Retour arrière : refusé tant qu'un paiement confirmé existe"
 P -c "select tests.reset_abo()" >/dev/null
 P -c "select tests.attempt(tests.mkshop())" >/dev/null
