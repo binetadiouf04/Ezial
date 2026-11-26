@@ -13,7 +13,7 @@ import { fetchSubscriptionAttemptState, startSubscriptionPayment, type Subscript
 //   * l'état réel est relu régulièrement et au retour dans l'application ; « Abonnement activé » seulement quand la base
 //     (après confirmation d'Orange) l'a dit ; jamais de second paiement créé automatiquement : un nouveau QR n'est créé
 //     que sur action explicite de la personne.
-export default function SubscriptionOrangePayment({ shopId, period, amount, onPaid, officialTest = false }: { shopId: string; period: SubscriptionPayPeriod; amount: number; onPaid: () => void; officialTest?: boolean }) {
+export default function SubscriptionOrangePayment({ shopId, period, amount, onPaid }: { shopId: string; period: SubscriptionPayPeriod; amount: number; onPaid: () => void }) {
   const launchKey = `abo-${shopId}`;
   const [now, setNow] = useState(() => Date.now());
   const [attempt, setAttempt] = useState<SubscriptionAttemptState | null>(null);
@@ -38,7 +38,8 @@ export default function SubscriptionOrangePayment({ shopId, period, amount, onPa
   const refresh = useCallback(async () => {
     const latest = await fetchSubscriptionAttemptState(shopId);
     if (latest === undefined) return; // lecture impossible : on garde l'état connu
-    setAttempt(latest);
+    // Une tentative en attente ou échouée d'un autre moyen (Wave) ne concerne pas cet écran.
+    setAttempt(latest && latest.state !== 'paid' && latest.provider !== 'orange_money' ? null : latest);
     setLoaded(true);
   }, [shopId]);
 
@@ -75,11 +76,12 @@ export default function SubscriptionOrangePayment({ shopId, period, amount, onPa
     const res = await startSubscriptionPayment(shopId, period);
     setLoading(false);
     if ('error' in res) { setError(res.error); void refresh(); return; }
+    if (!('qr' in res)) { setError('Orange Money n’a pas renvoyé de QR code. Réessayez dans un instant.'); return; }
     forgetLaunch(launchKey);
     setLaunch(null);
     setShowQr(false);
     setQr(res.qr);
-    setAttempt({ attemptId: res.qr.transactionId, state: 'pending', period, expiresAt: res.qr.validUntil, createdAt: new Date().toISOString() });
+    setAttempt({ attemptId: res.qr.transactionId, state: 'pending', period, provider: 'orange_money', expiresAt: res.qr.validUntil, createdAt: new Date().toISOString() });
     setLoaded(true);
   }, [shopId, period, launchKey, refresh]);
 
@@ -113,10 +115,8 @@ export default function SubscriptionOrangePayment({ shopId, period, amount, onPa
       <div className="card flex items-start gap-3 p-5" role="status" aria-live="polite">
         <CheckCircle2 size={22} className="mt-0.5 flex-shrink-0 text-green-700" />
         <div>
-          <p className="text-base font-semibold text-ink">{officialTest ? 'Paiement reçu, merci !' : 'Abonnement activé, merci !'}</p>
-          <p className="mt-0.5 text-sm text-ink/60">{officialTest
-            ? `Orange Money a confirmé votre paiement de test de ${price}. La boutique officielle reste Ezial Plus : rien ne change pour elle.`
-            : `Orange Money a confirmé votre paiement de ${price}. Votre abonnement Ezial Plus est actif.`}</p>
+          <p className="text-base font-semibold text-ink">Abonnement activé, merci !</p>
+          <p className="mt-0.5 text-sm text-ink/60">Orange Money a confirmé votre paiement de {price}. Votre abonnement Ezial Plus est actif.</p>
         </div>
       </div>
     );

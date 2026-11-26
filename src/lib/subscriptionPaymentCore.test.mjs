@@ -17,3 +17,11 @@ test('textes de retour : « Abonnement activé, merci ! » seulement pour paid',
   assert.match(returnCopy('pending', 'annule').title, /non finalisé/);
   assert.ok(isSubscriptionPayState('paid') && !isSubscriptionPayState('confirmed'));
 });
+test('textes de retour : neutres, valables pour Wave comme pour Orange Money', () => {
+  assert.match(returnCopy('paid', 'retour').text, /Votre paiement a été confirmé/);
+  for (const s of ['paid', 'pending', 'failed', 'expired', 'loading', 'neutral']) {
+    assert.doesNotMatch(returnCopy(s, 'retour').text, /Orange Money a confirmé|QR/);
+  }
+  assert.match(returnCopy('pending', 'retour').text, /Wave ou Orange Money/);
+  assert.match(returnCopy('neutral', null).text, /Wave ou Orange Money/);
+});

@@ -71,7 +71,7 @@ export default function AdminSubscriptions() {
                 <div key={`${r.kind}-${r.id}`} className="p-4">
                   <div className="flex flex-wrap items-start justify-between gap-2">
                     <div className="min-w-0">
-                      <p className="text-sm font-medium text-ink">{r.shopName} · {formatFcfa(r.amount)} · {r.billingPeriod === 'annual' ? 'annuel' : r.billingPeriod === 'test_25' ? 'TEST 1 jour' : 'trimestriel'}</p>
+                      <p className="text-sm font-medium text-ink">{r.shopName} · {formatFcfa(r.amount)} · {r.billingPeriod === 'annual' ? 'annuel' : 'trimestriel'}</p>
                       <p className="mt-0.5 text-xs text-ink/50">{PROVIDER_LABELS[r.provider]} · {formatDateTime(r.createdAt)}{r.reference ? <> · réf. <span className="font-mono">{r.reference}</span></> : null}</p>
                       {r.state === 'confirmed' && r.periodEnd && <p className="mt-0.5 text-xs text-ink/50">Actif jusqu’au {formatDateTime(r.periodEnd)}{r.manual ? ' · confirmé manuellement' : r.kind === 'legacy' ? '' : ' · activé automatiquement'}</p>}
                       {r.failureReason && r.state !== 'confirmed' && <p className="mt-0.5 text-xs text-red-700">{r.failureReason}</p>}

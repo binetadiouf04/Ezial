@@ -1,24 +1,24 @@
-// Supabase Edge Function — lance le paiement Orange Money (« QR CODE – OM ») de l'abonnement Ezial Plus
-// d'une boutique et renvoie le QR et les liens d'ouverture de l'application (Max It / Orange Money).
+// Supabase Edge Function — lance le paiement de l'abonnement Ezial Plus d'une boutique, au choix par Wave (page de paiement
+// Wave) ou Orange Money (« QR CODE – OM » : QR et liens d'ouverture de Max It / Orange Money).
 //
 // Même mécanique que payment-initiate (commandes), sur la table subscription_payment_attempts :
 //   * l'identité vient UNIQUEMENT du jeton, re-vérifié par getUser() ; la boutique doit appartenir à l'appelant ;
 //   * le MONTANT n'est jamais lu de la requête : la base le recalcule depuis la périodicité demandée
 //     (subscription_plan_price : 6 000 FCFA / 3 mois, 20 000 FCFA / an) ;
-//   * actif seulement si les secrets ORANGE_MONEY_* sont présents ET (payment_settings.orange_money_enabled = true
-//     OU compte listé dans payment_testers) ; sinon 503 « not_available » sans rien écrire ;
+//   * actif seulement si les secrets du moyen (ORANGE_MONEY_* / WAVE_*) sont présents ET (interrupteur du moyen allumé
+//     OU compte testeur de ce moyen dans payment_testers) ; sinon 503 « not_available » sans rien écrire ;
 //   * QR valable 30 minutes ; adresse de retour avec référence non devinable (ref={transactionId}) vers une page
 //     lisible sans connexion (/abonnement/retour) ;
-//   * l'abonnement est activé UNIQUEMENT par la base, à la confirmation d'Orange (payment-webhook / payments-reconcile).
+//   * l'abonnement est activé UNIQUEMENT par la base, à la confirmation du fournisseur (payment-webhook / payments-reconcile).
 //
 // Appelée par le site (supabase.functions.invoke) avec la session du vendeur.
 // Déploiement : supabase functions deploy subscription-payment-initiate   (vérification JWT de la plateforme ACTIVE)
-// Corps : { shopId: uuid, billingPeriod: 'quarterly' | 'annual' | 'test_25' (testeurs seulement), provider: 'orange_money' }.
-// Secrets : ceux de payment-initiate (SUPABASE_*, PAYMENTS_ENVIRONMENT, ORANGE_MONEY_*) ; facultatifs :
+// Corps : { shopId: uuid, billingPeriod: 'quarterly' | 'annual', provider: 'wave' | 'orange_money' }.
+// Secrets : ceux de payment-initiate (SUPABASE_*, PAYMENTS_ENVIRONMENT, ORANGE_MONEY_*, WAVE_*) ; facultatifs :
 //   PAYMENTS_SUBSCRIPTION_RETURN_URL / PAYMENTS_SUBSCRIPTION_CANCEL_URL (« {transactionId} » est remplacé).
 import { createClient } from 'npm:@supabase/supabase-js@2';
 import { UserFacingError, createAdapters, isProvider, isUuid } from '../_shared/payments/core.ts';
-import type { CheckoutData, InitiateErrorCode, PaymentSettings } from '../_shared/payments/core.ts';
+import type { CheckoutData, InitiateErrorCode } from '../_shared/payments/core.ts';
 import { initiateSubscriptionPayment, isBillingPeriod } from '../_shared/payments/subscription.ts';
 import type { BillingPeriod, SubscriptionAttemptRow, SubscriptionInitiateDb } from '../_shared/payments/subscription.ts';
 import { paymentsEnv } from '../_shared/payments/vault.ts';
@@ -106,21 +106,19 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { data: settings, error: settingsError } = await admin
-      .from('payment_settings')
-      .select('collections_enabled, payouts_enabled, orange_money_enabled')
-      .maybeSingle();
+    // Le moyen est ouvert si son interrupteur est allumé (orange_money_enabled / wave_enabled) OU si le compte est testeur
+    // de ce moyen (payment_testers). La base applique la même règle (subscription_payments_create_attempt) : ce contrôle
+    // ne sert qu'à répondre « en cours d'activation » sans rien créer. Lecture « * » : les colonnes de Wave n'existent
+    // qu'après la migration Wave ; absentes, Wave est simplement fermé.
+    const { data: settings, error: settingsError } = await admin.from('payment_settings').select('*').maybeSingle();
     if (settingsError) throw new Error(settingsError.message);
-
-    // Test réservé : interrupteur général éteint, mais Orange Money ouvert aux comptes listés dans payment_testers
-    // (la base applique la même règle : subscription_payments_create_attempt).
-    // Plan de test « test_25 » (25 FCFA, 1 jour) : comptes testeurs seulement (la base applique la même règle).
-    const { data: testerRow } = await admin.from('payment_testers').select('user_id').eq('user_id', userId).maybeSingle();
-    const isTester = !!testerRow;
-    let effectiveSettings = (settings as PaymentSettings | null) ?? { collections_enabled: false, payouts_enabled: false };
-    if (provider === 'orange_money' && !effectiveSettings.orange_money_enabled) {
-      const { data: tester, error: testerError } = await admin.from('payment_testers').select('user_id').eq('user_id', userId).maybeSingle();
-      if (!testerError && tester) effectiveSettings = { ...effectiveSettings, orange_money_enabled: true };
+    const flag = provider === 'wave' ? (settings as Record<string, unknown> | null)?.wave_enabled : (settings as Record<string, unknown> | null)?.orange_money_enabled;
+    let enabled = flag === true;
+    if (!enabled) {
+      const { data: tester, error: testerError } = await admin.from('payment_testers').select('*').eq('user_id', userId).maybeSingle();
+      const providers = (tester as { providers?: unknown } | null)?.providers;
+      // Sans colonne « providers » (avant la migration Wave), les testeurs existants sont des testeurs Orange Money.
+      enabled = !testerError && !!tester && (Array.isArray(providers) ? providers.includes(provider) : provider === 'orange_money');
     }
 
     const adapters = createAdapters(await paymentsEnv(admin, Deno.env.toObject()));
@@ -135,12 +133,12 @@ Deno.serve(async (req) => {
         returnUrl: Deno.env.get('PAYMENTS_SUBSCRIPTION_RETURN_URL') || DEFAULT_RETURN_URL,
         cancelUrl: Deno.env.get('PAYMENTS_SUBSCRIPTION_CANCEL_URL') || DEFAULT_CANCEL_URL,
       },
-      { settings: effectiveSettings, isTester },
+      { enabled },
     );
 
     if (result.ok) {
       return json({
-        transactionId: result.transactionId, checkoutData: result.checkoutData, expiresAt: result.expiresAt,
+        transactionId: result.transactionId, checkoutData: result.checkoutData, checkoutUrl: result.checkoutUrl, expiresAt: result.expiresAt,
         amount: result.amount, billingPeriod: result.billingPeriod,
       });
     }

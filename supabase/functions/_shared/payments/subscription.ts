@@ -1,21 +1,20 @@
 import { UserFacingError, fillUrl, isUuid, redactPhones } from './core.ts';
-import type { CheckoutData, CollectionAdapter, InitiateErrorCode, PaymentSettings, Provider } from './core.ts';
+import type { CheckoutData, CollectionAdapter, InitiateErrorCode, Provider } from './core.ts';
 
-// Ezial — lancement du paiement d'un ABONNEMENT Ezial Plus (boutique) avec Orange Money « QR CODE – OM ».
+// Ezial — lancement du paiement d'un ABONNEMENT Ezial Plus (boutique) avec Wave (page de paiement) ou Orange Money (« QR CODE – OM »).
 //
 // Même mécanique que le paiement d'une commande (initiatePayment dans core.ts), sur la table dédiée
 // subscription_payment_attempts : aucune des fonctions des commandes n'est utilisée ni modifiée.
 //   * Le MONTANT n'est jamais lu de la requête : la base le recalcule (subscription_plan_price) à partir
 //     de la périodicité demandée, et vérifie que la boutique appartient à l'appelant.
-//   * QR valable 30 minutes. Interrupteur : payment_settings.orange_money_enabled OU compte testeur
-//     (vérifié aussi par la base). Wave : même structure plus tard ; refusé pour l'instant.
-//   * Le site ne conclut jamais « payé » : l'activation est faite par la base à la confirmation d'Orange
+//   * QR / page de paiement valables 30 minutes. Interrupteur propre à chaque moyen (Orange Money : orange_money_enabled,
+//     Wave : wave_enabled) OU compte testeur de ce moyen ; vérifié aussi par la base.
+//   * Le site ne conclut jamais « payé » : l'activation est faite par la base à la confirmation du fournisseur
 //     (payment-webhook / payments-reconcile -> subscription_payments_record_verification).
 // TypeScript pur (testé par subscription.test.ts).
 
-// 'test_25' : plan de TEST (25 FCFA, 1 jour), réservé aux comptes listés dans payment_testers (vérifié ici ET par la base).
-export type BillingPeriod = 'quarterly' | 'annual' | 'test_25';
-export const BILLING_PERIODS: readonly BillingPeriod[] = ['quarterly', 'annual', 'test_25'];
+export type BillingPeriod = 'quarterly' | 'annual';
+export const BILLING_PERIODS: readonly BillingPeriod[] = ['quarterly', 'annual'];
 
 export function isBillingPeriod(value: unknown): value is BillingPeriod {
   return typeof value === 'string' && (BILLING_PERIODS as readonly string[]).includes(value);
@@ -24,7 +23,7 @@ export function isBillingPeriod(value: unknown): value is BillingPeriod {
 /** Validité du QR d'abonnement : 30 minutes. */
 export const SUBSCRIPTION_QR_VALIDITY_SECONDS = 1800;
 
-export const SUBSCRIPTION_NOT_AVAILABLE_MESSAGE = 'Le paiement de l’abonnement avec Orange Money est en cours d’activation.';
+export const SUBSCRIPTION_NOT_AVAILABLE_MESSAGE = 'Le paiement de l’abonnement est en cours d’activation pour ce moyen de paiement.';
 
 /** Ligne renvoyée par subscription_payments_create_attempt. */
 export interface SubscriptionAttemptRow {
@@ -66,10 +65,12 @@ export interface SubscriptionInitiateInput {
 }
 
 export type SubscriptionInitiateResult =
-  | { ok: true; transactionId: string; checkoutData: CheckoutData | null; expiresAt: string | null; amount: number; billingPeriod: BillingPeriod }
+  | { ok: true; transactionId: string; checkoutData: CheckoutData | null; checkoutUrl: string | null; expiresAt: string | null; amount: number; billingPeriod: BillingPeriod }
   | { ok: false; code: InitiateErrorCode; message: string };
 
-const PROVIDER_ERROR = 'Orange Money n’a pas pu ouvrir la page de paiement. Réessayez dans un instant.';
+function providerError(provider: Provider): string {
+  return `${provider === 'wave' ? 'Wave' : 'Orange Money'} n’a pas pu ouvrir la page de paiement. Réessayez dans un instant.`;
+}
 const INTERNAL_ERROR = 'Le paiement n’a pas pu être lancé. Réessayez dans un instant.';
 
 function isHttpsUrl(value: string): boolean {
@@ -90,14 +91,13 @@ export async function initiateSubscriptionPayment(
   db: SubscriptionInitiateDb,
   adapter: CollectionAdapter,
   input: SubscriptionInitiateInput,
-  opts: { settings?: Pick<PaymentSettings, 'collections_enabled' | 'orange_money_enabled'>; /** Le compte est-il dans payment_testers ? (plan test_25) */ isTester?: boolean; log?: (line: string) => void; now?: () => number } = {},
+  opts: { /** Le moyen de paiement est-il ouvert (interrupteur du moyen OU compte testeur de ce moyen) ? Contrôle aussi fait par la base. */ enabled?: boolean; log?: (line: string) => void; now?: () => number } = {},
 ): Promise<SubscriptionInitiateResult> {
   const log = opts.log ?? ((line: string) => console.log(line));
   const now = opts.now ?? Date.now;
 
-  // Seul Orange Money est ouvert pour l'abonnement ; Wave suivra avec la même structure.
-  if (input.provider !== 'orange_money' || adapter.provider !== 'orange_money') {
-    return { ok: false, code: 'not_available', message: 'Le paiement de l’abonnement est disponible avec Orange Money.' };
+  if ((input.provider !== 'orange_money' && input.provider !== 'wave') || adapter.provider !== input.provider) {
+    return { ok: false, code: 'invalid_request', message: 'Moyen de paiement inconnu.' };
   }
   // 1. Rien n'est créé tant que l'adaptateur n'est pas prêt ni l'interrupteur allumé.
   const readiness = adapter.status();
@@ -105,7 +105,7 @@ export async function initiateSubscriptionPayment(
     log(`[paiements] abonnement : encaissement ${adapter.provider} non prêt : ${readiness.reason ?? 'non configuré'}`);
     return { ok: false, code: 'not_available', message: SUBSCRIPTION_NOT_AVAILABLE_MESSAGE };
   }
-  if (opts.settings && opts.settings.orange_money_enabled !== true) {
+  if (opts.enabled === false) {
     return { ok: false, code: 'not_available', message: SUBSCRIPTION_NOT_AVAILABLE_MESSAGE };
   }
   if (!isHttpsUrl(input.returnUrl) || !isHttpsUrl(input.cancelUrl)) {
@@ -114,10 +114,6 @@ export async function initiateSubscriptionPayment(
   }
   if (!isUuid(input.shopId) || !isUuid(input.userId) || !isBillingPeriod(input.billingPeriod)) {
     return { ok: false, code: 'invalid_request', message: 'Demande de paiement invalide.' };
-  }
-
-  if (input.billingPeriod === 'test_25' && opts.isTester !== true) {
-    return { ok: false, code: 'refused', message: 'Ce paiement de test est réservé aux comptes testeurs.' };
   }
 
   // 2. Tentative côté serveur (montant = prix du plan en base, boutique de l'appelant).
@@ -129,13 +125,14 @@ export async function initiateSubscriptionPayment(
     log(`[paiements] abonnement : création de tentative impossible : ${errorText(err)}`);
     return { ok: false, code: 'internal_error', message: INTERNAL_ERROR };
   }
-  const done = (data: CheckoutData | null, expiresAt: string | null): SubscriptionInitiateResult => ({
-    ok: true, transactionId: attempt.id, checkoutData: data, expiresAt, amount: attempt.amount, billingPeriod: attempt.billing_period,
+  const done = (data: CheckoutData | null, url: string | null, expiresAt: string | null): SubscriptionInitiateResult => ({
+    ok: true, transactionId: attempt.id, checkoutData: data, checkoutUrl: url, expiresAt, amount: attempt.amount, billingPeriod: attempt.billing_period,
   });
 
-  // QR déjà ouvert et encore valable : réutilisé (jamais de second QR inutile).
-  if (attempt.status === 'pending' && attempt.checkout_data && (!attempt.expires_at || Date.parse(attempt.expires_at) > now())) {
-    return done(attempt.checkout_data, attempt.expires_at);
+  // QR (Orange Money) ou page de paiement (Wave) déjà ouverts et encore valables : réutilisés (jamais de second paiement inutile).
+  if (attempt.status === 'pending' && (!attempt.expires_at || Date.parse(attempt.expires_at) > now())) {
+    if (input.provider === 'orange_money' && attempt.checkout_data) return done(attempt.checkout_data, null, attempt.expires_at);
+    if (input.provider === 'wave' && attempt.checkout_url && isHttpsUrl(attempt.checkout_url)) return done(null, attempt.checkout_url, attempt.expires_at);
   }
 
   try {
@@ -152,20 +149,30 @@ export async function initiateSubscriptionPayment(
     });
     if (!checkout.ok) {
       const error = redactPhones(checkout.error).slice(0, 300);
-      log(`[paiements] abonnement ${attempt.id} : QR refusé par ${adapter.provider} (${error})`);
+      log(`[paiements] abonnement ${attempt.id} : paiement refusé par ${adapter.provider} (${error})`);
       // Refus définitif : tentative close ; erreur passagère : elle reste ouverte et sera réutilisée.
       if (!checkout.retryable) await db.fail(attempt.id, 'failed', error);
-      return { ok: false, code: 'provider_error', message: PROVIDER_ERROR };
+      return { ok: false, code: 'provider_error', message: providerError(input.provider) };
+    }
+    if (input.provider === 'wave') {
+      const url = checkout.checkoutUrl;
+      if (!url || !isHttpsUrl(url) || !checkout.providerReference) {
+        log(`[paiements] abonnement ${attempt.id} : réponse incomplète de ${adapter.provider}`);
+        return { ok: false, code: 'provider_error', message: providerError(input.provider) };
+      }
+      await db.setPending(attempt.id, checkout.providerReference, url, checkout.expiresAt);
+      log(`[paiements] abonnement ${attempt.id} : page Wave créée (${attempt.amount} FCFA, ${attempt.billing_period})`);
+      return done(null, url, checkout.expiresAt);
     }
     const hasQr = !!checkout.checkoutData && (!!checkout.checkoutData.qrCode || !!checkout.checkoutData.deepLink);
     if (!hasQr || !checkout.providerReference) {
       log(`[paiements] abonnement ${attempt.id} : réponse incomplète de ${adapter.provider}`);
-      return { ok: false, code: 'provider_error', message: PROVIDER_ERROR };
+      return { ok: false, code: 'provider_error', message: providerError(input.provider) };
     }
     await db.saveCheckoutData(attempt.id, checkout.checkoutData as CheckoutData);
     await db.setPending(attempt.id, checkout.providerReference, null, checkout.expiresAt);
     log(`[paiements] abonnement ${attempt.id} : QR ${adapter.provider} créé (${attempt.amount} FCFA, ${attempt.billing_period})`);
-    return done(checkout.checkoutData ?? null, checkout.expiresAt);
+    return done(checkout.checkoutData ?? null, null, checkout.expiresAt);
   } catch (err) {
     log(`[paiements] abonnement ${attempt.id} : erreur pendant le lancement : ${errorText(err)}`);
     return { ok: false, code: 'internal_error', message: INTERNAL_ERROR };

@@ -17,7 +17,7 @@ export interface WaveSession {
   validUntil: string;   // fin de validité de la session (30 minutes chez Wave)
 }
 
-function toSession(transactionId: unknown, url: unknown, expiresAt: unknown): WaveSession | null {
+export function toSession(transactionId: unknown, url: unknown, expiresAt: unknown): WaveSession | null {
   if (typeof transactionId !== 'string' || !transactionId || !isWaveLink(url)) return null;
   if (typeof expiresAt !== 'string' || Number.isNaN(Date.parse(expiresAt))) return null;
   return { transactionId, url, validUntil: expiresAt };
