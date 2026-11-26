@@ -5,7 +5,7 @@ import { parseReturnParams, RETURN_POLL_MS, RETURN_POLL_WINDOW_MS } from '@/lib/
 import { returnCopy, type SubscriptionPayState } from '@/lib/subscriptionPaymentCore';
 import { fetchSubscriptionReturnStatus } from '@/lib/supabaseSubscriptionPayment';
 
-// Page de retour après le paiement de l'abonnement Ezial Plus (adresse de retour Orange Money), lisible SANS connexion :
+// Page de retour après le paiement de l'abonnement Ezial Plus (adresse de retour Wave ou Orange Money), lisible SANS connexion :
 // sur iPhone, Max It rouvre Safari, qui n'a pas la session d'Ezial Pro. L'état vient de subscription_payment_return_status
 // (uuid « ref= » non devinable ; aucun montant, nom ni numéro). « Abonnement activé » uniquement si la base répond « paid ».
 type Result = { state: SubscriptionPayState; periodEnd: string | null } | 'unknown' | 'unavailable' | 'error';
@@ -58,7 +58,7 @@ export default function SubscriptionReturnPage() {
             {checking ? <Loader2 size={15} className="animate-spin" /> : <RefreshCw size={15} />} Vérifier à nouveau
           </button>
         )}
-        {(state === 'failed' || state === 'expired') && <p className="mt-3 text-sm text-ink/60">Un montant a été débité ? <button type="button" onClick={() => navigate('/info/contact')} className="font-medium text-burgundy hover:underline">Contactez-nous</button> : nous vérifions avec Orange Money.</p>}
+        {(state === 'failed' || state === 'expired') && <p className="mt-3 text-sm text-ink/60">Un montant a été débité ? <button type="button" onClick={() => navigate('/info/contact')} className="font-medium text-burgundy hover:underline">Contactez-nous</button> : nous vérifions avec Wave ou Orange Money.</p>}
       </section>
       <section className="card mt-4 p-5">
         <h2 className="flex items-center gap-2 text-base font-semibold text-ink"><Crown size={18} strokeWidth={1.5} className="text-burgundy" aria-hidden="true" /> Retourner dans Ezial Pro</h2>

@@ -35,7 +35,7 @@ function fakeDb(row: Partial<SubscriptionAttemptRow> = {}, err?: Error) {
   return { db, calls };
 }
 const input = { shopId: SHOP, billingPeriod: 'quarterly' as const, provider: 'orange_money' as const, userId: USER, returnUrl: RET, cancelUrl: CAN };
-const on = { settings: { collections_enabled: false, orange_money_enabled: true }, ...quiet };
+const on = { enabled: true, ...quiet };
 
 test('QR créé : montant de la base, validité 30 min, adresse de retour avec ref non devinable', async () => {
   const a = new Fake(); const { db, calls } = fakeDb();
@@ -53,31 +53,43 @@ test('le montant ne vient jamais de la requête : champ amount ignoré', async (
   const r = await initiateSubscriptionPayment(db, a, { ...input, billingPeriod: 'annual', amount: 1 } as never, on);
   assert.ok(r.ok && r.amount === 20000); assert.equal(a.checkouts[0].amount, 20000);
 });
-test('plan de test test_25 : refusé hors testeur sans rien écrire, accepté pour un testeur (25 FCFA)', async () => {
-  const a = new Fake(); let f = fakeDb();
-  let r = await initiateSubscriptionPayment(f.db, a, { ...input, billingPeriod: 'test_25' }, { ...on, isTester: false });
-  assert.ok(!r.ok && r.code === 'refused' && /testeurs/.test(r.message)); assert.deepEqual(f.calls, []);
-  r = await initiateSubscriptionPayment(f.db, a, { ...input, billingPeriod: 'test_25' }, on);
-  assert.ok(!r.ok && f.calls.length === 0);
-  f = fakeDb({ amount: 25, billing_period: 'test_25' });
-  r = await initiateSubscriptionPayment(f.db, a, { ...input, billingPeriod: 'test_25' }, { ...on, isTester: true });
-  assert.ok(r.ok && r.amount === 25 && a.checkouts[0].amount === 25 && a.checkouts[0].validitySeconds === 1800);
-  assert.ok(isBillingPeriod('test_25'));
+test('le plan de test test_25 n\'existe plus', () => {
+  assert.ok(!isBillingPeriod('test_25') && isBillingPeriod('quarterly') && isBillingPeriod('annual'));
+});
+test('Wave : page de paiement créée (session et adresse enregistrées), réutilisée tant qu\'elle est valable', async () => {
+  const URL = 'https://pay.wave.com/c/cos-ABC123';
+  const w = Object.assign(new Fake(), { provider: 'wave' as Provider, result: { ok: true, providerReference: 'cos-ABC123', checkoutUrl: URL, expiresAt: '2030-01-01T00:00:00.000Z' } as CheckoutResult });
+  const wi = { ...input, provider: 'wave' as const };
+  let f = fakeDb({ provider: 'wave' });
+  let r = await initiateSubscriptionPayment(f.db, w, wi, on);
+  assert.ok(r.ok && r.checkoutUrl === URL && r.checkoutData === null && r.amount === 6000);
+  assert.deepEqual(f.calls, ['create', 'pending']); assert.equal(w.checkouts[0].amount, 6000);
+  assert.equal(w.checkouts[0].returnUrl, `https://www.ezial.net/abonnement/retour?paiement=retour&ref=${ATT}`);
+  f = fakeDb({ provider: 'wave', status: 'pending', checkout_url: URL, expires_at: '2030-01-01T00:00:00.000Z' });
+  w.checkouts.length = 0;
+  r = await initiateSubscriptionPayment(f.db, w, wi, on);
+  assert.ok(r.ok && r.checkoutUrl === URL); assert.equal(w.checkouts.length, 0); assert.deepEqual(f.calls, ['create']);
+  // adresse non conforme (pas https) ou réponse sans session : refus, rien n'est enregistré comme « en attente »
+  for (const bad of [{ ok: true, providerReference: 'cos-1', checkoutUrl: 'http://x', expiresAt: null }, { ok: true, providerReference: 'cos-1', checkoutUrl: null, expiresAt: null }] as CheckoutResult[]) {
+    const w2 = Object.assign(new Fake(), { provider: 'wave' as Provider, result: bad }); f = fakeDb({ provider: 'wave' });
+    r = await initiateSubscriptionPayment(f.db, w2, wi, on);
+    assert.ok(!r.ok && r.code === 'provider_error' && /Wave/.test(r.message)); assert.deepEqual(f.calls, ['create']);
+  }
 });
 test('QR encore valable réutilisé : aucun second QR', async () => {
   const a = new Fake(); const { db, calls } = fakeDb({ status: 'pending', checkout_data: DATA, expires_at: '2030-01-01T00:00:00.000Z' });
   const r = await initiateSubscriptionPayment(db, a, input, on);
   assert.ok(r.ok); assert.equal(a.checkouts.length, 0); assert.deepEqual(calls, ['create']);
 });
-test('interrupteur éteint, adaptateur non prêt, Wave : rien n\'est écrit', async () => {
+test('moyen fermé, adaptateur non prêt, adaptateur d\'un autre moyen : rien n\'est écrit', async () => {
   for (const [adapter, opts, inp] of [
-    [new Fake(), { settings: { collections_enabled: false, orange_money_enabled: false }, ...quiet }, input],
+    [new Fake(), { enabled: false, ...quiet }, input],
     [Object.assign(new Fake(), { ready: false }), on, input],
-    [new Fake(), on, { ...input, provider: 'wave' as const }],
+    [Object.assign(new Fake(), { provider: 'wave' as Provider }), on, input],
   ] as const) {
     const { db, calls } = fakeDb();
     const r = await initiateSubscriptionPayment(db, adapter, inp, opts);
-    assert.ok(!r.ok && r.code === 'not_available'); assert.deepEqual(calls, []);
+    assert.ok(!r.ok && (r.code === 'not_available' || r.code === 'invalid_request')); assert.deepEqual(calls, []);
   }
 });
 test('requête invalide et adresses non https', async () => {
@@ -93,14 +105,10 @@ test('refus de la base (boutique d\'un autre) : message métier, 409', async () 
   const r = await initiateSubscriptionPayment(db, new Fake(), input, on);
   assert.ok(!r.ok && r.code === 'refused' && r.message === 'Boutique introuvable.');
 });
-test('boutique officielle : le refus de la base (plans réels) est renvoyé tel quel ; test_25 testeur passe jusqu\'à la base', async () => {
-  const a = new Fake();
-  let f = fakeDb({}, new UserFacingError('La boutique officielle Ezial est déjà toujours Ezial Plus.'));
-  let r = await initiateSubscriptionPayment(f.db, a, input, on);
+test('boutique officielle : le refus de la base est renvoyé tel quel', async () => {
+  const f = fakeDb({}, new UserFacingError('La boutique officielle Ezial est déjà toujours Ezial Plus.'));
+  const r = await initiateSubscriptionPayment(f.db, new Fake(), input, on);
   assert.ok(!r.ok && r.code === 'refused' && /déjà toujours Ezial Plus/.test(r.message));
-  f = fakeDb({ amount: 25, billing_period: 'test_25' });
-  r = await initiateSubscriptionPayment(f.db, a, { ...input, billingPeriod: 'test_25' }, { ...on, isTester: true });
-  assert.ok(r.ok && r.amount === 25 && f.calls[0] === 'create');
 });
 test('Orange refuse : tentative close si définitif, gardée si passager', async () => {
   const a = new Fake(); a.result = { ok: false, retryable: false, error: 'refusé' };

@@ -1,14 +1,14 @@
 import { supabase } from './supabaseClient';
 import { isRpcMissing } from './supabaseFeatureDetect';
 
-// Paiements d'abonnement Ezial Plus (administration). Les abonnements sont activés tout seuls à la confirmation d'Orange :
+// Paiements d'abonnement Ezial Plus (administration). Les abonnements sont activés tout seuls à la confirmation de l'opérateur (Wave ou Orange Money) :
 // cette liste sert à SUIVRE (moyen, état) et, pour les cas d'exception seulement (paiement reçu chez Orange / Wave mais non
 // rapproché), à confirmer ou refuser à la main, avec la référence de la transaction. Jamais d'espèces.
 export type SubscriptionPaymentState = 'confirmed' | 'pending' | 'expired' | 'failed' | 'duplicate' | 'review' | 'replaced';
 
 export interface AdminSubscriptionPayment {
   id: string; kind: 'online' | 'legacy'; shopId: string; shopName: string; provider: 'orange_money' | 'wave';
-  billingPeriod: 'quarterly' | 'annual' | 'test_25'; amount: number; state: SubscriptionPaymentState; createdAt: string;
+  billingPeriod: 'quarterly' | 'annual'; amount: number; state: SubscriptionPaymentState; createdAt: string;
   confirmedAt: string | null; periodEnd: string | null; reference: string | null; failureReason: string | null;
   manual: boolean; canConfirm: boolean; adminNote: string | null;
 }
@@ -23,7 +23,7 @@ type Raw = Record<string, unknown>;
 export function mapSubscriptionPayment(r: Raw): AdminSubscriptionPayment {
   return {
     id: String(r.id), kind: r.kind === 'legacy' ? 'legacy' : 'online', shopId: String(r.shop_id ?? ''), shopName: String(r.shop_name ?? ''),
-    provider: r.provider === 'wave' ? 'wave' : 'orange_money', billingPeriod: r.billing_period === 'annual' ? 'annual' : r.billing_period === 'test_25' ? 'test_25' : 'quarterly',
+    provider: r.provider === 'wave' ? 'wave' : 'orange_money', billingPeriod: r.billing_period === 'annual' ? 'annual' : 'quarterly',
     amount: Number(r.amount) || 0, state: (r.state as SubscriptionPaymentState) ?? 'review', createdAt: String(r.created_at ?? ''),
     confirmedAt: (r.confirmed_at as string | null) ?? null, periodEnd: (r.period_end as string | null) ?? null,
     reference: (r.reference as string | null) ?? null, failureReason: (r.failure_reason as string | null) ?? null,

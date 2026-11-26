@@ -55,6 +55,7 @@ drop function if exists public.subscription_payments_fail(uuid, text, text);
 drop function if exists public.subscription_payments_confirm(uuid, text, integer);
 drop function if exists public.subscription_payments_record_verification(uuid, text, integer, text);
 drop function if exists public.subscription_payments_reconcile_candidates(integer);
+drop function if exists public.subscription_payments_reconcile_candidates(integer, text);   -- version avec moyen de paiement (abonnement-wave.sql)
 drop function if exists public.subscription_payment_return_status(uuid);
 drop function if exists public.seller_subscription_attempt_state(uuid);
 drop function if exists public.admin_subscription_payments(integer);

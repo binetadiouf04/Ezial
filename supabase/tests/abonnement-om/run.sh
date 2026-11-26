@@ -55,6 +55,9 @@ P -f $SQL/abonnement-om.sql >/dev/null
 P -f 20-aides.sql >/dev/null
 T tests/20-migration.sql
 
+echo "== Migration Wave + retrait du test : appliquée deux fois (idempotence)"
+P -f $SQL/abonnement-wave.sql >/dev/null
+P -f $SQL/abonnement-wave.sql >/dev/null
 echo "== Tests fonctionnels"
 for t in tests/3*.sql; do T "$t"; done
 echo "-- tests/80-concurrence.sh"; ./tests/80-concurrence.sh || true

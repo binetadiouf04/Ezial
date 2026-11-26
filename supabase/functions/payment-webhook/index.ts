@@ -80,9 +80,18 @@ const db: WebhookDb = {
     // Pas une commande : tentative de paiement d'ABONNEMENT (table subscription_payment_attempts). Table absente
     // (migration abonnement-om pas encore exécutée) ou lecture impossible : traité comme « introuvable », les commandes
     // ne sont jamais affectées.
+    // Orange Money : la référence est l'identifiant de la tentative. Wave : c'est l'identifiant de la session de paiement
+    // (provider_reference, enregistré à la création de la page).
     const sub = await supabase.from('subscription_payment_attempts').select('id, amount, status').eq('provider', provider).eq('id', providerReference).maybeSingle();
-    if (sub.error || !sub.data) return null;
-    return { ...(sub.data as { id: string; amount: number; status: string }), kind: 'subscription' as const };
+    if (sub.error) return null;
+    let row = sub.data as { id: string; amount: number; status: string } | null;
+    if (!row && provider === 'wave') {
+      const byRef = await supabase.from('subscription_payment_attempts').select('id, amount, status').eq('provider', provider).eq('provider_reference', providerReference).maybeSingle();
+      if (byRef.error) return null;
+      row = byRef.data as { id: string; amount: number; status: string } | null;
+    }
+    if (!row) return null;
+    return { ...row, kind: 'subscription' as const };
   },
   async recordVerification(transactionId: string, status: PaymentStatus, amount: number | null, providerTransactionId: string | null, kind?: AttemptKind) {
     if (kind === 'subscription') {
