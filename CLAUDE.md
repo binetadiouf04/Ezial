@@ -27,6 +27,7 @@ Utiliser des sous-agents pour aller plus vite dès qu'une tâche se découpe en 
 
 ## Règles permanentes
 
+- **Tests de régression à chaque ajout (demande de la personne, 26 nov. 2026)** : après tout ajout ou toute modification, lancer des tests de régression et pas seulement des tests de la nouveauté : `tsc -b`, lint, `npm run test:security`, build complet avec prérendu, et, si la base est touchée, le banc SQL concerné (`supabase/tests/<banc>/run.sh`, PostgreSQL local) qui rejoue aussi les parcours existants (commandes, paiements, abonnements). Ajouter un test pour chaque nouveau comportement, vérifier que les parcours voisins fonctionnent encore, et annoncer ce qui a été testé et ce qui ne l'a pas été.
 - Travailler sur la branche de développement. **Accord permanent de la personne (8 nov. 2026) : publier ses changements sans attendre son accord**, une fois typecheck, lint, build et tests passés, via une pull request fusionnée dans `main` (jamais de push direct sur `main`). Les règles sur les migrations SQL ci-dessous restent valables : une interface qui dépend d'une migration n'est publiée qu'après son exécution en production. Après chaque publication, dire à la personne ce qu'elle doit vérifier dans Cloudflare.
 - `www.ezial.net` : ne pas modifier le DNS ni la configuration du domaine.
 - Ne jamais contourner la RLS depuis le frontend ; la clé `service_role` ne doit jamais atteindre le frontend.
