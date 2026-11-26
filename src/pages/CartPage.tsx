@@ -10,9 +10,12 @@ import { Plus, Minus, Trash2, ShoppingBag, ChevronRight, ArrowLeftRight, Bookmar
 import PriceDisplay from '@/components/PriceDisplay';
 import SmartImage from '@/components/SmartImage';
 import { availableStock, lineStockIssue, lineStockMessage } from '@/lib/cartStock';
+import { useOrderingStatus, ORDERING_CLOSED_TITLE, ORDERING_CLOSED_TEXT } from '@/lib/orderingStatus';
 
 export default function CartPage() {
   const { cart, removeFromCart, updateQuantity, updateWaist, cartSubtotal, navigate, saveForLater, savedItems, moveToCart, removeFromSaved, catalogProducts } = useApp();
+  const ordering = useOrderingStatus();
+  const orderingClosed = ordering?.open === false;
   const hasMockItem = cart.some((item) => !isRealCatalogId(item.productId));
   // Baya sans mesure valide : on ne peut pas commander (le serveur revérifie aussi).
   const missingWaist = cart.some((item) => lineNeedsWaist(item, catalogProducts.find((p) => p.id === item.productId)));
@@ -145,7 +148,12 @@ export default function CartPage() {
                   Un article de votre panier est épuisé ou n'est plus disponible dans cette quantité : retirez-le ou réduisez la quantité pour commander.
                 </p>
               )}
-              <button onClick={() => navigate('/checkout')} disabled={hasMockItem || missingWaist || hasStockIssue} className="btn-primary w-full disabled:opacity-50 disabled:cursor-not-allowed">Passer la commande <ChevronRight size={16} /></button>
+              {orderingClosed && (
+                <p role="status" className="rounded-lg bg-burgundy/5 p-3 text-xs leading-relaxed text-burgundy">
+                  <span className="font-semibold">{ORDERING_CLOSED_TITLE}.</span> {ORDERING_CLOSED_TEXT}
+                </p>
+              )}
+              <button onClick={() => navigate('/checkout')} disabled={hasMockItem || missingWaist || hasStockIssue || orderingClosed} className="btn-primary w-full disabled:opacity-50 disabled:cursor-not-allowed">Passer la commande <ChevronRight size={16} /></button>
               <button onClick={() => navigate('/')} className="btn-ghost w-full">Continuer mes achats</button>
             </div>
           </div>

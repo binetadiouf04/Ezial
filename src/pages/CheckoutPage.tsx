@@ -25,6 +25,7 @@ import { fetchUrgentDeliveryOptions } from '@/lib/supabaseUrgentDelivery';
 import { firstUrgentChoice, isUrgentChoiceOffered, urgentFeeOfRow, type UrgentDeliveryOptions } from '@/lib/urgentDelivery';
 import { formatDeliveryDay } from '@/lib/deliveryDay';
 import { lineStockIssue } from '@/lib/cartStock';
+import { useOrderingStatus, ORDERING_CLOSED_TITLE, ORDERING_CLOSED_TEXT } from '@/lib/orderingStatus';
 
 const InfoSheet = lazy(() => import('@/components/info/InfoSheet'));
 
@@ -132,6 +133,8 @@ function PromotionPreviewSync({ previewKey, onResult }: { previewKey: string; on
 
 export default function CheckoutPage() {
   const { cart, cartSubtotal, clearCart, navigate, addOrder, catalogProducts, customerUser, authLoading } = useApp();
+  const ordering = useOrderingStatus();
+  const orderingClosed = ordering?.open === false;
   // Article épuisé ou quantité au-delà du stock : paiement bloqué (create_order le refuse aussi).
   const hasStockIssue = cart.some((item) => lineStockIssue(catalogProducts.find((p) => p.id === item.productId), item) !== null);
   const [step, setStep] = useState(0);
@@ -556,6 +559,7 @@ export default function CheckoutPage() {
   };
 
   const placeOrder = async () => {
+    if (orderingClosed) { setSubmitError(ORDERING_CLOSED_TEXT); return; }
     // Baya : la mesure est obligatoire (le serveur la revérifie dans create_order).
     if (cart.some((item) => lineNeedsWaist(item, catalogProducts.find((cp) => cp.id === item.productId)))) {
       setSubmitError('Le tour de taille de votre baya est manquant ou invalide. Renseignez-le dans votre panier avant de payer.');
@@ -720,6 +724,15 @@ export default function CheckoutPage() {
         <ArrowLeft size={16} aria-hidden="true" /> {step === 0 ? 'Retour au panier' : 'Retour'}
       </button>
       <h1 className="mb-6 font-display text-[30px] font-medium leading-tight text-ink lg:text-4xl">Finaliser ma commande</h1>
+      {orderingClosed && (
+        <div role="status" className="mb-6 flex items-start gap-2.5 rounded-lg border border-burgundy/20 bg-burgundy/[0.04] p-4 text-sm text-ink/80">
+          <Clock size={18} className="mt-0.5 flex-shrink-0 text-burgundy" aria-hidden="true" />
+          <div>
+            <p className="font-semibold text-burgundy">{ORDERING_CLOSED_TITLE}</p>
+            <p className="mt-1 leading-relaxed">{ORDERING_CLOSED_TEXT}</p>
+          </div>
+        </div>
+      )}
       <div className="mx-auto mb-6 max-w-sm sm:mb-8 lg:mx-0 lg:max-w-md"><CheckoutSteps steps={steps} current={step} /></div>
 
       <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_340px] lg:gap-14">
@@ -1154,7 +1167,7 @@ export default function CheckoutPage() {
                 )}
                 <div className="grid grid-cols-[auto_1fr] gap-3">
                   <button onClick={() => setStep(1)} className="btn-shop-line" disabled={processing}>Retour</button>
-                  <button onClick={placeOrder} className="btn-shop" disabled={processing || hasStockIssue}>
+                  <button onClick={placeOrder} className="btn-shop" disabled={processing || hasStockIssue || orderingClosed}>
                     {processing ? <><Loader2 size={17} className="animate-spin" /> Traitement...</> : <><Lock size={16} aria-hidden="true" /> {`Payer ${formatFCFA(estimatedTotal)} ${hasDeliveryShops && !deliveryFeeKnown ? '(à partir de)' : '(estimé)'}`}</>}
                   </button>
                 </div>
